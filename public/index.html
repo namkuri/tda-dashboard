@@ -2047,6 +2047,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <option value="completed">완료됨 (Completed)</option>
                     </select>
                 </div>
+                <div>
+                    <select id="filter-zone" onchange="applyFilters()" class="filter-select border rounded p-1" title="3-Zone Attention Model 필터">
+                        <option value="active">📌📦 Now + Shelf (기본)</option>
+                        <option value="now">📌 Now만 (집중 모드)</option>
+                        <option value="all">전체 (🗑 Buried 포함)</option>
+                    </select>
+                </div>
                 <div class="flex-1 flex items-center justify-end">
                     <span id="filter-warning" class="text-[12px] text-red-500 font-bold bg-red-50 px-3 py-1 rounded hidden border border-red-200">
                         ※ 필터 활성화 중에는 카드 순서 변경(드래그)이 비활성화됩니다.
@@ -5883,7 +5890,16 @@ return data;
         function resetSettings() { uiSettings = { zoomLevel: 1, fontSize: 17, cardHeight: 460, padding: 10, volume: 50, isMuted: false }; saveUISettings(); }
 
         let filterDev = 'ALL'; let filterStatus = 'ALL';
-        function applyFilters() { filterDev = document.getElementById('filter-dev').value; filterStatus = document.getElementById('filter-status').value; renderBoard(); }
+        // [v40 Day2 청크 2] Zone 필터: 'active' = Now+Shelf (Buried 숨김, 기본), 'now' = Now만, 'all' = 전체
+        let filterZone = 'active';
+        function applyFilters() {
+            filterDev = document.getElementById('filter-dev').value;
+            filterStatus = document.getElementById('filter-status').value;
+            // [v40 Day2 청크 2] Zone 필터 (없으면 기본값 active)
+            var zoneSelect = document.getElementById('filter-zone');
+            filterZone = zoneSelect ? zoneSelect.value : 'active';
+            renderBoard();
+        }
 
         function updateJsonEditorView() { const editor = document.getElementById('json-editor'); if(editor) editor.value = JSON.stringify(currentData, null, 2); }
         function applyJsonFromEditor() { try { const parsed = JSON.parse(document.getElementById('json-editor').value); if(parsed.categories && parsed.tasks) { currentData = validateData(parsed); saveData(); showToast("JSON 데이터가 반영되었습니다.", "success"); if(currentView === 'docs') { updateProjectTitle(); renderDocTree(); } } else { alert("유효한 구조가 아닙니다."); } } catch(err) { alert("오류: " + err.message); } }
@@ -5999,7 +6015,8 @@ return data;
 
         function renderBoard() {
             const board = document.getElementById('board'); board.innerHTML = '';
-            const isFiltering = filterDev !== 'ALL' || filterStatus !== 'ALL';
+            // [v40 Day2 청크 2] filterZone='active'는 "기본 보기"이므로 isFiltering 트리거 X
+            const isFiltering = filterDev !== 'ALL' || filterStatus !== 'ALL' || filterZone === 'now';
             const filterWarning = document.getElementById('filter-warning');
             if(isFiltering) filterWarning.classList.remove('hidden'); else filterWarning.classList.add('hidden');
 
@@ -6034,6 +6051,13 @@ return data;
                 let catTasks = currentData.tasks.filter(t => t.catId === cat.id);
                 if(filterDev !== 'ALL') catTasks = catTasks.filter(t => t.dev === filterDev);
                 if(filterStatus !== 'ALL') catTasks = catTasks.filter(t => t.status === filterStatus);
+                // [v40 Day2 청크 2] Zone 필터 적용
+                if(filterZone === 'now') {
+                    catTasks = catTasks.filter(t => (t.zone || 'shelf') === 'now');
+                } else if(filterZone === 'active') {
+                    catTasks = catTasks.filter(t => (t.zone || 'shelf') !== 'buried');
+                }
+                // filterZone === 'all' 일 때는 필터 X (Buried도 표시)
 
                 // [v40 Day2 청크 1] Zone 우선 정렬 (안정 정렬: 같은 zone 내에서는 기존 순서 유지)
                 catTasks = catTasks.map((t, i) => ({ t, i }))
