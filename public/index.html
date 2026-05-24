@@ -4233,6 +4233,7 @@ return data;
                 // [v40 Day3 청크1] 양방향 링크 저장
                 linked_task_ids: doc.linkedTaskIds || [],
                 linked_doc_ids: doc.linkedDocIds || [],
+                doc_type: doc.docType || 'plan', // [v40 Day3 청크3]
                 updated_at: Date.now()
             });
             if (error) {
@@ -4500,7 +4501,7 @@ return data;
                 // [v21 PERF B4+B5] wiki_docs는 메타 컬럼만 먼저 가져오고, content는 문서 열 때 별도 fetch
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
-                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids'; // [v40 Day3 청크1] 링크 메타 포함 (없으면 dbUpsertDoc이 링크를 []로 덮어씀)
+                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type'; // [v40 Day3 청크1/3] 링크·doc_type 메타 포함 (없으면 dbUpsertDoc이 []/plan으로 덮어씀)
                 const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
@@ -6305,6 +6306,15 @@ return data;
             if (!task) return;
             const cur = task.zone || 'shelf';
             const nextZone = cur === 'shelf' ? 'now' : (cur === 'now' ? 'buried' : 'shelf');
+            // [v40 Day3 청크3] Sprint Lock (§1.3): 활성 스프린트 중 Shelf→Now 이동은 intrusion 리뷰 필요
+            const _activeSp = getActiveSprint();
+            if (nextZone === 'now' && _activeSp && task.sprintId !== _activeSp.id) {
+                const pending = (currentData.reviews || []).find(r => r.type === 'intrusion' && r.targetTaskId === taskId && r.status === 'pending');
+                if (pending) { showToast('이미 intrusion 리뷰가 진행 중입니다.', 'info'); openReviewInbox(); return; }
+                showToast('🔒 스프린트 잠금: Now 이동은 intrusion 리뷰가 필요합니다.', 'info');
+                openReviewModal('intrusion', taskId, null);
+                return;
+            }
             task.zone = nextZone;
             // Buried로 이동 시 history 기록
             if (nextZone === 'buried') {
@@ -6835,6 +6845,7 @@ return data;
             review.decisionTag = buildDecisionTag(review, result);
             review.decidedAt = new Date().toISOString();
             if (persist) await dbUpsertReview(review);
+            await applyReviewDecision(review); // [v40 Day3 청크3] intrusion 적용 + ADR 생성
             return true;
         }
         // 로드 시 만료된 pending 리뷰 정리
@@ -6918,9 +6929,21 @@ return data;
             }
             if (!Array.isArray(currentData.reviews)) currentData.reviews = [];
             currentData.reviews.push(review);
+            // [v40 Day3 청크3] intrusion 시도 → 스프린트 intrusionCount/log 기록
+            if (review.type === 'intrusion' && activeSp) {
+                activeSp.intrusionCount = (activeSp.intrusionCount || 0) + 1;
+                if (!Array.isArray(activeSp.intrusionLog)) activeSp.intrusionLog = [];
+                activeSp.intrusionLog.push({
+                    reviewId: review.id, taskId: review.targetTaskId || null,
+                    by: currentUser.id, byName: myNickname, at: new Date().toISOString(), reason: reason
+                });
+                await dbUpsertSprint(activeSp);
+                if (typeof renderSprintBand === 'function') renderSprintBand();
+            }
             _safeLocalCache(currentData);
             closeModal('review-create-modal');
             const { error } = await dbUpsertReview(review);
+            if (review.status === 'forced') await applyReviewDecision(review); // 강제는 즉시 적용 + ADR
             renderReviewBadge(); renderBoard();
             if (typeof renderReviewInbox === 'function') renderReviewInbox();
             if (currentView === 'docs') renderDocLinksBar();
@@ -7023,6 +7046,98 @@ return data;
         }
         function openReviewInbox() { renderReviewInbox(); openModal('review-inbox-modal'); }
 
+        // ==========================================
+        // [v40 Day3 청크3] 결정 적용 (intrusion → Now) + ADR 자동 생성
+        // ==========================================
+        function getDecisionFolderId() {
+            const docs = (currentData.docs || []).filter(d => d.projectId === activeProjectId && !d.parentId);
+            let folder = docs.find(d => d.docType === 'decision');
+            if (!folder) folder = docs.find(d => /결정\s*로그/.test(d.title || ''));
+            return folder ? folder.id : null;
+        }
+        function _two(n) { return String(n).padStart(2, '0'); }
+        function _adrStamp(d) { return `${d.getFullYear()}${_two(d.getMonth() + 1)}${_two(d.getDate())}-${_two(d.getHours())}${_two(d.getMinutes())}`; }
+
+        async function generateADR(review) {
+            if (!review || !review.decisionTag) return;
+            const adrId = 'adr-' + review.id;
+            if ((currentData.docs || []).find(d => d.id === adrId)) return; // 멱등
+            const dt = review.decisionTag;
+            const decided = review.decidedAt ? new Date(review.decidedAt) : new Date();
+            const shortReason = (review.reason || '결정').replace(/\s+/g, ' ').slice(0, 30);
+            const title = `ADR-${_adrStamp(decided)}: ${shortReason}`;
+            const statusKo = { approved: '승인', rejected: '거부', forced: '강제 통과', expired: '만료' }[review.status] || review.status;
+            const nameList = arr => (arr && arr.length) ? arr.map(x => x.name + (x.comment ? ` ("${x.comment}")` : '')).join(', ') : '없음';
+            let targetLines = '';
+            if (review.targetTaskId) targetLines += `- 대상 카드: [[task:${review.targetTaskId}]]\n`;
+            if (review.targetDocId) targetLines += `- 대상 문서: [[doc:${review.targetDocId}]]\n`;
+            if (review.sprintId) targetLines += `- 스프린트: ${review.sprintId}\n`;
+            const voteRows = (review.votes || []).map(v => `| ${v.userName || v.userId} | ${({ approve: '✅ 승인', reject: '👎 거부', skip: '⏭ 불참' })[v.decision] || v.decision} | ${(v.comment || '').replace(/\|/g, '/')} |`).join('\n');
+            const content =
+`# ${title}
+
+> 자동 생성 결정 로그 · 리뷰 ID \`${review.id}\` · type: \`${review.type}\`
+
+## 요청 정보
+- 제안자: ${review.proposerName || '알 수 없음'}
+- 요청 시각: ${review.createdAt ? new Date(review.createdAt).toLocaleString('ko-KR') : '-'}
+- 사유: ${review.reason || ''}
+
+## 룰
+- 선택된 룰: **${_ruleLabel(review.rule)}** (\`${(review.rule && review.rule.type) || ''}\`)${review.rule && review.rule.minApprovals ? `\n- 최소 승인 수: ${review.rule.minApprovals}` : ''}
+
+## 결정
+- 최종 결정: **${statusKo}**
+- 결정 시각: ${decided.toLocaleString('ko-KR')}
+
+## 투표 결과
+| 팀원 | 결정 | 코멘트 |
+|---|---|---|
+${voteRows || '| (투표 없음) | — | — |'}
+
+- 승인: ${nameList(dt.approvers)}
+- 거부: ${nameList(dt.rejecters)}
+- 불참: ${nameList(dt.skippers)}
+
+## 영향
+${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
+            const now = Date.now();
+            const adrDoc = {
+                id: adrId, projectId: activeProjectId, parentId: getDecisionFolderId(),
+                title: title, emoji: '🧭', content: content, sortOrder: now,
+                isCollapsed: false, deprecated: false, docType: 'decision',
+                linkedTaskIds: review.targetTaskId ? [review.targetTaskId] : [],
+                linkedDocIds: review.targetDocId ? [review.targetDocId] : [],
+                isLocked: false, _contentLoaded: true, createdAt: now, updatedAt: now
+            };
+            if (!Array.isArray(currentData.docs)) currentData.docs = [];
+            currentData.docs.push(adrDoc);
+            await dbUpsertDoc(adrDoc);
+            // 대상에 역방향 링크 (양방향)
+            if (review.targetTaskId) linkTaskDoc(review.targetTaskId, adrId);
+            if (review.targetDocId) linkDocDoc(review.targetDocId, adrId);
+            _safeLocalCache(currentData);
+            if (currentView === 'docs' && typeof renderDocTree === 'function') renderDocTree();
+            showToast('🧭 ADR 자동 생성: ' + title, 'info');
+        }
+
+        // 결정 전이 시 1회 실행 (결정한 클라이언트에서). adrId 멱등으로 중복 방지.
+        async function applyReviewDecision(review) {
+            // intrusion 승인/강제 → 대상 카드 Shelf→Now + 스프린트 배정
+            if (review.type === 'intrusion' && (review.status === 'approved' || review.status === 'forced') && review.targetTaskId) {
+                const task = currentData.tasks.find(t => t.id === review.targetTaskId);
+                if (task && (task.zone || 'shelf') !== 'now') {
+                    task.zone = 'now';
+                    const sp = review.sprintId || (getActiveSprint() ? getActiveSprint().id : null);
+                    if (sp) task.sprintId = sp;
+                    await dbUpsertTask(task);
+                    renderBoard();
+                }
+            }
+            // 모든 결정 → ADR 자동 생성
+            await generateADR(review);
+        }
+
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
         function toggleStar(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isStarred = !task.isStarred; saveData(); dbUpsertTask(task); }
         function changeDev(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newDev = prompt("담당자를 입력하세요:", task.dev); if (newDev) { task.dev = newDev; saveData(); dbUpsertTask(task); } }
@@ -7036,14 +7151,8 @@ return data;
         function deleteCategory(e, catId) { e.stopPropagation(); if(confirm("카테고리와 내부 모든 할 일이 삭제됩니다. 계속하시겠습니까?")) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
         function addNewTask(catId, position = 'top') {
             const newTask = { id: "t-" + Date.now(), catId: catId, priority: "p1", dev: "Dev A", catBadge: "NEW", title: "새로운 태스크 (New Task)", desc: "요약 설명을 입력하세요", details: "클릭하여 상세 내용을 마크다운으로 작성하세요...", scripts: ["NewScript.cs"], status: 'pending', isStarred: false, time: null, isCollapsed: false, comments: [], zone: 'shelf', sprintId: null };
-            // [v40 Day2 청크 4] 활성 스프린트 중이면 intrusion 선택 모달, 아니면 즉시 추가
-            const active = getActiveSprint();
-            if (active) {
-                _pendingNewTask = { task: newTask, position: position, catId: catId };
-                openSprintIntrusionModal(active, newTask);
-            } else {
-                _commitNewTask(newTask, position);
-            }
+            // [v40 Day3 청크3] 마스터 §1.4: 신규 카드는 항상 Shelf. Now 이동은 cycleZone에서 intrusion 리뷰로 게이트.
+            _commitNewTask(newTask, position);
         }
 
         // Kanban 코멘트
