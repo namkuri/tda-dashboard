@@ -4234,6 +4234,7 @@ return data;
                 linked_task_ids: doc.linkedTaskIds || [],
                 linked_doc_ids: doc.linkedDocIds || [],
                 doc_type: doc.docType || 'plan', // [v40 Day3 청크3]
+                is_locked: doc.isLocked || false, // [v40 Day4 §5.4]
                 updated_at: Date.now()
             });
             if (error) {
@@ -4501,7 +4502,7 @@ return data;
                 // [v21 PERF B4+B5] wiki_docs는 메타 컬럼만 먼저 가져오고, content는 문서 열 때 별도 fetch
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
-                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type'; // [v40 Day3 청크1/3] 링크·doc_type 메타 포함 (없으면 dbUpsertDoc이 []/plan으로 덮어씀)
+                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type, is_locked'; // [v40 Day3 청크1/3·Day4] 링크·doc_type·is_locked 메타 포함 (없으면 dbUpsertDoc이 덮어씀)
                 const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
@@ -4572,6 +4573,8 @@ return data;
                                 // [v40 Day3 청크1] 다른 사용자가 추가/변경한 링크 반영
                                 if (typeof u.linked_task_ids !== 'undefined') doc.linkedTaskIds = u.linked_task_ids || [];
                                 if (typeof u.linked_doc_ids !== 'undefined') doc.linkedDocIds = u.linked_doc_ids || [];
+                                if (typeof u.is_locked !== 'undefined') doc.isLocked = !!u.is_locked; // [v40 Day4]
+                                if (typeof u.doc_type !== 'undefined') doc.docType = u.doc_type || 'plan';
                                 if (currentView === 'docs') {
                                     renderDocTree();
                                     if (activeDocId === u.id && changed) {
@@ -6333,6 +6336,26 @@ return data;
             }
         }
 
+        // [v40 Day4] 수동 처내기 (§1.5) — 사유 필수, cycle 게이트 우회로 Shelf/Now → Buried 직접 이동
+        function buryTaskWithReason(e, taskId) {
+            e.stopPropagation();
+            const task = currentData.tasks.find(t => t.id === taskId);
+            if (!task) return;
+            if ((task.zone || 'shelf') === 'buried') { showToast('이미 Buried 상태입니다.', 'info'); return; }
+            const reason = prompt('처내기(Buried) 사유를 입력하세요 (필수):', '');
+            if (reason === null) return;
+            if (!reason.trim()) { showToast('처내기 사유는 필수입니다.', 'alert'); return; }
+            task.zone = 'buried';
+            task.buryReason = reason.trim();
+            task.sprintId = null; // Buried 카드는 스프린트에서 제외
+            if (!Array.isArray(task.buryHistory)) task.buryHistory = [];
+            task.buryHistory.push({ at: new Date().toISOString(), by: currentUser ? currentUser.id : null, byName: myNickname, reason: reason.trim() });
+            saveData();
+            dbUpsertTask(task);
+            renderBoard();
+            showToast('🗑 처내기: ' + reason.trim().slice(0, 24), 'info');
+        }
+
         // [v40 Day2 청크 3] 완료 후 3일 경과된 카드를 자동으로 Buried로 이동
         async function autoBuryOldCompleted() {
             if (!currentData.tasks || currentData.tasks.length === 0) return;
@@ -6501,16 +6524,26 @@ return data;
             const active = getActiveSprint();
             if (!active) { showToast('활성 스프린트가 없습니다.', 'alert'); return; }
             const inSprint = currentData.tasks.filter(t => t.sprintId === active.id);
-            const done = inSprint.filter(t => t.status === 'completed').length;
-            if (!confirm(`스프린트 ${active.weekLabel}를 종료할까요?\n\n포함 카드 ${inSprint.length}개 중 완료 ${done}개 · Intrusion ${active.intrusionCount || 0}회\n(완료 통계·회고 자동 생성은 Day 4)`)) return;
+            const completed = inSprint.filter(t => t.status === 'completed');
+            const incomplete = inSprint.filter(t => t.status !== 'completed');
+            if (!confirm(`스프린트 ${active.weekLabel}를 종료할까요?\n\n포함 ${inSprint.length}개 · 완료 ${completed.length} · 미완료(이월) ${incomplete.length} · Intrusion ${active.intrusionCount || 0}회\n\n미완료 카드는 Shelf로 이월(carryover+1)되고, 회고가 05_운영에 자동 생성됩니다.`)) return;
+            // [v40 Day4] 미완료 Now 카드 → Shelf 이월 (§1.4)
+            for (const t of incomplete) {
+                t.zone = 'shelf';
+                t.carryoverCount = (t.carryoverCount || 0) + 1;
+                t.sprintId = null;
+                await dbUpsertTask(t);
+            }
             active.status = 'closed';
             active.closedAt = new Date().toISOString();
+            active.carryoverFromPrevious = incomplete.map(t => t.id);
             if (!Array.isArray(active.history)) active.history = [];
             active.history.push({ action: 'end', by: currentUser ? currentUser.id : null, byName: myNickname, at: active.closedAt });
             saveData();
             const { error } = await dbUpsertSprint(active);
-            renderSprintBand();
-            if (!error) showToast(`🏁 스프린트 ${active.weekLabel} 종료`, 'success');
+            await generateRetrospective(active, { completed: completed, incomplete: incomplete });
+            renderSprintBand(); renderBoard();
+            if (!error) showToast(`🏁 ${active.weekLabel} 종료 — 미완료 ${incomplete.length}개 이월, 회고 생성됨`, 'success');
         }
 
         function editSprintGoal() {
@@ -6696,14 +6729,32 @@ return data;
                 `<span class="link-chip" onclick="navToDoc('${did}')" title="문서 열기">${_sprintEsc(getDocLabel(did))}<button class="link-chip-x" onclick="event.stopPropagation();removeDocDocLink('${doc.id}','${did}')" title="연결 해제">✕</button></span>`
             ).join('');
             const docReviewChips = (currentData.reviews || []).filter(r => r.targetDocId === doc.id).map(renderReviewChip).join('');
+            // [v40 Day4 §5.4] 잠금 버튼 + 편집 차단
+            const ta = document.getElementById('doc-editor-textarea');
+            if (ta) ta.readOnly = !!doc.isLocked;
+            const lockBtn = doc.isLocked
+                ? `<button class="link-add-btn" style="background:#fef3c7;border-color:#fcd34d;color:#92400e;" onclick="requestDocChange('${doc.id}')" title="잠긴 문서 — 변경 요청(standard_change)">🔒 변경 요청</button>
+                   <button class="link-add-btn" onclick="toggleDocLock('${doc.id}')" title="잠금 해제">🔓 해제</button>`
+                : `<button class="link-add-btn" onclick="toggleDocLock('${doc.id}')" title="문서 잠금(변경 시 리뷰 필요)">🔓 잠금</button>`;
             bar.innerHTML = `<b style="color:#475569;">🔗 연결</b>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','task')">+ 태스크</button>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','doc')">+ 문서</button>
                 <span class="link-sep"></span>
                 <button class="link-add-btn" onclick="openReviewModal('decision',null,'${doc.id}')">🗳 결정요청</button>
+                ${lockBtn}
+                ${doc.isLocked ? '<span style="font-size:11px;color:#92400e;font-weight:700;">🔒 잠김 — 편집하려면 변경 요청 승인 필요</span>' : ''}
                 ${taskChips}${docChips}${(!taskChips && !docChips) ? '<span class="linked-empty">연결 없음 — 버튼 또는 본문에 [[task:ID]]/[[doc:ID]]</span>' : ''}
                 ${docReviewChips}`;
         }
+        // [v40 Day4 §5.4] 문서 잠금 토글 / 변경 요청
+        function toggleDocLock(docId) {
+            const doc = currentData.docs.find(d => d.id === docId);
+            if (!doc) return;
+            doc.isLocked = !doc.isLocked;
+            saveData(); dbUpsertDoc(doc); renderDocLinksBar();
+            showToast(doc.isLocked ? '🔒 문서를 잠갔습니다 — 변경 시 리뷰 필요' : '🔓 잠금 해제', 'info');
+        }
+        function requestDocChange(docId) { openReviewModal('standard_change', null, docId); }
 
         function removeTaskDocLink(taskId, docId) { unlinkTaskDoc(taskId, docId); renderBoard(); renderDocLinksBar(); }
         function removeDocTaskLink(docId, taskId) { unlinkTaskDoc(taskId, docId); renderDocLinksBar(); renderBoard(); }
@@ -6866,7 +6917,8 @@ return data;
             if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
             _reviewDraftTarget = { type: type || 'decision', targetTaskId: targetTaskId || null, targetDocId: targetDocId || null };
             document.getElementById('review-reason').value = '';
-            document.getElementById('review-rule').value = 'majority';
+            // [v40 Day4] 타입별 권장 룰 기본값 (standard_change=전체합의, 그 외=다수결)
+            document.getElementById('review-rule').value = (type === 'standard_change') ? 'all_agree' : 'majority';
             document.getElementById('review-expiry').value = '24';
             let ctx = '일반 결정 (standalone)';
             if (targetTaskId) ctx = '🗂 ' + getTaskLabel(targetTaskId);
@@ -7134,8 +7186,77 @@ ${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
                     renderBoard();
                 }
             }
+            // [v40 Day4 §5.4] standard_change 승인/강제 → 대상 문서 잠금 해제
+            if (review.type === 'standard_change' && (review.status === 'approved' || review.status === 'forced') && review.targetDocId) {
+                const doc = currentData.docs.find(d => d.id === review.targetDocId);
+                if (doc && doc.isLocked) {
+                    doc.isLocked = false;
+                    await dbUpsertDoc(doc);
+                    if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
+                    showToast('🔓 변경 승인 — 문서 잠금 해제됨', 'success');
+                }
+            }
             // 모든 결정 → ADR 자동 생성
             await generateADR(review);
+        }
+
+        // [v40 Day4] 05_운영 폴더 + 스프린트 회고 자동 생성
+        function getOpsFolderId() {
+            const docs = (currentData.docs || []).filter(d => d.projectId === activeProjectId && !d.parentId);
+            let f = docs.find(d => d.docType === 'ops');
+            if (!f) f = docs.find(d => /운영/.test(d.title || ''));
+            return f ? f.id : null;
+        }
+        async function generateRetrospective(sprint, stats) {
+            const retroId = 'retro-' + sprint.id;
+            if ((currentData.docs || []).find(d => d.id === retroId)) return; // 멱등 (종료 1회)
+            const completed = stats.completed || [], incomplete = stats.incomplete || [];
+            const total = completed.length + incomplete.length;
+            const rate = total ? Math.round(completed.length / total * 100) : 0;
+            const fmtList = arr => arr.length ? arr.map(t => `- ${t.title}${t.carryoverCount ? ` (이월 ${t.carryoverCount}회)` : ''} [[task:${t.id}]]`).join('\n') : '- 없음';
+            const intrLog = (sprint.intrusionLog || []).length
+                ? sprint.intrusionLog.map(i => `- ${i.byName || ''}: ${i.reason || ''}${i.taskId ? ` [[task:${i.taskId}]]` : ''}`).join('\n')
+                : '- 없음';
+            const range = formatSprintRange(sprint.startDate, sprint.endDate);
+            const content =
+`# 회고: ${sprint.weekLabel}${range ? ` (${range})` : ''}
+
+> 자동 생성 스프린트 회고 · 스프린트 \`${sprint.id}\` · 종료 ${new Date(sprint.closedAt || Date.now()).toLocaleString('ko-KR')}
+
+## 목표
+${sprint.goal || '(목표 미설정)'}
+
+## 통계
+- 완료율: **${rate}%** (${completed.length}/${total})
+- 완료: ${completed.length}개 · 미완료(이월): ${incomplete.length}개
+- Intrusion(끼어들기) 시도: ${sprint.intrusionCount || 0}회
+
+## ✅ 완료 카드
+${fmtList(completed)}
+
+## ↩️ 이월 카드 (Shelf로 복귀, carryover+1)
+${fmtList(incomplete)}
+
+## ⚡ Intrusion 로그
+${intrLog}
+
+## 다음 스프린트 메모
+- (여기에 회고 논의를 적으세요)
+`;
+            const now = Date.now();
+            const retroDoc = {
+                id: retroId, projectId: activeProjectId, parentId: getOpsFolderId(),
+                title: `회고: ${sprint.weekLabel}`, emoji: '🗓', content: content, sortOrder: now,
+                isCollapsed: false, deprecated: false, docType: 'ops',
+                linkedTaskIds: completed.concat(incomplete).map(t => t.id), linkedDocIds: [],
+                isLocked: false, _contentLoaded: true, createdAt: now, updatedAt: now
+            };
+            if (!Array.isArray(currentData.docs)) currentData.docs = [];
+            currentData.docs.push(retroDoc);
+            await dbUpsertDoc(retroDoc);
+            _safeLocalCache(currentData);
+            if (currentView === 'docs' && typeof renderDocTree === 'function') renderDocTree();
+            showToast('🗓 회고 자동 생성: ' + retroDoc.title, 'info');
         }
 
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
@@ -7235,7 +7356,7 @@ ${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
                     const tagColor = currentData.tagColors[task.catBadge] || '#495057'; const statusInfo = getStatusInfo(task.status);
                     const card = document.createElement('div'); card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} ${task.isCollapsed ? 'collapsed' : ''} zone-${task.zone || 'shelf'}`; card.setAttribute('data-id', task.id);
                     const commentsHtml = task.comments.map((c, i) => ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `).join('');
-                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
+                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> ${(task.zone || 'shelf') !== 'buried' ? `<button class="action-btn" onclick="buryTaskWithReason(event, '${task.id}')" title="처내기 (Buried, 사유 필수)">🗑</button>` : ''} <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제(영구)">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
                     colList.appendChild(card);
                 });
 
