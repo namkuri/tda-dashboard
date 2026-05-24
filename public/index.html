@@ -2526,6 +2526,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             return supabaseClient;
         }
 
+        // [v40 Day3 청크4] Tauri(.msi) 데스크톱 환경 감지 — webview는 tauri.localhost / tauri: 로 로드됨
+        const IS_TAURI = (location.protocol === 'tauri:') || /(^|\.)tauri\.localhost$/.test(location.hostname) || location.hostname === 'tauri';
+
         async function signInWithProvider(provider) {
             const client = await ensureSupabaseClient();
             if (!client) {
@@ -2533,15 +2536,36 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 document.getElementById('auth-error').textContent = 'Supabase 클라이언트 초기화 실패. 콘솔(F12)을 확인하세요.';
                 return;
             }
+            // Tauri에서는 tda://auth-callback 딥링크로 콜백 (브라우저는 현재 URL)
             const { error } = await client.auth.signInWithOAuth({
                 provider,
-                options: { redirectTo: window.location.href }
+                options: { redirectTo: IS_TAURI ? 'tda://auth-callback' : window.location.href }
             });
             if (error) {
                 document.getElementById('auth-error').style.display = 'block';
                 document.getElementById('auth-error').textContent = '로그인 실패: ' + error.message;
             }
         }
+
+        // [v40 Day3 청크4] Tauri(Rust)가 딥링크 수신 시 eval로 호출 — 토큰 추출 후 Supabase 세션 설정
+        window.__tdaAuthCallback = async function(url) {
+            try {
+                console.log('[tauri-auth] callback 수신');
+                const frag = (String(url).split('#')[1] || String(url).split('?')[1] || '');
+                const params = new URLSearchParams(frag);
+                const access_token = params.get('access_token');
+                const refresh_token = params.get('refresh_token');
+                const errDesc = params.get('error_description');
+                if (errDesc) { if (typeof showToast === 'function') showToast('로그인 실패: ' + errDesc, 'alert'); return; }
+                if (!access_token || !refresh_token) { console.warn('[tauri-auth] 토큰 없음:', url); return; }
+                const client = await ensureSupabaseClient();
+                if (!client) return;
+                const { error } = await client.auth.setSession({ access_token, refresh_token });
+                if (error) { console.error('[tauri-auth] setSession 실패', error); if (typeof showToast === 'function') showToast('세션 설정 실패: ' + error.message, 'alert'); return; }
+                // 이후 onAuthStateChange(SIGNED_IN)가 initSupabase 트리거
+                var am = document.getElementById('auth-modal'); if (am) am.style.display = 'none';
+            } catch (e) { console.error('[tauri-auth]', e); }
+        };
 
         async function signOut() {
             if (!supabaseClient) return;

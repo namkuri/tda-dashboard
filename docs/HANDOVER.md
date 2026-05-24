@@ -86,13 +86,12 @@ Supabase(인증·DB·Realtime) + GitHub Pages(배포) + Tauri(.msi 데스크톱)
   - ⚠️ 솔로(팀원 1명)는 majority가 통과 불가 → `force` 사용.
 - **Day 4 자동화(JS)**: ① 스프린트 종료 회고+이월 — `endSprint`가 미완료 Now카드 → Shelf+carryoverCount+1(§1.4), `generateRetrospective`가 05_운영에 회고 문서 자동 생성(완료율·이월·intrusion 통계, id=`retro-`+sprintId 멱등). ② 수동 처내기(§1.5) — 카드 🗑 버튼 → 사유 필수 prompt → buried+buryReason/buryHistory(cycle 게이트 우회). ③ 기술문서 잠금(§5.4) — 문서뷰 🔓잠금 토글, 잠긴 문서 textarea readOnly+"변경요청"→`standard_change` 리뷰(all_agree 기본), 승인 시 `applyReviewDecision`이 unlock. `_DOC_META_COLS`+`dbUpsertDoc`에 `is_locked` 추가. **새 SQL 불필요**.
 
+- **Day 3 청크 4**: Tauri deep-link OAuth (`tda://auth-callback`) — `tauri-plugin-deep-link` + (데스크톱)`tauri-plugin-single-instance`, `tauri.conf.json` schemes, `main.rs`가 딥링크 URL → webview `window.__tdaAuthCallback(url)` eval, 프론트 `IS_TAURI` 감지 + `redirectTo` 분기 + 토큰 추출 `setSession`. **`cargo check` 통과**(빌드 영향 없음). 사용자 액션: Supabase Redirect URL에 `tda://auth-callback` 추가 + 재빌드 + 테스트 → `docs/TAURI_OAUTH_SETUP.md` §1.
+  - ⏸ **updater 미적용**(빌드 안정성·개인 서명키 필요). 적용법은 `docs/TAURI_OAUTH_SETUP.md` §2 (키 생성 → Cargo/conf/main.rs/release.yml).
+
 ### 🔲 남은 작업
-
-#### Day 3 청크 4 / Day 4 Tauri (다음 시작점)
-- Tauri `tauri-plugin-deep-link` (`tda://auth-callback`) — .msi 앱 OAuth (config+Rust, 빌드/리다이렉트는 사용자 액션)
-- Tauri updater plugin (자동 업데이트, pubkey 생성 필요 — 사용자 액션)
-
-#### 잔여 검증
+- Supabase Redirect URL에 `tda://auth-callback` 추가 + .msi 재빌드/로그인 테스트 (사용자)
+- Tauri updater 적용 (키 생성 후, `docs/TAURI_OAUTH_SETUP.md` §2)
 - 모바일 검증 (iOS PWA 설치 테스트)
 - 청크별 최종 통합 테스트 (라이브에서)
 
