@@ -1934,6 +1934,26 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .ui-dialog-btn.confirm.danger { background: var(--st-danger); }
         .ui-dialog-btn.confirm.danger:hover { filter: brightness(0.92); }
 
+        /* ============================================================
+           [UX] 모바일 하단 탭 + 더보기 시트 (데스크톱 사이드바와 IA 일치)
+           ============================================================ */
+        .mob-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border: none; background: none; cursor: pointer; position: relative; }
+        .mob-tab svg { stroke: #928d80; transition: stroke .15s; }
+        .mob-tab .mob-lbl { font-size: 10px; font-weight: 600; color: #928d80; letter-spacing: -0.2px; transition: color .15s; }
+        .mob-tab.active svg { stroke: var(--c-accent); }
+        .mob-tab.active .mob-lbl { color: var(--c-accent); font-weight: 700; }
+        .mob-badge { position: absolute; top: 0; right: calc(50% - 20px); min-width: 16px; height: 16px; padding: 0 4px; background: var(--st-danger); color: #fff; border-radius: 8px; font-size: 9px; font-weight: 800; display: none; align-items: center; justify-content: center; line-height: 1; }
+        #more-sheet-overlay { position: fixed; inset: 0; z-index: 250; display: none; background: rgba(0,0,0,0.4); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); align-items: flex-end; }
+        #more-sheet-overlay.open { display: flex; }
+        .more-sheet { width: 100%; background: var(--c-card); color: var(--c-text); border-radius: 18px 18px 0 0; padding: 6px 14px calc(env(safe-area-inset-bottom, 12px) + 12px); box-shadow: 0 -8px 30px rgba(0,0,0,0.25); animation: sheetUp .2s cubic-bezier(0.2,0,0.2,1); }
+        @keyframes sheetUp { from { transform: translateY(100%); } to { transform: none; } }
+        .more-sheet-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--c-border); margin: 8px auto 6px; }
+        .more-sheet-title { font-size: 11px; font-weight: 700; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px 8px; }
+        .more-sheet-item { display: flex; align-items: center; gap: 13px; width: 100%; padding: 14px 10px; border: none; background: none; text-align: left; font-size: 15px; font-weight: 600; color: var(--c-text); cursor: pointer; border-radius: 10px; }
+        .more-sheet-item:active { background: var(--c-accent-soft); }
+        .more-sheet-item .ms-ico { font-size: 18px; width: 26px; text-align: center; }
+        .more-sheet-item .ms-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; background: var(--st-danger); color: #fff; border-radius: 9px; font-size: 10px; font-weight: 800; display: none; align-items: center; justify-content: center; }
+
     </style>
 </head>
 <body>
@@ -2125,22 +2145,39 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         background:rgba(242,242,247,0.92);-webkit-backdrop-filter:saturate(180%) blur(20px);
         backdrop-filter:saturate(180%) blur(20px);border-top:0.5px solid rgba(60,60,67,0.18);
         padding:8px 0 env(safe-area-inset-bottom,8px);display:none;gap:0;">
-        <button onclick="switchView('kanban')" id="mob-tab-kanban" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;border:none;background:none;cursor:pointer;">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c96442" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            <span style="font-size:10px;font-weight:500;color:#c96442;letter-spacing:-0.2px;">칸반</span>
+        <button onclick="switchView('kanban')" id="mob-tab-kanban" class="mob-tab active">
+            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span class="mob-lbl">칸반</span>
         </button>
-        <button onclick="switchView('docs')" id="mob-tab-docs" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;border:none;background:none;cursor:pointer;">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#928d80" stroke-width="1.8" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-            <span style="font-size:10px;font-weight:500;color:#928d80;letter-spacing:-0.2px;">위키</span>
+        <button onclick="switchView('docs')" id="mob-tab-docs" class="mob-tab">
+            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+            <span class="mob-lbl">위키</span>
         </button>
-        <button onclick="toggleCommentsSidebar()" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;border:none;background:none;cursor:pointer;">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#928d80" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-            <span style="font-size:10px;font-weight:500;color:#928d80;letter-spacing:-0.2px;">코멘트</span>
+        <button onclick="switchView('canon')" id="mob-tab-canon" class="mob-tab">
+            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
+            <span class="mob-lbl">정전</span>
         </button>
-        <button onclick="toggleJsonSidebar()" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;border:none;background:none;cursor:pointer;">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#928d80" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-            <span style="font-size:10px;font-weight:500;color:#928d80;letter-spacing:-0.2px;">설정</span>
+        <button onclick="openReviewInbox()" class="mob-tab">
+            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <span class="mob-lbl">결정</span>
+            <span class="mob-badge" id="mob-review-badge">0</span>
         </button>
+        <button onclick="openMoreSheet()" class="mob-tab">
+            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span class="mob-lbl">더보기</span>
+        </button>
+    </div>
+    <!-- [UX] 모바일 더보기 시트 -->
+    <div id="more-sheet-overlay" onclick="if(event.target===this)closeMoreSheet()">
+        <div class="more-sheet">
+            <div class="more-sheet-grip"></div>
+            <div class="more-sheet-title">더보기</div>
+            <button class="more-sheet-item" onclick="closeMoreSheet();toggleCommentsSidebar()"><span class="ms-ico">💬</span> 코멘트</button>
+            <button class="more-sheet-item" onclick="closeMoreSheet();openChangeLog()"><span class="ms-ico">🕓</span> 변경 로그</button>
+            <button class="more-sheet-item" onclick="closeMoreSheet();toggleJsonSidebar()"><span class="ms-ico">🗄️</span> DB 도구 · 접속자</button>
+            <button class="more-sheet-item" onclick="closeMoreSheet();toggleSettings()"><span class="ms-ico">⚙️</span> 화면 설정</button>
+            <button class="more-sheet-item" onclick="closeMoreSheet();cycleDarkMode()"><span class="ms-ico">🌙</span> 테마 전환</button>
+        </div>
     </div>
 
     <!-- 전체화면 읽기 모드 -->
@@ -3997,8 +4034,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         let isDocPreviewOpen = true;
         let isDocEditorOpen = true; 
 
+        function openMoreSheet() { var o = document.getElementById('more-sheet-overlay'); if (o) o.classList.add('open'); }
+        function closeMoreSheet() { var o = document.getElementById('more-sheet-overlay'); if (o) o.classList.remove('open'); }
+        function updateMobNav(view) {
+            view = view || currentView;
+            [['mob-tab-kanban', 'kanban'], ['mob-tab-docs', 'docs'], ['mob-tab-canon', 'canon']].forEach(function (p) {
+                var el = document.getElementById(p[0]); if (el) el.classList.toggle('active', view === p[1]);
+            });
+        }
         function switchView(viewName) {
             currentView = viewName;
+            updateMobNav(viewName);
             hideToolbar();
             // [v40] 좌측 사이드바 활성 네비 표시
             var _csK = document.getElementById('cs-nav-kanban'), _csD = document.getElementById('cs-nav-docs');
@@ -4018,9 +4064,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var _sk=document.getElementById('tab-btn-kanban'), _sd=document.getElementById('tab-btn-docs'); var _psk=document.getElementById('pc-tab-kanban'), _psd=document.getElementById('pc-tab-docs'); if(_psk){_psk.className='text-xl font-black text-blue-600 border-b-4 border-blue-600 pb-2 px-2 transition-colors';} if(_psd){_psd.className='text-xl font-black text-gray-400 hover:text-gray-700 pb-2 px-2 transition-colors border-b-4 border-transparent';}
                 if(_sk){_sk.style.background='var(--ios-card)';_sk.style.color='var(--ios-label)';_sk.style.boxShadow='0 1px 3px rgba(0,0,0,0.12)';}
                 if(_sd){_sd.style.background='transparent';_sd.style.color='var(--ios-label2)';_sd.style.boxShadow='none';}
-                var _mk=document.getElementById('mob-tab-kanban'), _md=document.getElementById('mob-tab-docs');
-                if(_mk) _mk.querySelector('svg') && (_mk.querySelector('svg').style.stroke='#c96442'), _mk.querySelector('span').style.color='#c96442';
-                if(_md) _md.querySelector('svg') && (_md.querySelector('svg').style.stroke='#928d80'), _md.querySelector('span').style.color='#928d80';
+                // [UX] 모바일 탭 활성표시는 updateMobNav()의 .active 클래스로 처리됨
                 document.getElementById('tab-btn-docs').className = 'text-xl font-black text-gray-400 hover:text-gray-700 pb-2 px-2 transition-colors border-b-4 border-transparent';
                 
                 previewBtn.classList.add('hidden'); previewBtn.classList.remove('flex');
@@ -4037,9 +4081,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var _sk2=document.getElementById('tab-btn-kanban'), _sd2=document.getElementById('tab-btn-docs'); var _psk2=document.getElementById('pc-tab-kanban'), _psd2=document.getElementById('pc-tab-docs'); if(_psk2){_psk2.className='text-xl font-black text-gray-400 hover:text-gray-700 pb-2 px-2 transition-colors border-b-4 border-transparent';} if(_psd2){_psd2.className='text-xl font-black text-blue-600 border-b-4 border-blue-600 pb-2 px-2 transition-colors';}
                 if(_sk2){_sk2.style.background='transparent';_sk2.style.color='var(--ios-label2)';_sk2.style.boxShadow='none';}
                 if(_sd2){_sd2.style.background='var(--ios-card)';_sd2.style.color='var(--ios-label)';_sd2.style.boxShadow='0 1px 3px rgba(0,0,0,0.12)';}
-                var _mk2=document.getElementById('mob-tab-kanban'), _md2=document.getElementById('mob-tab-docs');
-                if(_mk2) _mk2.querySelector('svg') && (_mk2.querySelector('svg').style.stroke='#928d80'), _mk2.querySelector('span').style.color='#928d80';
-                if(_md2) _md2.querySelector('svg') && (_md2.querySelector('svg').style.stroke='#c96442'), _md2.querySelector('span').style.color='#c96442';
+                // [UX] 모바일 탭 활성표시는 updateMobNav()의 .active 클래스로 처리됨
                 
                 previewBtn.classList.remove('hidden'); previewBtn.classList.add('flex');
                 editorBtn.classList.remove('hidden'); editorBtn.classList.add('flex');
@@ -7617,6 +7659,8 @@ return data;
             if (b) { b.textContent = cnt; b.style.display = cnt > 0 ? 'inline-flex' : 'none'; }
             const cs = document.getElementById('cs-review-badge'); // [v40] 사이드바 뱃지
             if (cs) { cs.textContent = cnt; cs.style.display = cnt > 0 ? 'inline-flex' : 'none'; }
+            const mb = document.getElementById('mob-review-badge'); // [UX] 모바일 하단탭 뱃지
+            if (mb) { mb.textContent = cnt; mb.style.display = cnt > 0 ? 'inline-flex' : 'none'; }
         }
         function renderReviewInbox() {
             const listEl = document.getElementById('review-inbox-list');
@@ -8008,10 +8052,10 @@ ${intrLog}
                         </div>
                         <div class="flex items-center gap-2 cat-controls" onclick="event.stopPropagation()">
                             <div class="flex flex-col mr-2">
-                                <button onclick="sortCategory(event, '${cat.id}', 'asc')" class="text-xs text-gray-400 hover:text-blue-500 mb-0.5">🔼</button>
-                                <button onclick="sortCategory(event, '${cat.id}', 'desc')" class="text-xs text-gray-400 hover:text-blue-500">🔽</button>
+                                <button onclick="sortCategory(event, '${cat.id}', 'asc')" class="text-xs text-gray-400 hover:text-blue-500 mb-0.5" title="우선순위 높은 순으로 정렬 (P0→P2)">🔼</button>
+                                <button onclick="sortCategory(event, '${cat.id}', 'desc')" class="text-xs text-gray-400 hover:text-blue-500" title="우선순위 낮은 순으로 정렬 (P2→P0)">🔽</button>
                             </div>
-                            <button onclick="addNewTask('${cat.id}', 'top')" class="cat-add-btn text-xs bg-gray-200 hover:bg-gray-300 w-8 h-8 rounded-lg flex items-center justify-center font-bold">+</button>
+                            <button onclick="addNewTask('${cat.id}', 'top')" class="cat-add-btn text-xs bg-gray-200 hover:bg-gray-300 w-8 h-8 rounded-lg flex items-center justify-center font-bold" title="이 카테고리에 할 일 추가">+</button>
                         </div>
                     </div>
                     <div id="${cat.id}" class="kanban-column" onclick="event.stopPropagation()"></div>
@@ -8046,7 +8090,7 @@ ${intrLog}
                     const card = document.createElement('div'); card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} ${task.isCollapsed ? 'collapsed' : ''} zone-${task.zone || 'shelf'}`; card.setAttribute('data-id', task.id);
                     card.oncontextmenu = function(e) { showCardContextMenu(e, task.id); }; // [v40 B2] 우클릭 메뉴(결정 요청 등)
                     const commentsHtml = task.comments.map((c, i) => ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `).join('');
-                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> ${(task.zone || 'shelf') !== 'buried' ? `<button class="action-btn" onclick="buryTaskWithReason(event, '${task.id}')" title="처내기 (Buried, 사유 필수)">🗑</button>` : ''} <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제(영구)">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
+                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> ${(task.zone || 'shelf') !== 'buried' ? `<button class="action-btn" onclick="buryTaskWithReason(event, '${task.id}')" title="처내기 (Buried, 사유 필수)">🗑</button>` : ''} <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제(영구)">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')" title="클릭하여 상태 변경 (대기 → 진행 → 완료)">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')" title="${task.isStarred ? '즐겨찾기 해제' : '즐겨찾기'}">${task.isStarred ? '⭐' : '☆'}</span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')" title="클릭하여 담당자 변경">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')" title="클릭하여 태그·색상 수정">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')" title="클릭하여 우선순위 변경 (P0 → P1 → P2)">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
                     colList.appendChild(card);
                 });
 
