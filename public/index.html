@@ -1900,6 +1900,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .canon-ver-item .cv-meta { flex: 1; color: var(--c-text2); }
         .canon-ver-item b { color: var(--c-text); }
 
+        /* 컨텍스트 메뉴(트리/카드 공용) 웜 테마 */
+        #tree-context-menu { background: var(--c-card) !important; border: 1px solid var(--ios-sep) !important; border-radius: 10px !important; box-shadow: var(--ios-shadow) !important; padding: 5px !important; min-width: 200px; z-index: 700; }
+        .ctx-menu-item { color: var(--c-text) !important; border-radius: 7px; display: flex; align-items: center; gap: 9px; }
+        .ctx-menu-item:hover { background: var(--c-accent-soft) !important; }
+        .ctx-menu-item.danger { color: var(--ios-red) !important; }
+        .ctx-menu-sep { background: var(--ios-sep) !important; }
+
     </style>
 </head>
 <body>
@@ -2654,6 +2661,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button onclick="closeModal('review-inbox-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
                 </div>
             </div>
+            <p style="font-size:12px;color:var(--c-text2);background:var(--c-accent-soft);border-radius:8px;padding:8px 12px;margin-bottom:10px;line-height:1.5;">
+                팀 의사결정을 <b>투표(전체합의·다수결·특정인·강제)</b>로 처리하고, 결정 시 <b>03_결정 로그</b>에 ADR이 자동 생성됩니다.
+                보통은 <b>칸반 카드/위키 문서를 우클릭 → "결정 요청"</b> 으로 대상별 요청을 만드세요. (아래 + 버튼은 대상 없는 일반 결정용)
+            </p>
             <div id="review-inbox-list" class="flex-1 overflow-y-auto pr-1" style="min-height:160px;display:flex;flex-direction:column;gap:8px;"></div>
         </div>
     </div>
@@ -7883,6 +7894,7 @@ ${intrLog}
                 catTasks.forEach(task => {
                     const tagColor = currentData.tagColors[task.catBadge] || '#495057'; const statusInfo = getStatusInfo(task.status);
                     const card = document.createElement('div'); card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} ${task.isCollapsed ? 'collapsed' : ''} zone-${task.zone || 'shelf'}`; card.setAttribute('data-id', task.id);
+                    card.oncontextmenu = function(e) { showCardContextMenu(e, task.id); }; // [v40 B2] 우클릭 메뉴(결정 요청 등)
                     const commentsHtml = task.comments.map((c, i) => ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `).join('');
                     card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> ${(task.zone || 'shelf') !== 'buried' ? `<button class="action-btn" onclick="buryTaskWithReason(event, '${task.id}')" title="처내기 (Buried, 사유 필수)">🗑</button>` : ''} <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제(영구)">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
                     colList.appendChild(card);
@@ -9442,6 +9454,8 @@ ${intrLog}
                 '<div class="ctx-menu-item" onclick="ctxCopyDoc()"><span>📋</span> 복사</div>' +
                 '<div class="ctx-menu-item" onclick="renameDoc(\''+docId+'\')"><span>✏️</span> 이름 변경</div>' +
                 '<div class="ctx-menu-sep"></div>' +
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openReviewModal(\'decision\',null,\''+docId+'\')"><span>🗳</span> 결정 요청 (이 문서)</div>' +
+                '<div class="ctx-menu-sep"></div>' +
                 (isDeprecated
                     ? '<div class="ctx-menu-item" onclick="ctxUndeprecate()"><span>♻️</span> 폐기 취소</div>'
                     : '<div class="ctx-menu-item" onclick="ctxDeprecate()"><span>🔒</span> 폐기 처리</div>') +
@@ -9460,6 +9474,30 @@ ${intrLog}
                 document.addEventListener('wheel', hideTreeContextMenu, { once: true, passive: true });
                 window.addEventListener('blur', hideTreeContextMenu, { once: true });
                 window.addEventListener('resize', hideTreeContextMenu, { once: true });
+            }, 10);
+        }
+
+        // [v40 B2] 칸반 카드 우클릭 컨텍스트 메뉴 (결정 요청 등) — tree-context-menu 인프라 재사용
+        function showCardContextMenu(e, taskId) {
+            e.preventDefault(); e.stopPropagation();
+            var menu = document.getElementById('tree-context-menu');
+            if (!menu) return;
+            if (menu.parentNode !== document.body) document.body.appendChild(menu);
+            menu.innerHTML =
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openReviewModal(\'decision\',\'' + taskId + '\',null)"><span>🗳</span> 결정 요청 (이 카드)</div>' +
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openLinkPicker(\'task\',\'' + taskId + '\',\'doc\')"><span>🔗</span> 문서 연결</div>' +
+                '<div class="ctx-menu-sep"></div>' +
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();buryTaskWithReason(event,\'' + taskId + '\')"><span>🗑</span> 처내기 (Buried)</div>' +
+                '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();deleteTask(event,\'' + taskId + '\')"><span>❌</span> 삭제</div>';
+            var x = Math.min(e.clientX, window.innerWidth - 230);
+            var y = Math.min(e.clientY, window.innerHeight - 200);
+            if (y < 0) y = 0;
+            menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block';
+            setTimeout(function () {
+                document.addEventListener('click', hideTreeContextMenu, { once: true });
+                document.addEventListener('keydown', hideTreeContextMenu, { once: true });
+                document.addEventListener('wheel', hideTreeContextMenu, { once: true, passive: true });
+                window.addEventListener('blur', hideTreeContextMenu, { once: true });
             }, 10);
         }
 
