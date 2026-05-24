@@ -529,7 +529,7 @@
         }
 
         /* iOS 모달 중앙 정렬 강제 */
-        #project-modal, #settings-modal, #api-key-modal, #sprint-intrusion-modal, #link-picker-modal {
+        #project-modal, #settings-modal, #api-key-modal, #sprint-intrusion-modal, #link-picker-modal, #review-create-modal, #review-inbox-modal {
             display: none;
             position: fixed !important;
             inset: 0 !important;
@@ -541,9 +541,34 @@
         #settings-modal.modal-open,
         #api-key-modal.modal-open,
         #sprint-intrusion-modal.modal-open,
-        #link-picker-modal.modal-open {
+        #link-picker-modal.modal-open,
+        #review-create-modal.modal-open,
+        #review-inbox-modal.modal-open {
             display: flex !important;
         }
+
+        /* [v40 Day3 청크2] 리뷰 칩/투표/옵션 */
+        .review-chip { flex-basis: 100%; width: 100%; box-sizing: border-box; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; background: #fff; margin-top: 6px; }
+        .rv-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; }
+        .rv-rule { font-weight: 700; color: #475569; }
+        .rv-proposer { color: #9ca3af; }
+        .rv-reason { font-size: 12px; color: #374151; margin: 4px 0; }
+        .rv-target { font-size: 11px; margin-bottom: 4px; }
+        .rv-tally { font-size: 11px; color: #6b7280; margin-top: 2px; }
+        .rv-comment { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 3px 7px; font-size: 11px; margin-top: 5px; }
+        .rv-vote-btns { display: flex; gap: 5px; margin-top: 5px; }
+        .rv-btn { flex: 1; border: 1px solid #d1d5db; background: #f9fafb; border-radius: 7px; padding: 4px 6px; font-size: 11px; font-weight: 700; cursor: pointer; color: #374151; }
+        .rv-approve.on { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+        .rv-reject.on { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+        .rv-skip.on { background: #e5e7eb; color: #374151; }
+        .rv-btn:hover { filter: brightness(0.97); }
+        .review-opt-label { font-size: 11px; font-weight: 700; color: #6b7280; margin-bottom: 3px; }
+        .review-opt-hint { font-size: 12px; color: #4b5563; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
+        .review-chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #1f2937; padding: 2px 0; }
+        .review-num { width: 80px; border: 1px solid #d1d5db; border-radius: 6px; padding: 3px 7px; font-size: 13px; }
+        body.dark .review-chip { background: #1e293b; border-color: #334155; }
+        body.dark .rv-reason { color: #e2e8f0; }
+        body.dark #review-create-modal .bg-white, body.dark #review-inbox-modal .bg-white { background: #1e293b !important; }
 
         /* [v40 Day3 청크1] 연결 패널/칩/피커 */
         .linked-panel { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e5e7eb; }
@@ -1985,6 +2010,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <span style="width:7px;height:7px;border-radius:50%;background:var(--ios-green);display:inline-block;"></span>
                     <span id="header-online-count">1</span>
                 </div>
+                <!-- [v40 Day3 청크2] 결정/리뷰 인박스 + 알림 뱃지 -->
+                <button onclick="openReviewInbox()" class="ios-topbar-btn" title="결정/리뷰" style="position:relative;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    <span id="review-badge-count" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 3px;background:#dc2626;color:white;border-radius:8px;font-size:10px;font-weight:800;align-items:center;justify-content:center;">0</span>
+                </button>
                 <button onclick="toggleCommentsSidebar()" class="ios-topbar-btn" title="코멘트">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
                 </button>
@@ -2319,6 +2349,51 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
             <input type="text" id="link-picker-search" oninput="renderLinkPickerResults(this.value)" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-3" placeholder="제목으로 검색...">
             <div id="link-picker-list" class="flex-1 overflow-y-auto pr-1" style="min-height:120px;"></div>
+        </div>
+    </div>
+
+    <!-- [v40 Day3 청크2] 결정/리뷰 생성 모달 -->
+    <div id="review-create-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('review-create-modal')">
+        <div class="bg-white p-5 rounded-xl w-[480px] max-w-[92vw] shadow-2xl border border-gray-200 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h2 class="text-lg font-black text-gray-800">🗳 결정 요청</h2>
+                <button onclick="closeModal('review-create-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
+            </div>
+            <div class="overflow-y-auto pr-1">
+                <div class="text-xs text-gray-500 mb-2">대상: <span id="review-context" class="font-bold text-gray-700"></span></div>
+                <label class="block text-xs font-bold text-gray-600 mb-1">사유 (필수)</label>
+                <textarea id="review-reason" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-3" placeholder="왜 이 결정이 필요한가요?"></textarea>
+                <label class="block text-xs font-bold text-gray-600 mb-1">결정 룰</label>
+                <select id="review-rule" onchange="renderReviewRuleOptions()" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="majority">📊 다수결 (majority)</option>
+                    <option value="all_agree">🌐 전체 합의 (all_agree)</option>
+                    <option value="specific_approver">👤 특정인 승인 (specific_approver)</option>
+                    <option value="force">⚡ 강제 통과 (force)</option>
+                </select>
+                <div id="review-rule-options" class="mb-3"></div>
+                <label class="block text-xs font-bold text-gray-600 mb-1">만료</label>
+                <select id="review-expiry" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="24">24시간</option><option value="48">48시간</option><option value="72">72시간</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 mt-3 pt-2 border-t">
+                <button onclick="closeModal('review-create-modal')" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300">취소</button>
+                <button onclick="createReview()" class="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-blue-700">요청 생성</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [v40 Day3 청크2] 결정/리뷰 인박스 -->
+    <div id="review-inbox-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('review-inbox-modal')">
+        <div class="bg-white p-5 rounded-xl w-[560px] max-w-[94vw] shadow-2xl border border-gray-200 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h2 class="text-lg font-black text-gray-800">🗳 결정 / 리뷰</h2>
+                <div class="flex items-center gap-2">
+                    <button onclick="openReviewModal('decision',null,null)" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-100">+ 새 결정 요청</button>
+                    <button onclick="closeModal('review-inbox-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
+                </div>
+            </div>
+            <div id="review-inbox-list" class="flex-1 overflow-y-auto pr-1" style="min-height:160px;display:flex;flex-direction:column;gap:8px;"></div>
         </div>
     </div>
 
@@ -3888,6 +3963,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!data.projects) data.projects = [{ id: 'default', name: '기본 프로젝트', category: '일반' }];
             if (!data.docs) data.docs = [];
             if (!data.sprints) data.sprints = []; // [v40 Day2 청크 4]
+            if (!data.users) data.users = [];     // [v40 Day3 청크 2]
+            if (!data.reviews) data.reviews = []; // [v40 Day3 청크 2]
             if (!data.wikiAnnotations) data.wikiAnnotations = {};
 
             const docIds = new Set(data.docs.map(d => d.id));
@@ -4237,6 +4314,30 @@ return data;
             const { error } = await supabaseClient.from('sprints').delete().eq('id', sprintId);
             if (error) console.error('[dbDeleteSprint]', error);
         }
+        // [v40 Day3 청크2] 리뷰 요청 upsert
+        async function dbUpsertReview(review) {
+            if (!supabaseClient) return { error: null };
+            const { error } = await supabaseClient.from('review_requests').upsert({
+                id: review.id, type: review.type, rule: review.rule || {},
+                target_task_id: review.targetTaskId || null,
+                target_doc_id: review.targetDocId || null,
+                sprint_id: review.sprintId || null,
+                project_id: review.projectId || activeProjectId,
+                proposer_id: review.proposerId || null,
+                proposer_name: review.proposerName || '',
+                reason: review.reason || '',
+                votes: review.votes || [],
+                status: review.status || 'pending',
+                decision_tag: review.decisionTag || null,
+                expires_at: review.expiresAt || null,
+                decided_at: review.decidedAt || null
+            });
+            if (error) {
+                console.error('[dbUpsertReview]', error);
+                if (typeof showToast === 'function') showToast('⚠️ 리뷰 저장 실패: ' + (error.message||''), 'alert');
+            }
+            return { error };
+        }
 
         // ==========================================
         // 분절 테이블에서 currentData 조립
@@ -4255,7 +4356,19 @@ return data;
                 history: s.history || []
             };
         }
-        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData) {
+        // [v40 Day3 청크2] review_requests row(snake) → app 객체(camel) 매핑
+        function _mapReviewRow(r) {
+            return {
+                id: r.id, type: r.type, rule: r.rule || { type: 'majority' },
+                targetTaskId: r.target_task_id || null, targetDocId: r.target_doc_id || null,
+                sprintId: r.sprint_id || null, projectId: r.project_id || null,
+                proposerId: r.proposer_id || null, proposerName: r.proposer_name || '',
+                reason: r.reason || '', votes: r.votes || [],
+                status: r.status || 'pending', decisionTag: r.decision_tag || null,
+                createdAt: r.created_at || null, expiresAt: r.expires_at || null, decidedAt: r.decided_at || null
+            };
+        }
+        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData, usersData, reviewData) {
             const cmtMap = {};
             (cmtData || []).forEach(c => {
                 if (!cmtMap[c.task_id]) cmtMap[c.task_id] = [];
@@ -4310,6 +4423,12 @@ return data;
                 })),
                 // [v40 Day2 청크 4] 스프린트
                 sprints: (sprintData || []).map(_mapSprintRow),
+                // [v40 Day3 청크 2] 팀원 + 리뷰 요청
+                users: (usersData || []).map(u => ({
+                    id: u.id, email: u.email || '', displayName: u.display_name || (u.email ? u.email.split('@')[0] : '익명'),
+                    avatarUrl: u.avatar_url || null, provider: u.provider || '', role: u.role || 'member'
+                })),
+                reviews: (reviewData || []).map(_mapReviewRow),
                 tagColors: tagColors,
                 images: {}, wikiAnnotations: {}, changeLog: []
             };
@@ -4382,19 +4501,23 @@ return data;
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
                 const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids'; // [v40 Day3 청크1] 링크 메타 포함 (없으면 dbUpsertDoc이 링크를 []로 덮어씀)
-                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes] = await Promise.all([
+                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
                     supabaseClient.from('tasks').select('*').order('sort_order'),
                     supabaseClient.from('wiki_docs').select(_DOC_META_COLS).order('sort_order'),
                     supabaseClient.from('task_comments').select('*').order('ts'),
                     supabaseClient.from('tag_colors').select('*'),
-                    supabaseClient.from('sprints').select('*').order('created_at') // [v40 Day2 청크 4]
+                    supabaseClient.from('sprints').select('*').order('created_at'), // [v40 Day2 청크 4]
+                    supabaseClient.from('users').select('*'),                        // [v40 Day3 청크 2]
+                    supabaseClient.from('review_requests').select('*').order('created_at') // [v40 Day3 청크 2]
                 ]);
                 if (projRes.error) throw projRes.error;
                 if (taskRes.error) throw taskRes.error;
                 if (docRes.error)  throw docRes.error;
                 if (sprintRes.error) console.warn('[sprints load]', sprintRes.error); // 스프린트 로드 실패는 치명적이지 않음
+                if (usersRes.error) console.warn('[users load]', usersRes.error);
+                if (reviewRes.error) console.warn('[reviews load]', reviewRes.error);
 
                 // 메타만 받았으므로 content 필드를 빈 문자열로 보강
                 // 실제 content는 openDoc() 내부에서 fetch (B5)
@@ -4407,7 +4530,8 @@ return data;
 
                 currentData = _assembleCurrentData(
                     projRes.data, catRes.data, taskRes.data,
-                    docRes.data, cmtRes.data, tagRes.data, sprintRes.data
+                    docRes.data, cmtRes.data, tagRes.data, sprintRes.data,
+                    usersRes.data, reviewRes.data
                 );
                 currentData = validateData(currentData);
                 wikiAnnotations = currentData.wikiAnnotations || {};
@@ -4425,6 +4549,8 @@ return data;
                 await seedWikiFoldersIfEmpty();
                 // [v40 Day2 청크 3] 완료 3일 경과 카드 자동 매장 (Buried 이동)
                 await autoBuryOldCompleted();
+                // [v40 Day3 청크2] 만료된 pending 리뷰 정리
+                await sweepExpiredReviews();
 
                 // ★ Realtime: wiki_docs 변경 감지
                 supabaseClient.channel('rt-wiki-docs')
@@ -4580,6 +4706,38 @@ return data;
                     }).subscribe(function(status, err) {
                         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                             console.warn('[rt-sprints] 연결 끊김:', status, err);
+                        }
+                    });
+
+                // ★ Realtime: review_requests 변경 감지 [v40 Day3 청크2]
+                supabaseClient.channel('rt-reviews')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'review_requests' }, (payload) => {
+                        const ev = payload.eventType;
+                        if (!Array.isArray(currentData.reviews)) currentData.reviews = [];
+                        if (ev === 'INSERT' || ev === 'UPDATE') {
+                            const mapped = _mapReviewRow(payload.new);
+                            const idx = currentData.reviews.findIndex(x => x.id === mapped.id);
+                            const prevStatus = idx > -1 ? currentData.reviews[idx].status : null;
+                            if (idx > -1) currentData.reviews[idx] = mapped; else currentData.reviews.push(mapped);
+                            const mine = currentUser && mapped.proposerId === currentUser.id;
+                            if (ev === 'INSERT' && !mine && mapped.status === 'pending') {
+                                playNotificationSound && playNotificationSound('comment');
+                                showToast(`🗳 새 결정 요청: ${mapped.reason ? mapped.reason.slice(0, 30) : mapped.type}`, 'info');
+                            } else if (ev === 'UPDATE' && prevStatus === 'pending' && mapped.status !== 'pending') {
+                                const label = { approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제 통과', expired: '⏰ 만료' }[mapped.status] || mapped.status;
+                                showToast(`결정 완료 — ${label}: ${mapped.reason ? mapped.reason.slice(0, 24) : mapped.type}`, 'info');
+                            }
+                        } else if (ev === 'DELETE') {
+                            currentData.reviews = currentData.reviews.filter(x => x.id !== payload.old.id);
+                        }
+                        if (typeof renderReviewBadge === 'function') renderReviewBadge();
+                        if (typeof renderBoard === 'function') renderBoard();
+                        if (typeof renderReviewInbox === 'function' && document.getElementById('review-inbox-modal') && document.getElementById('review-inbox-modal').classList.contains('modal-open')) renderReviewInbox();
+                        if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
+                        _safeLocalCache(currentData);
+                    }).subscribe(function(status, err) {
+                        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                            console.warn('[rt-reviews] 연결 끊김:', status, err);
                         }
                     });
 
@@ -6527,11 +6685,14 @@ return data;
             const docChips = docIds.map(did =>
                 `<span class="link-chip" onclick="navToDoc('${did}')" title="문서 열기">${_sprintEsc(getDocLabel(did))}<button class="link-chip-x" onclick="event.stopPropagation();removeDocDocLink('${doc.id}','${did}')" title="연결 해제">✕</button></span>`
             ).join('');
+            const docReviewChips = (currentData.reviews || []).filter(r => r.targetDocId === doc.id).map(renderReviewChip).join('');
             bar.innerHTML = `<b style="color:#475569;">🔗 연결</b>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','task')">+ 태스크</button>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','doc')">+ 문서</button>
                 <span class="link-sep"></span>
-                ${taskChips}${docChips}${(!taskChips && !docChips) ? '<span class="linked-empty">아직 연결 없음 — 버튼 또는 본문에 [[task:ID]]/[[doc:ID]]</span>' : ''}`;
+                <button class="link-add-btn" onclick="openReviewModal('decision',null,'${doc.id}')">🗳 결정요청</button>
+                ${taskChips}${docChips}${(!taskChips && !docChips) ? '<span class="linked-empty">연결 없음 — 버튼 또는 본문에 [[task:ID]]/[[doc:ID]]</span>' : ''}
+                ${docReviewChips}`;
         }
 
         function removeTaskDocLink(taskId, docId) { unlinkTaskDoc(taskId, docId); renderBoard(); renderDocLinksBar(); }
@@ -6593,6 +6754,274 @@ return data;
             const input = document.getElementById('link-picker-search');
             renderLinkPickerResults(input ? input.value : '');
         }
+
+        // ==========================================
+        // [v40 Day3 청크2] 리뷰 시스템 — 판정 로직
+        // ==========================================
+        function getMembers() {
+            let members = Array.isArray(currentData.users) ? currentData.users.slice() : [];
+            if (currentUser && !members.find(m => m.id === currentUser.id)) {
+                members.push({ id: currentUser.id, displayName: myNickname || '나', email: myEmail || '', role: 'member' });
+            }
+            return members;
+        }
+        function getMemberName(userId) {
+            const u = (currentData.users || []).find(x => x.id === userId);
+            if (u) return u.displayName;
+            if (currentUser && userId === currentUser.id) return myNickname || '나';
+            return '알 수 없음';
+        }
+        function isReviewExpired(review) {
+            return !!(review.expiresAt && Date.now() > new Date(review.expiresAt).getTime());
+        }
+        function _voteCounts(review) {
+            const a = [], r = [], s = [];
+            (review.votes || []).forEach(v => {
+                if (v.decision === 'approve') a.push(v);
+                else if (v.decision === 'reject') r.push(v);
+                else if (v.decision === 'skip') s.push(v);
+            });
+            return { approvers: a, rejecters: r, skippers: s };
+        }
+        // pending 리뷰의 현재 투표/룰/팀원 기준 status 산출 (pending/approved/rejected/forced)
+        function evaluateReview(review) {
+            if (review.status && review.status !== 'pending') return review.status;
+            const rule = review.rule || { type: 'majority' };
+            if (rule.type === 'force') return 'forced';
+            const members = getMembers();
+            const voters = members.filter(m => m.id !== review.proposerId); // 제안자 = 암묵 승인, 투표 제외
+            const N = voters.length;
+            const vc = _voteCounts(review);
+            const approveCount = vc.approvers.length, rejectCount = vc.rejecters.length;
+            if (rule.type === 'all_agree') {
+                if (rejectCount > 0) return 'rejected';
+                if (N > 0 && approveCount >= N) return 'approved';
+                return 'pending';
+            }
+            if (rule.type === 'specific_approver') {
+                const req = Array.isArray(rule.requiredApprovers) ? rule.requiredApprovers : [];
+                const min = rule.minApprovals || 1;
+                const reqApproved = vc.approvers.filter(v => req.includes(v.userId)).length;
+                const reqRejected = vc.rejecters.filter(v => req.includes(v.userId)).length;
+                if (reqRejected > 0) return 'rejected';
+                if (reqApproved >= min) return 'approved';
+                return 'pending';
+            }
+            // majority (기본)
+            const threshold = rule.minApprovals || (Math.floor(N / 2) + 1);
+            if (approveCount >= threshold) return 'approved';
+            const undecided = N - approveCount - rejectCount;
+            if (approveCount + undecided < threshold) return 'rejected'; // 통과 불가능 → 즉시 거부
+            return 'pending';
+        }
+        function buildDecisionTag(review, finalStatus) {
+            const vc = _voteCounts(review);
+            return {
+                rule_used: (review.rule && review.rule.type) || 'majority',
+                approvers: vc.approvers.map(v => ({ id: v.userId, name: v.userName, comment: v.comment || '' })),
+                rejecters: vc.rejecters.map(v => ({ id: v.userId, name: v.userName, comment: v.comment || '' })),
+                skippers: vc.skippers.map(v => ({ id: v.userId, name: v.userName })),
+                final_decision: finalStatus,
+                decided_at: new Date().toISOString(),
+                proposer: { id: review.proposerId, name: review.proposerName, reason: review.reason }
+            };
+        }
+        // 재평가 → 결정되면 status/decisionTag 확정 (persist=true면 DB 저장). 결정 시 true
+        async function finalizeIfDecided(review, persist) {
+            if (review.status !== 'pending') return false;
+            let result = isReviewExpired(review) ? 'expired' : evaluateReview(review);
+            if (result === 'pending') return false;
+            review.status = result;
+            review.decisionTag = buildDecisionTag(review, result);
+            review.decidedAt = new Date().toISOString();
+            if (persist) await dbUpsertReview(review);
+            return true;
+        }
+        // 로드 시 만료된 pending 리뷰 정리
+        async function sweepExpiredReviews() {
+            if (!Array.isArray(currentData.reviews)) return;
+            for (const rv of currentData.reviews) {
+                if (rv.status === 'pending' && isReviewExpired(rv)) {
+                    await finalizeIfDecided(rv, true);
+                }
+            }
+        }
+
+        // ==========================================
+        // [v40 Day3 청크2] 리뷰 시스템 — 생성 / 투표 / 표시
+        // ==========================================
+        let _reviewDraftTarget = null;
+        function openReviewModal(type, targetTaskId, targetDocId) {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            _reviewDraftTarget = { type: type || 'decision', targetTaskId: targetTaskId || null, targetDocId: targetDocId || null };
+            document.getElementById('review-reason').value = '';
+            document.getElementById('review-rule').value = 'majority';
+            document.getElementById('review-expiry').value = '24';
+            let ctx = '일반 결정 (standalone)';
+            if (targetTaskId) ctx = '🗂 ' + getTaskLabel(targetTaskId);
+            else if (targetDocId) ctx = getDocLabel(targetDocId);
+            document.getElementById('review-context').textContent = ctx;
+            renderReviewRuleOptions();
+            openModal('review-create-modal');
+            setTimeout(() => { const r = document.getElementById('review-reason'); if (r) r.focus(); }, 50);
+        }
+        function renderReviewRuleOptions() {
+            const rule = document.getElementById('review-rule').value;
+            const box = document.getElementById('review-rule-options');
+            if (!box) return;
+            const members = getMembers().filter(m => !currentUser || m.id !== currentUser.id);
+            const N = members.length;
+            if (rule === 'specific_approver') {
+                box.innerHTML = '<div class="review-opt-label">승인 권한자 (1명 이상)</div>' +
+                    (members.length ? members.map(m => `<label class="review-chk"><input type="checkbox" class="review-approver" value="${m.id}"> ${_sprintEsc(m.displayName)}</label>`).join('')
+                        : '<span class="linked-empty">다른 팀원이 없습니다 (로그인 후 표시)</span>') +
+                    '<div class="review-opt-label" style="margin-top:6px;">최소 승인 수</div><input type="number" id="review-min" min="1" value="1" class="review-num">';
+            } else if (rule === 'majority') {
+                box.innerHTML = `<div class="review-opt-label">최소 승인 수 (기본: 과반 ${Math.floor(N/2)+1} / 팀원 ${N}명 기준)</div><input type="number" id="review-min" min="1" value="${Math.floor(N/2)+1}" class="review-num">`;
+            } else if (rule === 'force') {
+                box.innerHTML = '<div class="review-opt-hint">⚡ 강제: 투표 없이 즉시 통과합니다. 사유가 audit trail(decisionTag)에 기록됩니다.</div>';
+            } else {
+                box.innerHTML = `<div class="review-opt-hint">🌐 전체 합의: 제안자 외 팀원 ${N}명 전원 승인 필요. 1명이라도 거부하면 거부됩니다.</div>`;
+            }
+        }
+        async function createReview() {
+            const reason = document.getElementById('review-reason').value.trim();
+            if (!reason) { showToast('사유를 입력하세요.', 'alert'); return; }
+            const ruleType = document.getElementById('review-rule').value;
+            const hours = parseInt(document.getElementById('review-expiry').value, 10) || 24;
+            const rule = { type: ruleType };
+            if (ruleType === 'specific_approver') {
+                const checked = Array.from(document.querySelectorAll('.review-approver:checked')).map(el => el.value);
+                if (checked.length === 0) { showToast('승인 권한자를 1명 이상 선택하세요.', 'alert'); return; }
+                rule.requiredApprovers = checked;
+                const minEl = document.getElementById('review-min');
+                rule.minApprovals = Math.max(1, parseInt(minEl ? minEl.value : '1', 10) || 1);
+            } else if (ruleType === 'majority') {
+                const minEl = document.getElementById('review-min');
+                if (minEl) rule.minApprovals = Math.max(1, parseInt(minEl.value, 10) || 1);
+            }
+            const t = _reviewDraftTarget || {};
+            const activeSp = getActiveSprint();
+            const review = {
+                id: 'rv-' + Date.now(), type: t.type || 'decision', rule: rule,
+                targetTaskId: t.targetTaskId || null, targetDocId: t.targetDocId || null,
+                sprintId: activeSp ? activeSp.id : null, projectId: activeProjectId,
+                proposerId: currentUser.id, proposerName: myNickname || '',
+                reason: reason, votes: [], status: 'pending', decisionTag: null,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + hours * 3600 * 1000).toISOString(), decidedAt: null
+            };
+            if (ruleType === 'force') {
+                review.status = 'forced';
+                review.decisionTag = buildDecisionTag(review, 'forced');
+                review.decidedAt = new Date().toISOString();
+            }
+            if (!Array.isArray(currentData.reviews)) currentData.reviews = [];
+            currentData.reviews.push(review);
+            _safeLocalCache(currentData);
+            closeModal('review-create-modal');
+            const { error } = await dbUpsertReview(review);
+            renderReviewBadge(); renderBoard();
+            if (typeof renderReviewInbox === 'function') renderReviewInbox();
+            if (currentView === 'docs') renderDocLinksBar();
+            if (!error) showToast(ruleType === 'force' ? '⚡ 강제 통과로 기록되었습니다.' : '🗳 결정 요청이 생성되었습니다.', 'success');
+        }
+
+        async function castVote(reviewId, decision) {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            const review = (currentData.reviews || []).find(r => r.id === reviewId);
+            if (!review || review.status !== 'pending') return;
+            if (review.proposerId === currentUser.id) { showToast('제안자는 투표할 수 없습니다 (제안=승인).', 'info'); return; }
+            const commentEl = document.getElementById('vote-comment-' + reviewId);
+            const comment = commentEl ? commentEl.value.trim() : '';
+            if (!Array.isArray(review.votes)) review.votes = [];
+            const existing = review.votes.find(v => v.userId === currentUser.id);
+            if (existing) { existing.decision = decision; existing.comment = comment; existing.votedAt = new Date().toISOString(); }
+            else review.votes.push({ userId: currentUser.id, userName: myNickname || '', decision: decision, comment: comment, votedAt: new Date().toISOString() });
+            await finalizeIfDecided(review, false);
+            _safeLocalCache(currentData);
+            await dbUpsertReview(review);
+            renderReviewBadge(); renderBoard();
+            if (typeof renderReviewInbox === 'function') renderReviewInbox();
+            if (currentView === 'docs') renderDocLinksBar();
+            showToast('투표 완료: ' + ({ approve: '승인', reject: '거부', skip: '불참' }[decision] || decision), 'success');
+        }
+
+        // ── 표시 ──
+        function _reviewStatusBadge(status) {
+            const map = { pending: ['🔔 리뷰 중', '#fef9c3', '#854d0e'], approved: ['✅ 승인', '#d1fae5', '#065f46'],
+                rejected: ['❌ 거부', '#fee2e2', '#991b1b'], forced: ['⚡ 강제', '#ede9fe', '#5b21b6'], expired: ['⏰ 만료', '#e5e7eb', '#6b7280'] };
+            const m = map[status] || map.pending;
+            return `<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:9px;background:${m[1]};color:${m[2]};">${m[0]}</span>`;
+        }
+        function _ruleLabel(rule) {
+            return ({ all_agree: '전체합의', majority: '다수결', specific_approver: '특정인 승인', force: '강제' })[rule && rule.type] || (rule && rule.type) || '다수결';
+        }
+        function renderReviewChip(review) {
+            const canVote = currentUser && review.status === 'pending' && review.proposerId !== currentUser.id;
+            const myVote = (review.votes || []).find(v => currentUser && v.userId === currentUser.id);
+            const vc = _voteCounts(review);
+            let body = '';
+            if (review.status === 'pending') {
+                const exp = review.expiresAt ? new Date(review.expiresAt) : null;
+                const expStr = exp ? `${exp.getMonth() + 1}/${exp.getDate()} ${String(exp.getHours()).padStart(2, '0')}:${String(exp.getMinutes()).padStart(2, '0')}` : '';
+                body = `<div class="rv-tally">승인 ${vc.approvers.length} · 거부 ${vc.rejecters.length} · 불참 ${vc.skippers.length}${expStr ? ` · ⏰ ${expStr}` : ''}</div>`;
+                if (canVote) {
+                    body += `<input type="text" id="vote-comment-${review.id}" class="rv-comment" placeholder="코멘트(선택)" value="${myVote && myVote.comment ? _sprintEsc(myVote.comment) : ''}">
+                        <div class="rv-vote-btns">
+                            <button class="rv-btn rv-approve ${myVote && myVote.decision === 'approve' ? 'on' : ''}" onclick="event.stopPropagation();castVote('${review.id}','approve')">👍 승인</button>
+                            <button class="rv-btn rv-reject ${myVote && myVote.decision === 'reject' ? 'on' : ''}" onclick="event.stopPropagation();castVote('${review.id}','reject')">👎 거부</button>
+                            <button class="rv-btn rv-skip ${myVote && myVote.decision === 'skip' ? 'on' : ''}" onclick="event.stopPropagation();castVote('${review.id}','skip')">⏭ 불참</button>
+                        </div>`;
+                } else if (currentUser && review.proposerId === currentUser.id) {
+                    body += `<div class="rv-tally" style="font-style:italic;">내가 제안한 요청 (제안=승인). 응답을 기다리는 중.</div>`;
+                }
+            } else if (review.decisionTag) {
+                const dt = review.decisionTag;
+                const names = arr => (arr && arr.length) ? arr.map(x => _sprintEsc(x.name)).join(', ') : '없음';
+                body = `<div class="rv-tally">승인: ${names(dt.approvers)} · 거부: ${names(dt.rejecters)} · 불참: ${names(dt.skippers)}${review.decidedAt ? ` · ${new Date(review.decidedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}</div>`;
+            }
+            let tgt = '';
+            if (review.targetTaskId) tgt = `<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="${review.targetTaskId}">🗂 ${_sprintEsc(getTaskLabel(review.targetTaskId))}</a>`;
+            else if (review.targetDocId) tgt = `<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="${review.targetDocId}">${_sprintEsc(getDocLabel(review.targetDocId))}</a>`;
+            return `<div class="review-chip">
+                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span></div>
+                <div class="rv-reason">"${_sprintEsc(review.reason)}"</div>
+                ${tgt ? `<div class="rv-target">${tgt}</div>` : ''}
+                ${body}
+            </div>`;
+        }
+        function renderTaskReviewsPanel(task) {
+            const list = (currentData.reviews || []).filter(r => r.targetTaskId === task.id);
+            const chips = list.map(renderReviewChip).join('');
+            return `<div class="linked-panel ${task.isCollapsed ? 'hidden' : ''}">
+                <div class="linked-panel-head">🗳 결정 <button class="link-add-btn" onclick="event.stopPropagation();openReviewModal('decision','${task.id}',null)">+ 결정 요청</button></div>
+                ${chips || '<span class="linked-empty">없음</span>'}
+            </div>`;
+        }
+        function myPendingReviewCount() {
+            if (!currentUser || !Array.isArray(currentData.reviews)) return 0;
+            return currentData.reviews.filter(r => r.status === 'pending' && r.proposerId !== currentUser.id &&
+                !(r.votes || []).find(v => v.userId === currentUser.id)).length;
+        }
+        function renderReviewBadge() {
+            const b = document.getElementById('review-badge-count');
+            if (!b) return;
+            const cnt = myPendingReviewCount();
+            b.textContent = cnt;
+            b.style.display = cnt > 0 ? 'inline-flex' : 'none';
+        }
+        function renderReviewInbox() {
+            const listEl = document.getElementById('review-inbox-list');
+            if (!listEl) return;
+            const order = s => s === 'pending' ? 0 : 1;
+            const all = (currentData.reviews || []).slice().sort((a, b) => {
+                if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
+                return (b.createdAt || '').localeCompare(a.createdAt || '');
+            });
+            listEl.innerHTML = all.length ? all.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:20px;text-align:center;">결정 요청이 없습니다.</div>';
+        }
+        function openReviewInbox() { renderReviewInbox(); openModal('review-inbox-modal'); }
 
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
         function toggleStar(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isStarred = !task.isStarred; saveData(); dbUpsertTask(task); }
@@ -6697,7 +7126,7 @@ return data;
                     const tagColor = currentData.tagColors[task.catBadge] || '#495057'; const statusInfo = getStatusInfo(task.status);
                     const card = document.createElement('div'); card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} ${task.isCollapsed ? 'collapsed' : ''} zone-${task.zone || 'shelf'}`; card.setAttribute('data-id', task.id);
                     const commentsHtml = task.comments.map((c, i) => ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `).join('');
-                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
+                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
                     colList.appendChild(card);
                 });
 
@@ -6706,6 +7135,7 @@ return data;
             
             attachFavoriteButtonsToMedia(document.getElementById('board'));
             if (typeof renderSprintBand === 'function') renderSprintBand(); // [v40 Day2 청크 4]
+            if (typeof renderReviewBadge === 'function') renderReviewBadge(); // [v40 Day3 청크 2]
         }
 
         function renderProgress() {

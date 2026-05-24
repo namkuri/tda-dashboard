@@ -81,13 +81,14 @@ Supabase(인증·DB·Realtime) + GitHub Pages(배포) + Tauri(.msi 데스크톱)
 - **Day 2 청크 4**: Sprint Lock UI — 칸반 상단 스프린트 띠(활성 스프린트 라벨·기간·목표·intrusion 카운트), 시작/종료(로그인한 누구나 + confirm + 토스트 알림 + `history` audit), ISO week 라벨 자동(`sprint-2026W22`), 활성 스프린트 중 카드 추가 시 intrusion 선택 모달(포함/외부기록), `sprints` 테이블 로드+upsert+`rt-sprints` 실시간 구독
   - ⚠️ **필요 SQL(1회)**: `ALTER TABLE public.sprints ADD COLUMN IF NOT EXISTS history jsonb DEFAULT '[]'::jsonb;` — `docs/tda_v40_supabase_migration.sql` §2-2에 추가됨. Supabase SQL Editor에서 실행해야 시작/종료 히스토리가 DB에 저장됨.
 - **Day 3 청크 1**: 양방향 task↔doc 링크 (§5.5) — `[[task:ID]]`/`[[doc:ID]]` 위키링크 자동 양방향 등록 + 클릭 네비, 카드 "📄 연결된 문서" 패널 + 문서 뷰 "🔗 연결" 바(태스크/문서), 피커 모달(검색→클릭 연결). 데이터 갭 수정: `_DOC_META_COLS`에 `linked_*` 추가(미추가 시 저장이 링크를 []로 덮어씀), `dbUpsertDoc`이 `linked_*` 저장, rt-tasks/rt-wiki-docs에 zone/sprint/링크 멀티유저 동기화 보완. **새 SQL 불필요**(컬럼 기존재).
+- **Day 3 청크 2**: Review 시스템 (§3) — `users`+`review_requests` 로드+`rt-reviews` 실시간, 4룰 판정 로직(all_agree/majority/specific_approver/force + 만료 24/48/72h, 제안자=암묵승인), 생성 모달(사유·룰·룰별옵션·만료, 진입점=카드/문서/헤더 전역), 투표 UI(승인/거부/불참+코멘트), 결정 표시(decisionTag audit), 헤더 알림 뱃지(미투표 pending 수), 리뷰 인박스 모달. **새 SQL 불필요**(테이블 기존재). 판정 11/11 단위테스트 통과.
 
 ### 🔲 남은 작업
 
 #### Day 3 — 연결 + 리뷰 (진행 중)
 - ✅ 청크 1: 양방향 task↔doc 링크 (완료)
-- 청크 2: Review request 시스템 — 데이터 + 생성 모달(4룰: all_agree/majority/specific_approver/force) + 투표 UI(approve/reject/skip) + 알림 뱃지
-- 청크 3: 결정 시 ADR 자동 생성(`03_결정 로그`) + intrusion 정식 연결(Shelf→Now lock, §1.3) — 청크 4의 경량 모달 교체
+- ✅ 청크 2: Review 시스템 데이터+모달+투표+뱃지 (완료)
+- 청크 3: 결정 시 ADR 자동 생성(`03_결정 로그`, §3.5) + intrusion 정식 연결(Shelf→Now lock, §1.3) — 청크 4의 경량 모달 + standard_change(기술문서 잠금 §5.4) 연결
 - 청크 4: Tauri `tauri-plugin-deep-link` 적용 (`tda://auth-callback` 스킴) — Tauri 앱에서 OAuth 작동
 - 정렬 갭(교차검증): 수동 Bury 사유 필수(§1.5), 스프린트 종료 이월(§1.4, Day 4)
 
