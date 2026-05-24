@@ -1776,6 +1776,75 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .cs-userpill { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-top: 2px; border-radius: 9px; background: rgba(60,54,42,0.04); }
         body.dark .cs-userpill { background: rgba(255,250,240,0.04); }
 
+        /* ============================================================
+           [v40] 테마 polish v2 — 다크 균형 / 청색제거 / 스크롤바 / 레이아웃 / 사이드바 접기
+           ============================================================ */
+        /* 스크롤바 (전역, 테마) */
+        html.is-desktop ::-webkit-scrollbar { width: 12px; height: 12px; }
+        html.is-desktop ::-webkit-scrollbar-track { background: transparent; }
+        html.is-desktop ::-webkit-scrollbar-thumb { background: var(--ios-fill2); border-radius: 8px; border: 3px solid var(--c-paper); background-clip: padding-box; }
+        html.is-desktop ::-webkit-scrollbar-thumb:hover { background: var(--c-text3); background-clip: padding-box; }
+        html.is-desktop #claude-sidebar::-webkit-scrollbar-thumb { border-color: var(--c-sidebar-bg); }
+        html.is-desktop * { scrollbar-color: var(--ios-fill2) transparent; scrollbar-width: thin; }
+
+        /* 칸반 보드: 좌우 마진(스프린트/필터와 동일 16px) + 고정 너비 카테고리 */
+        html.is-desktop #board { padding: 0 16px; }
+        @media (min-width: 1280px) {
+            html.is-desktop #board { flex-wrap: wrap; align-items: flex-start; }
+            html.is-desktop .kanban-col-normal { flex: 0 0 340px; min-width: 340px; max-width: 340px; width: 340px; }
+            html.is-desktop .kanban-col-focused { flex: 0 0 560px; min-width: 560px; max-width: 560px; width: 560px; }
+        }
+
+        /* 위키링크 → 클레이/웜 (청색 제거) */
+        .wikilink { color: var(--c-accent); border-bottom-color: var(--c-accent-soft); }
+        .wikilink:hover { background: var(--c-accent-soft); }
+        .wikilink-doc { color: var(--ios-purple); border-bottom-color: var(--ios-purple); }
+        body.dark .wikilink { color: var(--c-accent); }
+        body.dark .wikilink-doc { color: var(--ios-purple); }
+        body.dark .wikilink:hover { background: var(--c-accent-soft); }
+
+        /* 링크 칩/버튼 → 웜 */
+        .link-chip { background: var(--c-accent-soft); color: var(--c-accent); border-color: transparent; }
+        .link-chip:hover { background: var(--c-accent-soft); filter: brightness(0.96); }
+        .link-chip-x { color: var(--c-accent); }
+        .link-chip-x:hover { background: rgba(0,0,0,0.06); color: var(--c-accent); }
+        .link-add-btn { color: var(--c-accent); background: var(--c-accent-soft); border-color: transparent; }
+        .link-add-btn:hover { filter: brightness(0.96); }
+
+        /* 리뷰 칩 / 입력 / doc-links-bar — 카드색·웜 다크 */
+        .review-chip { background: var(--c-card); border-color: var(--ios-sep); }
+        .rv-reason { color: var(--c-text); }
+        .rv-comment { background: var(--c-card); color: var(--c-text); border-color: var(--ios-sep); }
+        .rv-btn { background: var(--ios-fill); color: var(--c-text); border-color: var(--ios-sep); }
+        #doc-links-bar { background: var(--c-card) !important; border-bottom-color: var(--ios-sep) !important; }
+        .linked-panel { border-top-color: var(--ios-sep); }
+        .link-pick-item { color: var(--c-text); }
+        .link-pick-item:hover { background: var(--c-accent-soft); }
+
+        /* 다크에서 튀는 흰색/회색/청색 일괄 교정 */
+        body.dark .bg-white { background: var(--ios-card) !important; }
+        body.dark .bg-gray-50, body.dark .bg-gray-100, body.dark .bg-gray-200 { background: var(--ios-bg3) !important; }
+        body.dark .text-gray-900, body.dark .text-gray-800, body.dark .text-gray-700 { color: var(--ios-label) !important; }
+        body.dark .text-gray-600, body.dark .text-gray-500, body.dark .text-gray-400 { color: var(--ios-label2) !important; }
+        body.dark .border-gray-200, body.dark .border-gray-300, body.dark .border-b, body.dark .border-t, body.dark .border { border-color: var(--ios-sep) !important; }
+
+        /* 결정/리뷰·피커 모달이 인박스 위에 오도록 */
+        #review-create-modal, #link-picker-modal { z-index: 680 !important; }
+
+        /* ── 좌측 사이드바 접기 ── */
+        .cs-collapse-btn { position: absolute; top: 16px; right: -11px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--c-border); background: var(--c-card); color: var(--c-text2); cursor: pointer; display: none; align-items: center; justify-content: center; font-size: 10px; line-height: 1; z-index: 97; box-shadow: var(--ios-shadow-sm); }
+        html.is-desktop .cs-collapse-btn { display: flex; }
+        html.is-desktop body.sidebar-collapsed #claude-sidebar { width: 58px; }
+        html.is-desktop body.sidebar-collapsed #app-wrapper { padding-left: 58px !important; }
+        html.is-desktop body.sidebar-collapsed .cs-label { display: none !important; }
+        html.is-desktop body.sidebar-collapsed .cs-nav { justify-content: center; padding: 9px 0; gap: 0; }
+        html.is-desktop body.sidebar-collapsed .cs-brand { justify-content: center; padding: 4px 0 16px; }
+        html.is-desktop body.sidebar-collapsed .cs-userpill { justify-content: center; padding: 8px 0; }
+        html.is-desktop body.sidebar-collapsed .cs-userpill button { display: none; }
+        html.is-desktop body.sidebar-collapsed .cs-status { justify-content: center; padding: 6px 0; }
+        html.is-desktop body.sidebar-collapsed .cs-badge { position: absolute; top: 4px; right: 6px; margin: 0; }
+        html.is-desktop body.sidebar-collapsed .cs-nav { position: relative; }
+
     </style>
 </head>
 <body>
@@ -2073,19 +2142,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         <!-- [v40] Claude 스타일 좌측 네비 사이드바 (데스크톱 전용) -->
         <aside id="claude-sidebar" onclick="event.stopPropagation()">
-            <div class="cs-brand"><span class="cs-dot">T</span> TDA</div>
-            <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')"><span class="cs-ico">📋</span> 칸반 보드</button>
-            <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')"><span class="cs-ico">📚</span> 위키 문서</button>
-            <button class="cs-nav" onclick="openReviewInbox()"><span class="cs-ico">🗳</span> 결정/리뷰 <span class="cs-badge" id="cs-review-badge">0</span></button>
-            <div class="cs-section">도구</div>
-            <button class="cs-nav" onclick="toggleCommentsSidebar()"><span class="cs-ico">💬</span> 코멘트</button>
-            <button class="cs-nav" onclick="openChangeLog()"><span class="cs-ico">🕓</span> 변경 로그</button>
-            <button class="cs-nav" onclick="toggleJsonSidebar()"><span class="cs-ico">🗄️</span> DB 도구</button>
+            <button class="cs-collapse-btn" onclick="toggleSidebarCollapse()" title="사이드바 접기/펴기"><span id="cs-collapse-ico">◀</span></button>
+            <div class="cs-brand"><span class="cs-dot">T</span> <span class="cs-label cs-brand-text">TDA</span></div>
+            <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
+            <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="위키 문서"><span class="cs-ico">📚</span><span class="cs-label">위키 문서</span></button>
+            <button class="cs-nav" onclick="openReviewInbox()" title="결정/리뷰"><span class="cs-ico">🗳</span><span class="cs-label">결정/리뷰</span><span class="cs-badge" id="cs-review-badge">0</span></button>
+            <div class="cs-section cs-label">도구</div>
+            <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
+            <button class="cs-nav" onclick="openChangeLog()" title="변경 로그"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그</span></button>
+            <button class="cs-nav" onclick="toggleJsonSidebar()" title="DB 도구"><span class="cs-ico">🗄️</span><span class="cs-label">DB 도구</span></button>
             <div class="cs-spacer"></div>
             <div class="cs-foot">
-                <div class="cs-status"><span style="width:7px;height:7px;border-radius:50%;background:var(--ios-green);display:inline-block;"></span> 접속 <span id="cs-online">1</span>명</div>
-                <button class="cs-nav" onclick="cycleDarkMode()"><span class="cs-ico">🌙</span> 테마</button>
-                <button class="cs-nav" onclick="toggleSettings()"><span class="cs-ico">⚙️</span> 화면 설정</button>
+                <div class="cs-status"><span style="width:7px;height:7px;border-radius:50%;background:var(--ios-green);display:inline-block;flex-shrink:0;"></span> <span class="cs-label">접속 <span id="cs-online">1</span>명</span></div>
+                <button class="cs-nav" onclick="cycleDarkMode()" title="테마"><span class="cs-ico">🌙</span><span class="cs-label">테마</span></button>
+                <button class="cs-nav" onclick="toggleSettings()" title="화면 설정"><span class="cs-ico">⚙️</span><span class="cs-label">화면 설정</span></button>
                 <div class="cs-userpill" id="cs-user"><span style="font-size:12px;color:var(--c-text3);">로그인 필요</span></div>
             </div>
         </aside>
@@ -6581,6 +6651,23 @@ return data;
                 (!s.projectId || s.projectId === activeProjectId)) || null;
         }
 
+        // [v40] 좌측 사이드바 접기/펴기 (상태 영속)
+        function toggleSidebarCollapse() {
+            const collapsed = document.body.classList.toggle('sidebar-collapsed');
+            try { localStorage.setItem('pb3_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+            const ico = document.getElementById('cs-collapse-ico');
+            if (ico) ico.textContent = collapsed ? '▶' : '◀';
+        }
+        window.addEventListener('DOMContentLoaded', function () {
+            try {
+                if (localStorage.getItem('pb3_sidebar_collapsed') === '1') {
+                    document.body.classList.add('sidebar-collapsed');
+                    const ico = document.getElementById('cs-collapse-ico');
+                    if (ico) ico.textContent = '▶';
+                }
+            } catch (e) {}
+        });
+
         function renderSprintBand() {
             const el = document.getElementById('sprint-band');
             if (!el) return;
@@ -6589,23 +6676,23 @@ return data;
                 const range = formatSprintRange(active.startDate, active.endDate);
                 const intr = active.intrusionCount || 0;
                 el.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #6ee7b7;border-radius:12px;padding:8px 14px;">
-                        <span style="font-weight:800;font-size:14px;color:#065f46;">🏃 ${_sprintEsc(active.weekLabel)}</span>
-                        ${range ? `<span style="font-size:12px;color:#047857;font-weight:600;">${range}</span>` : ''}
-                        ${active.goal ? `<span style="font-size:12px;color:#374151;">· 🎯 ${_sprintEsc(active.goal)}</span>` : ''}
-                        <span title="Intrusion(스프린트 외 추가) 횟수" style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:9px;padding:1px 8px;">⚡ intrusion ${intr}</span>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--c-card);border:1px solid var(--ios-sep);border-left:3px solid var(--c-accent);border-radius:12px;padding:8px 14px;box-shadow:var(--ios-shadow-sm);">
+                        <span style="font-weight:800;font-size:14px;color:var(--c-text);">🏃 ${_sprintEsc(active.weekLabel)}</span>
+                        ${range ? `<span style="font-size:12px;color:var(--c-text2);font-weight:600;">${range}</span>` : ''}
+                        ${active.goal ? `<span style="font-size:12px;color:var(--c-text2);">· 🎯 ${_sprintEsc(active.goal)}</span>` : ''}
+                        <span title="Intrusion(스프린트 외 추가) 횟수" style="font-size:11px;font-weight:700;color:var(--c-accent);background:var(--c-accent-soft);border-radius:9px;padding:2px 9px;">⚡ intrusion ${intr}</span>
                         <div style="flex:1;"></div>
-                        <button onclick="editSprintGoal()" style="font-size:12px;font-weight:600;color:#047857;background:white;border:1px solid #6ee7b7;border-radius:8px;padding:4px 10px;cursor:pointer;">목표 수정</button>
-                        <button onclick="endSprint()" style="font-size:12px;font-weight:700;color:white;background:#dc2626;border:none;border-radius:8px;padding:4px 12px;cursor:pointer;">스프린트 종료</button>
+                        <button onclick="editSprintGoal()" style="font-size:12px;font-weight:600;color:var(--c-text2);background:var(--ios-fill);border:1px solid var(--ios-sep);border-radius:8px;padding:4px 10px;cursor:pointer;">목표 수정</button>
+                        <button onclick="endSprint()" style="font-size:12px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:8px;padding:4px 12px;cursor:pointer;">스프린트 종료</button>
                     </div>`;
             } else {
                 const { year, week } = getISOWeek(new Date());
                 el.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--ios-fill2,#f3f4f6);border:1px dashed #cbd5e1;border-radius:12px;padding:8px 14px;">
-                        <span style="font-size:13px;font-weight:700;color:#6b7280;">📅 활성 스프린트 없음</span>
-                        <span style="font-size:11px;color:#9ca3af;">3-Zone과 별개로 주간 스프린트를 시작할 수 있습니다.</span>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--ios-fill);border:1px dashed var(--ios-sep);border-radius:12px;padding:8px 14px;">
+                        <span style="font-size:13px;font-weight:700;color:var(--c-text2);">📅 활성 스프린트 없음</span>
+                        <span style="font-size:11px;color:var(--c-text3);">3-Zone과 별개로 주간 스프린트를 시작할 수 있습니다.</span>
                         <div style="flex:1;"></div>
-                        <button onclick="startSprint()" style="font-size:12px;font-weight:700;color:white;background:#059669;border:none;border-radius:8px;padding:5px 14px;cursor:pointer;">+ 스프린트 시작 (W${_pad2(week)})</button>
+                        <button onclick="startSprint()" style="font-size:12px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:8px;padding:5px 14px;cursor:pointer;">+ 스프린트 시작 (W${_pad2(week)})</button>
                     </div>`;
             }
         }
@@ -6766,7 +6853,7 @@ return data;
                 }
                 if (card) {
                     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    card.style.boxShadow = '0 0 0 3px #3b82f6';
+                    card.style.boxShadow = '0 0 0 3px var(--c-accent)';
                     setTimeout(() => { card.style.boxShadow = ''; }, 1800);
                 }
             }, 80);
