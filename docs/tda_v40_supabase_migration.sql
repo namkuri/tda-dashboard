@@ -253,6 +253,40 @@ VALUES ('default', 'pB-3 COMBAT', '메인 프로젝트')
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
+-- 6. [v40 Day4 B3] canon_docs: 게임 정전(canon) 위키 — 버전관리 + 승인
+--    실제 게임과 일치하는 문서(조합/게임루프 등), 프로젝트(게임)별.
+--    기존 배포에도 안전(idempotent). Supabase SQL Editor에서 1회 실행.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.canon_docs (
+    id              text PRIMARY KEY,
+    project_id      text REFERENCES public.projects(id) ON DELETE CASCADE,
+    category        text DEFAULT '일반',
+    title           text NOT NULL DEFAULT '제목 없음',
+    content         text DEFAULT '',
+    version         int DEFAULT 1,
+    status          text DEFAULT 'draft',     -- draft | approved
+    created_by      uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_by_name text,
+    created_at      timestamptz DEFAULT now(),
+    updated_by      uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+    updated_by_name text,
+    updated_at      timestamptz DEFAULT now(),
+    approved_by     uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+    approved_by_name text,
+    approved_at     timestamptz,
+    version_history jsonb DEFAULT '[]'::jsonb,
+    sort_order      int DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_canon_project ON public.canon_docs(project_id, category, sort_order);
+ALTER TABLE public.canon_docs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Authenticated all" ON public.canon_docs;
+CREATE POLICY "Authenticated all" ON public.canon_docs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- Realtime 활성화 (이미 추가됐으면 무시)
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.canon_docs;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ============================================================
 -- 완료!
 -- ============================================================
 -- 확인:

@@ -529,7 +529,7 @@
         }
 
         /* iOS 모달 중앙 정렬 강제 */
-        #project-modal, #settings-modal, #api-key-modal, #link-picker-modal, #review-create-modal, #review-inbox-modal {
+        #project-modal, #settings-modal, #api-key-modal, #link-picker-modal, #review-create-modal, #review-inbox-modal, #canon-history-modal {
             display: none;
             position: fixed !important;
             inset: 0 !important;
@@ -542,7 +542,8 @@
         #api-key-modal.modal-open,
         #link-picker-modal.modal-open,
         #review-create-modal.modal-open,
-        #review-inbox-modal.modal-open {
+        #review-inbox-modal.modal-open,
+        #canon-history-modal.modal-open {
             display: flex !important;
         }
 
@@ -1850,6 +1851,55 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         html.is-desktop body.sidebar-collapsed .cs-badge { position: absolute; top: 4px; right: 6px; margin: 0; }
         html.is-desktop body.sidebar-collapsed .cs-nav { position: relative; }
 
+        /* ============================================================
+           [v40 B3] 게임 정전(Canon) 뷰
+           ============================================================ */
+        #canon-view { padding: 8px 16px 40px; }
+        .canon-wrap { display: flex; gap: 16px; align-items: flex-start; }
+        html.is-mobile .canon-wrap { flex-direction: column; }
+        .canon-list-pane { flex: 0 0 280px; background: var(--c-card); border: 1px solid var(--ios-sep); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 120px); }
+        html.is-mobile .canon-list-pane { flex: 1 1 auto; width: 100%; max-height: none; }
+        .canon-list-head { display: flex; align-items: center; justify-content: space-between; font-weight: 800; font-size: 15px; color: var(--c-text); }
+        .canon-add { font-size: 12px; font-weight: 700; color: #fff; background: var(--c-accent); border: none; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+        .canon-add:hover { background: var(--c-accent-hover); }
+        .canon-search { width: 100%; border: 1px solid var(--ios-sep); border-radius: 8px; padding: 6px 10px; font-size: 13px; background: var(--c-paper); color: var(--c-text); }
+        .canon-list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+        .canon-cat-group { font-size: 11px; font-weight: 700; color: var(--c-text3); text-transform: uppercase; letter-spacing: .05em; padding: 10px 6px 3px; }
+        .canon-item { display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--c-text); border: none; background: none; text-align: left; width: 100%; }
+        .canon-item:hover { background: var(--c-accent-soft); }
+        .canon-item.active { background: var(--c-accent-soft); color: var(--c-accent); font-weight: 700; }
+        .canon-item .ci-badge { margin-left: auto; font-size: 9px; font-weight: 800; padding: 1px 6px; border-radius: 8px; }
+        .ci-approved { background: #d1fae5; color: #065f46; }
+        .ci-draft { background: var(--ios-fill2); color: var(--c-text3); }
+        body.dark .ci-approved { background: #20402e; color: #7fe0a8; }
+        .canon-editor-pane { flex: 1 1 auto; min-width: 0; background: var(--c-card); border: 1px solid var(--ios-sep); border-radius: 12px; padding: 16px; min-height: calc(100vh - 120px); }
+        .canon-empty { text-align: center; color: var(--c-text2); padding: 60px 20px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+        .canon-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--c-text2); background: var(--c-paper); border: 1px solid var(--ios-sep); border-radius: 9px; padding: 7px 12px; margin-bottom: 12px; }
+        .canon-meta b { color: var(--c-text); }
+        .canon-meta .cm-ver { font-weight: 800; color: var(--c-accent); }
+        .canon-meta .cm-status-approved { font-weight: 800; color: #0a7a4a; }
+        .canon-meta .cm-status-draft { font-weight: 800; color: #b45309; }
+        .canon-head-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .canon-title-input { flex: 1; font-size: 18px; font-weight: 800; border: none; border-bottom: 2px solid var(--ios-sep); background: none; color: var(--c-text); padding: 4px 2px; outline: none; }
+        .canon-title-input:focus { border-bottom-color: var(--c-accent); }
+        .canon-cat-input { flex: 0 0 200px; font-size: 12px; border: 1px solid var(--ios-sep); border-radius: 8px; background: var(--c-paper); color: var(--c-text); padding: 4px 10px; outline: none; }
+        .canon-body { display: flex; gap: 12px; height: calc(100vh - 320px); min-height: 280px; }
+        html.is-mobile .canon-body { flex-direction: column; height: auto; }
+        .canon-textarea { flex: 1; resize: none; border: 1px solid var(--ios-sep); border-radius: 10px; padding: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.6; background: var(--c-paper); color: var(--c-text); outline: none; }
+        html.is-mobile .canon-textarea { min-height: 220px; }
+        .canon-preview { flex: 1; overflow-y: auto; border: 1px solid var(--ios-sep); border-radius: 10px; padding: 12px 16px; background: var(--c-card); }
+        html.is-mobile .canon-preview { min-height: 160px; }
+        .canon-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        .canon-btn-save { font-size: 13px; font-weight: 700; color: #fff; background: var(--c-accent); border: none; border-radius: 9px; padding: 7px 16px; cursor: pointer; }
+        .canon-btn-save:hover { background: var(--c-accent-hover); }
+        .canon-btn-approve { font-size: 13px; font-weight: 700; color: #0a7a4a; background: transparent; border: 1px solid #6ee7b7; border-radius: 9px; padding: 7px 14px; cursor: pointer; }
+        .canon-btn-approve.approved { background: #d1fae5; }
+        .canon-btn-ghost { font-size: 13px; font-weight: 600; color: var(--c-text2); background: var(--ios-fill); border: 1px solid var(--ios-sep); border-radius: 9px; padding: 7px 14px; cursor: pointer; }
+        .canon-btn-danger { font-size: 12px; font-weight: 700; color: var(--ios-red); background: none; border: 1px solid var(--ios-sep); border-radius: 9px; padding: 7px 12px; cursor: pointer; }
+        .canon-ver-item { border: 1px solid var(--ios-sep); border-radius: 9px; padding: 9px 12px; background: var(--c-card); display: flex; align-items: center; gap: 10px; font-size: 12px; }
+        .canon-ver-item .cv-meta { flex: 1; color: var(--c-text2); }
+        .canon-ver-item b { color: var(--c-text); }
+
     </style>
 </head>
 <body>
@@ -2155,6 +2205,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </button>
             <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
             <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="위키 문서"><span class="cs-ico">📚</span><span class="cs-label">위키 문서</span></button>
+            <button class="cs-nav" id="cs-nav-canon" onclick="switchView('canon')" title="게임 정전(Canon)"><span class="cs-ico">🎮</span><span class="cs-label">게임 정전</span></button>
             <button class="cs-nav" onclick="openReviewInbox()" title="결정/리뷰"><span class="cs-ico">🗳</span><span class="cs-label">결정/리뷰</span><span class="cs-badge" id="cs-review-badge">0</span></button>
             <div class="cs-section cs-label">도구</div>
             <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
@@ -2328,6 +2379,47 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="text-xl hover:scale-110 transition-transform bg-gray-100 p-2 rounded-lg border border-gray-300 shadow-sm" onclick="copyProgressToClipboard()" title="진척률 마크다운 복사">📋</button>
                 </div>
                 <div id="progress-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8" style="padding-bottom:60px;"></div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- [v40 B3] 게임 정전 (Canon) VIEW -->
+        <!-- ========================================== -->
+        <div id="canon-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="canon-wrap">
+                <div class="canon-list-pane">
+                    <div class="canon-list-head">
+                        <span>🎮 게임 정전</span>
+                        <button onclick="createCanonDoc()" class="canon-add">+ 새 문서</button>
+                    </div>
+                    <input type="text" id="canon-search" oninput="renderCanonView()" placeholder="제목 검색..." class="canon-search">
+                    <div id="canon-list" class="canon-list"></div>
+                </div>
+                <div class="canon-editor-pane">
+                    <div id="canon-empty" class="canon-empty">
+                        <div style="font-size:40px;">🎮</div>
+                        <p>왼쪽에서 정전(canon) 문서를 선택하거나 <b>새로 만드세요</b>.</p>
+                        <p style="font-size:12px;opacity:.7;">실제 게임과 일치하는 조합/게임루프 등을 버전관리·승인과 함께 보관합니다. (프로젝트별)</p>
+                    </div>
+                    <div id="canon-editor" class="canon-editor" style="display:none;">
+                        <div class="canon-meta" id="canon-meta"></div>
+                        <div class="canon-head-row">
+                            <input type="text" id="canon-title" class="canon-title-input" placeholder="문서 제목" oninput="_canonDirty()">
+                            <input type="text" id="canon-category" class="canon-cat-input" placeholder="카테고리 (예: 조합 / 게임루프)" oninput="_canonDirty()">
+                        </div>
+                        <div class="canon-body">
+                            <textarea id="canon-content" class="canon-textarea" placeholder="# 마크다운으로 작성하세요..." oninput="_canonPreview()"></textarea>
+                            <div id="canon-preview" class="canon-preview markdown-body"></div>
+                        </div>
+                        <div class="canon-actions">
+                            <button onclick="saveCanonDoc()" class="canon-btn-save" id="canon-save-btn">💾 저장 (새 버전)</button>
+                            <button onclick="approveCanonDoc()" class="canon-btn-approve" id="canon-approve-btn">✅ 승인</button>
+                            <button onclick="openCanonHistory()" class="canon-btn-ghost">🕓 버전 기록</button>
+                            <div style="flex:1;"></div>
+                            <button onclick="deleteCanonDoc()" class="canon-btn-danger">🗑 삭제</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -2563,6 +2655,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 </div>
             </div>
             <div id="review-inbox-list" class="flex-1 overflow-y-auto pr-1" style="min-height:160px;display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+    </div>
+
+    <!-- [v40 B3] 정전 버전 기록 모달 -->
+    <div id="canon-history-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('canon-history-modal')">
+        <div class="bg-white p-5 rounded-xl w-[560px] max-w-[94vw] shadow-2xl border border-gray-200 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h2 class="text-lg font-black text-gray-800">🕓 버전 기록</h2>
+                <button onclick="closeModal('canon-history-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
+            </div>
+            <div id="canon-history-list" class="flex-1 overflow-y-auto pr-1" style="min-height:120px;display:flex;flex-direction:column;gap:8px;"></div>
         </div>
     </div>
 
@@ -3863,6 +3966,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var _csK = document.getElementById('cs-nav-kanban'), _csD = document.getElementById('cs-nav-docs');
             if (_csK) _csK.classList.toggle('active', viewName === 'kanban');
             if (_csD) _csD.classList.toggle('active', viewName === 'docs');
+            // [v40 B3] 게임 정전 뷰 토글
+            var _csC = document.getElementById('cs-nav-canon'); if (_csC) _csC.classList.toggle('active', viewName === 'canon');
+            var _cvw = document.getElementById('canon-view'); if (_cvw) { _cvw.classList.toggle('hidden', viewName !== 'canon'); _cvw.classList.toggle('block', viewName === 'canon'); }
             const previewBtn = document.getElementById('btn-toggle-preview');
             const editorBtn = document.getElementById('btn-toggle-editor');
             const gifBtn = document.getElementById('btn-gif-picker');
@@ -3886,7 +3992,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 // [v35] 위키 검색바는 사이드바로 이동됨. docs 뷰 진입 시 자동으로 열지 않음 (Ctrl+F 또는 🔍 클릭으로만 열림)
                 var pg=document.getElementById('pc-btn-gif');
                 if(pg)pg.style.display='inline-flex'; // GIF shown in docs view
-            } else {
+            } else if (viewName === 'docs') {
                 document.getElementById('kanban-view').classList.remove('block');
                 document.getElementById('kanban-view').classList.add('hidden');
                 var dv=document.getElementById('docs-view'); dv.classList.remove('hidden'); dv.classList.add('flex-show');
@@ -3908,7 +4014,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 
                 if(!isDocSidebarOpen) document.getElementById('doc-sidebar-mini-count').innerText = currentData.docs ? currentData.docs.filter(d=>d.projectId===activeProjectId).length : 0;
                 updateProjectTitle();
-                renderDocTree(); 
+                renderDocTree();
+            } else if (viewName === 'canon') {
+                // [v40 B3] 게임 정전 뷰
+                var _kvc = document.getElementById('kanban-view'); if (_kvc) { _kvc.classList.add('hidden'); _kvc.classList.remove('block'); }
+                var _dvc = document.getElementById('docs-view'); if (_dvc) { _dvc.classList.add('hidden'); _dvc.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpc = document.getElementById('gif-picker'); if (_gpc) _gpc.style.display = 'none';
+                if (typeof renderCanonView === 'function') renderCanonView();
             }
         }
 
@@ -4173,6 +4286,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!data.sprints) data.sprints = []; // [v40 Day2 청크 4]
             if (!data.users) data.users = [];     // [v40 Day3 청크 2]
             if (!data.reviews) data.reviews = []; // [v40 Day3 청크 2]
+            if (!data.canon) data.canon = [];     // [v40 B3] 게임 정전
             if (!data.wikiAnnotations) data.wikiAnnotations = {};
 
             const docIds = new Set(data.docs.map(d => d.id));
@@ -4548,6 +4662,26 @@ return data;
             }
             return { error };
         }
+        // [v40 B3] canon 문서 upsert / delete
+        async function dbUpsertCanonDoc(c) {
+            if (!supabaseClient) return { error: null };
+            const { error } = await supabaseClient.from('canon_docs').upsert({
+                id: c.id, project_id: c.projectId || activeProjectId, category: c.category || '일반',
+                title: c.title || '제목 없음', content: c.content || '', version: c.version || 1,
+                status: c.status || 'draft',
+                created_by: c.createdBy || null, created_by_name: c.createdByName || '',
+                updated_by: c.updatedBy || null, updated_by_name: c.updatedByName || '', updated_at: c.updatedAt || new Date().toISOString(),
+                approved_by: c.approvedBy || null, approved_by_name: c.approvedByName || '', approved_at: c.approvedAt || null,
+                version_history: c.versionHistory || [], sort_order: c.sortOrder || 0
+            });
+            if (error) { console.error('[dbUpsertCanonDoc]', error); if (typeof showToast === 'function') showToast('⚠️ 정전 문서 저장 실패: ' + (error.message || '') + ' (canon_docs 테이블 SQL 실행 필요)', 'alert'); }
+            return { error };
+        }
+        async function dbDeleteCanonDoc(id) {
+            if (!supabaseClient) return;
+            const { error } = await supabaseClient.from('canon_docs').delete().eq('id', id);
+            if (error) console.error('[dbDeleteCanonDoc]', error);
+        }
 
         // ==========================================
         // 분절 테이블에서 currentData 조립
@@ -4578,7 +4712,19 @@ return data;
                 createdAt: r.created_at || null, expiresAt: r.expires_at || null, decidedAt: r.decided_at || null
             };
         }
-        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData, usersData, reviewData) {
+        // [v40 B3] canon_docs row(snake) → app 객체(camel)
+        function _mapCanonRow(c) {
+            return {
+                id: c.id, projectId: c.project_id || 'default', category: c.category || '일반',
+                title: c.title || '제목 없음', content: c.content || '', version: c.version || 1,
+                status: c.status || 'draft',
+                createdBy: c.created_by || null, createdByName: c.created_by_name || '', createdAt: c.created_at || null,
+                updatedBy: c.updated_by || null, updatedByName: c.updated_by_name || '', updatedAt: c.updated_at || null,
+                approvedBy: c.approved_by || null, approvedByName: c.approved_by_name || '', approvedAt: c.approved_at || null,
+                versionHistory: c.version_history || [], sortOrder: c.sort_order || 0
+            };
+        }
+        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData, usersData, reviewData, canonData) {
             const cmtMap = {};
             (cmtData || []).forEach(c => {
                 if (!cmtMap[c.task_id]) cmtMap[c.task_id] = [];
@@ -4639,6 +4785,7 @@ return data;
                     avatarUrl: u.avatar_url || null, provider: u.provider || '', role: u.role || 'member'
                 })),
                 reviews: (reviewData || []).map(_mapReviewRow),
+                canon: (canonData || []).map(_mapCanonRow),
                 tagColors: tagColors,
                 images: {}, wikiAnnotations: {}, changeLog: []
             };
@@ -4711,7 +4858,7 @@ return data;
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
                 const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type, is_locked'; // [v40 Day3 청크1/3·Day4] 링크·doc_type·is_locked 메타 포함 (없으면 dbUpsertDoc이 덮어씀)
-                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes] = await Promise.all([
+                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes, canonRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
                     supabaseClient.from('tasks').select('*').order('sort_order'),
@@ -4720,7 +4867,8 @@ return data;
                     supabaseClient.from('tag_colors').select('*'),
                     supabaseClient.from('sprints').select('*').order('created_at'), // [v40 Day2 청크 4]
                     supabaseClient.from('users').select('*'),                        // [v40 Day3 청크 2]
-                    supabaseClient.from('review_requests').select('*').order('created_at') // [v40 Day3 청크 2]
+                    supabaseClient.from('review_requests').select('*').order('created_at'), // [v40 Day3 청크 2]
+                    supabaseClient.from('canon_docs').select('*').order('sort_order')      // [v40 B3] 게임 정전
                 ]);
                 if (projRes.error) throw projRes.error;
                 if (taskRes.error) throw taskRes.error;
@@ -4728,6 +4876,7 @@ return data;
                 if (sprintRes.error) console.warn('[sprints load]', sprintRes.error); // 스프린트 로드 실패는 치명적이지 않음
                 if (usersRes.error) console.warn('[users load]', usersRes.error);
                 if (reviewRes.error) console.warn('[reviews load]', reviewRes.error);
+                if (canonRes && canonRes.error) console.warn('[canon load]', canonRes.error);
 
                 // 메타만 받았으므로 content 필드를 빈 문자열로 보강
                 // 실제 content는 openDoc() 내부에서 fetch (B5)
@@ -4741,7 +4890,7 @@ return data;
                 currentData = _assembleCurrentData(
                     projRes.data, catRes.data, taskRes.data,
                     docRes.data, cmtRes.data, tagRes.data, sprintRes.data,
-                    usersRes.data, reviewRes.data
+                    usersRes.data, reviewRes.data, (canonRes ? canonRes.data : [])
                 );
                 currentData = validateData(currentData);
                 wikiAnnotations = currentData.wikiAnnotations || {};
@@ -4953,6 +5102,25 @@ return data;
                         }
                     });
 
+                // ★ Realtime: canon_docs 변경 감지 [v40 B3]
+                supabaseClient.channel('rt-canon')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'canon_docs' }, (payload) => {
+                        const ev = payload.eventType;
+                        if (!Array.isArray(currentData.canon)) currentData.canon = [];
+                        if (ev === 'INSERT' || ev === 'UPDATE') {
+                            const mapped = _mapCanonRow(payload.new);
+                            const idx = currentData.canon.findIndex(x => x.id === mapped.id);
+                            if (idx > -1) currentData.canon[idx] = mapped; else currentData.canon.push(mapped);
+                        } else if (ev === 'DELETE') {
+                            currentData.canon = currentData.canon.filter(x => x.id !== payload.old.id);
+                            if (activeCanonId === payload.old.id) activeCanonId = null;
+                        }
+                        if (currentView === 'canon' && typeof renderCanonView === 'function') renderCanonView();
+                        _safeLocalCache(currentData);
+                    }).subscribe(function(status, err) {
+                        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[rt-canon] 연결 끊김:', status, err);
+                    });
+
                 // Presence 채널
                 globalRoom = supabaseClient.channel('room_pb3', {
                     config: { presence: { key: myClientId } }
@@ -5083,9 +5251,11 @@ return data;
             activeProjectId = projId;
             activeDocId = null;
             focusedCategoryId = null;
+            activeCanonId = null;
             updateDocEditorUI();
             updateProjectTitle();
             renderDocTree();
+            if (currentView === 'canon' && typeof renderCanonView === 'function') renderCanonView();
             // [v40] 칸반/진척/스프린트/리뷰도 프로젝트 단위로 갱신
             if (typeof renderBoard === 'function') renderBoard();
             if (typeof renderProgress === 'function') renderProgress();
@@ -7462,6 +7632,159 @@ ${intrLog}
             _safeLocalCache(currentData);
             if (currentView === 'docs' && typeof renderDocTree === 'function') renderDocTree();
             showToast('🗓 회고 자동 생성: ' + retroDoc.title, 'info');
+        }
+
+        // ==========================================
+        // [v40 B3] 게임 정전(Canon) 위키 — 버전관리 + 승인 (프로젝트별)
+        // ==========================================
+        let activeCanonId = null;
+        function projectCanonDocs() { return (currentData.canon || []).filter(c => (c.projectId || 'default') === activeProjectId); }
+        function renderCanonView() { renderCanonList(); renderCanonEditor(); }
+
+        function renderCanonList() {
+            const listEl = document.getElementById('canon-list');
+            if (!listEl) return;
+            const qel = document.getElementById('canon-search');
+            const ql = (qel ? qel.value : '').toLowerCase().trim();
+            const docs = projectCanonDocs().filter(c => !ql || (c.title || '').toLowerCase().includes(ql) || (c.category || '').toLowerCase().includes(ql));
+            if (docs.length === 0) { listEl.innerHTML = '<div class="linked-empty" style="padding:16px;">문서 없음 — + 새 문서</div>'; return; }
+            const groups = {};
+            docs.forEach(c => { const k = c.category || '일반'; (groups[k] = groups[k] || []).push(c); });
+            let html = '';
+            Object.keys(groups).sort().forEach(cat => {
+                html += `<div class="canon-cat-group">${_sprintEsc(cat)}</div>`;
+                groups[cat].sort((a, b) => (a.title || '').localeCompare(b.title || '')).forEach(c => {
+                    const badge = c.status === 'approved' ? '<span class="ci-badge ci-approved">승인</span>' : '<span class="ci-badge ci-draft">draft</span>';
+                    html += `<button class="canon-item ${c.id === activeCanonId ? 'active' : ''}" onclick="openCanonDoc('${c.id}')"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_sprintEsc(c.title)}</span><span style="font-size:10px;opacity:.55;">v${c.version || 1}</span>${badge}</button>`;
+                });
+            });
+            listEl.innerHTML = html;
+        }
+
+        function renderCanonEditor() {
+            const editor = document.getElementById('canon-editor');
+            const empty = document.getElementById('canon-empty');
+            const doc = activeCanonId ? (currentData.canon || []).find(c => c.id === activeCanonId) : null;
+            if (!doc) { if (editor) editor.style.display = 'none'; if (empty) empty.style.display = 'flex'; return; }
+            if (empty) empty.style.display = 'none';
+            if (editor) editor.style.display = 'block';
+            document.getElementById('canon-title').value = doc.title || '';
+            document.getElementById('canon-category').value = doc.category || '';
+            document.getElementById('canon-content').value = doc.content || '';
+            _canonPreview();
+            renderCanonMeta(doc);
+            const ab = document.getElementById('canon-approve-btn');
+            if (ab) { if (doc.status === 'approved') { ab.textContent = '✅ 승인됨 (클릭 해제)'; ab.classList.add('approved'); } else { ab.textContent = '✅ 승인'; ab.classList.remove('approved'); } }
+        }
+        function renderCanonMeta(doc) {
+            const el = document.getElementById('canon-meta'); if (!el) return;
+            const fmt = t => t ? new Date(t).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+            const statusHtml = doc.status === 'approved'
+                ? `<span class="cm-status-approved">✅ 승인됨</span> · 승인자 <b>${_sprintEsc(doc.approvedByName || '?')}</b> (${fmt(doc.approvedAt)})`
+                : `<span class="cm-status-draft">✎ 초안(draft)</span>`;
+            el.innerHTML = `<span class="cm-ver">v${doc.version || 1}</span>
+                <span>작성 <b>${_sprintEsc(doc.createdByName || '?')}</b> · ${fmt(doc.createdAt)}</span>
+                <span>최종수정 <b>${_sprintEsc(doc.updatedByName || '?')}</b> · ${fmt(doc.updatedAt)}</span>
+                <span>${statusHtml}</span>`;
+        }
+        function _canonPreview() {
+            const ta = document.getElementById('canon-content'), pv = document.getElementById('canon-preview');
+            if (ta && pv) pv.innerHTML = DOMPurify.sanitize(parseMarkdownWithTables(ta.value), domPurifyConfig);
+        }
+        function _canonDirty() { /* (미저장 표시용 훅 — 현재 no-op) */ }
+
+        function createCanonDoc() {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            const now = new Date().toISOString();
+            const doc = {
+                id: 'canon_' + Date.now(), projectId: activeProjectId, category: '일반',
+                title: '새 정전 문서', content: '# 새 정전 문서\n\n실제 게임과 일치하는 내용을 작성하세요. (조합 / 게임루프 등)',
+                version: 1, status: 'draft',
+                createdBy: currentUser.id, createdByName: myNickname, createdAt: now,
+                updatedBy: currentUser.id, updatedByName: myNickname, updatedAt: now,
+                approvedBy: null, approvedByName: '', approvedAt: null, versionHistory: [], sortOrder: Date.now()
+            };
+            if (!Array.isArray(currentData.canon)) currentData.canon = [];
+            currentData.canon.push(doc);
+            activeCanonId = doc.id;
+            _safeLocalCache(currentData);
+            dbUpsertCanonDoc(doc);
+            renderCanonView();
+            setTimeout(() => { const t = document.getElementById('canon-title'); if (t) { t.focus(); t.select(); } }, 50);
+        }
+        function openCanonDoc(id) { activeCanonId = id; renderCanonView(); }
+
+        function saveCanonDoc() {
+            const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
+            const newTitle = (document.getElementById('canon-title').value || '').trim() || '제목 없음';
+            const newCat = (document.getElementById('canon-category').value || '').trim() || '일반';
+            const newContent = document.getElementById('canon-content').value;
+            if (newTitle === doc.title && newCat === doc.category && newContent === doc.content) { showToast('변경 사항이 없습니다.', 'info'); return; }
+            if (!Array.isArray(doc.versionHistory)) doc.versionHistory = [];
+            doc.versionHistory.push({ version: doc.version || 1, title: doc.title, content: doc.content, category: doc.category, by: doc.updatedBy, byName: doc.updatedByName, at: doc.updatedAt });
+            if (doc.versionHistory.length > 50) doc.versionHistory = doc.versionHistory.slice(-50); // 보관 한도
+            doc.version = (doc.version || 1) + 1;
+            doc.title = newTitle; doc.category = newCat; doc.content = newContent;
+            doc.updatedBy = currentUser ? currentUser.id : null; doc.updatedByName = myNickname; doc.updatedAt = new Date().toISOString();
+            let reapprove = false;
+            if (doc.status === 'approved') { doc.status = 'draft'; doc.approvedBy = null; doc.approvedByName = ''; doc.approvedAt = null; reapprove = true; }
+            _safeLocalCache(currentData);
+            dbUpsertCanonDoc(doc);
+            renderCanonView();
+            showToast(reapprove ? `💾 v${doc.version} 저장 — 내용 변경으로 재승인 필요` : `💾 v${doc.version} 저장됨`, 'success');
+        }
+        function approveCanonDoc() {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
+            if (doc.status === 'approved') {
+                if (!confirm('승인을 해제할까요?')) return;
+                doc.status = 'draft'; doc.approvedBy = null; doc.approvedByName = ''; doc.approvedAt = null;
+            } else {
+                doc.status = 'approved'; doc.approvedBy = currentUser.id; doc.approvedByName = myNickname; doc.approvedAt = new Date().toISOString();
+            }
+            _safeLocalCache(currentData);
+            dbUpsertCanonDoc(doc);
+            renderCanonView();
+            showToast(doc.status === 'approved' ? `✅ v${doc.version} 승인됨` : '승인 해제됨', 'success');
+        }
+        function deleteCanonDoc() {
+            const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
+            if (!confirm(`'${doc.title}' 정전 문서를 삭제할까요? (버전 기록 포함 영구 삭제)`)) return;
+            currentData.canon = (currentData.canon || []).filter(c => c.id !== doc.id);
+            dbDeleteCanonDoc(doc.id);
+            activeCanonId = null;
+            _safeLocalCache(currentData);
+            renderCanonView();
+            showToast('🗑 정전 문서 삭제됨', 'info');
+        }
+        function openCanonHistory() {
+            const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
+            const listEl = document.getElementById('canon-history-list'); if (!listEl) return;
+            const fmt = t => t ? new Date(t).toLocaleString('ko-KR') : '-';
+            const hist = (doc.versionHistory || []).slice().reverse();
+            let html = `<div class="canon-ver-item"><div class="cv-meta">현재 <b>v${doc.version}</b> · ${_sprintEsc(doc.updatedByName || '?')} · ${fmt(doc.updatedAt)}${doc.status === 'approved' ? ' · ✅승인' : ''}</div></div>`;
+            html += hist.map(v => `<div class="canon-ver-item"><div class="cv-meta"><b>v${v.version}</b> · ${_sprintEsc(v.byName || '?')} · ${fmt(v.at)}</div><button class="canon-btn-ghost" onclick="viewCanonVersion(${v.version})">보기</button><button class="canon-btn-ghost" onclick="restoreCanonVersion(${v.version})">복원</button></div>`).join('');
+            if (hist.length === 0) html += '<div class="linked-empty" style="padding:12px;">이전 버전 없음 (저장 시 누적)</div>';
+            listEl.innerHTML = html;
+            openModal('canon-history-modal');
+        }
+        function viewCanonVersion(ver) {
+            const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
+            const v = (doc.versionHistory || []).find(x => x.version === ver); if (!v) return;
+            const pv = document.getElementById('canon-preview');
+            if (pv) pv.innerHTML = '<div style="font-size:11px;color:var(--c-accent);font-weight:700;margin-bottom:8px;">📜 v' + ver + ' 미리보기 (복원 전까지 저장 안 됨)</div>' + DOMPurify.sanitize(parseMarkdownWithTables(v.content || ''), domPurifyConfig);
+            closeModal('canon-history-modal');
+        }
+        function restoreCanonVersion(ver) {
+            const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
+            const v = (doc.versionHistory || []).find(x => x.version === ver); if (!v) return;
+            if (!confirm(`v${ver} 내용으로 복원할까요? (현재 내용은 버전 기록으로 보존됩니다)`)) return;
+            document.getElementById('canon-title').value = v.title || doc.title;
+            document.getElementById('canon-category').value = v.category || doc.category;
+            document.getElementById('canon-content').value = v.content || '';
+            closeModal('canon-history-modal');
+            _canonPreview();
+            saveCanonDoc();
         }
 
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
