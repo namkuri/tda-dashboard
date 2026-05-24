@@ -89,6 +89,9 @@ Supabase(인증·DB·Realtime) + GitHub Pages(배포) + Tauri(.msi 데스크톱)
 - **Day 3 청크 4**: Tauri deep-link OAuth (`tda://auth-callback`) — `tauri-plugin-deep-link` + (데스크톱)`tauri-plugin-single-instance`, `tauri.conf.json` schemes, `main.rs`가 딥링크 URL → webview `window.__tdaAuthCallback(url)` eval, 프론트 `IS_TAURI` 감지 + `redirectTo` 분기 + 토큰 추출 `setSession`. **`cargo check` 통과**(빌드 영향 없음). 사용자 액션: Supabase Redirect URL에 `tda://auth-callback` 추가 + 재빌드 + 테스트 → `docs/TAURI_OAUTH_SETUP.md` §1.
   - ⏸ **updater 미적용**(빌드 안정성·개인 서명키 필요). 적용법은 `docs/TAURI_OAUTH_SETUP.md` §2 (키 생성 → Cargo/conf/main.rs/release.yml).
 
+- **UI 리스타일(Claude 데스크톱 룩)**: 웜 페이퍼 배경 + 클레이 오렌지 액센트 + 클린 타이포 + 웜 다크모드(슬레이트#1e293b→웜 교정). `:root`/`body.dark`/`body.dark-pure`의 `--ios-*` 변수 재매핑 + 컴포넌트 오버라이드(파일 끝 `<style>`). **좌측 네비 사이드바**(`#claude-sidebar`, 데스크톱 전용): 칸반/위키/리뷰 + 도구(코멘트/변경로그/DB) + 테마/설정/접속수/사용자. 데스크톱은 `#pc-header` 숨김(사이드바로 대체), 모바일은 기존 ios-topbar 유지. 데스크톱 리뷰 버튼 누락도 사이드바로 해결. JS 훅: switchView 활성표시·updateAuthUI·renderReviewBadge·온라인수에 사이드바 id 반영.
+  - ⚠️ 시각 검증 미완(브라우저/OAuth 불가) → 사용자가 https://namkuri.github.io/tda-dashboard/ (데스크톱 브라우저=동일 is-desktop)에서 눈으로 확인 후 .msi 빌드 권장. 색/여백 미세조정 필요시 알려주세요.
+
 ### 🔲 남은 작업 (사용자 환경 필요)
 - **통합 테스트**: `docs/V40_TEST_GUIDE.md` 체크리스트로 라이브/.msi 점검
 - Supabase SQL 1줄(sprints.history) + Redirect URL `tda://auth-callback` 추가 (`docs/TAURI_OAUTH_SETUP.md`)

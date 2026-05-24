@@ -1687,6 +1687,95 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             overflow: hidden;
         }
 
+        /* ============================================================
+           [v40] Claude Desktop 테마 — 웜 페이퍼 + 클레이 액센트 + 좌측 사이드바
+           (파일 끝에 추가되어 위 규칙을 덮어씀)
+           ============================================================ */
+        :root {
+            --c-accent: #C96442; --c-accent-hover: #B5573A; --c-accent-soft: #F3E6DF;
+            --c-paper: #FBFAF7; --c-sidebar-bg: #F1EEE6; --c-card: #FFFFFF;
+            --c-text: #2B2A26; --c-text2: #57544C; --c-text3: #8C887C;
+            --c-border: #E7E3D8;
+            /* iOS 변수 매핑 → Claude 팔레트 (var(--ios-*) 사용처 전체 반영) */
+            --ios-bg: #FBFAF7; --ios-bg2: #FFFFFF; --ios-bg3: #F4F1E9; --ios-grouped-bg: #FBFAF7;
+            --ios-card: #FFFFFF;
+            --ios-blue: #C96442; --ios-blue-light: #F3E6DF;
+            --ios-purple: #9A6A4B; --ios-teal: #5B7C8A; --ios-orange: #C58A3A;
+            --ios-green: #5E8C61; --ios-red: #BF4D43;
+            --ios-label: #2B2A26; --ios-label2: #57544C; --ios-label3: #8C887C; --ios-label4: rgba(43,42,38,0.16);
+            --ios-sep: #E7E3D8; --ios-fill: rgba(60,54,42,0.05); --ios-fill2: rgba(60,54,42,0.09);
+            --ios-shadow: 0 1px 2px rgba(60,54,42,0.06), 0 6px 20px rgba(60,54,42,0.05);
+            --ios-shadow-sm: 0 1px 2px rgba(60,54,42,0.05);
+            --dev-a: #9A6A4B; --dev-b: #5E8C61; --p0-red: #BF4D43; --p1-yellow: #C58A3A; --p2-blue: #5B7C8A;
+        }
+        body.dark, body.dark-pure {
+            --c-accent: #D97757; --c-accent-hover: #E0896B; --c-accent-soft: #3A2E27;
+            --c-paper: #262624; --c-sidebar-bg: #1F1E1C; --c-card: #2F2E2B;
+            --c-text: #ECE9E1; --c-text2: #B4AFA3; --c-text3: #8A8578; --c-border: #3B3934;
+            --ios-bg: #262624; --ios-bg2: #2F2E2B; --ios-bg3: #353330; --ios-grouped-bg: #262624;
+            --ios-card: #2F2E2B;
+            --ios-blue: #D97757; --ios-blue-light: #3A2E27;
+            --ios-purple: #C28C68; --ios-teal: #7FA0AE; --ios-orange: #D6A65C;
+            --ios-green: #7FA882; --ios-red: #D9685E;
+            --ios-label: #ECE9E1; --ios-label2: #B4AFA3; --ios-label3: #8A8578; --ios-label4: rgba(236,233,225,0.16);
+            --ios-sep: #3B3934; --ios-fill: rgba(255,250,240,0.06); --ios-fill2: rgba(255,250,240,0.10);
+        }
+        body.dark-pure { --c-paper: #1A1917; --c-sidebar-bg: #141312; --c-card: #222120; --ios-bg: #1A1917; --ios-bg2: #222120; --ios-card: #222120; }
+
+        /* 폰트 — 휴머니스트 sans (Claude 느낌) */
+        html.is-desktop body, html.is-mobile body {
+            font-family: 'Inter', 'Pretendard', -apple-system, 'Noto Sans KR', system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased; letter-spacing: -0.01em;
+        }
+        html.is-desktop body, html.is-desktop #app-wrapper { background: var(--c-paper); color: var(--c-text); }
+
+        /* 다크 슬레이트(#1e293b/#334155/#141414) → 웜 다크 교정 */
+        html.is-desktop body.dark .task-card, html.is-desktop body.dark .kanban-col-wrapper,
+        html.is-desktop body.dark .filter-bar, body.dark .task-card, body.dark .filter-bar,
+        body.dark .kanban-col-minimized, body.dark-pure .task-card, body.dark-pure .kanban-col-wrapper {
+            background: var(--ios-card) !important; border-color: var(--ios-sep) !important; color: var(--ios-label);
+        }
+        body.dark #settings-modal .bg-gray-50, body.dark #json-sidebar, body.dark #comments-sidebar { background: var(--ios-bg2) !important; }
+
+        /* 카드 / 컬럼 / 필터 — 웜·소프트 */
+        html.is-desktop .task-card { border: 1px solid var(--ios-sep); box-shadow: var(--ios-shadow-sm); border-radius: 12px; }
+        html.is-desktop .kanban-col-minimized { background: var(--ios-bg3) !important; border-color: var(--ios-sep) !important; }
+        html.is-desktop .filter-bar { background: var(--c-card); border: 1px solid var(--ios-sep); border-radius: 12px; box-shadow: none; }
+        html.is-desktop .col-header { border-bottom-color: var(--c-text) !important; }
+
+        /* util-btn → 클레이 primary / 중립 보조 */
+        html.is-desktop button.util-btn { background: var(--c-accent) !important; color: #fff !important; border-radius: 9px; box-shadow: none; font-weight: 600; }
+        html.is-desktop button.util-btn:hover { background: var(--c-accent-hover) !important; }
+        html.is-desktop button.util-btn.bg-gray-600, html.is-desktop button.util-btn.bg-gray-700 { background: var(--ios-fill2) !important; color: var(--c-text) !important; }
+        html.is-desktop button.util-btn.bg-gray-600:hover, html.is-desktop button.util-btn.bg-gray-700:hover { background: var(--ios-fill) !important; }
+
+        /* ============================================================
+           좌측 네비 사이드바 (데스크톱 전용)
+           ============================================================ */
+        #claude-sidebar { display: none; }
+        html.is-desktop #claude-sidebar {
+            display: flex; flex-direction: column;
+            position: fixed; left: 0; top: 0; bottom: 0; width: 220px; z-index: 95;
+            background: var(--c-sidebar-bg); border-right: 1px solid var(--c-border);
+            padding: 14px 10px; gap: 3px; overflow-y: auto;
+        }
+        html.is-desktop #app-wrapper { padding-left: 220px !important; }
+        html.is-desktop #pc-header { display: none !important; }
+        .cs-brand { display: flex; align-items: center; gap: 9px; padding: 4px 10px 16px; font-weight: 800; font-size: 17px; color: var(--c-text); letter-spacing: -0.02em; }
+        .cs-brand .cs-dot { width: 24px; height: 24px; border-radius: 7px; background: var(--c-accent); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 800; }
+        .cs-nav { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--c-text2); cursor: pointer; border: none; background: none; text-align: left; width: 100%; transition: background .12s, color .12s; }
+        .cs-nav:hover { background: rgba(60,54,42,0.06); color: var(--c-text); }
+        body.dark .cs-nav:hover { background: rgba(255,250,240,0.06); }
+        .cs-nav.active { background: var(--c-accent-soft); color: var(--c-accent); }
+        .cs-nav .cs-ico { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+        .cs-section { font-size: 11px; font-weight: 700; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.06em; padding: 14px 12px 4px; }
+        .cs-spacer { flex: 1 1 auto; min-height: 12px; }
+        .cs-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; background: var(--c-accent); color: #fff; border-radius: 9px; font-size: 10px; font-weight: 800; display: none; align-items: center; justify-content: center; }
+        .cs-foot { border-top: 1px solid var(--c-border); padding-top: 8px; margin-top: 4px; }
+        .cs-status { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 11px; color: var(--c-text3); }
+        .cs-userpill { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-top: 2px; border-radius: 9px; background: rgba(60,54,42,0.04); }
+        body.dark .cs-userpill { background: rgba(255,250,240,0.04); }
+
     </style>
 </head>
 <body>
@@ -1981,6 +2070,25 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
     <!-- 앱 래퍼 -->
     <div id="app-wrapper" onclick="unfocusCategory()">
+
+        <!-- [v40] Claude 스타일 좌측 네비 사이드바 (데스크톱 전용) -->
+        <aside id="claude-sidebar" onclick="event.stopPropagation()">
+            <div class="cs-brand"><span class="cs-dot">T</span> TDA</div>
+            <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')"><span class="cs-ico">📋</span> 칸반 보드</button>
+            <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')"><span class="cs-ico">📚</span> 위키 문서</button>
+            <button class="cs-nav" onclick="openReviewInbox()"><span class="cs-ico">🗳</span> 결정/리뷰 <span class="cs-badge" id="cs-review-badge">0</span></button>
+            <div class="cs-section">도구</div>
+            <button class="cs-nav" onclick="toggleCommentsSidebar()"><span class="cs-ico">💬</span> 코멘트</button>
+            <button class="cs-nav" onclick="openChangeLog()"><span class="cs-ico">🕓</span> 변경 로그</button>
+            <button class="cs-nav" onclick="toggleJsonSidebar()"><span class="cs-ico">🗄️</span> DB 도구</button>
+            <div class="cs-spacer"></div>
+            <div class="cs-foot">
+                <div class="cs-status"><span style="width:7px;height:7px;border-radius:50%;background:var(--ios-green);display:inline-block;"></span> 접속 <span id="cs-online">1</span>명</div>
+                <button class="cs-nav" onclick="cycleDarkMode()"><span class="cs-ico">🌙</span> 테마</button>
+                <button class="cs-nav" onclick="toggleSettings()"><span class="cs-ico">⚙️</span> 화면 설정</button>
+                <div class="cs-userpill" id="cs-user"><span style="font-size:12px;color:var(--c-text3);">로그인 필요</span></div>
+            </div>
+        </aside>
 
         <!-- iOS 스타일 상단 바 -->
         <div id="ios-topbar" onclick="event.stopPropagation()">
@@ -2583,11 +2691,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var avatar = myAvatarUrl 
                     ? '<img src="'+myAvatarUrl+'" style="width:20px;height:20px;border-radius:50%;object-fit:cover;">'
                     : '<span style="width:20px;height:20px;border-radius:50%;background:#7C3AED;color:white;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">'+(myNickname[0]||'?').toUpperCase()+'</span>';
-                pillEl.innerHTML = avatar 
+                pillEl.innerHTML = avatar
                     + '<span style="font-size:12px;font-weight:600;color:var(--ios-label);">'+myNickname+'</span>'
                     + '<span style="font-size:10px;opacity:0.6;">'+providerIcon+'</span>'
                     + '<button onclick="signOut()" title="로그아웃" style="background:none;border:none;cursor:pointer;color:var(--ios-red,#dc2626);font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;">↪</button>';
                 pillEl.style.display = 'flex';
+            }
+            // [v40] 좌측 사이드바 사용자 pill
+            var csUser = document.getElementById('cs-user');
+            if (csUser && currentUser) {
+                var csProvider = myAuthProvider === 'github' ? '⚫' : '🔵';
+                var csAvatar = myAvatarUrl
+                    ? '<img src="'+myAvatarUrl+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
+                    : '<span style="width:26px;height:26px;border-radius:50%;background:var(--c-accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">'+((myNickname||'?')[0]||'?').toUpperCase()+'</span>';
+                csUser.innerHTML = csAvatar
+                    + '<span style="font-size:13px;font-weight:600;color:var(--c-text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(myNickname||'')+' '+csProvider+'</span>'
+                    + '<button onclick="signOut()" title="로그아웃" style="background:none;border:none;cursor:pointer;color:var(--ios-red);font-size:13px;font-weight:700;padding:2px 5px;border-radius:6px;flex-shrink:0;">↪</button>';
             }
         }
 
@@ -3661,6 +3780,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function switchView(viewName) {
             currentView = viewName;
             hideToolbar();
+            // [v40] 좌측 사이드바 활성 네비 표시
+            var _csK = document.getElementById('cs-nav-kanban'), _csD = document.getElementById('cs-nav-docs');
+            if (_csK) _csK.classList.toggle('active', viewName === 'kanban');
+            if (_csD) _csD.classList.toggle('active', viewName === 'docs');
             const previewBtn = document.getElementById('btn-toggle-preview');
             const editorBtn = document.getElementById('btn-toggle-editor');
             const gifBtn = document.getElementById('btn-gif-picker');
@@ -4767,7 +4890,7 @@ return data;
                 globalRoom.on('presence', { event: 'sync' }, () => {
                     const newState = globalRoom.presenceState(); let count = 0; const ul = document.getElementById('online-users-list'); ul.innerHTML = '';
                     for (const id in newState) { const users = newState[id]; users.forEach(u => { count++; const li = document.createElement('li'); li.innerText = `- ${u.nickname} ${u.client_id === myClientId ? '(나)' : ''}`; ul.appendChild(li); }); }
-                    document.getElementById('online-count').innerText = count; document.getElementById('header-online-count').innerText = count; var pcC = document.getElementById('header-online-count-pc'); if (pcC) pcC.innerText = count;
+                    document.getElementById('online-count').innerText = count; document.getElementById('header-online-count').innerText = count; var pcC = document.getElementById('header-online-count-pc'); if (pcC) pcC.innerText = count; var csO = document.getElementById('cs-online'); if (csO) csO.innerText = count;
                 });
                 globalRoom.on('presence', { event: 'join' }, ({ key, newPresences }) => {
                     if (Date.now() < _presenceReadyAt) return; // 억제 윈도우 내 무시
@@ -7054,11 +7177,11 @@ return data;
                 !(r.votes || []).find(v => v.userId === currentUser.id)).length;
         }
         function renderReviewBadge() {
-            const b = document.getElementById('review-badge-count');
-            if (!b) return;
             const cnt = myPendingReviewCount();
-            b.textContent = cnt;
-            b.style.display = cnt > 0 ? 'inline-flex' : 'none';
+            const b = document.getElementById('review-badge-count');
+            if (b) { b.textContent = cnt; b.style.display = cnt > 0 ? 'inline-flex' : 'none'; }
+            const cs = document.getElementById('cs-review-badge'); // [v40] 사이드바 뱃지
+            if (cs) { cs.textContent = cnt; cs.style.display = cnt > 0 ? 'inline-flex' : 'none'; }
         }
         function renderReviewInbox() {
             const listEl = document.getElementById('review-inbox-list');
