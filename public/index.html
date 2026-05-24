@@ -272,6 +272,16 @@
         .task-card.zone-buried { opacity: 0.55; filter: grayscale(0.3); }
         html.is-mobile .task-card.zone-now    { box-shadow: inset 3px 0 0 var(--ios-orange, #ff9f0a); }
         html.is-mobile .task-card.zone-buried { opacity: 0.5; }
+        /* 카테고리 헤더 Zone 카운트 */
+        .zone-counts {
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            margin-left: 8px;
+            letter-spacing: 0.3px;
+            user-select: none;
+        }
+        html.is-mobile .zone-counts { color: var(--ios-label3, #adb5bd); }
 
         .details-content { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #dee2e6; font-size: 0.85rem; flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
         .task-card.collapsed .details-content { opacity: 0; pointer-events: none; }
@@ -2271,7 +2281,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // ==========================================
         // [v40] anon key 하드코딩 — Supabase RLS가 보호하므로 공개 안전.
         // 다른 프로젝트로 옮길 때만 변경. localStorage 값이 있으면 우선.
-        const SUPABASE_ANON_KEY_DEFAULT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhybWZ1bmpla2d3aG94dGx0enJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MDM5NTgsImV4cCI6MjA5NTE3OTk1OH0.0C0bZd8pT6MbkeFepsy_3Qb3SseQlI9N4S4z_QOJgwU";
+        const SUPABASE_ANON_KEY_DEFAULT = "PASTE_YOUR_ANON_KEY_HERE";
         let SUPABASE_ANON_KEY = localStorage.getItem('pb3_supabase_key') || SUPABASE_ANON_KEY_DEFAULT; 
         let TENOR_API_KEY = localStorage.getItem('pb3_tenor_key') || "LIVDSRZULELA"; 
         
@@ -4283,6 +4293,8 @@ return data;
 
                 // [v40 청크 3] 빈 프로젝트면 5종 위키 폴더 자동 시드
                 await seedWikiFoldersIfEmpty();
+                // [v40 Day2 청크 3] 완료 3일 경과 카드 자동 매장 (Buried 이동)
+                await autoBuryOldCompleted();
 
                 // ★ Realtime: wiki_docs 변경 감지
                 supabaseClient.channel('rt-wiki-docs')
@@ -5960,7 +5972,7 @@ return data;
         function toggleTaskCard(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isCollapsed = !task.isCollapsed; saveData(); }
         function cyclePriority(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.priority = task.priority === 'p0' ? 'p1' : (task.priority === 'p1' ? 'p2' : 'p0'); saveData(); dbUpsertTask(task); }
         function sortCategory(e, catId, order) { e.stopPropagation(); const catTasks = currentData.tasks.filter(t => t.catId === catId); const otherTasks = currentData.tasks.filter(t => t.catId !== catId); catTasks.sort((a, b) => { const weight = { 'p0': 0, 'p1': 1, 'p2': 2 }; return order === 'asc' ? weight[a.priority] - weight[b.priority] : weight[b.priority] - weight[a.priority]; }); currentData.tasks = [...otherTasks, ...catTasks]; saveData(); dbUpdateTaskSortOrders(currentData.tasks); }
-        function cycleStatus(e, taskId) { e.stopPropagation(); const taskIndex = currentData.tasks.findIndex(t => t.id === taskId); if (taskIndex === -1) return; const task = currentData.tasks[taskIndex]; if(task.status === 'pending') { task.status = 'progress'; } else if(task.status === 'progress') { task.status = 'completed'; task.time = new Date().toLocaleString(); } else { task.status = 'pending'; task.time = null; } if (task.status === 'completed') { currentData.tasks.splice(taskIndex, 1); currentData.tasks.push(task); } saveData(); dbUpsertTask(task); }
+        function cycleStatus(e, taskId) { e.stopPropagation(); const taskIndex = currentData.tasks.findIndex(t => t.id === taskId); if (taskIndex === -1) return; const task = currentData.tasks[taskIndex]; if(task.status === 'pending') { task.status = 'progress'; } else if(task.status === 'progress') { task.status = 'completed'; task.time = new Date().toLocaleString(); task.doneAt = new Date().toISOString(); /* [v40] auto-bury 기준 시각 */ } else { task.status = 'pending'; task.time = null; task.doneAt = null; } if (task.status === 'completed') { currentData.tasks.splice(taskIndex, 1); currentData.tasks.push(task); } saveData(); dbUpsertTask(task); }
 
         // [v40 Day2 청크 1] Zone 순환 (Shelf → Now → Buried → Shelf)
         function cycleZone(e, taskId) {
@@ -5986,6 +5998,57 @@ return data;
                 showToast(`Zone 변경: ${getZoneIcon(nextZone)} ${getZoneLabel(nextZone)}`, 'info');
             }
         }
+
+        // [v40 Day2 청크 3] 완료 후 3일 경과된 카드를 자동으로 Buried로 이동
+        async function autoBuryOldCompleted() {
+            if (!currentData.tasks || currentData.tasks.length === 0) return;
+            const now = Date.now();
+            const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+            const toBury = currentData.tasks.filter(task => {
+                if ((task.zone || 'shelf') === 'buried') return false; // 이미 매장됨
+                if (task.status !== 'completed') return false;
+                // doneAt (ISO) 우선, 없으면 task.time fallback
+                let checkTime = null;
+                if (task.doneAt) {
+                    checkTime = new Date(task.doneAt).getTime();
+                } else if (task.time) {
+                    const parsed = new Date(task.time).getTime();
+                    if (!isNaN(parsed)) checkTime = parsed;
+                }
+                if (!checkTime) return false;
+                return (now - checkTime) > threeDaysMs;
+            });
+            if (toBury.length === 0) return;
+            console.log(`[v40 autoBury] ${toBury.length}개 카드를 Buried로 자동 이동`);
+            for (const task of toBury) {
+                task.zone = 'buried';
+                if (!Array.isArray(task.buryHistory)) task.buryHistory = [];
+                task.buryHistory.push({
+                    at: new Date().toISOString(),
+                    by: 'system',
+                    reason: 'auto-3day'
+                });
+                // 순차 dbUpsertTask (병렬 호출 시 race condition 회피)
+                await dbUpsertTask(task);
+            }
+            saveData();
+            renderBoard();
+            if (typeof showToast === 'function') {
+                showToast(`🗑 ${toBury.length}개 카드 자동 매장 (완료 3일 경과)`, 'info');
+            }
+        }
+
+        // [v40 Day2 청크 3] 카테고리별 Zone 카운트 계산
+        function getCategoryZoneCounts(catId) {
+            const tasks = currentData.tasks.filter(t => t.catId === catId);
+            const counts = { now: 0, shelf: 0, buried: 0 };
+            tasks.forEach(t => {
+                const z = t.zone || 'shelf';
+                counts[z] = (counts[z] || 0) + 1;
+            });
+            return counts;
+        }
+
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
         function toggleStar(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isStarred = !task.isStarred; saveData(); dbUpsertTask(task); }
         function changeDev(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newDev = prompt("담당자를 입력하세요:", task.dev); if (newDev) { task.dev = newDev; saveData(); dbUpsertTask(task); } }
@@ -6026,10 +6089,16 @@ return data;
                 const col = document.createElement('div'); col.className = `kanban-col-wrapper ${colClass}`;
                 col.onclick = function(e) { if(isMinimized && !e.target.closest('.cat-controls') && !e.target.closest('.task-card')) toggleCategoryFocus(cat.id); };
 
+                // [v40 Day2 청크 3] 카테고리 헤더 Zone 카운트
+                const zc = getCategoryZoneCounts(cat.id);
+                const zcHtml = (zc.now + zc.shelf + zc.buried > 0)
+                    ? `<span class="zone-counts" title="Now / Shelf / Buried">${zc.now > 0 ? `📌${zc.now}` : ''}${zc.shelf > 0 ? ` 📦${zc.shelf}` : ''}${zc.buried > 0 ? ` 🗑${zc.buried}` : ''}</span>`
+                    : '';
+
                 col.innerHTML = `
                     <div class="col-header flex justify-between items-center border-b-4 border-gray-900 pb-3 mb-4 px-1 cursor-pointer" onclick="toggleCategoryFocus('${cat.id}')" title="클릭하여 포커스 모드 전환">
                         <div class="flex items-center gap-1 cat-controls" onclick="event.stopPropagation()">
-                            <h2 class="text-xl font-black text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer" onclick="toggleCategoryFocus('${cat.id}')">${cat.title}</h2>
+                            <h2 class="text-xl font-black text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer" onclick="toggleCategoryFocus('${cat.id}')">${cat.title}${zcHtml}</h2>
                             <button class="cat-copy-btn text-gray-400 hover:text-blue-500 text-sm ml-1" onclick="copyCategoryToClipboard(event, '${cat.id}')" title="복사">📋</button>
                             <button class="cat-edit-btn text-gray-400 hover:text-gray-700 text-sm ml-1" onclick="editCategoryName(event, '${cat.id}')" title="수정">✏️</button>
                             <button class="cat-delete-btn text-gray-400 hover:text-red-500 text-sm ml-1" onclick="deleteCategory(event, '${cat.id}')" title="삭제">🗑️</button>
