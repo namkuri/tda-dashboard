@@ -529,7 +529,7 @@
         }
 
         /* iOS 모달 중앙 정렬 강제 */
-        #project-modal, #settings-modal, #api-key-modal, #sprint-intrusion-modal, #link-picker-modal, #review-create-modal, #review-inbox-modal {
+        #project-modal, #settings-modal, #api-key-modal, #link-picker-modal, #review-create-modal, #review-inbox-modal {
             display: none;
             position: fixed !important;
             inset: 0 !important;
@@ -540,7 +540,6 @@
         #project-modal.modal-open,
         #settings-modal.modal-open,
         #api-key-modal.modal-open,
-        #sprint-intrusion-modal.modal-open,
         #link-picker-modal.modal-open,
         #review-create-modal.modal-open,
         #review-inbox-modal.modal-open {
@@ -2322,23 +2321,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         </div>
     </div>
 
-    <!-- [v40 Day2 청크 4] Sprint Intrusion 선택 모달 -->
-    <div id="sprint-intrusion-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="resolveIntrusion('cancel')">
-        <div class="bg-white p-6 rounded-xl w-[440px] max-w-[92vw] shadow-2xl border border-gray-200" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center mb-3 border-b pb-2">
-                <h2 class="text-lg font-black text-gray-800">🏃 스프린트 진행 중</h2>
-                <button onclick="resolveIntrusion('cancel')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
-            </div>
-            <p id="sprint-intrusion-desc" class="text-sm text-gray-600 mb-3 leading-relaxed"></p>
-            <label class="block text-xs font-bold text-gray-500 mb-1">Intrusion 사유 (스프린트 외 추가 시 기록)</label>
-            <textarea id="sprint-intrusion-reason" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4" placeholder="예: 긴급 버그, 외부 요청 등"></textarea>
-            <div class="flex flex-col gap-2">
-                <button onclick="resolveIntrusion('in')" class="w-full bg-emerald-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-emerald-700 shadow-md transition-colors">✅ 스프린트에 포함</button>
-                <button onclick="resolveIntrusion('out')" class="w-full bg-amber-500 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-amber-600 shadow-md transition-colors">⚡ 스프린트 외 추가 (Intrusion 기록)</button>
-                <button onclick="resolveIntrusion('cancel')" class="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">취소</button>
-            </div>
-        </div>
-    </div>
 
     <!-- [v40 Day3 청크1] task↔doc 링크 피커 모달 -->
     <div id="link-picker-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('link-picker-modal')">
@@ -6433,7 +6415,6 @@ return data;
         // ==========================================
         // [v40 Day2 청크 4] Sprint Lock
         // ==========================================
-        let _pendingNewTask = null; // intrusion 결정 대기 중인 새 카드
 
         function _sprintEsc(s) {
             return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -6586,45 +6567,6 @@ return data;
             saveData(); dbUpsertTask(newTask);
         }
 
-        function openSprintIntrusionModal(active, newTask) {
-            const desc = document.getElementById('sprint-intrusion-desc');
-            if (desc) desc.innerHTML = `현재 <b>${_sprintEsc(active.weekLabel)}</b> 스프린트가 진행 중입니다.<br>새 카드 「${_sprintEsc(newTask.title)}」를 어떻게 추가할까요?`;
-            const reasonEl = document.getElementById('sprint-intrusion-reason');
-            if (reasonEl) reasonEl.value = '';
-            openModal('sprint-intrusion-modal');
-        }
-
-        async function resolveIntrusion(choice) {
-            const pending = _pendingNewTask;
-            closeModal('sprint-intrusion-modal');
-            if (!pending) return;
-            _pendingNewTask = null;
-            if (choice === 'cancel') return;
-            const active = getActiveSprint();
-            const task = pending.task;
-            if (choice === 'in') {
-                task.sprintId = active ? active.id : null;
-                _commitNewTask(task, pending.position);
-                showToast('✅ 카드를 현재 스프린트에 추가했습니다.', 'success');
-            } else if (choice === 'out') {
-                task.sprintId = null;
-                _commitNewTask(task, pending.position);
-                if (active) {
-                    const reasonEl = document.getElementById('sprint-intrusion-reason');
-                    const reason = reasonEl ? reasonEl.value.trim() : '';
-                    active.intrusionCount = (active.intrusionCount || 0) + 1;
-                    if (!Array.isArray(active.intrusionLog)) active.intrusionLog = [];
-                    active.intrusionLog.push({
-                        taskId: task.id, taskTitle: task.title,
-                        by: currentUser ? currentUser.id : null, byName: myNickname,
-                        at: new Date().toISOString(), reason: reason
-                    });
-                    saveData(); await dbUpsertSprint(active); renderSprintBand();
-                }
-                showToast('⚡ Intrusion으로 기록되었습니다 (스프린트 외).', 'info');
-            }
-        }
-
         // ==========================================
         // [v40 Day3 청크1] 양방향 task↔doc 링크
         // ==========================================
@@ -6675,14 +6617,22 @@ return data;
         function getDocLabel(docId) { const d = currentData.docs.find(x => x.id === docId); return d ? ((d.emoji || '📄') + ' ' + (d.title || '제목 없음')) : '(삭제된 문서)'; }
         function getTaskLabel(taskId) { const t = currentData.tasks.find(x => x.id === taskId); return t ? (t.title || '(제목 없음)') : '(삭제된 카드)'; }
 
-        // 링크 클릭 네비게이션
+        // 링크 클릭 네비게이션 — 열린 오버레이 모달을 먼저 닫아 대상이 보이게
+        function _closeNavOverlays() {
+            ['review-inbox-modal', 'review-create-modal', 'link-picker-modal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.classList.contains('modal-open')) closeModal(id);
+            });
+        }
         function navToDoc(docId) {
             if (!currentData.docs.find(d => d.id === docId)) { showToast('문서를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
+            _closeNavOverlays();
             switchView('docs');
             setTimeout(() => openDoc(docId), 30);
         }
         function navToTask(taskId) {
             if (!currentData.tasks.find(t => t.id === taskId)) { showToast('카드를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
+            _closeNavOverlays();
             switchView('kanban');
             setTimeout(() => {
                 let card = document.querySelector('.task-card[data-id="' + taskId + '"]');

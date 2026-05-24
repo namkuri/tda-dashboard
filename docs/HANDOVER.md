@@ -89,11 +89,13 @@ Supabase(인증·DB·Realtime) + GitHub Pages(배포) + Tauri(.msi 데스크톱)
 - **Day 3 청크 4**: Tauri deep-link OAuth (`tda://auth-callback`) — `tauri-plugin-deep-link` + (데스크톱)`tauri-plugin-single-instance`, `tauri.conf.json` schemes, `main.rs`가 딥링크 URL → webview `window.__tdaAuthCallback(url)` eval, 프론트 `IS_TAURI` 감지 + `redirectTo` 분기 + 토큰 추출 `setSession`. **`cargo check` 통과**(빌드 영향 없음). 사용자 액션: Supabase Redirect URL에 `tda://auth-callback` 추가 + 재빌드 + 테스트 → `docs/TAURI_OAUTH_SETUP.md` §1.
   - ⏸ **updater 미적용**(빌드 안정성·개인 서명키 필요). 적용법은 `docs/TAURI_OAUTH_SETUP.md` §2 (키 생성 → Cargo/conf/main.rs/release.yml).
 
-### 🔲 남은 작업
-- Supabase Redirect URL에 `tda://auth-callback` 추가 + .msi 재빌드/로그인 테스트 (사용자)
-- Tauri updater 적용 (키 생성 후, `docs/TAURI_OAUTH_SETUP.md` §2)
-- 모바일 검증 (iOS PWA 설치 테스트)
-- 청크별 최종 통합 테스트 (라이브에서)
+### 🔲 남은 작업 (사용자 환경 필요)
+- **통합 테스트**: `docs/V40_TEST_GUIDE.md` 체크리스트로 라이브/.msi 점검
+- Supabase SQL 1줄(sprints.history) + Redirect URL `tda://auth-callback` 추가 (`docs/TAURI_OAUTH_SETUP.md`)
+- .msi 재빌드/로그인 테스트, Tauri updater 적용(키 생성 후)
+- 모바일 검증 (iOS PWA 설치)
+
+> 코드 정리: 청크4의 생성-시점 intrusion 모달/함수(dead code) 제거됨(청크3 cycleZone 게이트로 대체).
 
 ## 5. 기술 메모
 
