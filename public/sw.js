@@ -1,7 +1,8 @@
-// TDA Dashboard Service Worker
-// 정적 자산만 캐시, Supabase API는 캐시 X (실시간 데이터)
+// TDA Dashboard Service Worker — v40 chunk2
+// HTML/SW/Manifest: network-first (always latest)
+// Icons/CDN libs: cache-first (rarely change)
 
-const CACHE_NAME = 'tda-v40-001';
+const CACHE_NAME = 'tda-v40-002';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -10,16 +11,14 @@ const STATIC_ASSETS = [
   './icon-512.png'
 ];
 
-// 설치 시 정적 자산 캐시
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())  // 새 SW 즉시 활성화
+      .then(() => self.skipWaiting())
   );
 });
 
-// 활성화 시 옛 캐시 청소
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -30,11 +29,10 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 요청 처리: cache-first for static, network-only for APIs
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Supabase API, OAuth callback, Realtime → 절대 캐시 X
+  // Never cache: Supabase API, OAuth callbacks, Realtime
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('googleapis.com') ||
@@ -44,10 +42,10 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/rest/') ||
     url.pathname.startsWith('/realtime/')
   ) {
-    return;  // 기본 네트워크 동작
+    return;
   }
 
-  // CDN 라이브러리도 캐시
+  // CDN libraries: cache-first (heavy, rarely change)
   if (
     url.hostname.includes('cdn.jsdelivr.net') ||
     url.hostname.includes('cdnjs.cloudflare.com') ||
@@ -65,8 +63,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 같은 origin 정적 자산: cache-first
+  // Same origin
   if (url.origin === self.location.origin) {
+    // HTML, manifest, sw → network-first (always latest code)
+    const isHTML = url.pathname === '/' ||
+                   url.pathname.endsWith('/') ||
+                   url.pathname.endsWith('.html') ||
+                   url.pathname.endsWith('.json') ||
+                   url.pathname.endsWith('.js');
+    if (isHTML) {
+      event.respondWith(
+        fetch(event.request)
+          .then((res) => {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, copy));
+            return res;
+          })
+          .catch(() => caches.match(event.request))  // offline fallback
+      );
+      return;
+    }
+    // Other (icons, images): cache-first
     event.respondWith(
       caches.match(event.request).then(
         (cached) => cached || fetch(event.request)
