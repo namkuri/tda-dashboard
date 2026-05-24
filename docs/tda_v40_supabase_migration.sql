@@ -139,6 +139,9 @@ CREATE TABLE IF NOT EXISTS public.sprints (
     closed_at           timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_sprints_project ON public.sprints(project_id, status);
+-- [v40 Day2 청크 4] 스프린트 시작/종료 audit trail (누가·언제 시작/종료했는지)
+--   기존 배포(테이블 이미 생성됨)에도 안전하게 적용되는 idempotent 패치.
+ALTER TABLE public.sprints ADD COLUMN IF NOT EXISTS history jsonb DEFAULT '[]'::jsonb;
 
 -- 2-3. review_requests: 리뷰 요청 (의사결정 일반 메커니즘)
 CREATE TABLE IF NOT EXISTS public.review_requests (

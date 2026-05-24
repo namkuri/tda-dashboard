@@ -529,7 +529,7 @@
         }
 
         /* iOS 모달 중앙 정렬 강제 */
-        #project-modal, #settings-modal, #api-key-modal {
+        #project-modal, #settings-modal, #api-key-modal, #sprint-intrusion-modal {
             display: none;
             position: fixed !important;
             inset: 0 !important;
@@ -539,7 +539,8 @@
         }
         #project-modal.modal-open,
         #settings-modal.modal-open,
-        #api-key-modal.modal-open {
+        #api-key-modal.modal-open,
+        #sprint-intrusion-modal.modal-open {
             display: flex !important;
         }
 
@@ -2025,6 +2026,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <!-- 💡 KANBAN VIEW -->
         <!-- ========================================== -->
         <div id="kanban-view" class="block">
+            <!-- [v40 Day2 청크 4] Sprint Lock 띠 (활성 스프린트 표시 + 시작/종료) -->
+            <div id="sprint-band" onclick="event.stopPropagation()" style="margin:8px 16px 0;"></div>
             <!-- PC action bar (hidden on mobile, visible on desktop) -->
             <div id="pc-kanban-actions" onclick="event.stopPropagation()" class="flex justify-end mb-4 relative z-10" style="padding:4px 16px 0;">
                 <button onclick="expandAll()" class="util-btn bg-gray-600 shadow-sm mr-2">🔽 전체 펼침</button>
@@ -2252,6 +2255,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="flex justify-end mt-6 gap-2">
                 <button onclick="closeApiModal()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 shadow-md transition-colors">취소 (로컬 모드)</button>
                 <button onclick="saveApiKeyAndReloadFromModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md transition-colors">저장 및 연결</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [v40 Day2 청크 4] Sprint Intrusion 선택 모달 -->
+    <div id="sprint-intrusion-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="resolveIntrusion('cancel')">
+        <div class="bg-white p-6 rounded-xl w-[440px] max-w-[92vw] shadow-2xl border border-gray-200" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h2 class="text-lg font-black text-gray-800">🏃 스프린트 진행 중</h2>
+                <button onclick="resolveIntrusion('cancel')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
+            </div>
+            <p id="sprint-intrusion-desc" class="text-sm text-gray-600 mb-3 leading-relaxed"></p>
+            <label class="block text-xs font-bold text-gray-500 mb-1">Intrusion 사유 (스프린트 외 추가 시 기록)</label>
+            <textarea id="sprint-intrusion-reason" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4" placeholder="예: 긴급 버그, 외부 요청 등"></textarea>
+            <div class="flex flex-col gap-2">
+                <button onclick="resolveIntrusion('in')" class="w-full bg-emerald-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-emerald-700 shadow-md transition-colors">✅ 스프린트에 포함</button>
+                <button onclick="resolveIntrusion('out')" class="w-full bg-amber-500 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-amber-600 shadow-md transition-colors">⚡ 스프린트 외 추가 (Intrusion 기록)</button>
+                <button onclick="resolveIntrusion('cancel')" class="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">취소</button>
             </div>
         </div>
     </div>
@@ -3807,6 +3828,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function validateData(data) {
             if (!data.projects) data.projects = [{ id: 'default', name: '기본 프로젝트', category: '일반' }];
             if (!data.docs) data.docs = [];
+            if (!data.sprints) data.sprints = []; // [v40 Day2 청크 4]
             if (!data.wikiAnnotations) data.wikiAnnotations = {};
 
             const docIds = new Set(data.docs.map(d => d.id));
@@ -4126,10 +4148,52 @@ return data;
             }
         }
 
+        // [v40 Day2 청크 4] 스프린트 upsert / delete
+        async function dbUpsertSprint(sprint) {
+            if (!supabaseClient) return { error: null };
+            const { error } = await supabaseClient.from('sprints').upsert({
+                id: sprint.id, project_id: sprint.projectId || activeProjectId,
+                week_label: sprint.weekLabel || sprint.id, goal: sprint.goal || '',
+                status: sprint.status || 'planning',
+                intrusion_count: sprint.intrusionCount || 0,
+                intrusion_log: sprint.intrusionLog || [],
+                carryover_from_previous: sprint.carryoverFromPrevious || [],
+                milestone_criteria: sprint.milestoneCriteria || [],
+                start_date: sprint.startDate || null,
+                end_date: sprint.endDate || null,
+                closed_at: sprint.closedAt || null,
+                history: sprint.history || []
+            });
+            if (error) {
+                console.error('[dbUpsertSprint]', error);
+                if (typeof showToast === 'function') showToast('⚠️ 스프린트 저장 실패: ' + (error.message||''), 'alert');
+            }
+            return { error };
+        }
+        async function dbDeleteSprint(sprintId) {
+            if (!supabaseClient) return;
+            const { error } = await supabaseClient.from('sprints').delete().eq('id', sprintId);
+            if (error) console.error('[dbDeleteSprint]', error);
+        }
+
         // ==========================================
         // 분절 테이블에서 currentData 조립
         // ==========================================
-        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData) {
+        // [v40 Day2 청크 4] sprints row(snake) → app 객체(camel) 매핑 (로드/실시간 공용)
+        function _mapSprintRow(s) {
+            return {
+                id: s.id, projectId: s.project_id, weekLabel: s.week_label,
+                goal: s.goal || '', status: s.status || 'planning',
+                intrusionCount: s.intrusion_count || 0,
+                intrusionLog: s.intrusion_log || [],
+                carryoverFromPrevious: s.carryover_from_previous || [],
+                milestoneCriteria: s.milestone_criteria || [],
+                startDate: s.start_date || null, endDate: s.end_date || null,
+                createdAt: s.created_at || null, closedAt: s.closed_at || null,
+                history: s.history || []
+            };
+        }
+        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData) {
             const cmtMap = {};
             (cmtData || []).forEach(c => {
                 if (!cmtMap[c.task_id]) cmtMap[c.task_id] = [];
@@ -4182,6 +4246,8 @@ return data;
                     createdBy: d.created_by || null,
                     updatedBy: d.updated_by || null
                 })),
+                // [v40 Day2 청크 4] 스프린트
+                sprints: (sprintData || []).map(_mapSprintRow),
                 tagColors: tagColors,
                 images: {}, wikiAnnotations: {}, changeLog: []
             };
@@ -4254,17 +4320,19 @@ return data;
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
                 const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at';
-                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes] = await Promise.all([
+                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
                     supabaseClient.from('tasks').select('*').order('sort_order'),
                     supabaseClient.from('wiki_docs').select(_DOC_META_COLS).order('sort_order'),
                     supabaseClient.from('task_comments').select('*').order('ts'),
-                    supabaseClient.from('tag_colors').select('*')
+                    supabaseClient.from('tag_colors').select('*'),
+                    supabaseClient.from('sprints').select('*').order('created_at') // [v40 Day2 청크 4]
                 ]);
                 if (projRes.error) throw projRes.error;
                 if (taskRes.error) throw taskRes.error;
                 if (docRes.error)  throw docRes.error;
+                if (sprintRes.error) console.warn('[sprints load]', sprintRes.error); // 스프린트 로드 실패는 치명적이지 않음
 
                 // 메타만 받았으므로 content 필드를 빈 문자열로 보강
                 // 실제 content는 openDoc() 내부에서 fetch (B5)
@@ -4277,7 +4345,7 @@ return data;
 
                 currentData = _assembleCurrentData(
                     projRes.data, catRes.data, taskRes.data,
-                    docRes.data, cmtRes.data, tagRes.data
+                    docRes.data, cmtRes.data, tagRes.data, sprintRes.data
                 );
                 currentData = validateData(currentData);
                 wikiAnnotations = currentData.wikiAnnotations || {};
@@ -4418,6 +4486,32 @@ return data;
                     }).subscribe(function(status, err) {
                         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                             console.warn('[rt-comments] 연결 끊김:', status, err);
+                        }
+                    });
+
+                // ★ Realtime: sprints 변경 감지 [v40 Day2 청크 4]
+                supabaseClient.channel('rt-sprints')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'sprints' }, (payload) => {
+                        const ev = payload.eventType;
+                        if (ev === 'INSERT' || ev === 'UPDATE') {
+                            const mapped = _mapSprintRow(payload.new);
+                            const idx = currentData.sprints.findIndex(x => x.id === mapped.id);
+                            const prevStatus = idx > -1 ? currentData.sprints[idx].status : null;
+                            if (idx > -1) currentData.sprints[idx] = mapped; else currentData.sprints.push(mapped);
+                            // 다른 사용자의 시작/종료 알림 (내가 일으킨 변경은 echo지만 토스트는 무해)
+                            if (mapped.status === 'active' && prevStatus !== 'active') {
+                                showToast(`🏃 스프린트 ${mapped.weekLabel} 시작됨`, 'info');
+                            } else if (mapped.status === 'closed' && prevStatus !== 'closed') {
+                                showToast(`🏁 스프린트 ${mapped.weekLabel} 종료됨`, 'info');
+                            }
+                        } else if (ev === 'DELETE') {
+                            currentData.sprints = currentData.sprints.filter(x => x.id !== payload.old.id);
+                        }
+                        if (typeof renderSprintBand === 'function') renderSprintBand();
+                        _safeLocalCache(currentData);
+                    }).subscribe(function(status, err) {
+                        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                            console.warn('[rt-sprints] 연결 끊김:', status, err);
                         }
                     });
 
@@ -6049,6 +6143,191 @@ return data;
             return counts;
         }
 
+        // ==========================================
+        // [v40 Day2 청크 4] Sprint Lock
+        // ==========================================
+        let _pendingNewTask = null; // intrusion 결정 대기 중인 새 카드
+
+        function _sprintEsc(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        // ISO 8601 주차 계산 ({year, week}) — 목요일 기준
+        function getISOWeek(d) {
+            const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            const dayNum = (date.getUTCDay() + 6) % 7;            // Mon=0 … Sun=6
+            date.setUTCDate(date.getUTCDate() - dayNum + 3);      // 이번 주 목요일
+            const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+            const ftDayNum = (firstThursday.getUTCDay() + 6) % 7;
+            firstThursday.setUTCDate(firstThursday.getUTCDate() - ftDayNum + 3);
+            const week = 1 + Math.round((date - firstThursday) / (7 * 24 * 3600 * 1000));
+            return { year: date.getUTCFullYear(), week };
+        }
+        function _pad2(n) { return String(n).padStart(2, '0'); }
+        function sprintIdForDate(d) { const { year, week } = getISOWeek(d); return `sprint-${year}W${_pad2(week)}`; }
+        // 해당 날짜가 속한 ISO 주의 월요일 (로컬)
+        function isoWeekMonday(d) {
+            const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const dayNum = (date.getDay() + 6) % 7; // Mon=0
+            date.setDate(date.getDate() - dayNum);
+            return date;
+        }
+        function _fmtDate(d) { return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`; }
+        // 'YYYY-MM-DD' → 'M/D'
+        function _shortDate(str) {
+            if (!str) return '';
+            const parts = String(str).split('-');
+            if (parts.length < 3) return str;
+            return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+        }
+        function formatSprintRange(startDate, endDate) {
+            if (!startDate && !endDate) return '';
+            return `${_shortDate(startDate)}~${_shortDate(endDate)}`;
+        }
+        // 현재 프로젝트의 활성 스프린트
+        function getActiveSprint() {
+            if (!currentData || !Array.isArray(currentData.sprints)) return null;
+            return currentData.sprints.find(s => s.status === 'active' &&
+                (!s.projectId || s.projectId === activeProjectId)) || null;
+        }
+
+        function renderSprintBand() {
+            const el = document.getElementById('sprint-band');
+            if (!el) return;
+            const active = getActiveSprint();
+            if (active) {
+                const range = formatSprintRange(active.startDate, active.endDate);
+                const intr = active.intrusionCount || 0;
+                el.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #6ee7b7;border-radius:12px;padding:8px 14px;">
+                        <span style="font-weight:800;font-size:14px;color:#065f46;">🏃 ${_sprintEsc(active.weekLabel)}</span>
+                        ${range ? `<span style="font-size:12px;color:#047857;font-weight:600;">${range}</span>` : ''}
+                        ${active.goal ? `<span style="font-size:12px;color:#374151;">· 🎯 ${_sprintEsc(active.goal)}</span>` : ''}
+                        <span title="Intrusion(스프린트 외 추가) 횟수" style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:9px;padding:1px 8px;">⚡ intrusion ${intr}</span>
+                        <div style="flex:1;"></div>
+                        <button onclick="editSprintGoal()" style="font-size:12px;font-weight:600;color:#047857;background:white;border:1px solid #6ee7b7;border-radius:8px;padding:4px 10px;cursor:pointer;">목표 수정</button>
+                        <button onclick="endSprint()" style="font-size:12px;font-weight:700;color:white;background:#dc2626;border:none;border-radius:8px;padding:4px 12px;cursor:pointer;">스프린트 종료</button>
+                    </div>`;
+            } else {
+                const { year, week } = getISOWeek(new Date());
+                el.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--ios-fill2,#f3f4f6);border:1px dashed #cbd5e1;border-radius:12px;padding:8px 14px;">
+                        <span style="font-size:13px;font-weight:700;color:#6b7280;">📅 활성 스프린트 없음</span>
+                        <span style="font-size:11px;color:#9ca3af;">3-Zone과 별개로 주간 스프린트를 시작할 수 있습니다.</span>
+                        <div style="flex:1;"></div>
+                        <button onclick="startSprint()" style="font-size:12px;font-weight:700;color:white;background:#059669;border:none;border-radius:8px;padding:5px 14px;cursor:pointer;">+ 스프린트 시작 (W${_pad2(week)})</button>
+                    </div>`;
+            }
+        }
+
+        async function startSprint() {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            const existing = getActiveSprint();
+            if (existing) { showToast('이미 활성 스프린트가 있습니다: ' + existing.weekLabel, 'alert'); return; }
+            const now = new Date();
+            const { year, week } = getISOWeek(now);
+            const id = sprintIdForDate(now);
+            const mon = isoWeekMonday(now);
+            const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+            const rangeLabel = `${mon.getMonth() + 1}/${mon.getDate()}~${sun.getMonth() + 1}/${sun.getDate()}`;
+            if (!confirm(`스프린트 ${id} (${rangeLabel})를 시작할까요?`)) return;
+            const dup = currentData.sprints.find(s => s.id === id); // 같은 주차가 이미(closed 등) 있으면 재활성화
+            const goal = (prompt('스프린트 목표를 입력하세요 (선택):', dup ? dup.goal : '') || '').trim();
+            const histEntry = { action: 'start', by: currentUser.id, byName: myNickname, at: new Date().toISOString() };
+            let sprint;
+            if (dup) {
+                sprint = dup;
+                sprint.status = 'active'; sprint.goal = goal;
+                sprint.startDate = _fmtDate(mon); sprint.endDate = _fmtDate(sun);
+                sprint.closedAt = null;
+                if (!Array.isArray(sprint.history)) sprint.history = [];
+                sprint.history.push(histEntry);
+            } else {
+                sprint = {
+                    id, projectId: activeProjectId, weekLabel: `${year} W${_pad2(week)}`, goal,
+                    status: 'active', intrusionCount: 0, intrusionLog: [],
+                    carryoverFromPrevious: [], milestoneCriteria: [],
+                    startDate: _fmtDate(mon), endDate: _fmtDate(sun), closedAt: null,
+                    history: [histEntry]
+                };
+                currentData.sprints.push(sprint);
+            }
+            saveData();
+            const { error } = await dbUpsertSprint(sprint);
+            renderSprintBand();
+            if (!error) showToast(`🏃 스프린트 ${sprint.weekLabel} 시작! (${rangeLabel})`, 'success');
+        }
+
+        async function endSprint() {
+            const active = getActiveSprint();
+            if (!active) { showToast('활성 스프린트가 없습니다.', 'alert'); return; }
+            const inSprint = currentData.tasks.filter(t => t.sprintId === active.id);
+            const done = inSprint.filter(t => t.status === 'completed').length;
+            if (!confirm(`스프린트 ${active.weekLabel}를 종료할까요?\n\n포함 카드 ${inSprint.length}개 중 완료 ${done}개 · Intrusion ${active.intrusionCount || 0}회\n(완료 통계·회고 자동 생성은 Day 4)`)) return;
+            active.status = 'closed';
+            active.closedAt = new Date().toISOString();
+            if (!Array.isArray(active.history)) active.history = [];
+            active.history.push({ action: 'end', by: currentUser ? currentUser.id : null, byName: myNickname, at: active.closedAt });
+            saveData();
+            const { error } = await dbUpsertSprint(active);
+            renderSprintBand();
+            if (!error) showToast(`🏁 스프린트 ${active.weekLabel} 종료`, 'success');
+        }
+
+        function editSprintGoal() {
+            const active = getActiveSprint();
+            if (!active) return;
+            const g = prompt('스프린트 목표:', active.goal || '');
+            if (g === null) return;
+            active.goal = g.trim();
+            saveData(); dbUpsertSprint(active); renderSprintBand();
+        }
+
+        // 새 카드 DB 반영 (intrusion 결정 후 또는 활성 스프린트 없을 때 즉시)
+        function _commitNewTask(newTask, position) {
+            if (position === 'bottom') currentData.tasks.push(newTask); else currentData.tasks.unshift(newTask);
+            if (focusedCategoryId && focusedCategoryId !== newTask.catId) focusedCategoryId = newTask.catId;
+            saveData(); dbUpsertTask(newTask);
+        }
+
+        function openSprintIntrusionModal(active, newTask) {
+            const desc = document.getElementById('sprint-intrusion-desc');
+            if (desc) desc.innerHTML = `현재 <b>${_sprintEsc(active.weekLabel)}</b> 스프린트가 진행 중입니다.<br>새 카드 「${_sprintEsc(newTask.title)}」를 어떻게 추가할까요?`;
+            const reasonEl = document.getElementById('sprint-intrusion-reason');
+            if (reasonEl) reasonEl.value = '';
+            openModal('sprint-intrusion-modal');
+        }
+
+        async function resolveIntrusion(choice) {
+            const pending = _pendingNewTask;
+            closeModal('sprint-intrusion-modal');
+            if (!pending) return;
+            _pendingNewTask = null;
+            if (choice === 'cancel') return;
+            const active = getActiveSprint();
+            const task = pending.task;
+            if (choice === 'in') {
+                task.sprintId = active ? active.id : null;
+                _commitNewTask(task, pending.position);
+                showToast('✅ 카드를 현재 스프린트에 추가했습니다.', 'success');
+            } else if (choice === 'out') {
+                task.sprintId = null;
+                _commitNewTask(task, pending.position);
+                if (active) {
+                    const reasonEl = document.getElementById('sprint-intrusion-reason');
+                    const reason = reasonEl ? reasonEl.value.trim() : '';
+                    active.intrusionCount = (active.intrusionCount || 0) + 1;
+                    if (!Array.isArray(active.intrusionLog)) active.intrusionLog = [];
+                    active.intrusionLog.push({
+                        taskId: task.id, taskTitle: task.title,
+                        by: currentUser ? currentUser.id : null, byName: myNickname,
+                        at: new Date().toISOString(), reason: reason
+                    });
+                    saveData(); await dbUpsertSprint(active); renderSprintBand();
+                }
+                showToast('⚡ Intrusion으로 기록되었습니다 (스프린트 외).', 'info');
+            }
+        }
+
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
         function toggleStar(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isStarred = !task.isStarred; saveData(); dbUpsertTask(task); }
         function changeDev(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newDev = prompt("담당자를 입력하세요:", task.dev); if (newDev) { task.dev = newDev; saveData(); dbUpsertTask(task); } }
@@ -6060,7 +6339,17 @@ return data;
         function addNewCategory() { const title = prompt("카테고리 이름을 입력하세요:"); if (title) { const newCat = { id: "cat-" + Date.now(), title: title, subtitle: "CUSTOM MODULE" }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); } }
         function editCategoryName(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const newName = prompt("카테고리 이름을 수정하세요:", cat.title); if(newName) { cat.title = newName; saveData(); dbUpsertCategory(cat); } }
         function deleteCategory(e, catId) { e.stopPropagation(); if(confirm("카테고리와 내부 모든 할 일이 삭제됩니다. 계속하시겠습니까?")) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
-        function addNewTask(catId, position = 'top') { const newTask = { id: "t-" + Date.now(), catId: catId, priority: "p1", dev: "Dev A", catBadge: "NEW", title: "새로운 태스크 (New Task)", desc: "요약 설명을 입력하세요", details: "클릭하여 상세 내용을 마크다운으로 작성하세요...", scripts: ["NewScript.cs"], status: 'pending', isStarred: false, time: null, isCollapsed: false, comments: [] }; if(position === 'bottom') currentData.tasks.push(newTask); else currentData.tasks.unshift(newTask); if(focusedCategoryId && focusedCategoryId !== catId) focusedCategoryId = catId; saveData(); dbUpsertTask(newTask); }
+        function addNewTask(catId, position = 'top') {
+            const newTask = { id: "t-" + Date.now(), catId: catId, priority: "p1", dev: "Dev A", catBadge: "NEW", title: "새로운 태스크 (New Task)", desc: "요약 설명을 입력하세요", details: "클릭하여 상세 내용을 마크다운으로 작성하세요...", scripts: ["NewScript.cs"], status: 'pending', isStarred: false, time: null, isCollapsed: false, comments: [], zone: 'shelf', sprintId: null };
+            // [v40 Day2 청크 4] 활성 스프린트 중이면 intrusion 선택 모달, 아니면 즉시 추가
+            const active = getActiveSprint();
+            if (active) {
+                _pendingNewTask = { task: newTask, position: position, catId: catId };
+                openSprintIntrusionModal(active, newTask);
+            } else {
+                _commitNewTask(newTask, position);
+            }
+        }
 
         // Kanban 코멘트
         function handleCommentKey(e, taskId, input) { if(e.key === 'Enter') { e.preventDefault(); submitComment(taskId, input); } }
@@ -6150,6 +6439,7 @@ return data;
             });
             
             attachFavoriteButtonsToMedia(document.getElementById('board'));
+            if (typeof renderSprintBand === 'function') renderSprintBand(); // [v40 Day2 청크 4]
         }
 
         function renderProgress() {

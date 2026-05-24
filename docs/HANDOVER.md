@@ -78,19 +78,14 @@ Supabase(인증·DB·Realtime) + GitHub Pages(배포) + Tauri(.msi 데스크톱)
 - **Day 2 청크 1**: Zone 배지 (`badge-zone-*`) + cycleZone 함수 + Zone 우선 정렬 + dbUpsertTask에 v40 필드 추가
 - **Day 2 청크 2**: Zone 필터 토글 (Now만 / Now+Shelf기본 / 전체)
 - **Day 2 청크 3**: autoBuryOldCompleted (완료 3일 후 자동 매장) + 카테고리 헤더 Zone 카운트 (📌3 📦5 🗑2) + sw.js network-first 전략 (캐시 stale 해결)
+- **Day 2 청크 4**: Sprint Lock UI — 칸반 상단 스프린트 띠(활성 스프린트 라벨·기간·목표·intrusion 카운트), 시작/종료(로그인한 누구나 + confirm + 토스트 알림 + `history` audit), ISO week 라벨 자동(`sprint-2026W22`), 활성 스프린트 중 카드 추가 시 intrusion 선택 모달(포함/외부기록), `sprints` 테이블 로드+upsert+`rt-sprints` 실시간 구독
+  - ⚠️ **필요 SQL(1회)**: `ALTER TABLE public.sprints ADD COLUMN IF NOT EXISTS history jsonb DEFAULT '[]'::jsonb;` — `docs/tda_v40_supabase_migration.sql` §2-2에 추가됨. Supabase SQL Editor에서 실행해야 시작/종료 히스토리가 DB에 저장됨.
 
 ### 🔲 남은 작업
 
-#### Day 2 청크 4 — Sprint Lock UI (다음 시작점)
-- 현재 활성 스프린트 표시 (헤더 또는 상단 띠)
-- 스프린트 시작/종료 버튼 (관리자 권한 검증)
-- ISO week 라벨 자동 생성 (`sprint-${year}W${weekNum}`)
-- 활성 스프린트 중 새 카드 추가 시 → "intrusion" 옵션 (스프린트 외 추가 / 스프린트 안 추가)
-- `sprints` 테이블 활용 (이미 schema에 존재)
-
-#### Day 3 — 연결 + 리뷰
+#### Day 3 — 연결 + 리뷰 (다음 시작점)
 - 양방향 task↔doc 링크 UI (카드/문서에서 서로 참조 가능)
-- Review request 모달 (rule 선택, 대상 선택, 사유 입력)
+- Review request 모달 (rule 선택, 대상 선택, 사유 입력) — intrusion의 풀 투표/ADR 플로우 포함 (청크 4는 경량 기록만)
 - 투표 UI (approve/reject/skip 버튼)
 - 결정 시 ADR 자동 생성 (03_결정 로그 폴더에 마크다운 자동 추가)
 - Tauri `tauri-plugin-deep-link` 적용 (`tda://auth-callback` 스킴) — Tauri 앱에서 OAuth 작동 가능하게
