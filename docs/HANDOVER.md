@@ -92,6 +92,12 @@ Supabase(인증·DB·Realtime) + GitHub Pages(배포) + Tauri(.msi 데스크톱)
 - **UI 리스타일(Claude 데스크톱 룩)**: 웜 페이퍼 배경 + 클레이 오렌지 액센트 + 클린 타이포 + 웜 다크모드(슬레이트#1e293b→웜 교정). `:root`/`body.dark`/`body.dark-pure`의 `--ios-*` 변수 재매핑 + 컴포넌트 오버라이드(파일 끝 `<style>`). **좌측 네비 사이드바**(`#claude-sidebar`, 데스크톱 전용): 칸반/위키/리뷰 + 도구(코멘트/변경로그/DB) + 테마/설정/접속수/사용자. 데스크톱은 `#pc-header` 숨김(사이드바로 대체), 모바일은 기존 ios-topbar 유지. 데스크톱 리뷰 버튼 누락도 사이드바로 해결. JS 훅: switchView 활성표시·updateAuthUI·renderReviewBadge·온라인수에 사이드바 id 반영.
   - ⚠️ 시각 검증 미완(브라우저/OAuth 불가) → 사용자가 https://namkuri.github.io/tda-dashboard/ (데스크톱 브라우저=동일 is-desktop)에서 눈으로 확인 후 .msi 빌드 권장. 색/여백 미세조정 필요시 알려주세요.
 
+- **테마 polish v2 + 프로젝트 토대**: 다크 균형(흰색/회색/청색→웜), 청색 액센트 전부 클레이, 스프린트 띠/스크롤바/네비 하이라이트 테마화, 칸반 좌우16px 마진+카테고리 고정폭(340/560), 리뷰 생성·피커 모달 z-index 680, 좌측 사이드바 접기(◀/▶ 영속). **프로젝트(게임) 단위 토대**: category/task에 projectId 보존, renderBoard/renderProgress/리뷰가 activeProjectId로 필터(이전엔 칸반이 전역이었음), switchProject가 칸반/진척/스프린트/리뷰 전체 갱신 + 새 프로젝트 위키 자동 시드, 사이드바 상단 프로젝트 전환기. ⚠️ 기존 카테고리/카드는 모두 'default' 프로젝트 소속 → 다른 프로젝트는 빈 보드로 시작(의도된 격리).
+
+#### 🔭 B 후속 (사용자 선택 대기)
+- B2: 결정/리뷰를 카드/문서 컨텍스트 메뉴로 + 직관화
+- B3: 게임별 canon 위키(버전관리·작성/수정/승인자) 신설
+
 ### 🔲 남은 작업 (사용자 환경 필요)
 - **통합 테스트**: `docs/V40_TEST_GUIDE.md` 체크리스트로 라이브/.msi 점검
 - Supabase SQL 1줄(sprints.history) + Redirect URL `tda://auth-callback` 추가 (`docs/TAURI_OAUTH_SETUP.md`)

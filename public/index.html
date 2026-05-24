@@ -1763,6 +1763,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         html.is-desktop #pc-header { display: none !important; }
         .cs-brand { display: flex; align-items: center; gap: 9px; padding: 4px 10px 16px; font-weight: 800; font-size: 17px; color: var(--c-text); letter-spacing: -0.02em; }
         .cs-brand .cs-dot { width: 24px; height: 24px; border-radius: 7px; background: var(--c-accent); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 800; }
+        /* 프로젝트(게임) 전환기 */
+        .cs-project { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; margin-bottom: 10px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-card); cursor: pointer; font-weight: 800; font-size: 15px; color: var(--c-text); letter-spacing: -0.02em; text-align: left; transition: background .12s; }
+        .cs-project:hover { background: var(--c-accent-soft); }
+        .cs-project .cs-dot { width: 24px; height: 24px; border-radius: 7px; background: var(--c-accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; }
+        .cs-brand-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cs-nav { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--c-text2); cursor: pointer; border: none; background: none; text-align: left; width: 100%; transition: background .12s, color .12s; }
         .cs-nav:hover { background: rgba(60,54,42,0.06); color: var(--c-text); }
         body.dark .cs-nav:hover { background: rgba(255,250,240,0.06); }
@@ -2143,7 +2148,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <!-- [v40] Claude 스타일 좌측 네비 사이드바 (데스크톱 전용) -->
         <aside id="claude-sidebar" onclick="event.stopPropagation()">
             <button class="cs-collapse-btn" onclick="toggleSidebarCollapse()" title="사이드바 접기/펴기"><span id="cs-collapse-ico">◀</span></button>
-            <div class="cs-brand"><span class="cs-dot">T</span> <span class="cs-label cs-brand-text">TDA</span></div>
+            <button class="cs-project" onclick="openProjectModal()" title="프로젝트(게임) 전환">
+                <span class="cs-dot">T</span>
+                <span class="cs-label cs-brand-text" id="cs-project-name">프로젝트</span>
+                <span class="cs-label" style="margin-left:auto;font-size:10px;opacity:.55;">▾</span>
+            </button>
             <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
             <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="위키 문서"><span class="cs-ico">📚</span><span class="cs-label">위키 문서</span></button>
             <button class="cs-nav" onclick="openReviewInbox()" title="결정/리뷰"><span class="cs-ico">🗳</span><span class="cs-label">결정/리뷰</span><span class="cs-badge" id="cs-review-badge">0</span></button>
@@ -4583,10 +4592,10 @@ return data;
             return {
                 projects:   (projData || []),
                 categories: (catData || []).map(c => ({
-                    id: c.id, title: c.title, subtitle: c.subtitle
+                    id: c.id, title: c.title, subtitle: c.subtitle, projectId: c.project_id || 'default'
                 })),
                 tasks: (taskData || []).map(t => ({
-                    id: t.id, catId: t.cat_id, title: t.title,
+                    id: t.id, catId: t.cat_id, projectId: t.project_id || 'default', title: t.title,
                     desc: t.description, details: t.details,
                     priority: t.priority, status: t.status,
                     dev: t.dev_name, catBadge: t.cat_badge,
@@ -4843,11 +4852,11 @@ return data;
                             const t = payload.new;
                             if (!currentData.tasks.find(x => x.id === t.id)) {
                                 currentData.tasks.push({
-                                    id: t.id, catId: t.cat_id, title: t.title, desc: t.description,
+                                    id: t.id, catId: t.cat_id, projectId: t.project_id || 'default', title: t.title, desc: t.description,
                                     details: t.details, priority: t.priority, status: t.status,
                                     dev: t.dev_name, catBadge: t.cat_badge,
-                                    isStarred: t.is_starred, time: t.completed_at,
-                                    scripts: t.scripts || [], isCollapsed: false, comments: []
+                                    isStarred: t.is_starred, time: t.completed_at, zone: t.zone || 'shelf', sprintId: t.sprint_id || null,
+                                    scripts: t.scripts || [], isCollapsed: false, comments: [], linkedDocIds: t.linked_doc_ids || []
                                 });
                             }
                         } else if (ev === 'DELETE') {
@@ -5041,6 +5050,8 @@ return data;
         function updateProjectTitle() {
             const proj = currentData.projects.find(p => p.id === activeProjectId);
             document.getElementById('current-project-name').innerText = proj ? `📁 ${proj.name}` : '📂 문서 보관함';
+            var cs = document.getElementById('cs-project-name'); // [v40] 사이드바 프로젝트명
+            if (cs) cs.innerText = proj ? proj.name : '프로젝트';
         }
 
         function openProjectModal() {
@@ -5055,7 +5066,7 @@ return data;
                 html += `<div class="mb-4"><h4 class="text-[11px] font-bold text-gray-400 mb-2 uppercase tracking-widest border-b pb-1">${cat}</h4><div class="flex flex-col gap-1">`;
                 grouped[cat].forEach(p => {
                     const isActive = p.id === activeProjectId;
-                    html += `<button onclick="switchProject('${p.id}')" class="text-left px-3 py-2 rounded-lg text-sm font-bold ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 transition-colors'}">📄 ${p.name}</button>`;
+                    html += `<button onclick="switchProject('${p.id}')" class="text-left px-3 py-2 rounded-lg text-sm font-bold transition-colors" style="${isActive ? 'background:var(--c-accent-soft);color:var(--c-accent);' : 'background:var(--ios-fill);color:var(--c-text);'}">${isActive ? '📂' : '📁'} ${p.name}</button>`;
                 });
                 html += `</div></div>`;
             }
@@ -5070,11 +5081,21 @@ return data;
         function switchProject(projId) {
             localStorage.setItem('pb3_active_project', projId);
             activeProjectId = projId;
-            activeDocId = null; 
+            activeDocId = null;
+            focusedCategoryId = null;
             updateDocEditorUI();
             updateProjectTitle();
             renderDocTree();
+            // [v40] 칸반/진척/스프린트/리뷰도 프로젝트 단위로 갱신
+            if (typeof renderBoard === 'function') renderBoard();
+            if (typeof renderProgress === 'function') renderProgress();
+            if (typeof renderSprintBand === 'function') renderSprintBand();
+            if (typeof renderReviewBadge === 'function') renderReviewBadge();
             closeProjectModal();
+            // 새 프로젝트면 위키 5종 폴더 자동 시드(기존 프로젝트는 no-op)
+            if (typeof seedWikiFoldersIfEmpty === 'function') {
+                seedWikiFoldersIfEmpty().then(function () { renderDocTree(); }).catch(function () {});
+            }
         }
 
         function createNewProject() {
@@ -6446,8 +6467,8 @@ return data;
         function copyTextToClipboard(text, successMessage) { const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); showToast(successMessage || '복사되었습니다.', 'success'); } catch (err) { alert('복사에 실패했습니다.'); } document.body.removeChild(textArea); }
 
         function copyCategoryToClipboard(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const catTasks = currentData.tasks.filter(t => t.catId === catId); let md = `## 📂 **[${cat.title}]** - ${cat.subtitle}\n\n`; catTasks.forEach(task => { const statusIcon = task.status === 'completed' ? "✅" : (task.status === 'progress' ? "🔥" : "⏳"); const starIcon = task.isStarred ? "⭐" : ""; md += `> ${statusIcon} \`[${task.priority.toUpperCase()}]\` **${task.title}** ${starIcon} (${task.dev} | ${task.catBadge})\n> ↳ *${task.desc}*\n`; if(!task.isCollapsed && task.details) md += `> ↳ **상세내용:**\n>   ${task.details.replace(/\n/g, '\n>   ')}\n`; md += `\n`; }); copyTextToClipboard(md, `'${cat.title}' 복사됨.`); }
-        function copyProgressToClipboard() { let md = "## 📊 카테고리별 개발 진척률 상황판\n\n"; currentData.categories.forEach(cat => { const catTasks = currentData.tasks.filter(t => t.catId === cat.id); const total = catTasks.length; const done = catTasks.filter(t => t.status === 'completed').length; const percent = total === 0 ? 0 : Math.round((done / total) * 100); md += `- **${cat.title}**: ${percent}% 완료 (${done} / ${total})\n`; }); copyTextToClipboard(md, '진척률 복사됨.'); }
-        function exportToDiscord() { let md = "# ⚔️ pB-3: 전투 시스템 상황판\n\n"; currentData.categories.forEach(cat => { md += `## 📂 **[${cat.title}]**\n`; const catTasks = currentData.tasks.filter(t => t.catId === cat.id); catTasks.forEach(task => { const statusIcon = task.status === 'completed' ? "✅" : (task.status === 'progress' ? "🔥" : "⏳"); const starIcon = task.isStarred ? "⭐" : ""; md += `> ${statusIcon} \`[${task.priority.toUpperCase()}]\` **${task.title}** ${starIcon} (${task.dev} | ${task.catBadge})\n> ↳ *${task.desc}*\n\n`; }); }); copyTextToClipboard(md, '디스코드용 텍스트 복사됨.'); }
+        function copyProgressToClipboard() { let md = "## 📊 카테고리별 개발 진척률 상황판\n\n"; currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId).forEach(cat => { const catTasks = currentData.tasks.filter(t => t.catId === cat.id); const total = catTasks.length; const done = catTasks.filter(t => t.status === 'completed').length; const percent = total === 0 ? 0 : Math.round((done / total) * 100); md += `- **${cat.title}**: ${percent}% 완료 (${done} / ${total})\n`; }); copyTextToClipboard(md, '진척률 복사됨.'); }
+        function exportToDiscord() { let md = "# ⚔️ pB-3: 전투 시스템 상황판\n\n"; currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId).forEach(cat => { md += `## 📂 **[${cat.title}]**\n`; const catTasks = currentData.tasks.filter(t => t.catId === cat.id); catTasks.forEach(task => { const statusIcon = task.status === 'completed' ? "✅" : (task.status === 'progress' ? "🔥" : "⏳"); const starIcon = task.isStarred ? "⭐" : ""; md += `> ${statusIcon} \`[${task.priority.toUpperCase()}]\` **${task.title}** ${starIcon} (${task.dev} | ${task.catBadge})\n> ↳ *${task.desc}*\n\n`; }); }); copyTextToClipboard(md, '디스코드용 텍스트 복사됨.'); }
 
         let focusedCategoryId = null; let activeEditorId = null;
         function toggleCategoryFocus(catId) { if(focusedCategoryId === catId) focusedCategoryId = null; else focusedCategoryId = catId; renderBoard(); }
@@ -7260,7 +7281,7 @@ return data;
         }
         function myPendingReviewCount() {
             if (!currentUser || !Array.isArray(currentData.reviews)) return 0;
-            return currentData.reviews.filter(r => r.status === 'pending' && r.proposerId !== currentUser.id &&
+            return currentData.reviews.filter(r => r.status === 'pending' && (r.projectId || 'default') === activeProjectId && r.proposerId !== currentUser.id &&
                 !(r.votes || []).find(v => v.userId === currentUser.id)).length;
         }
         function renderReviewBadge() {
@@ -7274,7 +7295,7 @@ return data;
             const listEl = document.getElementById('review-inbox-list');
             if (!listEl) return;
             const order = s => s === 'pending' ? 0 : 1;
-            const all = (currentData.reviews || []).slice().sort((a, b) => {
+            const all = (currentData.reviews || []).filter(r => (r.projectId || 'default') === activeProjectId).slice().sort((a, b) => {
                 if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
                 return (b.createdAt || '').localeCompare(a.createdAt || '');
             });
@@ -7451,11 +7472,11 @@ ${intrLog}
         let activeTagEdit = null;
         function editTag(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newTagName = prompt("새 태그 이름을 입력하세요:", task.catBadge); if (newTagName === null) return; const finalTag = newTagName.trim() || task.catBadge; activeTagEdit = { oldTag: task.catBadge, newTag: finalTag }; const colorPicker = document.getElementById('hidden-color-picker'); colorPicker.value = currentData.tagColors[task.catBadge] || '#495057'; setTimeout(() => colorPicker.click(), 100); }
         function onColorPicked(e) { if(!activeTagEdit) return; const newColor = e.target.value; const { oldTag, newTag } = activeTagEdit; const affectedTasks = []; currentData.tasks.forEach(t => { if(t.catBadge === oldTag) { t.catBadge = newTag; affectedTasks.push(t); } }); currentData.tagColors[newTag] = newColor; activeTagEdit = null; saveData(); dbUpsertTagColor(newTag, newColor); affectedTasks.forEach(t => dbUpsertTask(t)); }
-        function addNewCategory() { const title = prompt("카테고리 이름을 입력하세요:"); if (title) { const newCat = { id: "cat-" + Date.now(), title: title, subtitle: "CUSTOM MODULE" }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); } }
+        function addNewCategory() { const title = prompt("카테고리 이름을 입력하세요:"); if (title) { const newCat = { id: "cat-" + Date.now(), title: title, subtitle: "CUSTOM MODULE", projectId: activeProjectId }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); } }
         function editCategoryName(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const newName = prompt("카테고리 이름을 수정하세요:", cat.title); if(newName) { cat.title = newName; saveData(); dbUpsertCategory(cat); } }
         function deleteCategory(e, catId) { e.stopPropagation(); if(confirm("카테고리와 내부 모든 할 일이 삭제됩니다. 계속하시겠습니까?")) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
         function addNewTask(catId, position = 'top') {
-            const newTask = { id: "t-" + Date.now(), catId: catId, priority: "p1", dev: "Dev A", catBadge: "NEW", title: "새로운 태스크 (New Task)", desc: "요약 설명을 입력하세요", details: "클릭하여 상세 내용을 마크다운으로 작성하세요...", scripts: ["NewScript.cs"], status: 'pending', isStarred: false, time: null, isCollapsed: false, comments: [], zone: 'shelf', sprintId: null };
+            const newTask = { id: "t-" + Date.now(), catId: catId, projectId: activeProjectId, priority: "p1", dev: "Dev A", catBadge: "NEW", title: "새로운 태스크 (New Task)", desc: "요약 설명을 입력하세요", details: "클릭하여 상세 내용을 마크다운으로 작성하세요...", scripts: ["NewScript.cs"], status: 'pending', isStarred: false, time: null, isCollapsed: false, comments: [], zone: 'shelf', sprintId: null };
             // [v40 Day3 청크3] 마스터 §1.4: 신규 카드는 항상 Shelf. Now 이동은 cycleZone에서 intrusion 리뷰로 게이트.
             _commitNewTask(newTask, position);
         }
@@ -7481,7 +7502,7 @@ ${intrLog}
             const filterWarning = document.getElementById('filter-warning');
             if(isFiltering) filterWarning.classList.remove('hidden'); else filterWarning.classList.add('hidden');
 
-            currentData.categories.forEach(cat => {
+            currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId).forEach(cat => {
                 const isFocused = focusedCategoryId === cat.id; const isMinimized = focusedCategoryId !== null && !isFocused;
                 const colClass = isFocused ? 'kanban-col-focused' : (isMinimized ? 'kanban-col-minimized' : 'kanban-col-normal');
                 const col = document.createElement('div'); col.className = `kanban-col-wrapper ${colClass}`;
@@ -7554,7 +7575,7 @@ ${intrLog}
 
         function renderProgress() {
             const container = document.getElementById('progress-container'); container.innerHTML = '';
-            currentData.categories.forEach(cat => {
+            currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId).forEach(cat => {
                 const catTasks = currentData.tasks.filter(t => t.catId === cat.id); const total = catTasks.length; const done = catTasks.filter(t => t.status === 'completed').length; const percent = total === 0 ? 0 : Math.round((done / total) * 100);
                 const div = document.createElement('div'); div.className = 'bg-white border-2 border-gray-100 p-5 rounded-xl shadow-sm'; div.innerHTML = ` <div class="flex justify-between items-center mb-3"> <span class="text-[15px] font-black text-gray-800">${cat.title}</span> <span class="text-sm font-mono font-black text-emerald-600">${percent}%</span> </div> <div class="progress-bar-container"><div class="progress-fill" style="width: ${percent}%"></div></div> <p class="text-[11px] text-gray-400 mt-3 font-mono font-bold uppercase tracking-wider">${done} / ${total} TASKS COMPLETE</p> `; container.appendChild(div);
             });
