@@ -529,7 +529,7 @@
         }
 
         /* iOS 모달 중앙 정렬 강제 */
-        #project-modal, #settings-modal, #api-key-modal, #sprint-intrusion-modal {
+        #project-modal, #settings-modal, #api-key-modal, #sprint-intrusion-modal, #link-picker-modal {
             display: none;
             position: fixed !important;
             inset: 0 !important;
@@ -540,9 +540,39 @@
         #project-modal.modal-open,
         #settings-modal.modal-open,
         #api-key-modal.modal-open,
-        #sprint-intrusion-modal.modal-open {
+        #sprint-intrusion-modal.modal-open,
+        #link-picker-modal.modal-open {
             display: flex !important;
         }
+
+        /* [v40 Day3 청크1] 연결 패널/칩/피커 */
+        .linked-panel { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e5e7eb; }
+        .linked-panel-head { font-size: 11px; font-weight: 700; color: #6b7280; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+        .linked-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+        .link-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; border-radius: 12px; padding: 2px 4px 2px 9px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .link-chip:hover { background: #e0e7ff; }
+        .link-chip-x { border: none; background: transparent; color: #818cf8; cursor: pointer; font-size: 11px; font-weight: 700; padding: 0 2px; border-radius: 8px; }
+        .link-chip-x:hover { background: #c7d2fe; color: #3730a3; }
+        .link-add-btn { font-size: 11px; font-weight: 700; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 2px 8px; cursor: pointer; }
+        .link-add-btn:hover { background: #dbeafe; }
+        .linked-empty { font-size: 11px; color: #9ca3af; }
+        .link-sep { flex: 0 0 auto; width: 1px; height: 16px; background: #e5e7eb; margin: 0 2px; }
+        .link-pick-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; color: #1f2937; }
+        .link-pick-item:hover { background: #eff6ff; }
+        .link-pick-sub { font-size: 11px; color: #9ca3af; flex-shrink: 0; }
+        body.dark .linked-panel { border-top-color: #334155; }
+        body.dark .link-chip { background: #1e293b; color: #c7d2fe; border-color: #334155; }
+        body.dark .link-pick-item { color: #e2e8f0; }
+        body.dark .link-pick-item:hover { background: #1e293b; }
+        body.dark #link-picker-modal .bg-white { background: #1e293b !important; }
+
+        /* [v40 Day3 청크1] 위키링크 ([[task:ID]] / [[doc:ID]]) */
+        .wikilink { color: #2563eb; cursor: pointer; text-decoration: none; border-bottom: 1px dashed #93c5fd; font-weight: 600; padding: 0 1px; }
+        .wikilink:hover { background: #eff6ff; border-bottom-style: solid; }
+        .wikilink-doc { color: #7c3aed; border-bottom-color: #c4b5fd; }
+        body.dark .wikilink { color: #93c5fd; }
+        body.dark .wikilink-doc { color: #c4b5fd; }
+        body.dark .wikilink:hover { background: rgba(147,197,253,0.12); }
 
         /* 모달 inner box 모바일 반응형 */
         @media (max-width: 480px) {
@@ -2184,6 +2214,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         </div>
                     </div>
 
+                    <!-- [v40 Day3 청크1] 문서 연결 링크 바 -->
+                    <div id="doc-links-bar" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid #e5e7eb;background:#fbfcfe;font-size:12px;flex-shrink:0;"></div>
+
                     <!-- 컨텐츠 영역: 소스 + 미리보기 나란히 또는 하나씩 -->
                     <div id="editor-content-wrap" style="flex:1;display:flex;min-height:0;overflow:hidden;position:relative;">
                         <!-- 소스 편집 영역 -->
@@ -2274,6 +2307,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button onclick="resolveIntrusion('out')" class="w-full bg-amber-500 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-amber-600 shadow-md transition-colors">⚡ 스프린트 외 추가 (Intrusion 기록)</button>
                 <button onclick="resolveIntrusion('cancel')" class="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">취소</button>
             </div>
+        </div>
+    </div>
+
+    <!-- [v40 Day3 청크1] task↔doc 링크 피커 모달 -->
+    <div id="link-picker-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('link-picker-modal')">
+        <div class="bg-white p-5 rounded-xl w-[460px] max-w-[92vw] shadow-2xl border border-gray-200 flex flex-col max-h-[80vh]" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h2 id="link-picker-title" class="text-lg font-black text-gray-800">🔗 연결</h2>
+                <button onclick="closeModal('link-picker-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
+            </div>
+            <input type="text" id="link-picker-search" oninput="renderLinkPickerResults(this.value)" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-3" placeholder="제목으로 검색...">
+            <div id="link-picker-list" class="flex-1 overflow-y-auto pr-1" style="min-height:120px;"></div>
         </div>
     </div>
 
@@ -2523,7 +2568,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                        'muted', 'controls', 'playsinline', 'target', 'style',
                        'colspan', 'rowspan', 'scope', 'align', 'valign', 'width', 'height',
                        'border', 'cellpadding', 'cellspacing', 'dir',
-                       'open', 'datetime', 'value', 'min', 'max', 'low', 'high', 'optimum'],
+                       'open', 'datetime', 'value', 'min', 'max', 'low', 'high', 'optimum',
+                       'data-wl-type', 'data-wl-id'], // [v40 Day3 청크1] 위키링크 앵커
             FORCE_BODY: false,
             ALLOW_UNKNOWN_PROTOCOLS: false
         };
@@ -2775,6 +2821,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // ── PASS 2: 깨진 GFM pipe table 감지 & 재구성 ──
             // 증상: 셀 내용에 줄바꿈이 있어서 | 기호가 한 줄에 하나씩 나오는 패턴
             text = fixBrokenGfmTables(text);
+
+            // ── [v40 Day3 청크1] PASS 2.5: [[task:ID]] / [[doc:ID]] 위키링크 → 인라인 앵커 ──
+            // placeholder로 보호 후 PASS 4에서 복원 (marked가 ⌂ 문자를 건드리지 않음)
+            text = text.replace(/\[\[(task|doc):([A-Za-z0-9_-]+)\]\]/g, function(match, type, id) {
+                var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂';
+                var label = type === 'task' ? getTaskLabel(id) : getDocLabel(id);
+                var icon = type === 'task' ? '🗂' : '📄';
+                var anchor = '<a class="wikilink wikilink-' + type + '" data-wl-type="' + type +
+                             '" data-wl-id="' + _sprintEsc(id) + '">' + icon + ' ' + _sprintEsc(label) + '</a>';
+                inlineTableStore[ph] = anchor;
+                _tableStore[ph] = anchor;
+                return ph; // 인라인이므로 줄바꿈 래핑 안 함
+            });
 
             // ── PASS 3: marked.js로 마크다운 → HTML ──
             var html = marked.parse(text);
@@ -4094,6 +4153,9 @@ return data;
                 sort_order: doc.sortOrder || 0,
                 is_collapsed: doc.isCollapsed || false,
                 is_deprecated: doc.deprecated || false,
+                // [v40 Day3 청크1] 양방향 링크 저장
+                linked_task_ids: doc.linkedTaskIds || [],
+                linked_doc_ids: doc.linkedDocIds || [],
                 updated_at: Date.now()
             });
             if (error) {
@@ -4319,7 +4381,7 @@ return data;
                 // [v21 PERF B4+B5] wiki_docs는 메타 컬럼만 먼저 가져오고, content는 문서 열 때 별도 fetch
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
-                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at';
+                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids'; // [v40 Day3 청크1] 링크 메타 포함 (없으면 dbUpsertDoc이 링크를 []로 덮어씀)
                 const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
@@ -4380,6 +4442,9 @@ return data;
                                 doc.title = u.title;
                                 doc.emoji = u.emoji; doc.sortOrder = u.sort_order;
                                 doc.is_collapsed = u.is_collapsed; doc.deprecated = u.is_deprecated;
+                                // [v40 Day3 청크1] 다른 사용자가 추가/변경한 링크 반영
+                                if (typeof u.linked_task_ids !== 'undefined') doc.linkedTaskIds = u.linked_task_ids || [];
+                                if (typeof u.linked_doc_ids !== 'undefined') doc.linkedDocIds = u.linked_doc_ids || [];
                                 if (currentView === 'docs') {
                                     renderDocTree();
                                     if (activeDocId === u.id && changed) {
@@ -4439,7 +4504,10 @@ return data;
                                     catId: u.cat_id, title: u.title, desc: u.description,
                                     details: u.details, priority: u.priority, status: u.status,
                                     dev: u.dev_name, catBadge: u.cat_badge,
-                                    isStarred: u.is_starred, time: u.completed_at, scripts: u.scripts || []
+                                    isStarred: u.is_starred, time: u.completed_at, scripts: u.scripts || [],
+                                    // [v40 Day3 청크1] zone/sprint/링크 멀티유저 동기화 (Day2 청크1~4 갭 보완)
+                                    zone: u.zone || 'shelf', sprintId: u.sprint_id || null,
+                                    linkedDocIds: u.linked_doc_ids || []
                                 });
                             }
                         } else if (ev === 'INSERT') {
@@ -5316,6 +5384,7 @@ return data;
             }
 
             updateDocEditorUI();
+            if (typeof renderDocLinksBar === 'function') renderDocLinksBar(); // [v40 Day3 청크1]
             // Load user highlights for this doc
             const doc = currentData.docs ? currentData.docs.find(d => d.id === docId) : null;
             if(doc && doc.userHighlights) userHighlights[docId] = doc.userHighlights;
@@ -5521,6 +5590,9 @@ return data;
 
             // 이미 저장된 내용이면 스킵 (콜백은 성공으로 처리 — 변경 없음 = 이미 최신 상태)
             if(_docLastSavedContent === content) { _cb(null); return; }
+
+            // [v40 Day3 청크1] 본문의 [[task:ID]]/[[doc:ID]] 위키링크 자동 양방향 등록 (신규 링크만 DB 반영)
+            if (typeof autoRegisterWikiLinks === 'function') autoRegisterWikiLinks('doc', activeDocId, content);
 
             // 저장 중 표시
             if(statusEl) { statusEl.textContent = '💾 저장 중...'; statusEl.style.color = '#3b82f6'; }
@@ -6058,7 +6130,7 @@ return data;
         }
 
         function editMarkdown(taskId) { const renderDiv = document.getElementById(`md-render-${taskId}`); const editorTextarea = document.getElementById(`md-editor-${taskId}`); if(!renderDiv || !editorTextarea) return; renderDiv.classList.add('hidden'); editorTextarea.classList.remove('hidden'); editorTextarea.focus(); activeEditorId = editorTextarea.id; }
-        function saveMarkdown(taskId, textarea) { setTimeout(() => { if (activeEditorId !== textarea.id) return; const task = currentData.tasks.find(t => t.id === taskId); if (task.details !== textarea.value) { task.details = textarea.value; saveData(); dbUpsertTask(task); } else { document.getElementById(`md-render-${taskId}`).classList.remove('hidden'); textarea.classList.add('hidden'); } activeEditorId = null; hideToolbar(); }, 150); }
+        function saveMarkdown(taskId, textarea) { setTimeout(() => { if (activeEditorId !== textarea.id) return; const task = currentData.tasks.find(t => t.id === taskId); if (task.details !== textarea.value) { task.details = textarea.value; saveData(); dbUpsertTask(task); if (typeof autoRegisterWikiLinks === 'function') autoRegisterWikiLinks('task', taskId, task.details); } else { document.getElementById(`md-render-${taskId}`).classList.remove('hidden'); textarea.classList.add('hidden'); } activeEditorId = null; hideToolbar(); }, 150); }
 
         function updateTaskText(taskId, field, element) { const task = currentData.tasks.find(t => t.id === taskId); if (!task) return; if (task[field] !== element.innerText) { task[field] = element.innerText; saveData(); dbUpsertTask(task); } }
         function updateTaskScripts(taskId, element) { const task = currentData.tasks.find(t => t.id === taskId); if (!task) return; task.scripts = element.innerText.split(',').map(s => s.trim()).filter(s => s); saveData(); dbUpsertTask(task); }
@@ -6328,6 +6400,200 @@ return data;
             }
         }
 
+        // ==========================================
+        // [v40 Day3 청크1] 양방향 task↔doc 링크
+        // ==========================================
+        function _ensureArr(o, k) { if (!Array.isArray(o[k])) o[k] = []; return o[k]; }
+
+        function linkTaskDoc(taskId, docId) {
+            const task = currentData.tasks.find(t => t.id === taskId);
+            const doc = currentData.docs.find(d => d.id === docId);
+            if (!task || !doc) return false;
+            let changed = false;
+            _ensureArr(task, 'linkedDocIds'); _ensureArr(doc, 'linkedTaskIds');
+            if (!task.linkedDocIds.includes(docId)) { task.linkedDocIds.push(docId); changed = true; }
+            if (!doc.linkedTaskIds.includes(taskId)) { doc.linkedTaskIds.push(taskId); changed = true; }
+            if (changed) { dbUpsertTask(task); dbUpsertDoc(doc); _safeLocalCache(currentData); }
+            return changed;
+        }
+        function unlinkTaskDoc(taskId, docId) {
+            const task = currentData.tasks.find(t => t.id === taskId);
+            const doc = currentData.docs.find(d => d.id === docId);
+            if (task && Array.isArray(task.linkedDocIds)) task.linkedDocIds = task.linkedDocIds.filter(id => id !== docId);
+            if (doc && Array.isArray(doc.linkedTaskIds)) doc.linkedTaskIds = doc.linkedTaskIds.filter(id => id !== taskId);
+            if (task) dbUpsertTask(task);
+            if (doc) dbUpsertDoc(doc);
+            _safeLocalCache(currentData);
+        }
+        function linkDocDoc(aId, bId) {
+            if (aId === bId) return false;
+            const a = currentData.docs.find(d => d.id === aId);
+            const b = currentData.docs.find(d => d.id === bId);
+            if (!a || !b) return false;
+            let changed = false;
+            _ensureArr(a, 'linkedDocIds'); _ensureArr(b, 'linkedDocIds');
+            if (!a.linkedDocIds.includes(bId)) { a.linkedDocIds.push(bId); changed = true; }
+            if (!b.linkedDocIds.includes(aId)) { b.linkedDocIds.push(aId); changed = true; }
+            if (changed) { dbUpsertDoc(a); dbUpsertDoc(b); _safeLocalCache(currentData); }
+            return changed;
+        }
+        function unlinkDocDoc(aId, bId) {
+            const a = currentData.docs.find(d => d.id === aId);
+            const b = currentData.docs.find(d => d.id === bId);
+            if (a && Array.isArray(a.linkedDocIds)) a.linkedDocIds = a.linkedDocIds.filter(id => id !== bId);
+            if (b && Array.isArray(b.linkedDocIds)) b.linkedDocIds = b.linkedDocIds.filter(id => id !== aId);
+            if (a) dbUpsertDoc(a);
+            if (b) dbUpsertDoc(b);
+            _safeLocalCache(currentData);
+        }
+
+        function getDocLabel(docId) { const d = currentData.docs.find(x => x.id === docId); return d ? ((d.emoji || '📄') + ' ' + (d.title || '제목 없음')) : '(삭제된 문서)'; }
+        function getTaskLabel(taskId) { const t = currentData.tasks.find(x => x.id === taskId); return t ? (t.title || '(제목 없음)') : '(삭제된 카드)'; }
+
+        // 링크 클릭 네비게이션
+        function navToDoc(docId) {
+            if (!currentData.docs.find(d => d.id === docId)) { showToast('문서를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
+            switchView('docs');
+            setTimeout(() => openDoc(docId), 30);
+        }
+        function navToTask(taskId) {
+            if (!currentData.tasks.find(t => t.id === taskId)) { showToast('카드를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
+            switchView('kanban');
+            setTimeout(() => {
+                let card = document.querySelector('.task-card[data-id="' + taskId + '"]');
+                if (!card) { // 필터(Zone 등)에 가려졌을 수 있음 → 전체 표시 후 재시도
+                    const fz = document.getElementById('filter-zone'); if (fz) fz.value = 'all';
+                    if (typeof applyFilters === 'function') applyFilters(); else { filterZone = 'all'; renderBoard(); }
+                    card = document.querySelector('.task-card[data-id="' + taskId + '"]');
+                }
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.style.boxShadow = '0 0 0 3px #3b82f6';
+                    setTimeout(() => { card.style.boxShadow = ''; }, 1800);
+                }
+            }, 80);
+        }
+
+        // 본문에서 [[task:ID]]/[[doc:ID]]를 스캔해 양방향 링크 자동 등록
+        function autoRegisterWikiLinks(sourceType, sourceId, text) {
+            if (!text) return;
+            var re = /\[\[(task|doc):([A-Za-z0-9_-]+)\]\]/g, m;
+            while ((m = re.exec(text))) {
+                var t = m[1], id = m[2];
+                if (sourceType === 'task') {
+                    if (t === 'doc') linkTaskDoc(sourceId, id);
+                } else if (sourceType === 'doc') {
+                    if (t === 'task') linkTaskDoc(id, sourceId);
+                    else if (t === 'doc' && id !== sourceId) linkDocDoc(sourceId, id);
+                }
+            }
+        }
+
+        // 위키링크 클릭 → 네비게이션 (캡처 단계: 카드 editMarkdown 등 상위 핸들러보다 먼저 가로챔)
+        document.addEventListener('click', function(e) {
+            var wl = (e.target && e.target.closest) ? e.target.closest('.wikilink') : null;
+            if (!wl) return;
+            e.preventDefault(); e.stopPropagation();
+            var type = wl.getAttribute('data-wl-type');
+            var id = wl.getAttribute('data-wl-id');
+            if (type === 'task') navToTask(id);
+            else if (type === 'doc') navToDoc(id);
+        }, true);
+
+        // ── 연결 패널 렌더 (카드) ──
+        function renderTaskLinkedDocsPanel(task) {
+            const ids = Array.isArray(task.linkedDocIds) ? task.linkedDocIds : [];
+            const chips = ids.map(docId =>
+                `<span class="link-chip" onclick="navToDoc('${docId}')" title="문서 열기">${_sprintEsc(getDocLabel(docId))}<button class="link-chip-x" onclick="event.stopPropagation();removeTaskDocLink('${task.id}','${docId}')" title="연결 해제">✕</button></span>`
+            ).join('');
+            return `<div class="linked-panel ${task.isCollapsed ? 'hidden' : ''}">
+                <div class="linked-panel-head">📄 연결된 문서 <button class="link-add-btn" onclick="openLinkPicker('task','${task.id}','doc')">🔗 연결</button></div>
+                <div class="linked-chips">${chips || '<span class="linked-empty">없음 — 🔗 연결 또는 본문에 [[doc:ID]]</span>'}</div>
+            </div>`;
+        }
+
+        // ── 연결 바 렌더 (문서 뷰) ──
+        function renderDocLinksBar() {
+            const bar = document.getElementById('doc-links-bar');
+            if (!bar) return;
+            const doc = activeDocId ? currentData.docs.find(d => d.id === activeDocId) : null;
+            if (!doc) { bar.style.display = 'none'; return; }
+            bar.style.display = 'flex';
+            const taskIds = Array.isArray(doc.linkedTaskIds) ? doc.linkedTaskIds : [];
+            const docIds = Array.isArray(doc.linkedDocIds) ? doc.linkedDocIds : [];
+            const taskChips = taskIds.map(tid =>
+                `<span class="link-chip" onclick="navToTask('${tid}')" title="카드로 이동">🗂 ${_sprintEsc(getTaskLabel(tid))}<button class="link-chip-x" onclick="event.stopPropagation();removeDocTaskLink('${doc.id}','${tid}')" title="연결 해제">✕</button></span>`
+            ).join('');
+            const docChips = docIds.map(did =>
+                `<span class="link-chip" onclick="navToDoc('${did}')" title="문서 열기">${_sprintEsc(getDocLabel(did))}<button class="link-chip-x" onclick="event.stopPropagation();removeDocDocLink('${doc.id}','${did}')" title="연결 해제">✕</button></span>`
+            ).join('');
+            bar.innerHTML = `<b style="color:#475569;">🔗 연결</b>
+                <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','task')">+ 태스크</button>
+                <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','doc')">+ 문서</button>
+                <span class="link-sep"></span>
+                ${taskChips}${docChips}${(!taskChips && !docChips) ? '<span class="linked-empty">아직 연결 없음 — 버튼 또는 본문에 [[task:ID]]/[[doc:ID]]</span>' : ''}`;
+        }
+
+        function removeTaskDocLink(taskId, docId) { unlinkTaskDoc(taskId, docId); renderBoard(); renderDocLinksBar(); }
+        function removeDocTaskLink(docId, taskId) { unlinkTaskDoc(taskId, docId); renderDocLinksBar(); renderBoard(); }
+        function removeDocDocLink(aId, bId) { unlinkDocDoc(aId, bId); renderDocLinksBar(); }
+
+        // ── 링크 피커 모달 ──
+        let _linkPicker = null;
+        function openLinkPicker(sourceType, sourceId, targetType) {
+            _linkPicker = { sourceType: sourceType, sourceId: sourceId, targetType: targetType };
+            const titleEl = document.getElementById('link-picker-title');
+            if (titleEl) titleEl.textContent = targetType === 'task' ? '🔗 연결할 태스크 선택' : '🔗 연결할 문서 선택';
+            const input = document.getElementById('link-picker-search');
+            if (input) input.value = '';
+            renderLinkPickerResults('');
+            openModal('link-picker-modal');
+            setTimeout(() => { if (input) input.focus(); }, 50);
+        }
+        function renderLinkPickerResults(query) {
+            if (!_linkPicker) return;
+            const sourceType = _linkPicker.sourceType, sourceId = _linkPicker.sourceId, targetType = _linkPicker.targetType;
+            const q = (query || '').toLowerCase().trim();
+            const listEl = document.getElementById('link-picker-list');
+            if (!listEl) return;
+            const linked = new Set();
+            if (sourceType === 'task') {
+                const t = currentData.tasks.find(x => x.id === sourceId);
+                (t && t.linkedDocIds || []).forEach(id => linked.add(id));
+            } else {
+                const d = currentData.docs.find(x => x.id === sourceId);
+                if (d) (targetType === 'task' ? (d.linkedTaskIds || []) : (d.linkedDocIds || [])).forEach(id => linked.add(id));
+            }
+            let items;
+            if (targetType === 'task') {
+                items = currentData.tasks
+                    .filter(t => !linked.has(t.id) && (!q || (t.title || '').toLowerCase().includes(q)))
+                    .slice(0, 40).map(t => {
+                        const c = currentData.categories.find(x => x.id === t.catId);
+                        return { id: t.id, label: (t.title || '(제목 없음)'), sub: c ? c.title : '' };
+                    });
+            } else {
+                items = currentData.docs
+                    .filter(d => d.id !== sourceId && !linked.has(d.id) && (d.projectId === activeProjectId) && (!q || (d.title || '').toLowerCase().includes(q)))
+                    .slice(0, 40).map(d => ({ id: d.id, label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), sub: '' }));
+            }
+            listEl.innerHTML = items.length
+                ? items.map(it => `<div class="link-pick-item" onclick="pickLink('${it.id}')"><span>${_sprintEsc(it.label)}</span>${it.sub ? `<span class="link-pick-sub">${_sprintEsc(it.sub)}</span>` : ''}</div>`).join('')
+                : '<div class="linked-empty" style="padding:14px;text-align:center;">결과 없음</div>';
+        }
+        function pickLink(targetId) {
+            if (!_linkPicker) return;
+            const sourceType = _linkPicker.sourceType, sourceId = _linkPicker.sourceId, targetType = _linkPicker.targetType;
+            let ok = false;
+            if (sourceType === 'task' && targetType === 'doc') ok = linkTaskDoc(sourceId, targetId);
+            else if (sourceType === 'doc' && targetType === 'task') ok = linkTaskDoc(targetId, sourceId);
+            else if (sourceType === 'doc' && targetType === 'doc') ok = linkDocDoc(sourceId, targetId);
+            if (ok) showToast('🔗 연결되었습니다.', 'success');
+            renderBoard(); renderDocLinksBar();
+            const input = document.getElementById('link-picker-search');
+            renderLinkPickerResults(input ? input.value : '');
+        }
+
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
         function toggleStar(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isStarred = !task.isStarred; saveData(); dbUpsertTask(task); }
         function changeDev(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newDev = prompt("담당자를 입력하세요:", task.dev); if (newDev) { task.dev = newDev; saveData(); dbUpsertTask(task); } }
@@ -6431,7 +6697,7 @@ return data;
                     const tagColor = currentData.tagColors[task.catBadge] || '#495057'; const statusInfo = getStatusInfo(task.status);
                     const card = document.createElement('div'); card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} ${task.isCollapsed ? 'collapsed' : ''} zone-${task.zone || 'shelf'}`; card.setAttribute('data-id', task.id);
                     const commentsHtml = task.comments.map((c, i) => ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `).join('');
-                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
+                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')"> ${task.isStarred ? '⭐ 즐겨찾기됨' : '☆ 즐겨찾기'} </span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
                     colList.appendChild(card);
                 });
 
