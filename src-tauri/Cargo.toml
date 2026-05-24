@@ -1,0 +1,24 @@
+[package]
+name = "tda-dashboard"
+version = "0.40.0"
+description = "TDA Dashboard - Team Dev Archive"
+authors = ["TDA Team"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "tda_dashboard_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+# 기본은 dev profile에서만 빠른 빌드
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
