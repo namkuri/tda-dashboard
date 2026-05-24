@@ -1954,6 +1954,21 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .more-sheet-item .ms-ico { font-size: 18px; width: 26px; text-align: center; }
         .more-sheet-item .ms-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; background: var(--st-danger); color: #fff; border-radius: 9px; font-size: 10px; font-weight: 800; display: none; align-items: center; justify-content: center; }
 
+        /* ============================================================
+           [UX] 빈 상태 (Empty states) — 컬럼/보드/트리/검색
+           ============================================================ */
+        .col-empty { text-align: center; color: var(--c-text3); font-size: 12.5px; line-height: 1.65; padding: 26px 14px; border: 1.5px dashed var(--c-border); border-radius: 12px; margin: 2px; }
+        .col-empty .ce-emoji { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.65; }
+        .col-empty b { color: var(--c-text2); font-weight: 700; }
+        .board-empty { width: 100%; text-align: center; color: var(--c-text2); padding: 64px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        .board-empty .be-emoji { font-size: 46px; opacity: 0.8; }
+        .board-empty .be-title { font-size: 18px; font-weight: 800; color: var(--c-text); }
+        .board-empty .be-sub { font-size: 13px; color: var(--c-text3); line-height: 1.7; max-width: 380px; }
+        .board-empty .be-cta { margin-top: 6px; background: var(--c-accent); color: #fff; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 700; font-size: 14px; cursor: pointer; transition: background .12s; }
+        .board-empty .be-cta:hover { background: var(--c-accent-hover); }
+        .tree-empty { text-align: center; color: var(--c-text3); font-size: 12.5px; line-height: 1.7; padding: 30px 16px; }
+        .tree-empty .te-emoji { font-size: 30px; display: block; margin-bottom: 8px; opacity: 0.65; }
+
     </style>
 </head>
 <body>
@@ -5998,7 +6013,7 @@ return data;
                     const badge = document.getElementById('doc-count-badge');
                     if(badge) badge.textContent = totalInProject + '개';
                     container.innerHTML = totalInProject === 0
-                        ? '<div class="text-center text-gray-400 text-sm mt-4">이 프로젝트에 생성된 문서가 없습니다.</div>'
+                        ? '<div class="tree-empty"><span class="te-emoji">📄</span>아직 문서가 없어요.<br>상단 <b>+ New</b>로 첫 문서를 만들어보세요.</div>'
                         : '<div class="text-center text-orange-400 text-xs mt-4 px-2">⚠️ ' + totalInProject + '개 문서가 있지만 현재 뷰에서 표시되지 않습니다.<br><button onclick="repairDocs()" class="mt-2 bg-orange-500 text-white px-3 py-1 rounded text-xs font-bold">🔧 문서 복구</button></div>';
                 }
                 return '';
@@ -8030,7 +8045,8 @@ ${intrLog}
             const filterWarning = document.getElementById('filter-warning');
             if(isFiltering) filterWarning.classList.remove('hidden'); else filterWarning.classList.add('hidden');
 
-            currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId).forEach(cat => {
+            const projCats = currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId);
+            projCats.forEach(cat => {
                 const isFocused = focusedCategoryId === cat.id; const isMinimized = focusedCategoryId !== null && !isFocused;
                 const colClass = isFocused ? 'kanban-col-focused' : (isMinimized ? 'kanban-col-minimized' : 'kanban-col-normal');
                 const col = document.createElement('div'); col.className = `kanban-col-wrapper ${colClass}`;
@@ -8094,9 +8110,21 @@ ${intrLog}
                     colList.appendChild(card);
                 });
 
-                new Sortable(colList, { group: 'tasks', animation: 250, handle: '.drag-handle', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', disabled: isFiltering, onEnd: function (evt) { const taskId = evt.item.getAttribute('data-id'); const newCatId = evt.to.id; const movedTask = currentData.tasks.find(t => t.id === taskId); movedTask.catId = newCatId; const newTasksOrder = []; document.querySelectorAll('.task-card').forEach(el => { const id = el.getAttribute('data-id'); const found = currentData.tasks.find(t => t.id === id); if(found) newTasksOrder.push(found); }); currentData.tasks = newTasksOrder; saveData(); dbUpdateTaskSortOrders(newTasksOrder); } });
+                if (catTasks.length === 0) {
+                    const _rawCount = currentData.tasks.filter(t => t.catId === cat.id).length;
+                    const _emptyMsg = (isFiltering && _rawCount > 0)
+                        ? '<span class="ce-emoji">🔍</span>현재 필터에 맞는 카드가 없습니다.'
+                        : '<span class="ce-emoji">🗂️</span>아직 할 일이 없어요.<br>아래 <b>+ 새 할일 추가</b>로 시작하세요.';
+                    const _empty = document.createElement('div'); _empty.className = 'col-empty'; _empty.innerHTML = _emptyMsg;
+                    colList.appendChild(_empty);
+                }
+
+                new Sortable(colList, { group: 'tasks', animation: 250, handle: '.drag-handle', filter: '.col-empty', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', disabled: isFiltering, onEnd: function (evt) { const taskId = evt.item.getAttribute('data-id'); const newCatId = evt.to.id; const movedTask = currentData.tasks.find(t => t.id === taskId); movedTask.catId = newCatId; const newTasksOrder = []; document.querySelectorAll('.task-card').forEach(el => { const id = el.getAttribute('data-id'); const found = currentData.tasks.find(t => t.id === id); if(found) newTasksOrder.push(found); }); currentData.tasks = newTasksOrder; saveData(); dbUpdateTaskSortOrders(newTasksOrder); } });
             });
-            
+
+            if (projCats.length === 0) {
+                board.innerHTML = '<div class="board-empty"><div class="be-emoji">🗂️</div><div class="be-title">아직 카테고리가 없어요</div><div class="be-sub">칸반 보드는 카테고리(컬럼)로 작업을 묶어 관리합니다. 첫 카테고리를 만들어 시작해보세요.</div><button class="be-cta" onclick="addNewCategory()">+ 새 카테고리 만들기</button></div>';
+            }
             attachFavoriteButtonsToMedia(document.getElementById('board'));
             if (typeof renderSprintBand === 'function') renderSprintBand(); // [v40 Day2 청크 4]
             if (typeof renderReviewBadge === 'function') renderReviewBadge(); // [v40 Day3 청크 2]
