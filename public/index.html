@@ -1912,6 +1912,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .ctx-menu-item.danger { color: var(--ios-red) !important; }
         .ctx-menu-sep { background: var(--ios-sep) !important; }
 
+        /* ============================================================
+           [UX] 공용 다이얼로그 (브라우저 prompt/confirm 대체) — 웜 테마
+           ============================================================ */
+        #ui-dialog-overlay { position: fixed; inset: 0; z-index: 900; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); padding: 20px; }
+        #ui-dialog-overlay.open { display: flex; }
+        .ui-dialog { width: 420px; max-width: 100%; background: var(--c-card); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); padding: 22px 22px 18px; animation: uiDialogIn .16s cubic-bezier(0.2,0,0.2,1); }
+        @keyframes uiDialogIn { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+        .ui-dialog-title { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 6px; color: var(--c-text); }
+        .ui-dialog-msg { font-size: 13.5px; line-height: 1.6; color: var(--c-text2); white-space: pre-line; margin: 0 0 14px; }
+        .ui-dialog-label { font-size: 12px; font-weight: 700; color: var(--c-text3); margin: 0 0 6px; }
+        .ui-dialog-input, .ui-dialog-textarea { width: 100%; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; transition: border-color .12s, box-shadow .12s; }
+        .ui-dialog-input:focus, .ui-dialog-textarea:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
+        .ui-dialog-textarea { resize: vertical; min-height: 76px; line-height: 1.5; }
+        .ui-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+        .ui-dialog-btn { font-size: 13.5px; font-weight: 700; border-radius: 9px; padding: 9px 16px; cursor: pointer; border: 1px solid transparent; transition: background .12s, filter .12s; }
+        .ui-dialog-btn.cancel { background: var(--ios-fill); color: var(--c-text); border-color: var(--c-border); }
+        .ui-dialog-btn.cancel:hover { background: var(--ios-fill2); }
+        .ui-dialog-btn.confirm { background: var(--c-accent); color: #fff; }
+        .ui-dialog-btn.confirm:hover { background: var(--c-accent-hover); }
+        .ui-dialog-btn.confirm.danger { background: var(--st-danger); }
+        .ui-dialog-btn.confirm.danger:hover { filter: brightness(0.92); }
+
     </style>
 </head>
 <body>
@@ -4265,8 +4287,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         
         function saveApiKeyAndReloadFromModal() { 
             const key = document.getElementById('api-key-input').value.trim(); 
-            if(key) { localStorage.setItem('pb3_supabase_key', key); window.location.reload(); } 
-            else { alert("API 키를 입력해주세요."); } 
+            if(key) { localStorage.setItem('pb3_supabase_key', key); window.location.reload(); }
+            else { showToast("API 키를 입력해주세요.", 'alert'); }
         }
         function closeApiModal() { closeModal('api-key-modal'); }
 
@@ -4288,6 +4310,85 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             toast.textContent = message;
             container.appendChild(toast);
             setTimeout(function() { toast.classList.replace('toast-enter','toast-exit'); setTimeout(function(){ if(toast.parentNode) toast.parentNode.removeChild(toast); },500); }, 3000);
+        }
+
+        // ==========================================
+        // [UX] 공용 다이얼로그 — 브라우저 prompt()/confirm() 대체 (Promise 기반)
+        //   uiConfirm({title,message,confirmText,cancelText,danger}) → Promise<boolean>
+        //   uiPrompt({title,label,value,placeholder,multiline,...}) → Promise<string|null>
+        // ==========================================
+        function _ensureUiDialogEl() {
+            var ov = document.getElementById('ui-dialog-overlay');
+            if (ov) return ov;
+            ov = document.createElement('div');
+            ov.id = 'ui-dialog-overlay';
+            ov.innerHTML = '<div class="ui-dialog" role="dialog" aria-modal="true"></div>';
+            document.body.appendChild(ov);
+            return ov;
+        }
+        function _openUiDialog(opts) {
+            opts = opts || {};
+            return new Promise(function(resolve) {
+                var ov = _ensureUiDialogEl();
+                var box = ov.querySelector('.ui-dialog');
+                var hasInput = !!opts.input;
+                var multiline = opts.input === 'textarea';
+                var esc = function(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+                var html = '';
+                if (opts.title) html += '<div class="ui-dialog-title">' + esc(opts.title) + '</div>';
+                if (opts.message) html += '<div class="ui-dialog-msg">' + esc(opts.message) + '</div>';
+                if (hasInput) {
+                    if (opts.label) html += '<div class="ui-dialog-label">' + esc(opts.label) + '</div>';
+                    if (multiline) html += '<textarea class="ui-dialog-textarea" id="ui-dialog-field" placeholder="' + esc(opts.placeholder||'') + '">' + esc(opts.value||'') + '</textarea>';
+                    else html += '<input type="text" class="ui-dialog-input" id="ui-dialog-field" placeholder="' + esc(opts.placeholder||'') + '" value="' + esc(opts.value||'') + '">';
+                }
+                html += '<div class="ui-dialog-actions">'
+                      + '<button type="button" class="ui-dialog-btn cancel" id="ui-dialog-cancel">' + esc(opts.cancelText||'취소') + '</button>'
+                      + '<button type="button" class="ui-dialog-btn confirm' + (opts.danger?' danger':'') + '" id="ui-dialog-ok">' + esc(opts.confirmText||'확인') + '</button>'
+                      + '</div>';
+                box.innerHTML = html;
+                ov.classList.add('open');
+                var field = document.getElementById('ui-dialog-field');
+                var okBtn = document.getElementById('ui-dialog-ok');
+                var cancelBtn = document.getElementById('ui-dialog-cancel');
+                var done = false;
+                function cleanup() {
+                    document.removeEventListener('keydown', onKey, true);
+                    ov.removeEventListener('mousedown', onOverlay);
+                    ov.classList.remove('open');
+                    box.innerHTML = '';
+                }
+                function finish(ok) {
+                    if (done) return; done = true;
+                    var val = field ? field.value : null;
+                    cleanup();
+                    resolve(hasInput ? { ok: ok, value: ok ? val : null } : { ok: ok, value: null });
+                }
+                function onKey(e) {
+                    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+                    else if (e.key === 'Enter') {
+                        if (multiline && !(e.ctrlKey || e.metaKey)) return; // 멀티라인: Enter=줄바꿈, Ctrl/⌘+Enter=확인
+                        e.preventDefault(); finish(true);
+                    }
+                }
+                function onOverlay(e) { if (e.target === ov) finish(false); }
+                okBtn.addEventListener('click', function(){ finish(true); });
+                cancelBtn.addEventListener('click', function(){ finish(false); });
+                document.addEventListener('keydown', onKey, true);
+                ov.addEventListener('mousedown', onOverlay);
+                setTimeout(function(){ if (field) { field.focus(); if (field.select && !multiline) field.select(); } else okBtn.focus(); }, 30);
+            });
+        }
+        function uiConfirm(opts) {
+            if (typeof opts === 'string') opts = { message: opts };
+            opts = opts || {}; opts.input = false;
+            return _openUiDialog(opts).then(function(r){ return r.ok; });
+        }
+        function uiPrompt(opts) {
+            if (typeof opts === 'string') opts = { title: opts };
+            opts = opts || {};
+            opts.input = opts.multiline ? 'textarea' : 'text';
+            return _openUiDialog(opts).then(function(r){ return r.ok ? r.value : null; });
         }
 
         function getTimeAgo(ts) { const diffMin = Math.floor((Date.now() - ts) / 60000); if (diffMin < 1) return '방금 전'; if (diffMin < 60) return `${diffMin}분 전`; const diffHour = Math.floor(diffMin / 60); if (diffHour < 24) return `${diffHour}시간 전`; const diffDay = Math.floor(diffHour / 24); return `${diffDay}일 전`; }
@@ -5284,12 +5385,12 @@ return data;
             }
         }
 
-        function createNewProject() {
-            const cat = prompt("새 프로젝트의 대범주(태그)를 입력하세요:", "일반");
-            if (!cat) return;
-            const name = prompt("새 프로젝트의 이름을 입력하세요:", "새 프로젝트");
-            if (!name) return;
-            
+        async function createNewProject() {
+            const cat = await uiPrompt({ title: '새 프로젝트 (1/2)', label: '대범주(태그)를 입력하세요', value: "일반" });
+            if (cat === null || !cat.trim()) return;
+            const name = await uiPrompt({ title: '새 프로젝트 (2/2)', label: '프로젝트 이름을 입력하세요', value: "새 프로젝트" });
+            if (name === null || !name.trim()) return;
+
             const newProj = { id: 'proj_' + Date.now(), name, category: cat };
             currentData.projects.push(newProj);
             saveData();
@@ -6542,14 +6643,14 @@ return data;
             });
         }
 
-        function createNewDoc(parentId) {
-            const title = prompt("새 문서(탭)의 제목을 입력하세요:", "새 문서");
-            if (!title) return;
+        async function createNewDoc(parentId) {
+            const title = await uiPrompt({ title: '새 문서', label: '문서 제목을 입력하세요', value: "새 문서" });
+            if (title === null || !title.trim()) return;
             const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId, title: title, emoji: '📄', isCollapsed: false, content: '# ' + title + '\n\n여기에 내용을 작성하세요...', createdAt: Date.now(), updatedAt: Date.now() };
             currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc); openDoc(newDoc.id); 
         }
 
-        function moveAllDocsToCurrentProject() {
+        async function moveAllDocsToCurrentProject() {
             if(!currentData || !currentData.docs) return;
             const proj = currentData.projects.find(p => p.id === activeProjectId);
             if(!proj) { showToast('먼저 이동할 프로젝트를 선택하세요.', 'alert'); return; }
@@ -6557,7 +6658,7 @@ return data;
             const count = currentData.docs.filter(d => d.projectId !== activeProjectId).length;
             if(count === 0) { showToast('이미 모든 문서가 현재 프로젝트에 있습니다.', 'info'); return; }
 
-            if(!confirm(count + '개의 문서를 "' + proj.name + '"으로 이동하시겠습니까?\n(문서 내용은 보존됩니다)')) return;
+            if(!(await uiConfirm({ title: '문서 일괄 이동', message: count + '개의 문서를 "' + proj.name + '"으로 이동할까요?\n(문서 내용은 보존됩니다)', confirmText: '이동' }))) return;
 
             currentData.docs.forEach(d => { d.projectId = activeProjectId; });
             saveData();
@@ -6565,13 +6666,13 @@ return data;
             showToast(count + '개 문서를 "' + proj.name + '"으로 이동했습니다.', 'success');
         }
 
-        function moveDocToProject(docId) {
+        async function moveDocToProject(docId) {
             const doc = currentData.docs.find(d => d.id === docId);
             if(!doc) return;
 
             // 현재 프로젝트 목록 표시
             const projList = currentData.projects.map((p, i) => i + '. ' + p.name + (p.id === doc.projectId ? ' (현재)' : '')).join('\n');
-            const choice = prompt('이동할 프로젝트 번호를 선택하세요:\n' + projList + '\n\n0. 취소');
+            const choice = await uiPrompt({ title: '문서 이동', message: projList + '\n\n0 = 취소', label: '이동할 프로젝트 번호를 입력하세요' });
             if(choice === null || choice === '0') return;
 
             const idx = parseInt(choice);
@@ -6589,18 +6690,18 @@ return data;
             showToast('"' + doc.title + '" → ' + targetProj.name + '으로 이동했습니다.', 'success');
         }
 
-        function renameDoc(docId) {
+        async function renameDoc(docId) {
             // [v26 FIX-1] 컨텍스트 메뉴를 즉시 닫음
             if (typeof hideTreeContextMenu === 'function') hideTreeContextMenu();
             const doc = currentData.docs.find(d => d.id === docId);
-            const newTitle = prompt("문서 이름을 변경하세요:", doc.title);
+            const newTitle = await uiPrompt({ title: '문서 이름 변경', label: '문서 이름', value: doc.title || '' });
             if (newTitle && newTitle.trim()) { doc.title = newTitle.trim(); saveData(); dbUpsertDoc(doc); renderDocTree(); if(activeDocId === docId) document.getElementById('doc-editor-title').innerText = `${doc.emoji || '📄'} ${doc.title}`; }
         }
 
-        function deleteDoc(docId) {
+        async function deleteDoc(docId) {
             // [v26 FIX-1] 컨텍스트 메뉴를 즉시 닫음
             if (typeof hideTreeContextMenu === 'function') hideTreeContextMenu();
-            if(!confirm("이 문서와 하위 문서들이 모두 삭제됩니다. 계속하시겠습니까?")) return;
+            if(!(await uiConfirm({ title: '문서 삭제', message: '이 문서와 하위 문서가 모두 삭제됩니다. 계속할까요?', confirmText: '삭제', danger: true }))) return;
             const getIdsToDelete = (id) => { let ids = [id]; const children = currentData.docs.filter(d => d.parentId === id); children.forEach(child => { ids = ids.concat(getIdsToDelete(child.id)); }); return ids; };
             const idsToDelete = getIdsToDelete(docId);
             currentData.docs = currentData.docs.filter(d => !idsToDelete.includes(d.id));
@@ -6648,9 +6749,9 @@ return data;
         }
 
         function updateJsonEditorView() { const editor = document.getElementById('json-editor'); if(editor) editor.value = JSON.stringify(currentData, null, 2); }
-        function applyJsonFromEditor() { try { const parsed = JSON.parse(document.getElementById('json-editor').value); if(parsed.categories && parsed.tasks) { currentData = validateData(parsed); saveData(); showToast("JSON 데이터가 반영되었습니다.", "success"); if(currentView === 'docs') { updateProjectTitle(); renderDocTree(); } } else { alert("유효한 구조가 아닙니다."); } } catch(err) { alert("오류: " + err.message); } }
+        function applyJsonFromEditor() { try { const parsed = JSON.parse(document.getElementById('json-editor').value); if(parsed.categories && parsed.tasks) { currentData = validateData(parsed); saveData(); showToast("JSON 데이터가 반영되었습니다.", "success"); if(currentView === 'docs') { updateProjectTitle(); renderDocTree(); } } else { showToast("유효한 구조가 아닙니다.", 'alert'); } } catch(err) { showToast("오류: " + err.message, 'alert'); } }
         function importJsonFile(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = function(evt) { document.getElementById('json-editor').value = evt.target.result; applyJsonFromEditor(); }; reader.readAsText(file); e.target.value = ""; }
-        function copyTextToClipboard(text, successMessage) { const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); showToast(successMessage || '복사되었습니다.', 'success'); } catch (err) { alert('복사에 실패했습니다.'); } document.body.removeChild(textArea); }
+        function copyTextToClipboard(text, successMessage) { const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); showToast(successMessage || '복사되었습니다.', 'success'); } catch (err) { showToast('복사에 실패했습니다.', 'alert'); } document.body.removeChild(textArea); }
 
         function copyCategoryToClipboard(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const catTasks = currentData.tasks.filter(t => t.catId === catId); let md = `## 📂 **[${cat.title}]** - ${cat.subtitle}\n\n`; catTasks.forEach(task => { const statusIcon = task.status === 'completed' ? "✅" : (task.status === 'progress' ? "🔥" : "⏳"); const starIcon = task.isStarred ? "⭐" : ""; md += `> ${statusIcon} \`[${task.priority.toUpperCase()}]\` **${task.title}** ${starIcon} (${task.dev} | ${task.catBadge})\n> ↳ *${task.desc}*\n`; if(!task.isCollapsed && task.details) md += `> ↳ **상세내용:**\n>   ${task.details.replace(/\n/g, '\n>   ')}\n`; md += `\n`; }); copyTextToClipboard(md, `'${cat.title}' 복사됨.`); }
         function copyProgressToClipboard() { let md = "## 📊 카테고리별 개발 진척률 상황판\n\n"; currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId).forEach(cat => { const catTasks = currentData.tasks.filter(t => t.catId === cat.id); const total = catTasks.length; const done = catTasks.filter(t => t.status === 'completed').length; const percent = total === 0 ? 0 : Math.round((done / total) * 100); md += `- **${cat.title}**: ${percent}% 완료 (${done} / ${total})\n`; }); copyTextToClipboard(md, '진척률 복사됨.'); }
@@ -6709,7 +6810,7 @@ return data;
         function cycleStatus(e, taskId) { e.stopPropagation(); const taskIndex = currentData.tasks.findIndex(t => t.id === taskId); if (taskIndex === -1) return; const task = currentData.tasks[taskIndex]; if(task.status === 'pending') { task.status = 'progress'; } else if(task.status === 'progress') { task.status = 'completed'; task.time = new Date().toLocaleString(); task.doneAt = new Date().toISOString(); /* [v40] auto-bury 기준 시각 */ } else { task.status = 'pending'; task.time = null; task.doneAt = null; } if (task.status === 'completed') { currentData.tasks.splice(taskIndex, 1); currentData.tasks.push(task); } saveData(); dbUpsertTask(task); }
 
         // [v40 Day2 청크 1] Zone 순환 (Shelf → Now → Buried → Shelf)
-        function cycleZone(e, taskId) {
+        async function cycleZone(e, taskId) {
             e.stopPropagation();
             const task = currentData.tasks.find(t => t.id === taskId);
             if (!task) return;
@@ -6720,8 +6821,13 @@ return data;
             if (nextZone === 'now' && _activeSp && task.sprintId !== _activeSp.id) {
                 const pending = (currentData.reviews || []).find(r => r.type === 'intrusion' && r.targetTaskId === taskId && r.status === 'pending');
                 if (pending) { showToast('이미 intrusion 리뷰가 진행 중입니다.', 'info'); openReviewInbox(); return; }
-                showToast('🔒 스프린트 잠금: Now 이동은 intrusion 리뷰가 필요합니다.', 'info');
-                openReviewModal('intrusion', taskId, null);
+                const goAhead = await uiConfirm({
+                    title: '🔒 스프린트 잠금',
+                    message: `진행 중인 스프린트(${_activeSp.weekLabel})에 없는 카드를 Now로 올리려면 팀 결정(intrusion 리뷰)이 필요합니다.\n\n인트루전은 스프린트 집중을 깨는 끼어들기로 기록됩니다. 결정 요청을 생성할까요?`,
+                    confirmText: '결정 요청 생성',
+                    cancelText: '취소'
+                });
+                if (goAhead) openReviewModal('intrusion', taskId, null);
                 return;
             }
             task.zone = nextZone;
@@ -6743,12 +6849,12 @@ return data;
         }
 
         // [v40 Day4] 수동 처내기 (§1.5) — 사유 필수, cycle 게이트 우회로 Shelf/Now → Buried 직접 이동
-        function buryTaskWithReason(e, taskId) {
+        async function buryTaskWithReason(e, taskId) {
             e.stopPropagation();
             const task = currentData.tasks.find(t => t.id === taskId);
             if (!task) return;
             if ((task.zone || 'shelf') === 'buried') { showToast('이미 Buried 상태입니다.', 'info'); return; }
-            const reason = prompt('처내기(Buried) 사유를 입력하세요 (필수):', '');
+            const reason = await uiPrompt({ title: '처내기 (Buried)', label: '사유를 입력하세요 (필수)', placeholder: '왜 보류/제외하나요?', multiline: true });
             if (reason === null) return;
             if (!reason.trim()) { showToast('처내기 사유는 필수입니다.', 'alert'); return; }
             task.zone = 'buried';
@@ -6914,9 +7020,9 @@ return data;
             const mon = isoWeekMonday(now);
             const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
             const rangeLabel = `${mon.getMonth() + 1}/${mon.getDate()}~${sun.getMonth() + 1}/${sun.getDate()}`;
-            if (!confirm(`스프린트 ${id} (${rangeLabel})를 시작할까요?`)) return;
+            if (!(await uiConfirm({ title: '스프린트 시작', message: `${id} (${rangeLabel}) 스프린트를 시작할까요?`, confirmText: '시작' }))) return;
             const dup = currentData.sprints.find(s => s.id === id); // 같은 주차가 이미(closed 등) 있으면 재활성화
-            const goal = (prompt('스프린트 목표를 입력하세요 (선택):', dup ? dup.goal : '') || '').trim();
+            const goal = (await uiPrompt({ title: '스프린트 목표', label: '이번 스프린트 목표 (선택)', value: dup ? (dup.goal || '') : '' }) || '').trim();
             const histEntry = { action: 'start', by: currentUser.id, byName: myNickname, at: new Date().toISOString() };
             let sprint;
             if (dup) {
@@ -6948,7 +7054,7 @@ return data;
             const inSprint = currentData.tasks.filter(t => t.sprintId === active.id);
             const completed = inSprint.filter(t => t.status === 'completed');
             const incomplete = inSprint.filter(t => t.status !== 'completed');
-            if (!confirm(`스프린트 ${active.weekLabel}를 종료할까요?\n\n포함 ${inSprint.length}개 · 완료 ${completed.length} · 미완료(이월) ${incomplete.length} · Intrusion ${active.intrusionCount || 0}회\n\n미완료 카드는 Shelf로 이월(carryover+1)되고, 회고가 05_운영에 자동 생성됩니다.`)) return;
+            if (!(await uiConfirm({ title: `스프린트 종료 — ${active.weekLabel}`, message: `포함 ${inSprint.length}개 · 완료 ${completed.length} · 미완료(이월) ${incomplete.length} · Intrusion ${active.intrusionCount || 0}회\n\n미완료 카드는 Shelf로 이월(carryover+1)되고, 회고가 05_운영에 자동 생성됩니다.`, confirmText: '종료' }))) return;
             // [v40 Day4] 미완료 Now 카드 → Shelf 이월 (§1.4)
             for (const t of incomplete) {
                 t.zone = 'shelf';
@@ -6968,10 +7074,10 @@ return data;
             if (!error) showToast(`🏁 ${active.weekLabel} 종료 — 미완료 ${incomplete.length}개 이월, 회고 생성됨`, 'success');
         }
 
-        function editSprintGoal() {
+        async function editSprintGoal() {
             const active = getActiveSprint();
             if (!active) return;
-            const g = prompt('스프린트 목표:', active.goal || '');
+            const g = await uiPrompt({ title: '스프린트 목표 수정', label: '스프린트 목표', value: active.goal || '' });
             if (g === null) return;
             active.goal = g.trim();
             saveData(); dbUpsertSprint(active); renderSprintBand();
@@ -7423,15 +7529,50 @@ return data;
         function _ruleLabel(rule) {
             return ({ all_agree: '전체합의', majority: '다수결', specific_approver: '특정인 승인', force: '강제' })[rule && rule.type] || (rule && rule.type) || '다수결';
         }
+        // [UX] pending 리뷰 만료까지 남은 시간 (임박=1시간 미만)
+        function _reviewTimeLeft(review) {
+            if (!review.expiresAt) return null;
+            const ms = new Date(review.expiresAt).getTime() - Date.now();
+            if (ms <= 0) return { text: '만료됨', urgent: true, expired: true };
+            const mins = Math.floor(ms / 60000), hrs = Math.floor(mins / 60), days = Math.floor(hrs / 24);
+            let text;
+            if (days >= 1) text = `${days}일 ${hrs % 24}시간 남음`;
+            else if (hrs >= 1) text = `${hrs}시간 ${mins % 60}분 남음`;
+            else text = `${mins}분 남음`;
+            return { text: text, urgent: ms < 3600000, expired: false };
+        }
+        // [UX] pending 리뷰: 룰 기준 통과까지 진행도 (자동확정 로직을 투명하게)
+        function _reviewProgressLabel(review) {
+            if (review.status !== 'pending') return '';
+            const rule = review.rule || { type: 'majority' };
+            if (rule.type === 'force') return '강제 통과';
+            const members = (typeof getMembers === 'function') ? getMembers() : [];
+            const voters = members.filter(m => m.id !== review.proposerId);
+            const N = voters.length;
+            const vc = _voteCounts(review);
+            const approve = vc.approvers.length;
+            if (rule.type === 'all_agree') return `전체합의 · ${approve}/${N} 승인 (전원 필요)`;
+            if (rule.type === 'specific_approver') {
+                const req = Array.isArray(rule.requiredApprovers) ? rule.requiredApprovers : [];
+                const min = rule.minApprovals || 1;
+                const reqApproved = vc.approvers.filter(v => req.includes(v.userId)).length;
+                return `특정인 승인 · ${reqApproved}/${min} 필요`;
+            }
+            const threshold = rule.minApprovals || (Math.floor(N / 2) + 1);
+            const need = Math.max(0, threshold - approve);
+            return need > 0 ? `다수결 · ${need}표 더 필요 (${approve}/${threshold})` : '다수결 · 통과 조건 충족';
+        }
         function renderReviewChip(review) {
             const canVote = currentUser && review.status === 'pending' && review.proposerId !== currentUser.id;
             const myVote = (review.votes || []).find(v => currentUser && v.userId === currentUser.id);
             const vc = _voteCounts(review);
             let body = '';
             if (review.status === 'pending') {
-                const exp = review.expiresAt ? new Date(review.expiresAt) : null;
-                const expStr = exp ? `${exp.getMonth() + 1}/${exp.getDate()} ${String(exp.getHours()).padStart(2, '0')}:${String(exp.getMinutes()).padStart(2, '0')}` : '';
-                body = `<div class="rv-tally">승인 ${vc.approvers.length} · 거부 ${vc.rejecters.length} · 불참 ${vc.skippers.length}${expStr ? ` · ⏰ ${expStr}` : ''}</div>`;
+                const tl = _reviewTimeLeft(review);
+                const expHtml = tl ? ` · <span style="color:${tl.urgent ? 'var(--st-danger)' : 'var(--c-text3)'};font-weight:${tl.urgent ? '800' : '600'};">⏰ ${tl.text}</span>` : '';
+                const prog = _reviewProgressLabel(review);
+                body = `<div class="rv-tally">승인 ${vc.approvers.length} · 거부 ${vc.rejecters.length} · 불참 ${vc.skippers.length}${expHtml}</div>`;
+                if (prog) body += `<div class="rv-tally" style="color:var(--c-accent);font-weight:700;">🎯 ${prog}</div>`;
                 if (canVote) {
                     body += `<input type="text" id="vote-comment-${review.id}" class="rv-comment" placeholder="코멘트(선택)" value="${myVote && myVote.comment ? _sprintEsc(myVote.comment) : ''}">
                         <div class="rv-vote-btns">
@@ -7485,9 +7626,12 @@ return data;
                 if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
                 return (b.createdAt || '').localeCompare(a.createdAt || '');
             });
-            listEl.innerHTML = all.length ? all.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:20px;text-align:center;">결정 요청이 없습니다.</div>';
+            const pendingN = all.filter(r => r.status === 'pending').length;
+            const myN = (typeof myPendingReviewCount === 'function') ? myPendingReviewCount() : 0;
+            const summary = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:4px 2px 12px;font-size:12px;color:var(--c-text2);font-weight:700;border-bottom:1px solid var(--c-border);margin-bottom:12px;"><span>🔔 대기 ${pendingN}</span><span>🙋 내 투표 필요 ${myN}</span><span style="color:var(--c-text3);">전체 ${all.length}</span></div>`;
+            listEl.innerHTML = all.length ? (summary + all.map(renderReviewChip).join('')) : '<div class="linked-empty" style="padding:20px;text-align:center;">결정 요청이 없습니다.</div>';
         }
-        function openReviewInbox() { renderReviewInbox(); openModal('review-inbox-modal'); }
+        async function openReviewInbox() { if (typeof sweepExpiredReviews === 'function') await sweepExpiredReviews(); renderReviewInbox(); openModal('review-inbox-modal'); }
 
         // ==========================================
         // [v40 Day3 청크3] 결정 적용 (intrusion → Now) + ADR 자동 생성
@@ -7747,13 +7891,14 @@ ${intrLog}
             _safeLocalCache(currentData);
             dbUpsertCanonDoc(doc);
             renderCanonView();
-            showToast(reapprove ? `💾 v${doc.version} 저장 — 내용 변경으로 재승인 필요` : `💾 v${doc.version} 저장됨`, 'success');
+            if (reapprove) showToast(`💾 v${doc.version} 저장 — 내용 변경으로 승인이 해제됨 (재승인 필요)`, 'update');
+            else showToast(`💾 v${doc.version} 저장됨`, 'success');
         }
-        function approveCanonDoc() {
+        async function approveCanonDoc() {
             if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
             const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
             if (doc.status === 'approved') {
-                if (!confirm('승인을 해제할까요?')) return;
+                if (!(await uiConfirm({ title: '승인 해제', message: `이 정전 문서(v${doc.version})의 승인을 해제하고 draft로 되돌릴까요?`, confirmText: '승인 해제' }))) return;
                 doc.status = 'draft'; doc.approvedBy = null; doc.approvedByName = ''; doc.approvedAt = null;
             } else {
                 doc.status = 'approved'; doc.approvedBy = currentUser.id; doc.approvedByName = myNickname; doc.approvedAt = new Date().toISOString();
@@ -7763,9 +7908,9 @@ ${intrLog}
             renderCanonView();
             showToast(doc.status === 'approved' ? `✅ v${doc.version} 승인됨` : '승인 해제됨', 'success');
         }
-        function deleteCanonDoc() {
+        async function deleteCanonDoc() {
             const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
-            if (!confirm(`'${doc.title}' 정전 문서를 삭제할까요? (버전 기록 포함 영구 삭제)`)) return;
+            if (!(await uiConfirm({ title: '정전 문서 삭제', message: `'${doc.title}' 문서를 삭제할까요?\n버전 기록 포함 영구 삭제됩니다.`, confirmText: '삭제', danger: true }))) return;
             currentData.canon = (currentData.canon || []).filter(c => c.id !== doc.id);
             dbDeleteCanonDoc(doc.id);
             activeCanonId = null;
@@ -7791,10 +7936,10 @@ ${intrLog}
             if (pv) pv.innerHTML = '<div style="font-size:11px;color:var(--c-accent);font-weight:700;margin-bottom:8px;">📜 v' + ver + ' 미리보기 (복원 전까지 저장 안 됨)</div>' + DOMPurify.sanitize(parseMarkdownWithTables(v.content || ''), domPurifyConfig);
             closeModal('canon-history-modal');
         }
-        function restoreCanonVersion(ver) {
+        async function restoreCanonVersion(ver) {
             const doc = (currentData.canon || []).find(c => c.id === activeCanonId); if (!doc) return;
             const v = (doc.versionHistory || []).find(x => x.version === ver); if (!v) return;
-            if (!confirm(`v${ver} 내용으로 복원할까요? (현재 내용은 버전 기록으로 보존됩니다)`)) return;
+            if (!(await uiConfirm({ title: '버전 복원', message: `v${ver} 내용으로 복원할까요?\n현재 내용은 버전 기록으로 보존됩니다.`, confirmText: '복원' }))) return;
             document.getElementById('canon-title').value = v.title || doc.title;
             document.getElementById('canon-category').value = v.category || doc.category;
             document.getElementById('canon-content').value = v.content || '';
@@ -7805,15 +7950,15 @@ ${intrLog}
 
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
         function toggleStar(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isStarred = !task.isStarred; saveData(); dbUpsertTask(task); }
-        function changeDev(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newDev = prompt("담당자를 입력하세요:", task.dev); if (newDev) { task.dev = newDev; saveData(); dbUpsertTask(task); } }
-        function deleteTask(e, taskId) { e.stopPropagation(); if(confirm("정말 삭제하시겠습니까?")) { currentData.tasks = currentData.tasks.filter(t => t.id !== taskId); saveData(); dbDeleteTask(taskId); } }
+        async function changeDev(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newDev = await uiPrompt({ title: '담당자 변경', label: '담당자를 입력하세요', value: task.dev || '' }); if (newDev !== null && newDev.trim()) { task.dev = newDev.trim(); saveData(); dbUpsertTask(task); } }
+        async function deleteTask(e, taskId) { e.stopPropagation(); if(await uiConfirm({ title: '할 일 삭제', message: '이 할 일을 삭제할까요? 되돌릴 수 없습니다.', confirmText: '삭제', danger: true })) { currentData.tasks = currentData.tasks.filter(t => t.id !== taskId); saveData(); dbDeleteTask(taskId); } }
         
         let activeTagEdit = null;
-        function editTag(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newTagName = prompt("새 태그 이름을 입력하세요:", task.catBadge); if (newTagName === null) return; const finalTag = newTagName.trim() || task.catBadge; activeTagEdit = { oldTag: task.catBadge, newTag: finalTag }; const colorPicker = document.getElementById('hidden-color-picker'); colorPicker.value = currentData.tagColors[task.catBadge] || '#57544c'; setTimeout(() => colorPicker.click(), 100); }
+        async function editTag(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newTagName = await uiPrompt({ title: '태그 수정', label: '새 태그 이름', value: task.catBadge || '' }); if (newTagName === null) return; const finalTag = newTagName.trim() || task.catBadge; activeTagEdit = { oldTag: task.catBadge, newTag: finalTag }; const colorPicker = document.getElementById('hidden-color-picker'); colorPicker.value = currentData.tagColors[task.catBadge] || '#57544c'; setTimeout(() => colorPicker.click(), 100); }
         function onColorPicked(e) { if(!activeTagEdit) return; const newColor = e.target.value; const { oldTag, newTag } = activeTagEdit; const affectedTasks = []; currentData.tasks.forEach(t => { if(t.catBadge === oldTag) { t.catBadge = newTag; affectedTasks.push(t); } }); currentData.tagColors[newTag] = newColor; activeTagEdit = null; saveData(); dbUpsertTagColor(newTag, newColor); affectedTasks.forEach(t => dbUpsertTask(t)); }
-        function addNewCategory() { const title = prompt("카테고리 이름을 입력하세요:"); if (title) { const newCat = { id: "cat-" + Date.now(), title: title, subtitle: "CUSTOM MODULE", projectId: activeProjectId }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); } }
-        function editCategoryName(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const newName = prompt("카테고리 이름을 수정하세요:", cat.title); if(newName) { cat.title = newName; saveData(); dbUpsertCategory(cat); } }
-        function deleteCategory(e, catId) { e.stopPropagation(); if(confirm("카테고리와 내부 모든 할 일이 삭제됩니다. 계속하시겠습니까?")) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
+        async function addNewCategory() { const title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름을 입력하세요', placeholder: '예: 전투 시스템' }); if (title && title.trim()) { const newCat = { id: "cat-" + Date.now(), title: title.trim(), subtitle: "CUSTOM MODULE", projectId: activeProjectId }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); } }
+        async function editCategoryName(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const newName = await uiPrompt({ title: '카테고리 이름 수정', label: '카테고리 이름', value: cat.title || '' }); if(newName && newName.trim()) { cat.title = newName.trim(); saveData(); dbUpsertCategory(cat); } }
+        async function deleteCategory(e, catId) { e.stopPropagation(); if(await uiConfirm({ title: '카테고리 삭제', message: '카테고리와 내부 모든 할 일이 함께 삭제됩니다. 계속할까요?', confirmText: '삭제', danger: true })) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
         function addNewTask(catId, position = 'top') {
             const newTask = { id: "t-" + Date.now(), catId: catId, projectId: activeProjectId, priority: "p1", dev: "Dev A", catBadge: "NEW", title: "새로운 태스크 (New Task)", desc: "요약 설명을 입력하세요", details: "클릭하여 상세 내용을 마크다운으로 작성하세요...", scripts: ["NewScript.cs"], status: 'pending', isStarred: false, time: null, isCollapsed: false, comments: [], zone: 'shelf', sprintId: null };
             // [v40 Day3 청크3] 마스터 §1.4: 신규 카드는 항상 Shelf. Now 이동은 cycleZone에서 intrusion 리뷰로 게이트.
@@ -7823,7 +7968,7 @@ ${intrLog}
         // Kanban 코멘트
         function handleCommentKey(e, taskId, input) { if(e.key === 'Enter') { e.preventDefault(); submitComment(taskId, input); } }
         function submitComment(taskId, inputOrButton) { const inputEl = inputOrButton.tagName === 'INPUT' ? inputOrButton : inputOrButton.previousElementSibling; const text = inputEl.value.trim(); if(!text) return; const task = currentData.tasks.find(t => t.id === taskId); const newComment = { text: text, time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}), timestamp: Date.now(), author: myNickname }; task.comments.push(newComment); inputEl.value = ''; saveData(); dbInsertComment(taskId, newComment); playNotificationSound('comment'); showToast("코멘트가 등록되었습니다.", "success"); if(!document.getElementById('comments-sidebar').classList.contains('translate-x-full')) renderCommentsSidebar(); }
-        function deleteComment(taskId, index) { if(confirm("코멘트를 삭제하시겠습니까?")) { const task = currentData.tasks.find(t => t.id === taskId); const removed = task.comments.splice(index, 1)[0]; saveData(); if(removed) dbDeleteComment(taskId, removed.timestamp); if(!document.getElementById('comments-sidebar').classList.contains('translate-x-full')) renderCommentsSidebar(); } }
+        async function deleteComment(taskId, index) { if(await uiConfirm({ title: '코멘트 삭제', message: '코멘트를 삭제할까요?', confirmText: '삭제', danger: true })) { const task = currentData.tasks.find(t => t.id === taskId); const removed = task.comments.splice(index, 1)[0]; saveData(); if(removed) dbDeleteComment(taskId, removed.timestamp); if(!document.getElementById('comments-sidebar').classList.contains('translate-x-full')) renderCommentsSidebar(); } }
 
         function renderCommentsSidebar() { const container = document.getElementById('comments-list-container'); if(!container) return; let allComments = []; currentData.tasks.forEach(task => { if(task.comments) { task.comments.forEach(c => { allComments.push({ taskTitle: task.title, taskPriority: task.priority, text: c.text, time: c.time, timestamp: c.timestamp || 0, author: c.author || '익명' }); }); } }); allComments.sort((a, b) => b.timestamp - a.timestamp); if(allComments.length === 0) { container.innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm font-bold">등록된 코멘트가 없습니다.</div>'; return; } container.innerHTML = allComments.map(c => { const pColor = c.taskPriority === 'p0' ? 'text-red-500' : (c.taskPriority === 'p1' ? 'text-yellow-600' : 'text-blue-500'); const timeStr = c.timestamp ? getTimeAgo(c.timestamp) : c.time; return ` <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-1 hover:border-orange-300 transition-colors"> <div class="flex justify-between items-start mb-1"> <span class="text-[11px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">${c.author}</span> <span class="text-[10px] text-gray-400 font-mono font-bold">${timeStr}</span> </div> <div class="text-[13px] text-gray-800 break-all leading-snug">${c.text}</div> <div class="text-[10px] font-bold mt-2 pt-2 border-t border-gray-100 truncate"> 📌 <span class="${pColor} uppercase mr-1">[${c.taskPriority}]</span> <span class="text-gray-500">${c.taskTitle}</span> </div> </div> `; }).join(''); }
 
@@ -9055,8 +9200,7 @@ ${intrLog}
             var detail = document.getElementById('tree-confirm-detail');
             if (!modal || !detail) {
                 // 폴백: native confirm
-                if (confirm('정말로 문서 위치를 변경하시겠습니까?')) onYes();
-                else if (typeof onNo === 'function') onNo();
+                uiConfirm({ title: '문서 위치 변경', message: '정말로 문서 위치를 변경할까요?', confirmText: '변경' }).then(function(ok){ if (ok) onYes(); else if (typeof onNo === 'function') onNo(); });
                 return;
             }
             detail.innerHTML = detailHtml;
