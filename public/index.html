@@ -1993,6 +1993,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .ring-blue-200, .focus\:ring-blue-200:focus { --tw-ring-color: var(--c-accent-soft) !important; }
         .focus\:border-blue-500:focus { border-color: var(--c-accent) !important; }
 
+        /* ============================================================
+           [UX] 위키링크 [[ 자동완성 드롭다운
+           ============================================================ */
+        #wikilink-ac { position: fixed; z-index: 920; display: none; min-width: 240px; max-width: 360px; max-height: 280px; overflow-y: auto; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; box-shadow: var(--ios-shadow); padding: 5px; }
+        #wikilink-ac.open { display: block; }
+        #wikilink-ac .wlac-hint { padding: 5px 9px 6px; font-size: 10px; color: var(--c-text3); border-bottom: 1px solid var(--c-border); margin-bottom: 4px; letter-spacing: -0.2px; }
+        #wikilink-ac .wlac-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--c-text); }
+        #wikilink-ac .wlac-item > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #wikilink-ac .wlac-item .wlac-kind { font-size: 10px; font-weight: 700; color: var(--c-text3); flex-shrink: 0; }
+        #wikilink-ac .wlac-item.sel, #wikilink-ac .wlac-item:hover { background: var(--c-accent-soft); color: var(--c-accent); }
+        #wikilink-ac .wlac-item.sel .wlac-kind, #wikilink-ac .wlac-item:hover .wlac-kind { color: var(--c-accent); }
+        #wikilink-ac .wlac-empty { padding: 10px; font-size: 12px; color: var(--c-text3); text-align: center; }
+
     </style>
 </head>
 <body>
@@ -6456,6 +6469,91 @@ return data;
             });
         }
 
+        // ═══════════════════════════════════════════════
+        // [UX] 위키링크 [[ 자동완성 (Obsidian 스타일) — 문법 없이 문서/태스크 링크
+        // ═══════════════════════════════════════════════
+        var _wlac = { open: false, start: -1, query: '', items: [], sel: 0 };
+        function _wlacEsc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        // textarea 캐럿 픽셀 좌표 (mirror div 기법)
+        function _wlacCaretCoords(el, pos) {
+            var mirror = document.getElementById('_wlac-mirror');
+            if (!mirror) { mirror = document.createElement('div'); mirror.id = '_wlac-mirror'; document.body.appendChild(mirror); }
+            var cs = getComputedStyle(el); var st = mirror.style;
+            st.position = 'absolute'; st.visibility = 'hidden'; st.top = '0'; st.left = '0';
+            st.whiteSpace = 'pre-wrap'; st.wordWrap = 'break-word'; st.overflow = 'hidden';
+            ['boxSizing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight', 'textTransform', 'wordSpacing', 'textIndent', 'tabSize'].forEach(function (p) { st[p] = cs[p]; });
+            st.width = cs.width; st.height = 'auto';
+            mirror.textContent = el.value.substring(0, pos);
+            var span = document.createElement('span'); span.textContent = '​'; mirror.appendChild(span);
+            var rect = el.getBoundingClientRect();
+            var lh = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.4);
+            return { x: rect.left + span.offsetLeft - el.scrollLeft, y: rect.top + span.offsetTop - el.scrollTop, lh: lh };
+        }
+        function _wlacClose() { _wlac.open = false; var el = document.getElementById('wikilink-ac'); if (el) el.classList.remove('open'); }
+        function _wlacScan(ta) {
+            if (!ta || ta.selectionStart !== ta.selectionEnd) return _wlacClose();
+            var pos = ta.selectionStart; var text = ta.value;
+            var open = text.lastIndexOf('[[', pos - 1);
+            if (open === -1) return _wlacClose();
+            var between = text.substring(open + 2, pos);
+            if (/[\[\]\n]/.test(between)) return _wlacClose(); // 닫힘/줄바꿈/중첩 → 비활성
+            _wlac.start = open; _wlac.query = between; _wlacRender(ta);
+        }
+        function _wlacRender(ta) {
+            var q = (_wlac.query || '').toLowerCase().trim();
+            var match = function (s) { return !q || (s || '').toLowerCase().indexOf(q) !== -1; };
+            var items = [];
+            (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId; })
+                .forEach(function (d) { if (match(d.title)) items.push({ type: 'doc', id: d.id, label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), kind: '문서' }); });
+            (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; })
+                .forEach(function (t) { if (match(t.title)) items.push({ type: 'task', id: t.id, label: '🗂 ' + (t.title || '제목 없음'), kind: '태스크' }); });
+            items = items.slice(0, 8);
+            _wlac.items = items; _wlac.sel = 0;
+            var box = document.getElementById('wikilink-ac');
+            if (!box) { box = document.createElement('div'); box.id = 'wikilink-ac'; document.body.appendChild(box); }
+            if (!items.length) {
+                box.innerHTML = '<div class="wlac-hint">위키링크 삽입</div><div class="wlac-empty">일치하는 문서·태스크 없음</div>';
+            } else {
+                box.innerHTML = '<div class="wlac-hint">↑↓ 이동 · Enter 삽입 · Esc 닫기</div>' + items.map(function (it, i) {
+                    return '<div class="wlac-item' + (i === 0 ? ' sel' : '') + '" onmousedown="event.preventDefault();_wlacPick(' + i + ')"><span>' + _wlacEsc(it.label) + '</span><span class="wlac-kind">' + it.kind + '</span></div>';
+                }).join('');
+            }
+            var c = _wlacCaretCoords(ta, _wlac.start);
+            box.style.left = Math.max(8, Math.min(c.x, window.innerWidth - 368)) + 'px';
+            box.style.top = Math.max(8, Math.min(c.y + c.lh + 4, window.innerHeight - 288)) + 'px';
+            box.classList.add('open'); _wlac.open = true;
+        }
+        function _wlacMoveSel(d) {
+            if (!_wlac.open || !_wlac.items.length) return;
+            _wlac.sel = (_wlac.sel + d + _wlac.items.length) % _wlac.items.length;
+            var box = document.getElementById('wikilink-ac'); if (!box) return;
+            Array.prototype.forEach.call(box.querySelectorAll('.wlac-item'), function (el, i) { el.classList.toggle('sel', i === _wlac.sel); if (i === _wlac.sel) el.scrollIntoView({ block: 'nearest' }); });
+        }
+        function _wlacPick(i) {
+            var ta = document.getElementById('doc-editor-textarea'); if (!ta) return;
+            var it = _wlac.items[i != null ? i : _wlac.sel]; if (!it) { _wlacClose(); return; }
+            var pos = ta.selectionStart; var insert = '[[' + it.type + ':' + it.id + ']]';
+            ta.value = ta.value.substring(0, _wlac.start) + insert + ta.value.substring(pos);
+            var newPos = _wlac.start + insert.length;
+            ta.selectionStart = ta.selectionEnd = newPos;
+            _wlacClose(); ta.focus();
+            handleDocInput({ target: ta });
+        }
+        function initWikilinkAutocomplete() {
+            var ta = document.getElementById('doc-editor-textarea'); if (!ta) return;
+            ta.addEventListener('input', function () { _wlacScan(ta); });
+            ta.addEventListener('click', function () { _wlacScan(ta); });
+            ta.addEventListener('keydown', function (e) {
+                if (!_wlac.open) return;
+                if (e.key === 'ArrowDown') { e.preventDefault(); _wlacMoveSel(1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); _wlacMoveSel(-1); }
+                else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); _wlacPick(); }
+                else if (e.key === 'Escape') { e.preventDefault(); _wlacClose(); }
+            });
+            ta.addEventListener('blur', function () { setTimeout(_wlacClose, 150); });
+            ta.addEventListener('scroll', function () { if (_wlac.open) _wlacClose(); });
+        }
+
         // ── img:// → 실제 데이터 URL 해석 함수 ──
         function resolveImgRefs(md) {
             if(!md || !currentData.images) return md;
@@ -8385,7 +8483,7 @@ ${intrLog}
                     '<button data-col="#f3e6df" onclick="previewHighlightSel(this.dataset.col)" style="background:#f3e6df;border:none;cursor:pointer;width:18px;height:18px;border-radius:50%;" title="형광펜 파랑"></button>' +
                     '<button data-col="#fecaca" onclick="previewHighlightSel(this.dataset.col)" style="background:#fecaca;border:none;cursor:pointer;width:18px;height:18px;border-radius:50%;" title="형광펜 빨강"></button>' +
                     '<div style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 2px;"></div>' +
-                    '<button onclick="addWikiAnnotationFromPreview()" style="color:#fbbf24;background:none;border:none;cursor:pointer;font-size:12px;padding:3px 6px;border-radius:4px;font-weight:600;" title="코멘트 달기">💬</button>' +
+                    '<button onclick="addWikiAnnotationFromPreview()" style="color:#fbbf24;background:none;border:none;cursor:pointer;font-size:12px;padding:3px 8px;border-radius:4px;font-weight:600;white-space:nowrap;" title="선택한 텍스트에 주석(하이라이트+메모) 달기">💬 주석</button>' +
                     '<button onclick="previewDeleteSel()" style="color:#f87171;background:none;border:none;cursor:pointer;font-size:12px;padding:3px 6px;border-radius:4px;font-weight:700;" title="삭제">✕</button>';
                 document.body.appendChild(_previewFormatBarEl);
             }
@@ -12123,6 +12221,7 @@ ${intrLog}
                 initImageDrop();
                 initEditorFileDrop();
                 initDocEditorBlurSave();
+                initWikilinkAutocomplete();
                 // Hide preview format bar on outside click
                 document.addEventListener('mousedown', function(e) {
                     if(_previewFormatBarEl && _previewFormatBarEl.style.display !== 'none') {
