@@ -1969,6 +1969,30 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .tree-empty { text-align: center; color: var(--c-text3); font-size: 12.5px; line-height: 1.7; padding: 30px 16px; }
         .tree-empty .te-emoji { font-size: 30px; display: block; margin-bottom: 8px; opacity: 0.65; }
 
+        /* ============================================================
+           [UX] 잔여 Tailwind cold(파랑/인디고) 유틸 클래스 → 웜 매핑
+           (hex가 아닌 class라 1차 색상 마이그레이션에서 누락된 부분. 의미색/브랜드색은 보존)
+           ============================================================ */
+        /* 텍스트: primary 파랑 → 클레이, 인디고 → 웜퍼플, P2(text-blue-500)는 좌측보더와 맞춰 스틸 유지 */
+        .text-blue-300, .text-blue-600, .text-blue-700 { color: var(--c-accent) !important; }
+        .text-blue-500 { color: var(--p2-blue) !important; }
+        .text-indigo-600, .text-indigo-800, .text-indigo-900 { color: var(--ios-purple) !important; }
+        .hover\:text-blue-500:hover, .hover\:text-blue-600:hover { color: var(--c-accent) !important; }
+        /* 솔리드 배경 버튼 (흰 글자 유지) */
+        .bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-blue-800 { background-color: var(--c-accent) !important; }
+        .bg-indigo-400, .bg-indigo-500, .bg-indigo-600 { background-color: var(--ios-purple) !important; }
+        .hover\:bg-blue-600:hover, .hover\:bg-blue-700:hover, .hover\:bg-blue-800:hover { background-color: var(--c-accent-hover) !important; }
+        .hover\:bg-indigo-600:hover { background-color: var(--ios-purple) !important; filter: brightness(0.93); }
+        /* 라이트 틴트 배경 */
+        .bg-blue-50, .bg-blue-100, .bg-indigo-50 { background-color: var(--c-accent-soft) !important; }
+        .hover\:bg-blue-50:hover, .hover\:bg-blue-100:hover { background-color: var(--c-accent-soft) !important; }
+        /* 테두리 */
+        .border-blue-500, .border-blue-600 { border-color: var(--c-accent) !important; }
+        .border-blue-200, .border-indigo-100, .border-indigo-200 { border-color: var(--c-border) !important; }
+        /* 포커스 링/보더 → 클레이 */
+        .ring-blue-200, .focus\:ring-blue-200:focus { --tw-ring-color: var(--c-accent-soft) !important; }
+        .focus\:border-blue-500:focus { border-color: var(--c-accent) !important; }
+
     </style>
 </head>
 <body>
