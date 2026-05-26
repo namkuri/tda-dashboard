@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-26 r22 (r21 + Git Phase2: 파일트리·파일 미리보기·커밋 히스토리/diff·버전 이동) -->
+<!-- BUILD: 2026-05-26 r23 (r22 + 에디터 우클릭: 코드 가져오기/코드 인용/문서 인용 삽입 피커) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2282,6 +2282,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .dvh-by { font-size: 10.5px; color: var(--c-text3); white-space: nowrap; }
         .dvh-restore { background: var(--c-card); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
         .dvh-restore:hover { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+        /* [에디터 우클릭] 코드/문서 삽입 피커 */
+        .gip-form { display: flex; flex-direction: column; }
+        .gip-l { font-size: 11px; font-weight: 700; color: var(--c-text3); margin: 8px 0 3px; }
+        .gip-in { width: 100%; box-sizing: border-box; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 7px 10px; font-size: 13px; }
+        .gip-files { margin-top: 6px; max-height: 38vh; overflow-y: auto; border: 1px solid var(--c-border); border-radius: 8px; padding: 4px; background: var(--c-paper); }
+        .gip-file { padding: 6px 9px; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-family: 'JetBrains Mono', monospace; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .gip-file:hover { background: var(--c-accent-soft); }
+        .gip-file.sel { background: var(--c-accent-soft); color: var(--c-accent); font-weight: 700; }
+        .gip-group { font-size: 10.5px; font-weight: 800; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 6px 3px; }
+        .gip-rows { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
+        .gip-ln { width: 96px; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 6px 9px; font-size: 12.5px; }
+        .gip-sel { font-size: 11.5px; color: var(--c-text3); font-family: 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+        .gip-act { display: flex; justify-content: flex-end; margin-top: 12px; }
+        .gip-go { background: var(--c-accent); color: #fff; border: none; border-radius: 9px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+        .gip-go:hover { background: var(--c-accent-hover); }
+        .gip-go:disabled { opacity: 0.5; cursor: not-allowed; }
         .rv-log { margin: 8px 0; padding: 8px 11px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; }
         .rv-log-h { font-size: 11px; font-weight: 700; color: var(--c-text3); margin-bottom: 6px; }
         .rv-log-row { display: flex; align-items: baseline; gap: 7px; font-size: 11.5px; padding: 2px 0; flex-wrap: wrap; }
@@ -10922,28 +10938,90 @@ ${intrLog}
         let annotationColors = ['#fef08a','#bbf7d0','#f3e6df','#fecaca','#ece0d2','#fed7aa'];
 
         function handleEditorContextMenu(e) {
-            // Right-click in editor with selected text → offer to add comment on preview
             const textarea = e.target;
-            const selStart = textarea.selectionStart;
-            const selEnd = textarea.selectionEnd;
-            if(selStart === selEnd) return; // no selection
+            const selStart = textarea.selectionStart, selEnd = textarea.selectionEnd;
             const selText = textarea.value.substring(selStart, selEnd).trim();
-            if(!selText || selText.length < 1) return;
             e.preventDefault();
-            // Show generic context menu at cursor
             const menu = document.getElementById('tree-context-menu');
             if(!menu) return;
-            menu.innerHTML =
-                '<div style="padding:6px 14px 4px;font-size:11px;font-weight:700;color:#9b968a;letter-spacing:0.5px;">에디터 선택 텍스트</div>' +
-                '<div class="ctx-menu-sep"></div>' +
-                '<div class="ctx-menu-item" onclick="addWikiAnnotationFromEditor(\'' + selText.replace(/'/g,"\\'").substring(0,200) + '\')">' +
-                '<span>💬</span> 코멘트 달기</div>';
+            if (menu.parentNode !== document.body) document.body.appendChild(menu);
+            var html = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openGitInsertPicker(\'import\')"><span>📥</span> 코드 가져오기 (코드블록 삽입)</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openGitInsertPicker(\'cite\')"><span>🔖</span> 코드 인용하기</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openDocCitePicker()"><span>📄</span> 문서 인용하기</div>';
+            if (selText) {
+                html += '<div class="ctx-menu-sep"></div>'
+                    + '<div class="ctx-menu-item" onclick="addWikiAnnotationFromEditor(\'' + selText.replace(/\\/g, '\\\\').replace(/'/g, "\\'").substring(0, 200) + '\')"><span>💬</span> 선택 텍스트에 코멘트</div>';
+            }
+            menu.innerHTML = html;
             menu.style.display = 'block';
-            const x = Math.min(e.clientX, window.innerWidth - 220);
-            const y = Math.min(e.clientY, window.innerHeight - 100);
+            const x = Math.min(e.clientX, window.innerWidth - 250);
+            const y = Math.min(e.clientY, window.innerHeight - 170);
             menu.style.left = x + 'px';
-            menu.style.top = y + 'px';
+            menu.style.top = Math.max(0, y) + 'px';
             setTimeout(() => document.addEventListener('click', hideTreeContextMenu, { once: true }), 10);
+        }
+        // [에디터 우클릭] 코드/문서 삽입 피커
+        async function openGitInsertPicker(mode) {
+            if (!document.getElementById('doc-editor-textarea') || !activeDocId) { showToast('문서를 먼저 열어주세요.', 'alert'); return; }
+            var repos = (typeof gitRepos === 'function') ? gitRepos() : [];
+            if (!repos.length) { showToast('먼저 📦 Git 탭에서 레포를 연결하세요.', 'info'); return; }
+            var repoOpts = repos.map(function (r) { return '<option value="' + r.id + '">' + _sprintEsc((r.meta && r.meta.fullName) || r.title) + '</option>'; }).join('');
+            _openSimpleModal((mode === 'import' ? '📥 코드 가져오기 (코드블록 삽입)' : '🔖 코드 인용하기'),
+                '<div class="gip-form"><label class="gip-l">레포</label><select id="gip-repo" class="gip-in">' + repoOpts + '</select>'
+                + '<label class="gip-l">파일 검색</label><input id="gip-search" class="gip-in" placeholder="파일명/경로 일부 입력">'
+                + '<div id="gip-files" class="gip-files">파일 목록 로딩…</div>'
+                + '<div class="gip-rows"><input id="gip-l1" class="gip-ln" type="number" min="1" placeholder="시작줄(선택)"><input id="gip-l2" class="gip-ln" type="number" min="1" placeholder="끝줄(선택)"><span id="gip-sel" class="gip-sel">파일 미선택 — 전체 또는 줄범위</span></div>'
+                + '<div class="gip-act"><button class="gip-go" id="gip-go" disabled>' + (mode === 'import' ? '📥 코드블록 삽입' : '🔖 [[code:]] 인용 삽입') + '</button></div></div>');
+            var _flat = [], _selFile = null, _gipMode = mode;
+            function _renderFiles(q) { q = (q || '').toLowerCase(); var box = document.getElementById('gip-files'); if (!box) return; var list = _flat.filter(function (p) { return !q || p.toLowerCase().indexOf(q) >= 0; }).slice(0, 250); box.innerHTML = list.length ? list.map(function (p) { return '<div class="gip-file' + (p === _selFile ? ' sel' : '') + '" onclick="_gipPick(\'' + _gitAttr(p) + '\')">' + gitFileIcon(p.split('/').pop()) + ' ' + _sprintEsc(p) + '</div>'; }).join('') : '<span style="color:var(--c-text3);font-size:12px;">결과 없음</span>'; }
+            async function _loadFiles() {
+                var repo = gitById(document.getElementById('gip-repo').value); if (!repo) return;
+                var full = (repo.meta && repo.meta.fullName) || repo.title, branch = (repo.meta && repo.meta.defaultBranch) || 'main';
+                document.getElementById('gip-files').innerHTML = '로딩…';
+                try { var sha = await gitResolveSha(full, branch); var tr = await gitGetTree(full, sha); _flat = tr.flat.filter(function (e) { return e.type === 'blob'; }).map(function (e) { return e.path; }); _renderFiles(document.getElementById('gip-search').value); }
+                catch (e) { document.getElementById('gip-files').innerHTML = '<span style="color:var(--st-danger);font-size:12px;">' + gitEsc(e.message) + '</span>'; }
+            }
+            window._gipPick = function (p) { _selFile = p; var s = document.getElementById('gip-sel'); if (s) s.textContent = p; var g = document.getElementById('gip-go'); if (g) g.disabled = false; _renderFiles(document.getElementById('gip-search').value); };
+            window._gipConfirm = async function () {
+                if (!_selFile) return;
+                var repo = gitById(document.getElementById('gip-repo').value); if (!repo) return;
+                var full = (repo.meta && repo.meta.fullName) || repo.title, branch = (repo.meta && repo.meta.defaultBranch) || 'main';
+                var l1 = parseInt(document.getElementById('gip-l1').value, 10) || 0, l2 = parseInt(document.getElementById('gip-l2').value, 10) || 0;
+                var go = document.getElementById('gip-go'); if (go) { go.disabled = true; go.textContent = '가져오는 중…'; }
+                try {
+                    var f = await gitFetchFile(full, branch, _selFile); var lines = (f.text || '').split('\n');
+                    var a, b;
+                    if (l1 || l2) { a = l1 || l2; b = l2 || l1; if (b < a) { var t = a; a = b; b = t; } } else { a = 1; b = lines.length; }
+                    a = Math.max(1, Math.min(a, lines.length)); b = Math.max(a, Math.min(b, lines.length));
+                    var snippet = lines.slice(a - 1, b).join('\n');
+                    if (_gipMode === 'import') {
+                        var ext = (_selFile.split('.').pop() || '').toLowerCase();
+                        insertAtCursor('```' + ext + '\n' + snippet + '\n```\n<sub>📦 ' + full + ' · ' + _selFile + ' L' + a + (b !== a ? ('-' + b) : '') + ' @' + (f.sha || branch).slice(0, 7) + '</sub>');
+                        showToast('📥 코드블록 삽입됨', 'success');
+                    } else {
+                        var docc = { id: gitUid('cr'), projectId: activeProjectId, parentId: repo.id, kind: 'coderef', title: _selFile.split('/').pop() + ' #L' + a + (b !== a ? ('-' + b) : ''), emoji: '🔖', content: '', meta: { repo: full, ref: branch, sha: f.sha, path: _selFile, lineStart: a, lineEnd: b, snippet: snippet, comments: [] }, createdAt: Date.now(), updatedAt: Date.now() };
+                        if (!Array.isArray(currentData.docs)) currentData.docs = []; currentData.docs.push(docc); if (typeof gitSave === 'function') gitSave(docc);
+                        insertAtCursor('[[code:' + docc.id + ']]');
+                        showToast('🔖 코드 인용 삽입됨', 'success');
+                    }
+                    _closeSimpleModal();
+                } catch (e) { showToast('실패: ' + e.message, 'alert'); if (go) { go.disabled = false; go.textContent = (_gipMode === 'import' ? '📥 코드블록 삽입' : '🔖 [[code:]] 인용 삽입'); } }
+            };
+            setTimeout(function () {
+                var rs = document.getElementById('gip-repo'); if (rs) rs.onchange = _loadFiles;
+                var ss = document.getElementById('gip-search'); if (ss) ss.oninput = function (ev) { _renderFiles(ev.target.value); };
+                var gg = document.getElementById('gip-go'); if (gg) gg.onclick = function () { window._gipConfirm(); };
+                _loadFiles();
+            }, 20);
+        }
+        function openDocCitePicker() {
+            if (!document.getElementById('doc-editor-textarea') || !activeDocId) { showToast('문서를 먼저 열어주세요.', 'alert'); return; }
+            var KIND = [['wiki', '📄 문서'], ['canon', '🎮 게임 위키'], ['diagram', '📈 흐름·그래프'], ['personal', '🔒 개인 문서']];
+            var pool = (currentData.docs || []).filter(function (d) { if ((d.projectId || 'default') !== activeProjectId) return false; if (d.meta && d.meta.isFolder) return false; var k = d.kind || 'wiki'; if (k === 'gitrepo' || k === 'coderef') return false; if (k === 'personal') { var o = d.meta && d.meta.owner; if (o && currentUser && o !== currentUser.id && !(d.meta && d.meta.visibility === 'public')) return false; } if (d.id === activeDocId) return false; return true; });
+            _openSimpleModal('📄 문서 인용하기', '<input id="dcite-search" class="gip-in" placeholder="문서 제목 검색" oninput="_dciteRender(this.value)"><div id="dcite-list" class="gip-files" style="margin-top:8px;max-height:46vh;"></div>');
+            window._dciteRender = function (q) { q = (q || '').toLowerCase(); var out = ''; KIND.forEach(function (g) { var grp = pool.filter(function (d) { return (d.kind || 'wiki') === g[0] && (!q || (d.title || '').toLowerCase().indexOf(q) >= 0); }); if (!grp.length) return; out += '<div class="gip-group">' + g[1] + ' <span style="opacity:.6">' + grp.length + '</span></div>' + grp.map(function (d) { return '<div class="gip-file" onclick="_dcitePick(\'' + d.id + '\')">' + _sprintEsc((d.emoji || '📄') + ' ' + (d.title || '제목없음')) + '</div>'; }).join(''); }); var le = document.getElementById('dcite-list'); if (le) le.innerHTML = out || '<span style="color:var(--c-text3);font-size:12px;">결과 없음</span>'; };
+            window._dcitePick = function (id) { insertAtCursor('[[doc:' + id + ']]'); _closeSimpleModal(); showToast('📄 문서 인용 삽입됨', 'success'); };
+            setTimeout(function () { window._dciteRender(''); }, 20);
         }
 
         function addWikiAnnotationFromEditor(selText) {
