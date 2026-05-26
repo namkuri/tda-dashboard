@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r26 (r25 + 문서 본문 [[code:]] 코드 내용 임베드 + 펼침/접힘(기본 펼침)) -->
+<!-- BUILD: 2026-05-27 r27 (r26 + 코드 임베드 표→거터+pre 재구성: 줄번호 줄바꿈/테두리/간격 제거) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3073,8 +3073,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .md-code-embed .mce-title { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--c-accent); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .md-code-embed .mce-gh, .md-code-embed .mce-gitopen { font-size: 11px; font-weight: 700; color: var(--c-text2); background: var(--c-card); border: 1px solid var(--c-border); border-radius: 6px; padding: 2px 7px; text-decoration: none; flex-shrink: 0; }
         .md-code-embed .mce-gh:hover, .md-code-embed .mce-gitopen:hover { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
-        .md-code-embed .mce-body { max-height: 440px; overflow: auto; }
-        .md-code-embed .mce-body .gitp-code { border: none; border-radius: 0; }
+        .md-code-embed .mce-body { overflow: hidden; }
+        .md-code-embed .mce-code { display: flex; align-items: stretch; background: var(--c-paper); font-family: 'JetBrains Mono', 'D2Coding', monospace; font-size: 12px; line-height: 1.55; max-height: 440px; overflow: auto; }
+        .markdown-body .md-code-embed .mce-gut { flex: 0 0 auto; margin: 0 !important; padding: 9px 10px 9px 12px !important; text-align: right; color: var(--c-text3); user-select: none; border: 0 !important; border-right: 1px solid var(--c-border) !important; border-radius: 0 !important; background: var(--c-card) !important; white-space: pre !important; position: sticky; left: 0; z-index: 1; font: inherit; box-shadow: none !important; }
+        .markdown-body .md-code-embed .mce-pre { flex: 1 1 auto; min-width: 0; margin: 0 !important; padding: 9px 14px !important; white-space: pre !important; overflow: visible; background: transparent !important; border: 0 !important; border-radius: 0 !important; color: var(--c-text); font: inherit; box-shadow: none !important; }
+        .markdown-body .md-code-embed .mce-pre code { font: inherit !important; background: none !important; padding: 0 !important; border: 0 !important; color: inherit; white-space: pre; }
         .gitp-cmts { padding: 10px 13px; border-top: 1px solid var(--c-border); }
         .gitp-cmts-h { font-size: 11px; font-weight: 800; color: var(--c-text3); margin-bottom: 7px; }
         .gitp-cmt { display: flex; gap: 7px; font-size: 12.5px; padding: 4px 0; align-items: baseline; }
@@ -4071,8 +4074,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         var m = cr.meta;
                         var lbl = (typeof gitRefLabel === 'function') ? gitRefLabel(id) : id;
                         var gh = (typeof gitWebUrl === 'function') ? gitWebUrl(m) : '#';
-                        var bodyInner = (typeof gitCodeTable === 'function')
-                            ? gitCodeTable((m.snippet || '').split('\n'), (m.isDir ? 1 : (m.lineStart || 1)), m.path, false)
+                        var bodyInner = (typeof gitEmbedCodeHtml === 'function')
+                            ? gitEmbedCodeHtml((m.snippet || '').split('\n'), (m.isDir ? 1 : (m.lineStart || 1)), m.path, !!m.isDir)
                             : '<pre style="white-space:pre-wrap;">' + _sprintEsc(m.snippet || '') + '</pre>';
                         var embed = '<div class="md-code-embed" data-cref="' + _sprintEsc(id) + '">'
                             + '<div class="mce-head" data-mce-toggle="1"><span class="mce-caret">▾</span><span>🔖</span><span class="mce-title">' + _sprintEsc(lbl) + '</span>'
@@ -15704,6 +15707,16 @@ ${intrLog}
         var lc = gitLineCmt(path), st = { block: false };
         var rows = lines.map(function (ln, i) { var r = gitHLLine(ln == null ? '' : ln, st, lc); st = r.st; return '<tr><td class="gln">' + (startLine + i) + '</td><td class="gtxt">' + (r.html || ' ') + '</td></tr>'; }).join('');
         return '<div class="gitp-code"' + (withCtx ? ' oncontextmenu="gitCtxCode(event)" title="우클릭: 문서로 인용 / 인용구·링크 복사 (텍스트 선택 시 해당 줄범위)"' : '') + '><table>' + rows + '</table></div>';
+    }
+    // [문서 임베드용] 표 대신 거터(줄번호 sticky) + 코드 pre 플렉스 — markdown-body 표 CSS 영향 없음
+    function gitEmbedCodeHtml(lines, startLine, path, noHL) {
+        var lc = gitLineCmt(path), st = { block: false }, gut = [], code = [];
+        for (var i = 0; i < lines.length; i++) {
+            var raw = lines[i] == null ? '' : lines[i];
+            var html = noHL ? gitEsc(raw === '' ? ' ' : raw) : (function () { var r = gitHLLine(raw, st, lc); st = r.st; return r.html || ' '; })();
+            gut.push(startLine + i); code.push(html);
+        }
+        return '<div class="mce-code"><pre class="mce-gut" aria-hidden="true">' + gut.join('\n') + '</pre><pre class="mce-pre"><code>' + code.join('\n') + '</code></pre></div>';
     }
     function gitDiffHtml(patch) {
         return '<div class="gitp-code gitp-diff">' + (patch || '').split('\n').map(function (ln) {
