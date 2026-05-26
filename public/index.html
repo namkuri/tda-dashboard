@@ -2183,6 +2183,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         #spv-parts-tip { position: fixed; z-index: 9000; display: none; min-width: 150px; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; box-shadow: var(--ios-shadow); padding: 8px; }
         .spv-tip-h { font-size: 10.5px; font-weight: 800; color: var(--c-text3); padding: 0 2px 5px; border-bottom: 1px solid var(--c-border); margin-bottom: 4px; }
         .spv-tip-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--c-text); white-space: nowrap; padding: 2px; }
+        /* [라운드11] 리뷰 유형 배지·내 기안 토글·문서 리뷰 더보기·특정인 선택 */
+        .rv-type { font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 8px; background: var(--ios-fill2); color: var(--c-text2); flex-shrink: 0; }
+        .rvp-mine-toggle { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 8px; padding: 4px 11px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .rvp-mine-toggle:hover { background: var(--c-accent-soft); color: var(--c-accent); }
+        .rvp-mine-toggle.on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
+        .rv-doc-list { display: flex; flex-direction: column; width: 100%; }
+        .rv-more-btn { align-self: flex-start; margin-top: 4px; background: none; border: 1px dashed var(--c-border); color: var(--c-text2); border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .rv-more-btn:hover { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-soft); }
+        .review-chk-mem { gap: 7px; }
+        .review-chk-name { font-weight: 600; }
+        .review-chk-email { color: var(--c-text3); font-size: 10.5px; margin-left: auto; }
         .spv-goal-ta { width: 100%; min-height: 120px; resize: vertical; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
         .spv-goal-ta:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .spv-goal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -2762,6 +2773,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <option value="recent">최신순</option>
                         <option value="expiry">만료 임박순</option>
                     </select>
+                    <button id="rvp-f-mine" class="rvp-mine-toggle" onclick="toggleReviewMine()" title="내가 기안한 리뷰만 보기">🙋 내 기안</button>
                 </div>
                 <div id="rvp-mine"></div>
                 <div id="rvp-list"></div>
@@ -5726,6 +5738,8 @@ return data;
                         }
                         if (typeof renderReviewBadge === 'function') renderReviewBadge();
                         if (typeof renderBoard === 'function') renderBoard();
+                        // [실시간] 리뷰함 페이지가 열려 있으면 즉시 갱신 (이전엔 레거시 모달만 갱신해 화면이 안 바뀜)
+                        if (currentView === 'review' && typeof renderReviewPage === 'function') renderReviewPage();
                         if (typeof renderReviewInbox === 'function' && document.getElementById('review-inbox-modal') && document.getElementById('review-inbox-modal').classList.contains('modal-open')) renderReviewInbox();
                         if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
                         _safeLocalCache(currentData);
@@ -8494,6 +8508,8 @@ return data;
             showToast('📥 정전 ' + legacy.length + '건을 게임 위키로 가져왔습니다.', 'success');
         }
 
+        var _docReviewsAllShown = {}; // [#4] 문서별 리뷰 내역 펼침 상태
+        function toggleDocReviewsAll(docId) { _docReviewsAllShown[docId] = !_docReviewsAllShown[docId]; renderDocLinksBar(); }
         function renderDocLinksBar() {
             const bar = document.getElementById('doc-links-bar');
             if (!bar) return;
@@ -8508,7 +8524,15 @@ return data;
             const docChips = docIds.map(did =>
                 `<span class="link-chip" onclick="navToDoc('${did}')" title="문서 열기">${_sprintEsc(getDocLabel(did))}<button class="link-chip-x" onclick="event.stopPropagation();removeDocDocLink('${doc.id}','${did}')" title="연결 해제">✕</button></span>`
             ).join('');
-            const docReviewChips = (currentData.reviews || []).filter(r => r.targetDocId === doc.id).map(renderReviewChip).join('');
+            // [#4] 문서 리뷰/승인 내역 — 최근 1건만, 나머지는 "더 보기"로 펼침
+            const _dr = (currentData.reviews || []).filter(r => r.targetDocId === doc.id && !r.deleted).slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+            const _drAll = !!_docReviewsAllShown[doc.id];
+            const _drVisible = _drAll ? _dr : _dr.slice(0, 1);
+            const docReviewChips = _dr.length
+                ? ('<div class="rv-doc-list">' + _drVisible.map(renderReviewChip).join('')
+                    + (_dr.length > 1 ? '<button class="rv-more-btn" onclick="event.stopPropagation();toggleDocReviewsAll(\'' + doc.id + '\')">' + (_drAll ? '리뷰 접기 ▴' : ('이전 리뷰·승인 ' + (_dr.length - 1) + '건 더 보기 ▾')) + '</button>' : '')
+                    + '</div>')
+                : '';
             // [v40 Day4 §5.4] 잠금 버튼 + 편집 차단
             const ta = document.getElementById('doc-editor-textarea');
             if (ta) ta.readOnly = !!doc.isLocked;
@@ -8717,9 +8741,9 @@ return data;
             const members = getMembers().filter(m => !currentUser || m.id !== currentUser.id);
             const N = members.length;
             if (rule === 'specific_approver') {
-                box.innerHTML = '<div class="review-opt-label">승인 권한자 (1명 이상)</div>' +
-                    (members.length ? members.map(m => `<label class="review-chk"><input type="checkbox" class="review-approver" value="${m.id}"> ${_sprintEsc(m.displayName)}</label>`).join('')
-                        : '<span class="linked-empty">다른 팀원이 없습니다 (로그인 후 표시)</span>') +
+                box.innerHTML = '<div class="review-opt-label">승인 권한자 선택 (팀원 계정 · 1명 이상)</div>' +
+                    (members.length ? members.map(m => `<label class="review-chk review-chk-mem"><input type="checkbox" class="review-approver" value="${m.id}">${_avatarHtml(m, 20)}<span class="review-chk-name">${_sprintEsc(m.displayName || m.email)}</span>${m.email ? `<span class="review-chk-email">${_sprintEsc(m.email)}</span>` : ''}</label>`).join('')
+                        : '<span class="linked-empty">선택 가능한 다른 팀원 계정이 없습니다 (팀원이 한 번 로그인하면 표시됩니다)</span>') +
                     '<div class="review-opt-label" style="margin-top:6px;">최소 승인 수</div><input type="number" id="review-min" min="1" value="1" class="review-num">';
             } else if (rule === 'majority') {
                 box.innerHTML = `<div class="review-opt-label">최소 승인 수 (기본: 과반 ${Math.floor(N/2)+1} / 팀원 ${N}명 기준)</div><input type="number" id="review-min" min="1" value="${Math.floor(N/2)+1}" class="review-num">`;
@@ -8873,6 +8897,10 @@ return data;
         function _reviewStepState(st) {
             return ({ approve: ['✅', '승인', '#10b981'], reject: ['❌', '거부', '#ef4444'], skip: ['⏭', '불참', '#9a8f80'], pending: ['⏳', '대기', '#b08968'] })[st] || ['⏳', '대기', '#b08968'];
         }
+        // [#2] 리뷰 유형 라벨 (변경요청=잠금해제 vs 결정 vs 게임위키 승인 구분)
+        function _reviewTypeLabel(type) {
+            return ({ decision: '🗳 결정', intrusion: '⚡ 끼어들기', standard_change: '🔓 변경요청', canon_approval: '📜 게임위키 승인' })[type] || '🗳 결정';
+        }
         // [#2] 결재선: 기안자 → 합의자 순서 + 각 상태 + 현재 결재 상태
         function _renderApprovalLine(review) {
             var members = getMembers();
@@ -8903,6 +8931,7 @@ return data;
             var createdStr = review.createdAt ? new Date(review.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
             var header = '<div class="rv-head" onclick="toggleReviewExpand(\'' + review.id + '\')">'
                 + _reviewStatusBadge(review.status)
+                + '<span class="rv-type">' + _reviewTypeLabel(review.type) + '</span>'
                 + (del ? '<span class="rv-deleted-tag">🗑 삭제됨</span>' : '')
                 + '<span class="rv-title">' + _sprintEsc(title) + '</span>'
                 + '<span class="rv-rule">' + _ruleLabel(review.rule) + '</span>'
@@ -9026,8 +9055,9 @@ return data;
         }
 
         // [리뷰함] 페이지 렌더 (통계·내 리뷰 대기·필터·검색)
-        var _reviewFilter = { status: 'pending', type: 'all', sort: 'recent', q: '' }; // [#2] 기본=리뷰 중
+        var _reviewFilter = { status: 'pending', type: 'all', sort: 'recent', q: '', mine: false }; // [#2] 기본=리뷰 중
         function setReviewStatusFilter(s) { _reviewFilter.status = s || 'all'; renderReviewPage(); }
+        function toggleReviewMine() { _reviewFilter.mine = !_reviewFilter.mine; renderReviewPage(); }
         function _reviewTargetLabel(r) {
             if (r.targetTaskId) return (typeof getTaskLabel === 'function') ? getTaskLabel(r.targetTaskId) : '';
             if (r.targetDocId) return (typeof getDocLabel === 'function') ? getDocLabel(r.targetDocId) : '';
@@ -9065,9 +9095,11 @@ return data;
             }
             // 필터 + 정렬
             var f = _reviewFilter;
+            var mineBtn = document.getElementById('rvp-f-mine'); if (mineBtn) mineBtn.classList.toggle('on', !!f.mine);
             var list = all.filter(function (r) {
                 if (f.status === 'deleted') { if (!r.deleted) return false; }
                 else { if (r.deleted) return false; if (f.status !== 'all' && r.status !== f.status) return false; }
+                if (f.mine && (!currentUser || r.proposerId !== currentUser.id)) return false; // [#3] 내 기안만
                 if (f.type !== 'all' && r.type !== f.type) return false;
                 if (f.q) { var hay = ((r.title || '') + ' ' + (r.reason || '') + ' ' + (r.proposerName || '') + ' ' + _reviewTargetLabel(r)).toLowerCase(); if (hay.indexOf(f.q) === -1) return false; }
                 return true;
