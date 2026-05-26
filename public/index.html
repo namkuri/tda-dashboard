@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-26 r25 (r24 + Git 2단 레일 레이아웃 + 폴더 우클릭 인용 + 코드 신택스 하이라이트 + 선택 블록 인용) -->
+<!-- BUILD: 2026-05-27 r26 (r25 + 문서 본문 [[code:]] 코드 내용 임베드 + 펼침/접힘(기본 펼침)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3065,6 +3065,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         body.dark .gitp-code .gh-k { color: #e58aa8; }
         body.dark .gitp-code .gh-n { color: #6fc0b0; }
         body.dark .gitp-code .gh-f { color: #c2a0d8; }
+        /* [문서 본문 코드 인용 임베드] 펼침/접힘 */
+        .md-code-embed { border: 1px solid var(--c-border); border-radius: 10px; margin: 12px 0; overflow: hidden; background: var(--c-card); }
+        .md-code-embed .mce-head { display: flex; align-items: center; gap: 7px; padding: 7px 11px; background: var(--c-paper); border-bottom: 1px solid var(--c-border); cursor: pointer; font-size: 12.5px; user-select: none; }
+        .md-code-embed .mce-head:hover { background: var(--c-accent-soft); }
+        .md-code-embed .mce-caret { width: 12px; color: var(--c-text3); font-size: 11px; flex-shrink: 0; }
+        .md-code-embed .mce-title { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--c-accent); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .md-code-embed .mce-gh, .md-code-embed .mce-gitopen { font-size: 11px; font-weight: 700; color: var(--c-text2); background: var(--c-card); border: 1px solid var(--c-border); border-radius: 6px; padding: 2px 7px; text-decoration: none; flex-shrink: 0; }
+        .md-code-embed .mce-gh:hover, .md-code-embed .mce-gitopen:hover { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+        .md-code-embed .mce-body { max-height: 440px; overflow: auto; }
+        .md-code-embed .mce-body .gitp-code { border: none; border-radius: 0; }
         .gitp-cmts { padding: 10px 13px; border-top: 1px solid var(--c-border); }
         .gitp-cmts-h { font-size: 11px; font-weight: 800; color: var(--c-text3); margin-bottom: 7px; }
         .gitp-cmt { display: flex; gap: 7px; font-size: 12.5px; padding: 4px 0; align-items: baseline; }
@@ -4054,8 +4064,30 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // placeholder로 보호 후 PASS 4에서 복원 (marked가 ⌂ 문자를 건드리지 않음)
             text = text.replace(/\[\[(task|doc|code):([A-Za-z0-9_-]+)\]\]/g, function(match, type, id) {
                 var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂';
-                var label = type === 'task' ? getTaskLabel(id) : (type === 'code' ? (typeof gitRefLabel === 'function' ? gitRefLabel(id) : id) : getDocLabel(id));
-                var icon = type === 'task' ? '🗂' : (type === 'code' ? '🔖' : '📄');
+                // [코드 인용 임베드] 본문에 코드 내용까지 펼쳐 보임(기본 펼침) + 접기/펼치기
+                if (type === 'code') {
+                    var cr = (currentData.docs || []).find(function (d) { return d.id === id && d.kind === 'coderef'; });
+                    if (cr && cr.meta) {
+                        var m = cr.meta;
+                        var lbl = (typeof gitRefLabel === 'function') ? gitRefLabel(id) : id;
+                        var gh = (typeof gitWebUrl === 'function') ? gitWebUrl(m) : '#';
+                        var bodyInner = (typeof gitCodeTable === 'function')
+                            ? gitCodeTable((m.snippet || '').split('\n'), (m.isDir ? 1 : (m.lineStart || 1)), m.path, false)
+                            : '<pre style="white-space:pre-wrap;">' + _sprintEsc(m.snippet || '') + '</pre>';
+                        var embed = '<div class="md-code-embed" data-cref="' + _sprintEsc(id) + '">'
+                            + '<div class="mce-head" data-mce-toggle="1"><span class="mce-caret">▾</span><span>🔖</span><span class="mce-title">' + _sprintEsc(lbl) + '</span>'
+                            + '<a class="mce-gh" href="' + _sprintEsc(gh) + '" target="_blank" rel="noopener">GitHub ↗</a>'
+                            + '<span class="mce-gitopen" data-git-open="' + _sprintEsc(id) + '" title="Git 탭에서 열기">↗ Git</span></div>'
+                            + '<div class="mce-body">' + bodyInner + '</div></div>';
+                        inlineTableStore[ph] = embed; _tableStore[ph] = embed;
+                        return '\n\n' + ph + '\n\n'; // 블록으로
+                    }
+                    // 코드 인용 대상이 없으면(삭제됨) 깨진 칩 표시
+                    var dead = '<a class="wikilink wikilink-code" data-wl-type="code" data-wl-id="' + _sprintEsc(id) + '" title="삭제된 코드 인용">🔖 (삭제된 인용)</a>';
+                    inlineTableStore[ph] = dead; _tableStore[ph] = dead; return ph;
+                }
+                var label = type === 'task' ? getTaskLabel(id) : getDocLabel(id);
+                var icon = type === 'task' ? '🗂' : '📄';
                 var anchor = '<a class="wikilink wikilink-' + type + '" data-wl-type="' + type +
                              '" data-wl-id="' + _sprintEsc(id) + '">' + icon + ' ' + _sprintEsc(label) + '</a>';
                 inlineTableStore[ph] = anchor;
@@ -8868,6 +8900,19 @@ return data;
             if (type === 'task') navToTask(id);
             else if (type === 'doc') navToDoc(id);
             else if (type === 'code' && typeof gitGoRef === 'function') gitGoRef(id);
+        }, true);
+        // [코드 인용 임베드] 헤더 클릭=접기/펼치기, ↗Git=Git탭에서 열기 (GitHub 링크는 기본 동작)
+        document.addEventListener('click', function(e) {
+            if (!e.target || !e.target.closest) return;
+            var gopen = e.target.closest('.mce-gitopen');
+            if (gopen) { e.preventDefault(); e.stopPropagation(); var gid = gopen.getAttribute('data-git-open'); if (gid && typeof gitGoRef === 'function') gitGoRef(gid); return; }
+            if (e.target.closest('.mce-gh')) return; // GitHub 링크: 기본 동작
+            var head = e.target.closest('.mce-head');
+            if (!head) return;
+            e.preventDefault(); e.stopPropagation();
+            var embed = head.closest('.md-code-embed'); if (!embed) return;
+            var body = embed.querySelector('.mce-body'); var caret = head.querySelector('.mce-caret');
+            if (body) { var hidden = body.style.display === 'none'; body.style.display = hidden ? '' : 'none'; if (caret) caret.textContent = hidden ? '▾' : '▸'; }
         }, true);
 
         // ── 연결 패널 렌더 (카드) ──
