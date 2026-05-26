@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-26 r19 (r18 + Git 탭: 레포연결·코드상태·코드인용[[code:]]·내부코멘트) -->
+<!-- BUILD: 2026-05-26 r20 (r19 + 문서연결 피커 종류별 그룹 + 연결 클릭 종류별 라우팅) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -594,6 +594,9 @@
         .link-pick-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; color: #2f2d28; }
         .link-pick-item:hover { background: #f6efe8; }
         .link-pick-sub { font-size: 11px; color: #9b968a; flex-shrink: 0; }
+        .link-pick-group { font-size: 10.5px; font-weight: 800; color: var(--c-text3, #9b968a); text-transform: uppercase; letter-spacing: 0.04em; padding: 9px 10px 3px; display: flex; align-items: center; gap: 6px; }
+        .link-pick-group:first-child { padding-top: 2px; }
+        .link-pick-gn { background: var(--ios-fill2, #ece7dc); color: var(--c-text2, #6f6b5d); border-radius: 8px; padding: 0 7px; font-size: 10px; font-weight: 800; }
         body.dark .linked-panel { border-top-color: #3b3934; }
         body.dark .link-chip { background: #2f2e2b; color: #e0896b; border-color: #3b3934; }
         body.dark .link-pick-item { color: #e7e3d8; }
@@ -8724,9 +8727,16 @@ return data;
             });
         }
         function navToDoc(docId) {
-            if (!currentData.docs.find(d => d.id === docId)) { showToast('문서를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
+            var d = currentData.docs.find(x => x.id === docId);
+            if (!d) { showToast('문서를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
             _closeNavOverlays();
-            switchView('docs');
+            var k = d.kind || 'wiki';
+            // [라우팅] 종류별로 알맞은 탭으로 (흐름→그래프, 코드참조→Git, 게임위키/개인문서/문서)
+            if (k === 'diagram') { if (typeof gphOpenFromSprint === 'function') gphOpenFromSprint(docId); else switchView('graph'); return; }
+            if (k === 'coderef') { if (typeof gitGoRef === 'function') gitGoRef(docId); else switchView('git'); return; }
+            if (k === 'gitrepo') { switchView('git'); if (typeof gitSelectRepo === 'function') setTimeout(function () { gitSelectRepo(docId); }, 30); return; }
+            var view = (typeof getViewForDoc === 'function') ? getViewForDoc(docId) : 'docs'; // canon/personal/docs
+            switchView(view);
             setTimeout(() => openDoc(docId), 30);
         }
         function navToTask(taskId) {
@@ -9076,22 +9086,40 @@ return data;
                 const d = currentData.docs.find(x => x.id === sourceId);
                 if (d) (targetType === 'task' ? (d.linkedTaskIds || []) : (d.linkedDocIds || [])).forEach(id => linked.add(id));
             }
-            let items;
+            var _emptyHtml = '<div class="linked-empty" style="padding:14px;text-align:center;">결과 없음</div>';
             if (targetType === 'task') {
-                items = currentData.tasks
+                var items = currentData.tasks
                     .filter(t => !linked.has(t.id) && (!q || (t.title || '').toLowerCase().includes(q)))
                     .slice(0, 40).map(t => {
                         const c = currentData.categories.find(x => x.id === t.catId);
                         return { id: t.id, label: (t.title || '(제목 없음)'), sub: c ? c.title : '' };
                     });
-            } else {
-                items = currentData.docs
-                    .filter(d => d.id !== sourceId && !linked.has(d.id) && (d.projectId === activeProjectId) && (!q || (d.title || '').toLowerCase().includes(q)))
-                    .slice(0, 40).map(d => ({ id: d.id, label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), sub: '' }));
+                listEl.innerHTML = items.length
+                    ? items.map(it => `<div class="link-pick-item" onclick="pickLink('${it.id}')"><span>${_sprintEsc(it.label)}</span>${it.sub ? `<span class="link-pick-sub">${_sprintEsc(it.sub)}</span>` : ''}</div>`).join('')
+                    : _emptyHtml;
+                return;
             }
-            listEl.innerHTML = items.length
-                ? items.map(it => `<div class="link-pick-item" onclick="pickLink('${it.id}')"><span>${_sprintEsc(it.label)}</span>${it.sub ? `<span class="link-pick-sub">${_sprintEsc(it.sub)}</span>` : ''}</div>`).join('')
-                : '<div class="linked-empty" style="padding:14px;text-align:center;">결과 없음</div>';
+            // [정렬] 문서 연결 — 종류별 그룹(문서/게임위키/흐름·그래프/개인문서), 폴더·코드참조 제외
+            var KIND_GROUPS = [['wiki', '📄 문서'], ['canon', '🎮 게임 위키'], ['diagram', '📈 흐름·그래프'], ['personal', '🔒 개인 문서']];
+            var pool = currentData.docs.filter(function (d) {
+                if (d.id === sourceId || linked.has(d.id)) return false;
+                if ((d.projectId || 'default') !== activeProjectId) return false;
+                if (d.meta && d.meta.isFolder) return false;
+                var k = d.kind || 'wiki';
+                if (k === 'gitrepo' || k === 'coderef') return false; // 코드 참조는 [[code:]]로
+                if (k === 'personal') { var owner = d.meta && d.meta.owner; if (owner && currentUser && owner !== currentUser.id && !(d.meta && d.meta.visibility === 'public')) return false; }
+                if (q && !(d.title || '').toLowerCase().includes(q)) return false;
+                return true;
+            });
+            var html = '';
+            KIND_GROUPS.forEach(function (g) {
+                var grp = pool.filter(function (d) { return (d.kind || 'wiki') === g[0]; }).slice(0, 40);
+                if (!grp.length) return;
+                var subLabel = g[1].replace(/^\S+\s/, '');
+                html += '<div class="link-pick-group">' + g[1] + ' <span class="link-pick-gn">' + grp.length + '</span></div>'
+                    + grp.map(function (d) { return '<div class="link-pick-item" onclick="pickLink(\'' + d.id + '\')"><span>' + _sprintEsc((d.emoji || '📄') + ' ' + (d.title || '제목 없음')) + '</span><span class="link-pick-sub">' + _sprintEsc(subLabel) + '</span></div>'; }).join('');
+            });
+            listEl.innerHTML = html || _emptyHtml;
         }
         function pickLink(targetId) {
             if (!_linkPicker) return;
