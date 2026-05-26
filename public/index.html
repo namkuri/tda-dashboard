@@ -2106,6 +2106,31 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-hist-meta { font-size: 10.5px; color: var(--c-text3); font-weight: 600; white-space: nowrap; text-align: right; }
         .spv-hist-by { color: var(--c-accent); font-weight: 700; }
         .spv-hist-empty { font-size: 12px; color: var(--c-text3); text-align: center; padding: 24px; }
+        /* [라운드8] 담당자·마감 뱃지(칸반) */
+        .badge-assignee { display: inline-flex; align-items: center; gap: 4px; background: var(--ios-fill2); color: var(--c-text2); cursor: pointer; }
+        .badge-assignee:hover { background: var(--c-accent-soft); color: var(--c-accent); }
+        .badge-due { cursor: pointer; background: var(--ios-fill2); color: var(--c-text2); }
+        .badge-due:hover { box-shadow: 0 0 0 2px var(--c-accent-soft); }
+        .badge-due.empty { color: var(--c-text3); opacity: 0.85; }
+        .badge-due.soon { color: var(--st-warn); font-weight: 700; }
+        .badge-due.overdue { color: #fff; background: var(--st-danger); font-weight: 800; }
+        .badge-due.done { color: var(--c-text3); text-decoration: line-through; }
+        /* [라운드8] 스프린트 카드 인라인 편집·삭제 */
+        .spv-mini-click { cursor: pointer; }
+        .spv-mini-click:hover { box-shadow: 0 0 0 2px var(--c-accent-soft); }
+        .spv-card-del { margin-left: auto; background: none; border: none; color: var(--c-text3); font-size: 12px; cursor: pointer; padding: 0 3px; border-radius: 5px; flex-shrink: 0; }
+        .spv-card-del:hover { color: var(--st-danger); background: var(--c-accent-soft); }
+        .spv-cat-del { background: none; border: 1px solid var(--c-border); color: var(--c-text3); border-radius: 6px; width: 22px; height: 22px; font-size: 11px; line-height: 1; cursor: pointer; flex-shrink: 0; padding: 0; }
+        .spv-cat-del:hover { color: var(--st-danger); background: var(--c-accent-soft); }
+        .spv-cat-new { width: 100%; margin-top: 8px; background: var(--ios-fill); border: 1.5px dashed var(--c-border); color: var(--c-text2); border-radius: 9px; padding: 7px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .spv-cat-new:hover { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-soft); }
+        /* [라운드8] 스프린트 참여자 아바타·체크리스트 */
+        .spv-parts { display: inline-flex; align-items: center; }
+        .spv-parts > * { margin-left: -4px; box-shadow: 0 0 0 2px var(--c-card); border-radius: 50%; }
+        .spv-part-more { font-size: 9px; font-weight: 800; color: var(--c-text2); background: var(--ios-fill2); width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
+        .spv-part-list { display: flex; flex-direction: column; gap: 5px; max-height: 170px; overflow-y: auto; border: 1px solid var(--c-border); border-radius: 8px; padding: 8px; background: var(--c-paper); }
+        .spv-part-chk { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--c-text); cursor: pointer; }
+        .spv-part-chk input { accent-color: var(--c-accent); flex-shrink: 0; }
         .spv-goal-ta { width: 100%; min-height: 120px; resize: vertical; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
         .spv-goal-ta:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .spv-goal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -2944,6 +2969,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <div style="flex:1;"><div class="ui-dialog-label">종료일</div><input id="sprint-edit-end" type="date" class="ui-dialog-input" onchange="_updateSprintEditDuration()"></div>
                 </div>
                 <div id="sprint-edit-duration" style="font-size:12px;color:var(--c-text3);font-weight:600;"></div>
+                <div>
+                    <div class="ui-dialog-label">👥 참여자 (팀원)</div>
+                    <div id="sprint-edit-participants" class="spv-part-list"></div>
+                </div>
                 <div style="font-size:11px;color:var(--c-text3);">🎯 목표(.md)는 스프린트를 펼쳐 인라인으로 편집합니다.</div>
             </div>
             <div class="ui-dialog-actions">
@@ -2961,6 +2990,25 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button onclick="closeModal('sprint-history-modal')" style="background:none;border:none;color:var(--c-text3);font-weight:800;font-size:18px;cursor:pointer;">✕</button>
             </div>
             <div id="sprint-hist-body" class="spv-hist-list"></div>
+        </div>
+    </div>
+
+    <!-- [#5] 카드 마감기한 설정 모달 -->
+    <div id="due-date-modal" class="bg-black bg-opacity-60 z-[690] backdrop-blur-sm" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;" onclick="closeModal('due-date-modal')">
+        <div style="background:var(--c-card);border:1px solid var(--c-border);padding:18px 20px;border-radius:14px;width:340px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--c-border);padding-bottom:10px;">
+                <h2 style="font-size:15px;font-weight:800;color:var(--c-text);margin:0;">📅 마감기한</h2>
+                <button onclick="closeModal('due-date-modal')" style="background:none;border:none;color:var(--c-text3);font-weight:800;font-size:18px;cursor:pointer;">✕</button>
+            </div>
+            <div style="font-size:12px;color:var(--c-text3);margin-bottom:8px;" id="due-date-task">카드</div>
+            <input type="date" id="due-date-input" class="ui-dialog-input" style="width:100%;">
+            <div class="ui-dialog-actions" style="margin-top:14px;justify-content:space-between;">
+                <button class="ui-dialog-btn cancel" onclick="saveDueDate(true)" title="마감기한 제거">없음</button>
+                <div style="display:flex;gap:8px;">
+                    <button class="ui-dialog-btn cancel" onclick="closeModal('due-date-modal')">취소</button>
+                    <button class="ui-dialog-btn confirm" onclick="saveDueDate(false)">설정</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -4936,7 +4984,7 @@ return data;
         // ==========================================
         async function dbUpsertTask(task) {
             if (!supabaseClient) return;
-            const { error } = await supabaseClient.from('tasks').upsert({
+            const payload = {
                 id: task.id, project_id: task.projectId || activeProjectId,
                 cat_id: task.catId, title: task.title,
                 description: task.desc, details: task.details,
@@ -4953,8 +5001,16 @@ return data;
                 done_at: task.doneAt || null,
                 linked_doc_ids: task.linkedDocIds || [],
                 created_by: task.createdBy || (currentUser ? currentUser.id : null),
-                assignees: task.assignees || []
-            });
+                assignees: task.assignees || [],
+                due_date: task.dueDate || null
+            };
+            let { error } = await supabaseClient.from('tasks').upsert(payload);
+            // [라운드8] due_date 컬럼 미생성 환경 보호: 마감기한만 빼고 재시도(기존 저장 보존)
+            if (error && /due_date/.test(error.message || '')) {
+                delete payload.due_date;
+                ({ error } = await supabaseClient.from('tasks').upsert(payload));
+                if (!error) console.warn('[dbUpsertTask] due_date 컬럼 없음 — 마감기한 제외 저장. SQL: alter table tasks add column if not exists due_date date;');
+            }
             if (error) {
                 console.error('[dbUpsertTask]', error);
                 if (typeof showToast === 'function') showToast('⚠️ 태스크 저장 실패: ' + (error.message||''), 'alert');
@@ -5059,7 +5115,7 @@ return data;
         // [v40 Day2 청크 4] 스프린트 upsert / delete
         async function dbUpsertSprint(sprint) {
             if (!supabaseClient) return { error: null };
-            const { error } = await supabaseClient.from('sprints').upsert({
+            const payload = {
                 id: sprint.id, project_id: sprint.projectId || activeProjectId,
                 week_label: sprint.weekLabel || sprint.id, goal: sprint.goal || '',
                 status: sprint.status || 'planning',
@@ -5070,8 +5126,16 @@ return data;
                 start_date: sprint.startDate || null,
                 end_date: sprint.endDate || null,
                 closed_at: sprint.closedAt || null,
-                history: sprint.history || []
-            });
+                history: sprint.history || [],
+                participants: sprint.participants || []
+            };
+            let { error } = await supabaseClient.from('sprints').upsert(payload);
+            // [라운드8] participants 컬럼 미생성 환경 보호: 참여자만 빼고 재시도(기존 저장 보존)
+            if (error && /participants/.test(error.message || '')) {
+                delete payload.participants;
+                ({ error } = await supabaseClient.from('sprints').upsert(payload));
+                if (!error) console.warn('[dbUpsertSprint] participants 컬럼 없음 — 참여자 제외 저장. SQL: alter table sprints add column if not exists participants jsonb default \'[]\'::jsonb;');
+            }
             if (error) {
                 console.error('[dbUpsertSprint]', error);
                 if (typeof showToast === 'function') showToast('⚠️ 스프린트 저장 실패: ' + (error.message||''), 'alert');
@@ -5148,7 +5212,8 @@ return data;
                 milestoneCriteria: s.milestone_criteria || [],
                 startDate: s.start_date || null, endDate: s.end_date || null,
                 createdAt: s.created_at || null, closedAt: s.closed_at || null,
-                history: s.history || []
+                history: s.history || [],
+                participants: s.participants || []
             };
         }
         // [v40 Day3 청크2] review_requests row(snake) → app 객체(camel) 매핑
@@ -5209,7 +5274,10 @@ return data;
                     doneAt: t.done_at || null,
                     linkedDocIds: t.linked_doc_ids || [],
                     createdBy: t.created_by || null,
-                    assignees: t.assignees || []
+                    assignees: t.assignees || [],
+                    // [라운드8] 담당자 실계정 연결(assignees[0]) + 마감기한
+                    assigneeId: (t.assignees && t.assignees[0]) || null,
+                    dueDate: t.due_date || null
                 })),
                 docs: (docData || []).map(d => ({
                     id: d.id, projectId: d.project_id, parentId: d.parent_id,
@@ -5449,7 +5517,8 @@ return data;
                                     isStarred: u.is_starred, time: u.completed_at, scripts: u.scripts || [],
                                     // [v40 Day3 청크1] zone/sprint/링크 멀티유저 동기화 (Day2 청크1~4 갭 보완)
                                     zone: u.zone || 'shelf', sprintId: u.sprint_id || null,
-                                    linkedDocIds: u.linked_doc_ids || []
+                                    linkedDocIds: u.linked_doc_ids || [],
+                                    assignees: u.assignees || [], assigneeId: (u.assignees && u.assignees[0]) || null, dueDate: u.due_date || null
                                 });
                             }
                         } else if (ev === 'INSERT') {
@@ -5460,7 +5529,8 @@ return data;
                                     details: t.details, priority: t.priority, status: t.status,
                                     dev: t.dev_name, catBadge: t.cat_badge,
                                     isStarred: t.is_starred, time: t.completed_at, zone: t.zone || 'shelf', sprintId: t.sprint_id || null,
-                                    scripts: t.scripts || [], isCollapsed: false, comments: [], linkedDocIds: t.linked_doc_ids || []
+                                    scripts: t.scripts || [], isCollapsed: false, comments: [], linkedDocIds: t.linked_doc_ids || [],
+                                    assignees: t.assignees || [], assigneeId: (t.assignees && t.assignees[0]) || null, dueDate: t.due_date || null
                                 });
                             }
                         } else if (ev === 'DELETE') {
@@ -7219,6 +7289,19 @@ return data;
             sel.innerHTML = sprints.map(function (s) { var b = s.status === 'active' ? '🏃 ' : (s.status === 'closed' ? '🏁 ' : '📋 '); return '<option value="' + s.id + '">' + b + _sprintEsc(s.weekLabel || s.id) + '</option>'; }).join('');
             sel.value = selectedBoardSprintId;
         }
+        // [#4] 담당자 필터를 실제 팀원(+레거시 담당자명) 기반으로 채움
+        function renderDevFilter() {
+            var sel = document.getElementById('filter-dev'); if (!sel) return;
+            var prev = sel.value || filterDev || 'ALL';
+            var labels = [];
+            getMembers().forEach(function (m) { var l = m.displayName || m.email; if (l && labels.indexOf(l) === -1) labels.push(l); });
+            (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).forEach(function (t) {
+                var l = getTaskAssigneeLabel(t); if (l && l !== '미지정' && labels.indexOf(l) === -1) labels.push(l);
+            });
+            sel.innerHTML = '<option value="ALL">모든 담당자</option>' + labels.map(function (l) { return '<option value="' + l.replace(/"/g, '&quot;') + '">' + _sprintEsc(l) + '</option>'; }).join('');
+            sel.value = (prev === 'ALL' || labels.indexOf(prev) > -1) ? prev : 'ALL';
+            filterDev = sel.value;
+        }
 
         // [#1] 새 스프린트에 직전 스프린트의 카테고리(컬럼)만 복제 — 카드는 복제 안 함
         function _inheritCategories(newSprintId) {
@@ -7607,12 +7690,20 @@ return data;
             var st = getStatusInfo(t.status);
             var tagColor = (currentData.tagColors && currentData.tagColors[t.catBadge]) || '#57544c';
             var pc = t.priority === 'p0' ? 'var(--st-danger)' : (t.priority === 'p1' ? 'var(--st-warn)' : 'var(--p2-blue)');
+            var assignee = getTaskAssignee(t);
+            var asgLabel = assignee ? (assignee.displayName || assignee.email) : (t.dev || '미지정');
+            var asgAv = assignee ? _avatarHtml(assignee, 14) : '<span style="font-size:10px;">👤</span>';
+            var dueSt = _dueState(t);
+            var dueLabel = t.dueDate ? ('📅 ' + _fmtDueLabel(t.dueDate) + (dueSt === 'overdue' ? ' ⚠' : '')) : '📅 기한';
+            var dueColor = dueSt === 'overdue' ? 'var(--st-danger)' : (dueSt === 'soon' ? 'var(--st-warn)' : 'var(--c-text2)');
             var head = '<div class="spv-card-head"><span class="spv-drag" title="드래그하여 스프린트/카테고리 이동">⠿</span>'
                 + '<span class="spv-card-title" onclick="event.stopPropagation();toggleSprintCard(\'' + t.id + '\')">' + _sprintEsc(t.title || '(제목 없음)') + '</span>'
-                + '<span class="spv-mini" style="background:var(--ios-fill2);color:var(--c-text2);">' + getZoneIcon(t.zone) + ' ' + getZoneLabel(t.zone) + '</span>'
-                + '<span class="spv-mini" style="background:var(--ios-fill2);color:var(--c-text2);">' + _sprintEsc(st.text) + '</span>'
-                + '<span class="spv-mini" style="background:var(--ios-fill2);color:var(--c-text2);">' + _sprintEsc(t.dev || '') + '</span>'
-                + '<span class="spv-mini" style="color:' + pc + ';font-weight:800;">' + String(t.priority || '').toUpperCase() + '</span></div>';
+                + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();spvCycleZone(\'' + t.id + '\')" title="클릭하여 Zone 변경" style="background:var(--ios-fill2);color:var(--c-text2);">' + getZoneIcon(t.zone) + ' ' + getZoneLabel(t.zone) + '</span>'
+                + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();spvCycleStatus(\'' + t.id + '\')" title="클릭하여 상태 변경" style="background:var(--ios-fill2);color:var(--c-text2);">' + _sprintEsc(st.text) + '</span>'
+                + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();openAssigneePicker(event,\'' + t.id + '\',\'sprint\')" title="클릭하여 담당자 변경 (팀원 계정)" style="background:var(--ios-fill2);color:var(--c-text2);display:inline-flex;align-items:center;gap:3px;">' + asgAv + _sprintEsc(asgLabel) + '</span>'
+                + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();openDueDatePicker(event,\'' + t.id + '\',\'sprint\')" title="클릭하여 마감기한 설정" style="background:var(--ios-fill2);color:' + dueColor + ';font-weight:700;">' + dueLabel + '</span>'
+                + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();spvCyclePriority(\'' + t.id + '\')" title="클릭하여 우선순위 변경" style="color:' + pc + ';font-weight:800;">' + String(t.priority || '').toUpperCase() + '</span>'
+                + '<button class="spv-card-del" onclick="event.stopPropagation();spvDeleteCard(\'' + t.id + '\')" title="카드 삭제">🗑</button></div>';
             var detail = '';
             if (_sprintCardOpen[t.id]) {
                 var cmts = (t.comments || []).map(function (c) { return '<div class="spv-cmt"><b>' + _sprintEsc(c.author || '익명') + '</b> ' + _sprintEsc(c.text || '') + ' <span class="spv-cmt-t">' + _sprintEsc(c.time || '') + '</span></div>'; }).join('');
@@ -7635,13 +7726,15 @@ return data;
             cats.forEach(function (cat) {
                 var inCat = tasks.filter(function (t) { return t.catId === cat.id; });
                 html += '<div class="spv-cat-h"><span>' + _sprintEsc(cat.title) + '</span><span class="spv-cat-n">' + inCat.length + '</span>'
-                    + '<button class="spv-cat-add" title="이 카테고리에 새 카드 추가" onclick="sprintAddCard(\'' + cat.id + '\',\'' + (sid || '') + '\')">+</button></div>'
+                    + '<button class="spv-cat-add" title="이 카테고리에 새 카드 추가" onclick="sprintAddCard(\'' + cat.id + '\',\'' + (sid || '') + '\')">+</button>'
+                    + '<button class="spv-cat-del" title="카테고리 삭제" onclick="spvDeleteCategory(\'' + cat.id + '\',\'' + (sid || '') + '\')">🗑</button></div>'
                     + '<div class="spv-cards" data-sprintid="' + (sid || '') + '" data-catid="' + cat.id + '">'
                     + (inCat.length ? inCat.map(_sprintCardSummary).join('') : '<div class="spv-empty">비어있음 — 여기로 드래그</div>') + '</div>';
             });
             var orphan = tasks.filter(function (t) { return !cats.find(function (c) { return c.id === t.catId; }); });
-            if (orphan.length) html += '<div class="spv-cat-h">기타</div><div class="spv-cards" data-sprintid="' + (sid || '') + '" data-catid="">' + orphan.map(_sprintCardSummary).join('') + '</div>';
-            return html || '<div class="spv-empty">이 프로젝트에 카테고리가 없습니다.</div>';
+            if (orphan.length) html += '<div class="spv-cat-h"><span>기타(카테고리 없음)</span><span class="spv-cat-n">' + orphan.length + '</span></div><div class="spv-cards" data-sprintid="' + (sid || '') + '" data-catid="">' + orphan.map(_sprintCardSummary).join('') + '</div>';
+            html += '<button class="spv-cat-new" onclick="sprintAddCategory(\'' + (sid || '') + '\')">+ 카테고리 추가</button>';
+            return html;
         }
         function _sprintGoalArea(s) {
             if (_sprintGoalEditing[s.id]) {
@@ -7661,6 +7754,71 @@ return data;
             delete _sprintGoalEditing[sid]; renderSprintView();
             showToast('🎯 목표 저장됨', 'success');
         }
+        // [#2] 스프린트 카드 인라인 속성 변경 — 칸반 로직 재사용 후 스프린트 뷰 갱신
+        function _spvEvt() { return { stopPropagation: function () {}, preventDefault: function () {} }; }
+        function spvCycleStatus(taskId) { cycleStatus(_spvEvt(), taskId); if (currentView === 'sprint') renderSprintView(); }
+        function spvCyclePriority(taskId) { cyclePriority(_spvEvt(), taskId); if (currentView === 'sprint') renderSprintView(); }
+        async function spvCycleZone(taskId) { await cycleZone(_spvEvt(), taskId); if (currentView === 'sprint') renderSprintView(); }
+        // [#3] 스프린트 카드 삭제
+        async function spvDeleteCard(taskId) {
+            var t = (currentData.tasks || []).find(function (x) { return x.id === taskId; }); if (!t) return;
+            if (!(await uiConfirm({ title: '카드 삭제', message: '"' + (t.title || '카드') + '"을(를) 삭제할까요? 되돌릴 수 없습니다.', confirmText: '삭제', danger: true }))) return;
+            var sid = t.sprintId || null;
+            currentData.tasks = (currentData.tasks || []).filter(function (x) { return x.id !== taskId; });
+            saveData(); if (typeof dbDeleteTask === 'function') dbDeleteTask(taskId);
+            var s = (currentData.sprints || []).find(function (x) { return x.id === sid; });
+            if (s) { _sprintLogHist(s, 'card-del', '카드 "' + (t.title || '') + '" 삭제'); dbUpsertSprint(s); }
+            if (currentView === 'sprint') renderSprintView();
+            showToast('🗑 카드 삭제됨', 'info');
+        }
+        // [#1] 스프린트 페이지에서 카테고리 추가
+        async function sprintAddCategory(sid) {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var realSid = sid || null;
+            var title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름', placeholder: '예: 전투 시스템' });
+            if (title === null || !title.trim()) return;
+            var nc = { id: 'cat-' + Date.now(), title: title.trim(), subtitle: 'CUSTOM MODULE', projectId: activeProjectId, sprintId: realSid };
+            if (!Array.isArray(currentData.categories)) currentData.categories = [];
+            currentData.categories.push(nc); saveData(); dbUpsertCategory(nc);
+            var s = (currentData.sprints || []).find(function (x) { return x.id === realSid; });
+            if (s) { _sprintLogHist(s, 'category-add', '카테고리 "' + nc.title + '" 추가'); dbUpsertSprint(s); }
+            if (currentView === 'sprint') renderSprintView();
+            if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
+            showToast('🗂 카테고리 추가됨', 'success');
+        }
+        // [#3] 스프린트 페이지에서 카테고리 삭제 (내부 카드 포함)
+        async function spvDeleteCategory(catId, sid) {
+            var cat = (currentData.categories || []).find(function (c) { return c.id === catId; }); if (!cat) return;
+            var n = (currentData.tasks || []).filter(function (t) { return t.catId === catId; }).length;
+            if (!(await uiConfirm({ title: '카테고리 삭제', message: '"' + (cat.title || '카테고리') + '"' + (n ? (' 및 내부 카드 ' + n + '개') : '') + '를 삭제할까요? 되돌릴 수 없습니다.', confirmText: '삭제', danger: true }))) return;
+            currentData.categories = (currentData.categories || []).filter(function (c) { return c.id !== catId; });
+            currentData.tasks = (currentData.tasks || []).filter(function (t) { return t.catId !== catId; });
+            saveData(); if (typeof dbDeleteCategory === 'function') dbDeleteCategory(catId);
+            var s = (currentData.sprints || []).find(function (x) { return x.id === (sid || null); });
+            if (s) { _sprintLogHist(s, 'category-del', '카테고리 "' + (cat.title || '') + '" 삭제'); dbUpsertSprint(s); }
+            if (currentView === 'sprint') renderSprintView();
+            if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
+            showToast('🗑 카테고리 삭제됨', 'info');
+        }
+        // [#6] 스프린트 참여자 — 행 아바타 + 편집 모달 체크리스트
+        function _sprintParticipantsHtml(s) {
+            var ids = Array.isArray(s.participants) ? s.participants : [];
+            if (!ids.length) return '';
+            var members = getMembers();
+            var shown = ids.slice(0, 5).map(function (id) { var m = members.find(function (x) { return x.id === id; }); return m ? _avatarHtml(m, 18) : _avatarHtml({ displayName: '?' }, 18); }).join('');
+            var more = ids.length > 5 ? ('<span class="spv-part-more">+' + (ids.length - 5) + '</span>') : '';
+            var names = ids.map(function (id) { return getMemberName(id); }).join(', ');
+            return '<span class="spv-parts" title="참여자: ' + _sprintEsc(names) + '">' + shown + more + '</span>';
+        }
+        function _renderSprintParticipantPicker(selectedIds) {
+            var sel = Array.isArray(selectedIds) ? selectedIds : [];
+            var members = getMembers();
+            if (!members.length) return '<div style="font-size:12px;color:var(--c-text3);">로그인한 팀원이 없습니다.</div>';
+            return members.map(function (m) {
+                var on = sel.indexOf(m.id) > -1;
+                return '<label class="spv-part-chk"><input type="checkbox" class="spv-part-cb" value="' + m.id + '"' + (on ? ' checked' : '') + '> ' + _avatarHtml(m, 18) + '<span>' + _sprintEsc(m.displayName || m.email) + '</span></label>';
+            }).join('');
+        }
         function renderSprintView() {
             var wrap = document.getElementById('sprint-view'); if (!wrap) return;
             var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
@@ -7674,6 +7832,7 @@ return data;
                     + '<div class="spv-row" onclick="toggleSprintExpand(\'' + s.id + '\')">' + _sprintStatusBadge(s) + '<b>' + _sprintEsc(s.weekLabel || s.id) + '</b>'
                     + '<span class="spv-range">' + formatSprintRange(s.startDate, s.endDate) + (_sprintDurationLabel(s) ? (' · ' + _sprintDurationLabel(s)) : '') + '</span>'
                     + '<span class="spv-count">' + countOf(s.id) + ' 카드</span>'
+                    + _sprintParticipantsHtml(s)
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();openSprintHistory(\'' + s.id + '\')" title="변경 히스토리">📜</button>'
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();openSprintEditModal(\'' + s.id + '\')" title="제목·날짜 수정">✏️</button>'
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();deleteSprint(\'' + s.id + '\')" title="스프린트 삭제">🗑</button>'
@@ -7724,6 +7883,8 @@ return data;
             document.getElementById('sprint-edit-label').value = defLabel;
             document.getElementById('sprint-edit-start').value = s ? (s.startDate || '') : _fmtDate(mon);
             document.getElementById('sprint-edit-end').value = s ? (s.endDate || '') : _fmtDate(sun);
+            var partEl = document.getElementById('sprint-edit-participants');
+            if (partEl) partEl.innerHTML = _renderSprintParticipantPicker(s ? (s.participants || []) : (currentUser ? [currentUser.id] : []));
             _updateSprintEditDuration();
             openModal('sprint-edit-modal');
             setTimeout(function () { var el = document.getElementById('sprint-edit-label'); if (el) el.focus(); }, 50);
@@ -7734,16 +7895,20 @@ return data;
             var start = document.getElementById('sprint-edit-start').value || null;
             var end = document.getElementById('sprint-edit-end').value || null;
             if (start && end && new Date(end) < new Date(start)) { showToast('종료일이 시작일보다 빠릅니다.', 'alert'); return; }
+            var partEls = document.querySelectorAll('#sprint-edit-participants .spv-part-cb');
+            var participants = Array.prototype.slice.call(partEls).filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
             if (!Array.isArray(currentData.sprints)) currentData.sprints = [];
             var s;
             if (_sprintEditId) {
                 s = currentData.sprints.find(function (x) { return x.id === _sprintEditId; }); if (!s) return;
-                s.weekLabel = label; s.startDate = start; s.endDate = end;
+                var partChanged = JSON.stringify((s.participants || []).slice().sort()) !== JSON.stringify(participants.slice().sort());
+                s.weekLabel = label; s.startDate = start; s.endDate = end; s.participants = participants;
                 if (!Array.isArray(s.history)) s.history = [];
                 s.history.push({ action: 'edit', by: currentUser.id, byName: myNickname, at: new Date().toISOString() });
+                if (partChanged) _sprintLogHist(s, 'participants', '참여자 ' + participants.length + '명: ' + (participants.map(function (id) { return getMemberName(id); }).join(', ') || '없음'));
             } else {
                 var id = 'sprint-' + Date.now();
-                s = { id: id, projectId: activeProjectId, weekLabel: label, goal: '', status: 'planned', intrusionCount: 0, intrusionLog: [], carryoverFromPrevious: [], milestoneCriteria: [], startDate: start, endDate: end, closedAt: null, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] };
+                s = { id: id, projectId: activeProjectId, weekLabel: label, goal: '', status: 'planned', intrusionCount: 0, intrusionLog: [], carryoverFromPrevious: [], milestoneCriteria: [], startDate: start, endDate: end, closedAt: null, participants: participants, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] };
                 currentData.sprints.push(s); _sprintExpanded[id] = true; _inheritCategories(id);
             }
             saveData(); await dbUpsertSprint(s); closeModal('sprint-edit-modal');
@@ -7822,7 +7987,7 @@ return data;
         }
         // [#6] 스프린트 히스토리 뷰어
         function _sprintHistInfo(action) {
-            var m = { create: '🆕 생성', edit: '✏️ 정보 수정', status: '🔄 상태 변경', start: '🏃 시작', end: '🏁 종료', 'card-add': '➕ 카드 추가', 'category-add': '🗂 카테고리 추가' };
+            var m = { create: '🆕 생성', edit: '✏️ 정보 수정', status: '🔄 상태 변경', start: '🏃 시작', end: '🏁 종료', 'card-add': '➕ 카드 추가', 'card-del': '🗑 카드 삭제', 'category-add': '🗂 카테고리 추가', 'category-del': '🗑 카테고리 삭제', participants: '👥 참여자 변경' };
             return m[action] || ('• ' + (action || ''));
         }
         function openSprintHistory(sid) {
@@ -8998,6 +9163,126 @@ ${intrLog}
         function getStatusInfo(status) { if(status === 'progress') return { text: '🔥 진행중', class: 'status-progress' }; if(status === 'completed') return { text: '✅ 완료됨', class: 'status-completed' }; return { text: '⏳ 대기중', class: 'status-pending' }; }
         function toggleStar(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.isStarred = !task.isStarred; saveData(); dbUpsertTask(task); }
         async function changeDev(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newDev = await uiPrompt({ title: '담당자 변경', label: '담당자를 입력하세요', value: task.dev || '' }); if (newDev !== null && newDev.trim()) { task.dev = newDev.trim(); saveData(); dbUpsertTask(task); } }
+
+        // ═══════════════════════════════════════════════
+        // [라운드8] 담당자(실계정 연결)·마감기한·아바타 공통 헬퍼
+        // ═══════════════════════════════════════════════
+        function _avatarHtml(member, size) {
+            size = size || 18;
+            if (member && member.avatarUrl) return '<img src="' + member.avatarUrl + '" referrerpolicy="no-referrer" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;vertical-align:middle;">';
+            var nm = (member && (member.displayName || member.email)) || '?';
+            var ini = String(nm).trim().charAt(0).toUpperCase() || '?';
+            return '<span style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:var(--c-accent-soft);color:var(--c-accent);font-size:' + Math.round(size * 0.52) + 'px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;vertical-align:middle;">' + ini + '</span>';
+        }
+        function getTaskAssignee(task) {
+            if (!task || !task.assigneeId) return null;
+            return getMembers().find(function (x) { return x.id === task.assigneeId; }) || null;
+        }
+        function getTaskAssigneeLabel(task) {
+            var m = getTaskAssignee(task);
+            if (m) return m.displayName || m.email || '팀원';
+            return (task && task.dev) ? task.dev : '미지정';
+        }
+        function _afterCardEdit(ctx) {
+            if (ctx === 'sprint') { if (typeof renderSprintView === 'function') renderSprintView(); }
+            else { if (typeof renderBoard === 'function') renderBoard(); }
+        }
+        // 컨텍스트 메뉴(tree-context-menu)를 클릭 요소 기준으로 띄우는 경량 팝업
+        function _openCardMenu(e, innerHtml) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            var menu = document.getElementById('tree-context-menu');
+            if (!menu) return;
+            if (menu.parentNode !== document.body) document.body.appendChild(menu);
+            menu.innerHTML = innerHtml;
+            menu.style.display = 'block';
+            var anchor = (e && e.currentTarget && e.currentTarget.getBoundingClientRect) ? e.currentTarget.getBoundingClientRect() : null;
+            var mw = menu.offsetWidth || 220, mh = menu.offsetHeight || 200;
+            var x = anchor ? anchor.left : (e ? e.clientX : 100);
+            var y = anchor ? (anchor.bottom + 4) : (e ? e.clientY : 100);
+            x = Math.min(x, window.innerWidth - mw - 8); if (x < 6) x = 6;
+            y = Math.min(y, window.innerHeight - mh - 8); if (y < 6) y = 6;
+            menu.style.left = x + 'px'; menu.style.top = y + 'px';
+            setTimeout(function () {
+                document.addEventListener('click', hideTreeContextMenu, { once: true });
+                document.addEventListener('keydown', hideTreeContextMenu, { once: true });
+                document.addEventListener('wheel', hideTreeContextMenu, { once: true, passive: true });
+            }, 10);
+        }
+        // [#4] 담당자(실 계정) 피커 — board/sprint 공용
+        function openAssigneePicker(e, taskId, ctx) {
+            var task = currentData.tasks.find(function (t) { return t.id === taskId; }); if (!task) return;
+            var members = getMembers();
+            var cur = task.assigneeId || null;
+            var rows = members.length ? members.map(function (m) {
+                return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();setTaskAssignee(\'' + taskId + '\',\'' + m.id + '\',\'' + (ctx || 'board') + '\')">' + _avatarHtml(m, 18) + '<span style="flex:1;">' + _sprintEsc(m.displayName || m.email) + '</span>' + (m.id === cur ? '<span>✓</span>' : '') + '</div>';
+            }).join('') : '<div class="ctx-menu-item" style="opacity:.6;cursor:default;">로그인한 팀원이 없습니다</div>';
+            var unassigned = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();setTaskAssignee(\'' + taskId + '\',\'\',\'' + (ctx || 'board') + '\')"><span>🚫</span><span style="flex:1;">미지정</span>' + (!cur ? '<span>✓</span>' : '') + '</div>';
+            var manual = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();manualDevEntry(\'' + taskId + '\',\'' + (ctx || 'board') + '\')"><span>✏️</span><span style="flex:1;">직접 입력…</span></div>';
+            _openCardMenu(e, rows + '<div class="ctx-menu-sep"></div>' + unassigned + manual);
+        }
+        function setTaskAssignee(taskId, userId, ctx) {
+            var task = currentData.tasks.find(function (t) { return t.id === taskId; }); if (!task) return;
+            if (userId) { task.assigneeId = userId; task.assignees = [userId]; task.dev = getMemberName(userId); }
+            else { task.assigneeId = null; task.assignees = []; task.dev = '미지정'; }
+            saveData(); dbUpsertTask(task); _afterCardEdit(ctx);
+            showToast('담당자 → ' + getTaskAssigneeLabel(task), 'info');
+        }
+        async function manualDevEntry(taskId, ctx) {
+            var task = currentData.tasks.find(function (t) { return t.id === taskId; }); if (!task) return;
+            var v = await uiPrompt({ title: '담당자 직접 입력', label: '계정 미연결 담당자 이름', value: task.assigneeId ? '' : (task.dev || '') });
+            if (v === null) return;
+            task.assigneeId = null; task.assignees = []; task.dev = (v.trim() || '미지정');
+            saveData(); dbUpsertTask(task); _afterCardEdit(ctx);
+        }
+        function renderAssigneeBadge(task, ctx) {
+            var m = getTaskAssignee(task);
+            var label = m ? (m.displayName || m.email) : (task.dev || '미지정');
+            var av = m ? _avatarHtml(m, 16) : '<span style="font-size:11px;">👤</span>';
+            return '<span class="badge badge-assignee" onclick="openAssigneePicker(event,\'' + task.id + '\',\'' + (ctx || 'board') + '\')" title="클릭하여 담당자 변경 (팀원 계정 연결)">' + av + '<span>' + _sprintEsc(label) + '</span></span>';
+        }
+        // [#5] 마감기한
+        function _fmtDueLabel(due) {
+            if (!due) return '';
+            var d = new Date(due + 'T00:00:00');
+            if (isNaN(d.getTime())) return due;
+            return (d.getMonth() + 1) + '/' + d.getDate();
+        }
+        function _dueState(task) {
+            if (!task || !task.dueDate) return '';
+            if (task.status === 'completed') return 'done';
+            var end = new Date(task.dueDate + 'T23:59:59');
+            if (isNaN(end.getTime())) return '';
+            var now = new Date();
+            if (end < now) return 'overdue';
+            if ((end - now) < 3 * 86400000) return 'soon';
+            return '';
+        }
+        function renderDueBadge(task, ctx) {
+            var c = ctx || 'board';
+            if (!task.dueDate) return '<span class="badge badge-due empty" onclick="openDueDatePicker(event,\'' + task.id + '\',\'' + c + '\')" title="마감기한 설정 (옵션)">📅 기한</span>';
+            var st = _dueState(task);
+            return '<span class="badge badge-due ' + st + '" onclick="openDueDatePicker(event,\'' + task.id + '\',\'' + c + '\')" title="마감기한: ' + task.dueDate + ' (클릭하여 변경)">📅 ' + _fmtDueLabel(task.dueDate) + (st === 'overdue' ? ' ⚠' : '') + '</span>';
+        }
+        var _dueTarget = { taskId: null, ctx: 'board' };
+        function openDueDatePicker(e, taskId, ctx) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            var task = currentData.tasks.find(function (t) { return t.id === taskId; }); if (!task) return;
+            _dueTarget = { taskId: taskId, ctx: ctx || 'board' };
+            var inp = document.getElementById('due-date-input'); if (inp) inp.value = task.dueDate || '';
+            var tEl = document.getElementById('due-date-task'); if (tEl) tEl.textContent = task.title || '카드';
+            openModal('due-date-modal');
+            setTimeout(function () { var i = document.getElementById('due-date-input'); if (i) i.focus(); }, 50);
+        }
+        function saveDueDate(clear) {
+            var task = currentData.tasks.find(function (t) { return t.id === _dueTarget.taskId; });
+            if (task) {
+                var inp = document.getElementById('due-date-input');
+                task.dueDate = clear ? null : ((inp && inp.value) ? inp.value : null);
+                saveData(); dbUpsertTask(task); _afterCardEdit(_dueTarget.ctx);
+                showToast(task.dueDate ? ('📅 마감기한 ' + task.dueDate) : '마감기한 제거됨', 'info');
+            }
+            closeModal('due-date-modal');
+        }
         async function deleteTask(e, taskId) { e.stopPropagation(); if(await uiConfirm({ title: '할 일 삭제', message: '이 할 일을 삭제할까요? 되돌릴 수 없습니다.', confirmText: '삭제', danger: true })) { currentData.tasks = currentData.tasks.filter(t => t.id !== taskId); saveData(); dbDeleteTask(taskId); } }
         
         let activeTagEdit = null;
@@ -9030,6 +9315,7 @@ ${intrLog}
         function renderBoard() {
             const board = document.getElementById('board'); board.innerHTML = '';
             if (typeof renderBoardSprintPicker === 'function') renderBoardSprintPicker(); // [#2] 스프린트 콤보 동기화
+            if (typeof renderDevFilter === 'function') renderDevFilter(); // [#4] 담당자 필터 팀원 기반
             // [v40 Day2 청크 2] filterZone='active'는 "기본 보기"이므로 isFiltering 트리거 X
             const isFiltering = filterDev !== 'ALL' || filterStatus !== 'ALL' || filterZone === 'now';
             const filterWarning = document.getElementById('filter-warning');
@@ -9076,7 +9362,7 @@ ${intrLog}
                 // [#2] 스프린트 스코프
                 if(selectedBoardSprintId === 'none') catTasks = catTasks.filter(t => !t.sprintId);
                 else if(selectedBoardSprintId !== 'all') catTasks = catTasks.filter(t => t.sprintId === selectedBoardSprintId);
-                if(filterDev !== 'ALL') catTasks = catTasks.filter(t => t.dev === filterDev);
+                if(filterDev !== 'ALL') catTasks = catTasks.filter(t => getTaskAssigneeLabel(t) === filterDev);
                 if(filterStatus !== 'ALL') catTasks = catTasks.filter(t => t.status === filterStatus);
                 // [v40 Day2 청크 2] Zone 필터 적용
                 if(filterZone === 'now') {
@@ -9101,7 +9387,7 @@ ${intrLog}
                     const card = document.createElement('div'); card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} ${task.isCollapsed ? 'collapsed' : ''} zone-${task.zone || 'shelf'}`; card.setAttribute('data-id', task.id);
                     card.oncontextmenu = function(e) { showCardContextMenu(e, task.id); }; // [v40 B2] 우클릭 메뉴(결정 요청 등)
                     const commentsHtml = task.comments.map((c, i) => ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `).join('');
-                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> ${(task.zone || 'shelf') !== 'buried' ? `<button class="action-btn" onclick="buryTaskWithReason(event, '${task.id}')" title="처내기 (Buried, 사유 필수)">🗑</button>` : ''} <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제(영구)">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')" title="클릭하여 상태 변경 (대기 → 진행 → 완료)">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')" title="${task.isStarred ? '즐겨찾기 해제' : '즐겨찾기'}">${task.isStarred ? '⭐' : '☆'}</span> <span class="badge ${task.dev.includes('A') ? 'badge-a' : 'badge-b'}" onclick="changeDev(event, '${task.id}')" title="클릭하여 담당자 변경">${task.dev}</span> <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')" title="클릭하여 태그·색상 수정">${task.catBadge}</span> </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')" title="클릭하여 우선순위 변경 (P0 → P1 → P2)">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
+                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> ${(task.zone || 'shelf') !== 'buried' ? `<button class="action-btn" onclick="buryTaskWithReason(event, '${task.id}')" title="처내기 (Buried, 사유 필수)">🗑</button>` : ''} <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제(영구)">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')" title="클릭하여 상태 변경 (대기 → 진행 → 완료)">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')" title="${task.isStarred ? '즐겨찾기 해제' : '즐겨찾기'}">${task.isStarred ? '⭐' : '☆'}</span> ${renderAssigneeBadge(task, 'board')} <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')" title="클릭하여 태그·색상 수정">${task.catBadge}</span> ${renderDueBadge(task, 'board')} </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')" title="클릭하여 우선순위 변경 (P0 → P1 → P2)">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10 ${task.isCollapsed ? 'hidden' : ''}"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
                     colList.appendChild(card);
                 });
 
