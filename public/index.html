@@ -2047,6 +2047,43 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         #canon-meta-bar .cmb-btn:hover { background: var(--c-accent-soft); }
         #canon-meta-bar .cmb-btn.on { background: var(--c-accent); color: #fff; border-color: transparent; }
 
+        /* ============================================================
+           [스프린트] 스프린트 페이지 (#sprint-view)
+           ============================================================ */
+        html.is-desktop #sprint-view { padding: 8px 16px 48px; }
+        html.is-mobile #sprint-view { padding: 8px 16px 90px; }
+        #sprint-view.hidden { display: none; }
+        .spv-wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+        .spv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .spv-title { font-size: 22px; font-weight: 800; color: var(--c-text); letter-spacing: -0.02em; }
+        .spv-sub { font-size: 12.5px; color: var(--c-text3); margin-top: 3px; line-height: 1.5; max-width: 560px; }
+        .spv-new { background: var(--c-accent); color: #fff; border: none; border-radius: 10px; padding: 9px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .spv-new:hover { background: var(--c-accent-hover); }
+        .spv-sprint { border: 1px solid var(--c-border); border-radius: 12px; background: var(--c-card); overflow: hidden; }
+        .spv-sprint.spv-active { border-left: 3px solid var(--c-accent); }
+        .spv-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; cursor: pointer; }
+        .spv-row:hover { background: var(--c-accent-soft); }
+        .spv-badge { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 9px; }
+        .spv-row b { font-size: 14px; color: var(--c-text); }
+        .spv-range { font-size: 12px; color: var(--c-text2); font-weight: 600; }
+        .spv-count { font-size: 11px; color: var(--c-text3); font-weight: 700; margin-left: auto; }
+        .spv-caret { font-size: 11px; color: var(--c-text3); width: 14px; text-align: center; }
+        .spv-body { border-top: 1px solid var(--c-border); padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; background: var(--c-paper); }
+        .spv-goal { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 10px 12px; }
+        .spv-goal-head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--c-text3); margin-bottom: 6px; }
+        .spv-goal-head button { margin-left: auto; background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 7px; padding: 3px 9px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .spv-goal .markdown-body { font-size: 13px; }
+        .spv-cards { display: flex; flex-direction: column; gap: 6px; min-height: 36px; border: 1.5px dashed var(--c-border); border-radius: 10px; padding: 7px; }
+        .spv-cards-label { font-size: 11px; font-weight: 700; color: var(--c-text3); margin: 2px 2px 4px; }
+        .spv-card { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 9px; padding: 8px 10px; }
+        .spv-card-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+        .spv-drag { cursor: grab; color: var(--c-text3); font-size: 14px; flex-shrink: 0; }
+        .spv-card-title { font-weight: 700; font-size: 13px; color: var(--c-text); cursor: pointer; flex: 1; min-width: 80px; }
+        .spv-mini { font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 7px; }
+        .spv-card-detail { margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--c-border); font-size: 12px; color: var(--c-text2); line-height: 1.5; }
+        .spv-empty { font-size: 11.5px; color: var(--c-text3); text-align: center; padding: 8px; }
+        .sortable-ghost { opacity: 0.4; }
+
     </style>
 </head>
 <body>
@@ -2265,6 +2302,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <div class="more-sheet">
             <div class="more-sheet-grip"></div>
             <div class="more-sheet-title">더보기</div>
+            <button class="more-sheet-item" onclick="closeMoreSheet();switchView('sprint')"><span class="ms-ico">🏃</span> 스프린트</button>
+            <button class="more-sheet-item" onclick="closeMoreSheet();switchView('personal')"><span class="ms-ico">🔒</span> 개인 문서</button>
             <button class="more-sheet-item" onclick="closeMoreSheet();toggleCommentsSidebar()"><span class="ms-ico">💬</span> 코멘트</button>
             <button class="more-sheet-item" onclick="closeMoreSheet();openChangeLog()"><span class="ms-ico">🕓</span> 변경 로그</button>
             <button class="more-sheet-item" onclick="closeMoreSheet();toggleJsonSidebar()"><span class="ms-ico">🗄️</span> DB 도구 · 접속자</button>
@@ -2367,10 +2406,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <span class="cs-label cs-brand-text" id="cs-project-name">프로젝트</span>
                 <span class="cs-label" style="margin-left:auto;font-size:10px;opacity:.55;">▾</span>
             </button>
+            <button class="cs-nav" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
             <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
             <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="문서"><span class="cs-ico">📚</span><span class="cs-label">문서</span></button>
             <button class="cs-nav" id="cs-nav-canon" onclick="switchView('canon')" title="게임 위키"><span class="cs-ico">🎮</span><span class="cs-label">게임 위키</span></button>
             <button class="cs-nav" id="cs-nav-review" onclick="openReviewInbox()" title="결재함"><span class="cs-ico">🗳</span><span class="cs-label">결재함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
+            <button class="cs-nav" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
             <div class="cs-section cs-label">도구</div>
             <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
             <button class="cs-nav" onclick="openChangeLog()" title="변경 로그"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그</span></button>
@@ -2484,6 +2525,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         </div>
 
         <!-- ========================================== -->
+        <!-- [스프린트] 스프린트 페이지 -->
+        <div id="sprint-view" class="hidden" onclick="event.stopPropagation()"></div>
         <!-- 💡 KANBAN VIEW -->
         <!-- ========================================== -->
         <div id="kanban-view" class="block">
@@ -4189,6 +4232,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [결재함] 페이지 토글
             var _csR = document.getElementById('cs-nav-review'); if (_csR) _csR.classList.toggle('active', viewName === 'review');
             var _rvw = document.getElementById('review-view'); if (_rvw) { _rvw.classList.toggle('hidden', viewName !== 'review'); _rvw.classList.toggle('block', viewName === 'review'); }
+            // [스프린트] 페이지 토글
+            var _csS = document.getElementById('cs-nav-sprint'); if (_csS) _csS.classList.toggle('active', viewName === 'sprint');
+            var _svw = document.getElementById('sprint-view'); if (_svw) { _svw.classList.toggle('hidden', viewName !== 'sprint'); _svw.classList.toggle('block', viewName === 'sprint'); }
+            // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
+            var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
             const editorBtn = document.getElementById('btn-toggle-editor');
             const gifBtn = document.getElementById('btn-gif-picker');
@@ -4259,6 +4307,30 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var _gpr = document.getElementById('gif-picker'); if (_gpr) _gpr.style.display = 'none';
                 if (typeof sweepExpiredReviews === 'function') { sweepExpiredReviews().then(function(){ if (currentView === 'review') renderReviewPage(); }); }
                 if (typeof renderReviewPage === 'function') renderReviewPage();
+            } else if (viewName === 'sprint') {
+                // [스프린트] 페이지
+                var _kvs = document.getElementById('kanban-view'); if (_kvs) { _kvs.classList.add('hidden'); _kvs.classList.remove('block'); }
+                var _dvs = document.getElementById('docs-view'); if (_dvs) { _dvs.classList.add('hidden'); _dvs.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gps = document.getElementById('gif-picker'); if (_gps) _gps.style.display = 'none';
+                if (typeof renderSprintView === 'function') renderSprintView();
+            } else if (viewName === 'personal') {
+                // [개인문서] docs-view 재사용 (kind='personal')
+                if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
+                document.getElementById('kanban-view').classList.remove('block');
+                document.getElementById('kanban-view').classList.add('hidden');
+                var dvp=document.getElementById('docs-view'); dvp.classList.remove('hidden'); dvp.classList.add('flex-show');
+                previewBtn.classList.remove('hidden'); previewBtn.classList.add('flex');
+                editorBtn.classList.remove('hidden'); editorBtn.classList.add('flex');
+                gifBtn.classList.remove('hidden'); gifBtn.classList.add('flex');
+                var ssbP=document.getElementById('sidebar-search-bar'); if(ssbP) ssbP.style.display='none';
+                if(typeof hideWikiResults === 'function') hideWikiResults();
+                var pgP=document.getElementById('pc-btn-gif'); if(pgP)pgP.style.display='none';
+                updateProjectTitle();
+                renderDocTree();
+                if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar();
+                if (typeof renderPersonalPicker === 'function') renderPersonalPicker();
+                if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
             }
         }
 
@@ -7387,10 +7459,104 @@ return data;
         async function editSprintGoal() {
             const active = getActiveSprint();
             if (!active) return;
-            const g = await uiPrompt({ title: '스프린트 목표 수정', label: '스프린트 목표', value: active.goal || '' });
+            const g = await uiPrompt({ title: '스프린트 목표 (마크다운)', label: active.weekLabel + ' 목표 · 세부사항', value: active.goal || '', placeholder: '## 목표\n- 세부 ...', multiline: true });
             if (g === null) return;
-            active.goal = g.trim();
+            active.goal = g;
             saveData(); dbUpsertSprint(active); renderSprintBand();
+            if (currentView === 'sprint' && typeof renderSprintView === 'function') renderSprintView();
+        }
+
+        // ═══════════════════════════════════════════════
+        // [스프린트] 스프린트 페이지 — 리스트/확장/.md 목표/카드 드래그
+        // ═══════════════════════════════════════════════
+        var _sprintExpanded = {}; var _sprintCardOpen = {};
+        function _sprintStatusBadge(s) {
+            var m = { active: ['🏃 진행 중', 'var(--c-accent-soft)', 'var(--c-accent)'], closed: ['🏁 종료', 'var(--ios-fill)', 'var(--c-text3)'] };
+            var x = m[s.status] || ['📋 예정', 'var(--ios-fill2)', 'var(--c-text2)'];
+            return '<span class="spv-badge" style="background:' + x[1] + ';color:' + x[2] + ';">' + x[0] + '</span>';
+        }
+        function _sprintDurationLabel(s) {
+            if (!s.startDate || !s.endDate) return '';
+            var days = Math.round((new Date(s.endDate) - new Date(s.startDate)) / 86400000) + 1;
+            return days > 0 ? days + '일' : '';
+        }
+        function _sprintCardSummary(t) {
+            var st = getStatusInfo(t.status);
+            var tagColor = (currentData.tagColors && currentData.tagColors[t.catBadge]) || '#57544c';
+            var pc = t.priority === 'p0' ? 'var(--st-danger)' : (t.priority === 'p1' ? 'var(--st-warn)' : 'var(--p2-blue)');
+            var head = '<div class="spv-card-head"><span class="spv-drag" title="드래그하여 스프린트 이동">⠿</span>'
+                + '<span class="spv-card-title" onclick="event.stopPropagation();toggleSprintCard(\'' + t.id + '\')">' + _sprintEsc(t.title || '(제목 없음)') + '</span>'
+                + '<span class="spv-mini" style="background:var(--ios-fill2);color:var(--c-text2);">' + getZoneIcon(t.zone) + ' ' + getZoneLabel(t.zone) + '</span>'
+                + '<span class="spv-mini" style="background:var(--ios-fill2);color:var(--c-text2);">' + _sprintEsc(st.text) + '</span>'
+                + '<span class="spv-mini" style="background:var(--ios-fill2);color:var(--c-text2);">' + _sprintEsc(t.dev || '') + '</span>'
+                + '<span class="spv-mini" style="background:' + tagColor + ';color:#fff;">' + _sprintEsc(t.catBadge || '') + '</span>'
+                + '<span class="spv-mini" style="color:' + pc + ';font-weight:800;">' + String(t.priority || '').toUpperCase() + '</span></div>';
+            var detail = _sprintCardOpen[t.id] ? ('<div class="spv-card-detail">' + _sprintEsc(t.desc || '요약 없음')
+                + (t.comments && t.comments.length ? ('<br>💬 코멘트 ' + t.comments.length + '개 · 최근: ' + _sprintEsc(String((t.comments[t.comments.length - 1] || {}).text || '').slice(0, 60))) : '') + '</div>') : '';
+            return '<div class="spv-card" data-id="' + t.id + '">' + head + detail + '</div>';
+        }
+        function toggleSprintExpand(id) { _sprintExpanded[id] = !_sprintExpanded[id]; renderSprintView(); }
+        function toggleSprintCard(id) { _sprintCardOpen[id] = !_sprintCardOpen[id]; renderSprintView(); }
+        function renderSprintView() {
+            var wrap = document.getElementById('sprint-view'); if (!wrap) return;
+            var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
+                .slice().sort(function (a, b) { var r = (b.startDate || '').localeCompare(a.startDate || ''); return r !== 0 ? r : (b.id || '').localeCompare(a.id || ''); });
+            var tasksOf = function (sid) { return (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId && (t.sprintId || null) === sid; }); };
+            var html = '<div class="spv-wrap"><div class="spv-head"><div><div class="spv-title">🏃 스프린트</div><div class="spv-sub">주간 스프린트 목표(.md)·진행 현황. 스프린트를 펼쳐 카드를 드래그(⠿)해 이동하세요.</div></div><button class="spv-new" onclick="createSprintPlanned()">+ 새 스프린트</button></div>';
+            if (!sprints.length) html += '<div class="spv-empty" style="padding:30px;">스프린트가 없습니다. "+ 새 스프린트"로 시작하세요.</div>';
+            sprints.forEach(function (s) {
+                var ts = tasksOf(s.id); var exp = !!_sprintExpanded[s.id];
+                html += '<div class="spv-sprint ' + (s.status === 'active' ? 'spv-active' : '') + '">'
+                    + '<div class="spv-row" onclick="toggleSprintExpand(\'' + s.id + '\')">' + _sprintStatusBadge(s) + '<b>' + _sprintEsc(s.weekLabel || s.id) + '</b>'
+                    + '<span class="spv-range">' + formatSprintRange(s.startDate, s.endDate) + (_sprintDurationLabel(s) ? (' · ' + _sprintDurationLabel(s)) : '') + '</span>'
+                    + '<span class="spv-count">' + ts.length + ' 카드</span><span class="spv-caret">' + (exp ? '▾' : '▸') + '</span></div>';
+                if (exp) {
+                    var goalHtml = s.goal ? DOMPurify.sanitize(parseMarkdownWithTables(s.goal), domPurifyConfig) : '<span style="color:var(--c-text3);">목표 없음 — ✏️ 편집으로 작성</span>';
+                    html += '<div class="spv-body"><div class="spv-goal"><div class="spv-goal-head">🎯 목표 <button onclick="editSprintGoalMd(\'' + s.id + '\')">✏️ 편집</button></div><div class="markdown-body">' + goalHtml + '</div></div>'
+                        + '<div><div class="spv-cards-label">카드 ' + ts.length + '개 (⠿ 드래그로 이동)</div><div class="spv-cards" data-sprintid="' + s.id + '">'
+                        + (ts.length ? ts.map(_sprintCardSummary).join('') : '<div class="spv-empty">카드를 여기로 드래그</div>') + '</div></div></div>';
+                }
+                html += '</div>';
+            });
+            var unassigned = tasksOf(null);
+            html += '<div class="spv-sprint"><div class="spv-row" onclick="toggleSprintExpand(\'__none__\')"><span class="spv-badge" style="background:var(--ios-fill);color:var(--c-text3);">📥 미지정</span><b>스프린트 미지정</b><span class="spv-count">' + unassigned.length + ' 카드</span><span class="spv-caret">' + (_sprintExpanded['__none__'] ? '▾' : '▸') + '</span></div>';
+            if (_sprintExpanded['__none__']) html += '<div class="spv-body"><div><div class="spv-cards-label">미지정 카드 (스프린트로 드래그)</div><div class="spv-cards" data-sprintid="">' + (unassigned.length ? unassigned.map(_sprintCardSummary).join('') : '<div class="spv-empty">없음</div>') + '</div></div></div>';
+            html += '</div></div>';
+            wrap.innerHTML = html;
+            if (typeof Sortable !== 'undefined') {
+                wrap.querySelectorAll('.spv-cards').forEach(function (list) {
+                    new Sortable(list, {
+                        group: 'sprint-cards', animation: 200, handle: '.spv-drag', ghostClass: 'sortable-ghost', filter: '.spv-empty',
+                        onEnd: function (evt) {
+                            var taskId = evt.item.getAttribute('data-id'); if (!taskId) return;
+                            var toSid = evt.to.getAttribute('data-sprintid') || null;
+                            var t = (currentData.tasks || []).find(function (x) { return x.id === taskId; }); if (!t) return;
+                            if ((t.sprintId || null) === (toSid || null)) { renderSprintView(); return; }
+                            t.sprintId = toSid || null;
+                            saveData(); dbUpsertTask(t); renderSprintView();
+                            showToast(toSid ? '카드를 스프린트로 이동' : '카드를 미지정으로 이동', 'info');
+                        }
+                    });
+                });
+            }
+        }
+        async function editSprintGoalMd(sid) {
+            var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!s) return;
+            var g = await uiPrompt({ title: '스프린트 목표 (마크다운)', label: (s.weekLabel || s.id) + ' 목표 · 세부사항', value: s.goal || '', placeholder: '## 목표\n- 세부 ...', multiline: true });
+            if (g === null) return;
+            s.goal = g; saveData(); dbUpsertSprint(s); renderSprintView();
+            if (typeof renderSprintBand === 'function') renderSprintBand();
+        }
+        async function createSprintPlanned() {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var label = await uiPrompt({ title: '새 스프린트', label: '주차/이름 (예: 2026 W23)', value: '' });
+            if (label === null || !label.trim()) return;
+            var goal = (await uiPrompt({ title: '스프린트 목표 (선택, 마크다운)', label: '목표 · 세부사항', value: '', placeholder: '## 목표\n- ...', multiline: true }) || '');
+            var id = 'sprint-' + Date.now();
+            var s = { id: id, projectId: activeProjectId, weekLabel: label.trim(), goal: goal, status: 'planned', intrusionCount: 0, intrusionLog: [], carryoverFromPrevious: [], milestoneCriteria: [], startDate: null, endDate: null, closedAt: null, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] };
+            if (!Array.isArray(currentData.sprints)) currentData.sprints = [];
+            currentData.sprints.push(s); saveData(); await dbUpsertSprint(s); _sprintExpanded[id] = true; renderSprintView();
+            showToast('🏃 스프린트 "' + label.trim() + '" 생성됨', 'success');
         }
 
         // 새 카드 DB 반영 (intrusion 결정 후 또는 활성 스프린트 없을 때 즉시)
