@@ -2138,6 +2138,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-part-list { display: flex; flex-direction: column; gap: 5px; max-height: 170px; overflow-y: auto; border: 1px solid var(--c-border); border-radius: 8px; padding: 8px; background: var(--c-paper); }
         .spv-part-chk { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--c-text); cursor: pointer; }
         .spv-part-chk input { accent-color: var(--c-accent); flex-shrink: 0; }
+        /* [스프린트 흐름] */
+        .spv-flows { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 9px 11px; }
+        .spv-flows-h { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--c-text3); margin-bottom: 6px; }
+        .spv-flow-btn { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .spv-flow-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
+        .spv-flow-item { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--c-text); padding: 5px 7px; border-radius: 6px; cursor: pointer; }
+        .spv-flow-item:hover { background: var(--c-accent-soft); }
         /* [변경 로그] 기간 필터 바 */
         .cl-period-btn { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 8px; padding: 4px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
         .cl-period-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
@@ -8167,6 +8174,30 @@ return data;
                 return '<label class="spv-part-chk"><input type="checkbox" class="spv-part-cb" value="' + m.id + '"' + (on ? ' checked' : '') + '> ' + _avatarHtml(m, 18) + '<span>' + _sprintEsc(m.displayName || m.email) + '</span></label>';
             }).join('');
         }
+        // [스프린트 흐름] 스프린트별 그래프(흐름) — wiki_docs kind='diagram' + meta.sprintId
+        function _sprintFlowsSection(sid) {
+            var flows = (currentData.docs || []).filter(function (d) { return d.kind === 'diagram' && (d.projectId || 'default') === activeProjectId && d.meta && d.meta.sprintId === sid && !d.meta.isFolder; });
+            var items = flows.length ? flows.map(function (f) { var ap = f.meta && f.meta.status === 'approved'; return '<div class="spv-flow-item" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')">📈 ' + _sprintEsc(f.title || '(무제)') + (ap ? ' <span class="official-check" title="승인됨">✔</span>' : '') + '</div>'; }).join('') : '<div class="spv-empty" style="padding:6px;">연결된 흐름 없음 — "+ 새 흐름"으로 시작</div>';
+            return '<div class="spv-flows"><div class="spv-flows-h">🔀 흐름 (그래프) <button class="spv-flow-btn" onclick="event.stopPropagation();sprintNewFlow(\'' + sid + '\')">+ 새 흐름</button><button class="spv-flow-btn" onclick="event.stopPropagation();sprintImportFlow(event,\'' + sid + '\')">가져오기</button></div>' + items + '</div>';
+        }
+        function sprintNewFlow(sid) {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var d = { id: gphUid('doc'), projectId: activeProjectId, parentId: null, title: '새 흐름', emoji: '📈', kind: 'diagram', content: '', meta: { scope: 'project', sprintId: sid, isFolder: false, diagram: { mode: 'graph', orientation: 'horizontal', points: [], nodes: [], edges: [], memos: [] }, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] }, createdAt: Date.now(), updatedAt: Date.now(), sortOrder: 1 };
+            if (!Array.isArray(currentData.docs)) currentData.docs = [];
+            currentData.docs.push(d);
+            if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d);
+            if (currentView === 'sprint') renderSprintView();
+            showToast('🔀 흐름 생성됨', 'success');
+            gphOpenFromSprint(d.id);
+        }
+        function sprintImportFlow(e, sid) {
+            var graphs = (currentData.docs || []).filter(function (d) { return d.kind === 'diagram' && (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder); });
+            if (!graphs.length) { showToast('가져올 그래프가 없습니다. 그래프 탭에서 먼저 만드세요.', 'info'); return; }
+            var html = graphs.map(function (g) { var inS = g.meta && g.meta.sprintId === sid; var other = g.meta && g.meta.sprintId && !inS; return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();sprintAttachFlow(\'' + g.id + '\',\'' + sid + '\')">📈 ' + _sprintEsc(g.title || '(무제)') + (inS ? ' <span style="color:var(--st-success)">✓</span>' : (other ? ' <span style="color:var(--c-text3);font-size:10px">(타 스프린트)</span>' : '')) + '</div>'; }).join('');
+            _openCardMenu({ clientX: e ? e.clientX : 200, clientY: e ? e.clientY : 200, stopPropagation: function () {} }, html);
+        }
+        function sprintAttachFlow(gid, sid) { var d = (currentData.docs || []).find(function (x) { return x.id === gid; }); if (!d) return; if (!d.meta) d.meta = {}; d.meta.sprintId = sid; d.meta.scope = 'project'; if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d); if (currentView === 'sprint') renderSprintView(); showToast('🔀 흐름 연결됨', 'success'); }
+        function gphOpenFromSprint(id) { var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return; gphState.scope = (d.meta && d.meta.scope === 'personal') ? 'personal' : 'project'; gphState.currentId = id; gphState.selected = null; gphState.connecting = null; switchView('graph'); document.querySelectorAll('.gph-scope-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.scope === gphState.scope); }); gphRender(); }
         function renderSprintView() {
             var wrap = document.getElementById('sprint-view'); if (!wrap) return;
             var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
@@ -8185,7 +8216,7 @@ return data;
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();openSprintEditModal(\'' + s.id + '\')" title="제목·날짜 수정">✏️</button>'
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();deleteSprint(\'' + s.id + '\')" title="스프린트 삭제">🗑</button>'
                     + '<span class="spv-caret">' + (exp ? '▾' : '▸') + '</span></div>';
-                if (exp) html += '<div class="spv-body">' + _sprintGoalArea(s) + '<div>' + _sprintCatSections(s.id) + '</div></div>';
+                if (exp) html += '<div class="spv-body">' + _sprintGoalArea(s) + _sprintFlowsSection(s.id) + '<div>' + _sprintCatSections(s.id) + '</div></div>';
                 html += '</div>';
             });
             html += '<div class="spv-sprint"><div class="spv-row" onclick="toggleSprintExpand(\'__none__\')"><span class="spv-badge" style="background:var(--ios-fill);color:var(--c-text3);">📥 미지정</span><b>스프린트 미지정</b><span class="spv-count">' + countOf(null) + ' 카드</span><span class="spv-caret">' + (_sprintExpanded['__none__'] ? '▾' : '▸') + '</span></div>';
@@ -9768,11 +9799,13 @@ ${intrLog}
             y = Math.min(y, window.innerHeight - mh - 8); if (y < 6) y = 6;
             menu.style.left = x + 'px'; menu.style.top = y + 'px';
             setTimeout(function () {
-                document.addEventListener('click', hideTreeContextMenu, { once: true });
+                // [수정] 캡처 단계 mousedown — 메뉴 밖 클릭 시 stopPropagation에 막히지 않고 닫힘
+                document.addEventListener('mousedown', _ctxOutsideClose, true);
                 document.addEventListener('keydown', hideTreeContextMenu, { once: true });
                 document.addEventListener('wheel', hideTreeContextMenu, { once: true, passive: true });
             }, 10);
         }
+        function _ctxOutsideClose(ev) { var m = document.getElementById('tree-context-menu'); if (m && m.contains(ev.target)) return; hideTreeContextMenu(); }
         // [#4] 담당자(실 계정) 피커 — board/sprint 공용
         function openAssigneePicker(e, taskId, ctx) {
             var task = currentData.tasks.find(function (t) { return t.id === taskId; }); if (!task) return;
@@ -11578,6 +11611,7 @@ ${intrLog}
             document.removeEventListener('click', hideTreeContextMenu);
             document.removeEventListener('keydown', hideTreeContextMenu);
             document.removeEventListener('wheel', hideTreeContextMenu);
+            document.removeEventListener('mousedown', _ctxOutsideClose, true);
             window.removeEventListener('blur', hideTreeContextMenu);
             window.removeEventListener('resize', hideTreeContextMenu);
         }
@@ -14370,6 +14404,9 @@ ${intrLog}
             var yo = 22;
             parts.push('<text x="14" y="' + yo + '" font-family="Pretendard,sans-serif" font-size="13" font-weight="700" fill="' + color + '" pointer-events="none">' + gphEscX(node.title || '(무제)') + '</text>'); yo += 18;
             if (node.meta) { parts.push('<text x="14" y="' + yo + '" font-family="JetBrains Mono,monospace" font-size="11" fill="' + mutedC + '" pointer-events="none">' + gphEscX(node.meta) + '</text>'); yo += 16; }
+            var gEx = []; if (node.status && node.status !== 'pending') gEx.push(gphStatusInfo(node.status)[0]); if (node.assigneeId) gEx.push('👤' + gphMemberName(node.assigneeId)); if (node.linkedCardId) gEx.push('🗂'); if (node.linkedDocId) gEx.push('📄');
+            if (gEx.length && yo + 14 <= node.h - 4) { parts.push('<text x="14" y="' + yo + '" font-family="Pretendard,sans-serif" font-size="10.5" fill="' + mutedC + '" pointer-events="none">' + gphEscX(gEx.join('   ')) + '</text>'); yo += 15; }
+            if (node.status === 'done') parts.push('<circle cx="' + (node.w - 13) + '" cy="13" r="5" fill="' + gphCssVar('--st-success') + '"/>'); else if (node.status === 'progress') parts.push('<circle cx="' + (node.w - 13) + '" cy="13" r="5" fill="' + gphCssVar('--st-progress') + '"/>');
             if (node.body) { var lines = node.body.split('\n'); var lh = 14; for (var i = 0; i < lines.length; i++) { var maxChars = Math.floor((node.w - 28) / 6.5); var ln = lines[i].length > maxChars ? lines[i].slice(0, maxChars - 1) + '…' : lines[i]; if (yo + lh > node.h - 4) break; parts.push('<text x="14" y="' + yo + '" font-family="Pretendard,sans-serif" font-size="11.5" fill="' + textC + '" pointer-events="none">' + gphEscX(ln) + '</text>'); yo += lh; } }
             parts.push('<g class="node-connector" data-connector-source="' + node.id + '"><circle cx="' + node.w + '" cy="' + (node.h / 2) + '" r="9" fill="' + color + '" stroke="' + cardBg + '" stroke-width="2"/><text x="' + node.w + '" y="' + (node.h / 2 + 4) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" pointer-events="none" font-family="JetBrains Mono,monospace">→</text></g>');
             parts.push('</g>');
@@ -14382,7 +14419,7 @@ ${intrLog}
         svg.querySelectorAll('.node-group').forEach(function (g) {
             var nodeId = g.dataset.nodeId;
             gphNodeDrag(g, nodeId, svg, minX, minY, cw, ch);
-            gphTip(g, function () { var n = (gphPayload(gphCurrent()).nodes || []).find(function (x) { return x.id === nodeId; }); return n ? { title: n.title, meta: (n.meta || '') + ' · ' + gphPartName(n.part), body: n.body } : null; });
+            gphTip(g, function () { var n = (gphPayload(gphCurrent()).nodes || []).find(function (x) { return x.id === nodeId; }); if (!n) return null; var mt = gphStatusInfo(n.status)[0] + (n.assigneeId ? (' · 담당 ' + gphMemberName(n.assigneeId)) : ' · 미배정') + ' · ' + gphPartName(n.part); var bd = (n.body || ''); if (n.linkedCardId) { var t = (currentData.tasks || []).find(function (x) { return x.id === n.linkedCardId; }); bd += (bd ? '\n' : '') + '🗂 카드: ' + (t ? (t.title || '') : '(삭제됨)'); } if (n.linkedDocId) { var dc = (currentData.docs || []).find(function (x) { return x.id === n.linkedDocId; }); bd += (bd ? '\n' : '') + '📄 문서: ' + (dc ? (dc.title || '') : '(삭제됨)'); } return { title: n.title, meta: mt, body: bd }; });
             var conn = g.querySelector('[data-connector-source]');
             if (conn) gphConnectorInteraction(conn, nodeId, svg, minX, minY, cw, ch);
         });
@@ -14493,15 +14530,16 @@ ${intrLog}
         e.preventDefault(); e.stopPropagation();
         var r = svg.getBoundingClientRect();
         var x = vbX + (e.clientX - r.left) * (vbW / r.width), y = vbY + (e.clientY - r.top) * (vbH / r.height);
+        var pe = { clientX: e.clientX, clientY: e.clientY, stopPropagation: function () {} }; // 커서 위치에 메뉴
         var el = e.target && e.target.closest ? e.target.closest('[data-node-id],[data-point-id],[data-memo-id],[data-edge-id]') : null;
         var html = '';
-        if (el && el.dataset.memoId) { html = '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();gphDelMemo(\'' + el.dataset.memoId + '\')"><span>🗑</span> 메모 삭제</div>'; _openCardMenu(e, html); return; }
-        if (el && el.dataset.edgeId) { html = '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();gphDelEdge(\'' + el.dataset.edgeId + '\')"><span>🗑</span> 엣지 삭제</div>'; _openCardMenu(e, html); return; }
-        if (el && el.dataset.nodeId) { html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphState.connecting={sourceNodeId:\'' + el.dataset.nodeId + '\'};gphUpdateConnecting();gphRenderCanvas()"><span>↗</span> 여기서 엣지 시작</div><div class="ctx-menu-item danger" onclick="hideTreeContextMenu();gphDelNode(\'' + el.dataset.nodeId + '\')"><span>❌</span> 노드 삭제</div><div class="ctx-menu-sep"></div>'; }
+        if (el && el.dataset.memoId) { html = '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();gphDelMemo(\'' + el.dataset.memoId + '\')"><span>🗑</span> 메모 삭제</div>'; _openCardMenu(pe, html); return; }
+        if (el && el.dataset.edgeId) { var eid = el.dataset.edgeId; html = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphState.selected={type:\'edge\',id:\'' + eid + '\'};gphRenderPanel()"><span>✏️</span> 편집(담당자·링크)</div><div class="ctx-menu-item danger" onclick="hideTreeContextMenu();gphDelEdge(\'' + eid + '\')"><span>🗑</span> 엣지 삭제</div>'; _openCardMenu(pe, html); return; }
+        if (el && el.dataset.nodeId) { var nid = el.dataset.nodeId; html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphState.connecting={sourceNodeId:\'' + nid + '\'};gphUpdateConnecting();gphRenderCanvas()"><span>↗</span> 여기서 엣지 시작</div><div class="ctx-menu-item" onclick="hideTreeContextMenu();gphState.selected={type:\'node\',id:\'' + nid + '\'};gphRenderPanel()"><span>✏️</span> 편집(담당자·상태·링크)</div><div class="ctx-menu-item danger" onclick="hideTreeContextMenu();gphDelNode(\'' + nid + '\')"><span>❌</span> 노드 삭제</div><div class="ctx-menu-sep"></div>'; }
         else if (el && el.dataset.pointId) { html += '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();gphDelPoint(\'' + el.dataset.pointId + '\')"><span>❌</span> 포인트 삭제</div><div class="ctx-menu-sep"></div>'; }
         else { if (mode === 'graph') html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphAddNode(' + x + ',' + y + ')"><span>＋</span> 새 노드</div>'; else html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphAddPoint(0.5)"><span>＋</span> 새 포인트</div>'; }
         html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphAddMemo(' + x + ',' + y + ')"><span>📝</span> 메모 추가</div>';
-        _openCardMenu(e, html);
+        _openCardMenu(pe, html);
     }
     function gphPanelMemo(panel, d, p) {
         var m = p.memos.find(function (x) { return x.id === gphState.selected.id; }); if (!m) { gphState.selected = null; gphRenderPanel(); return; }
@@ -14552,12 +14590,37 @@ ${intrLog}
         document.getElementById('gphPtDel').onclick = gphDeleteSelected;
         document.getElementById('gphPtClose').onclick = function () { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); };
     }
+    // [Phase3] 상태/담당자/링크 헬퍼
+    function gphStatusInfo(s) { return ({ pending: ['⏳ 대기중', 'var(--c-text3)'], progress: ['🔥 진행중', 'var(--st-progress)'], done: ['✅ 완료', 'var(--st-success)'] })[s || 'pending'] || ['⏳ 대기중', 'var(--c-text3)']; }
+    function gphMemberName(uid) { if (!uid) return ''; if (typeof getMemberName === 'function') return getMemberName(uid); return uid; }
+    function gphMemberSel(id, cur) { var ms = (typeof getMembers === 'function') ? getMembers() : []; return '<select id="' + id + '"><option value="">(담당자 없음)</option>' + ms.map(function (m) { return '<option value="' + m.id + '" ' + (cur === m.id ? 'selected' : '') + '>' + gphEsc(m.displayName || m.email) + '</option>'; }).join('') + '</select>'; }
+    function gphTaskSel(id, cur) { var ts = (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }); var d = gphCurrent(); var sid = d && d.meta ? d.meta.sprintId : null; if (sid) ts = ts.filter(function (t) { return t.sprintId === sid; }); return '<select id="' + id + '"><option value="">(카드 연결 없음)</option>' + ts.map(function (t) { return '<option value="' + t.id + '" ' + (cur === t.id ? 'selected' : '') + '>' + gphEsc(t.title || '(제목없음)') + '</option>'; }).join('') + '</select>'; }
+    function gphDocSel(id, cur) { var ds = (currentData.docs || []).filter(function (x) { return (x.projectId || 'default') === activeProjectId && x.kind !== 'diagram' && !(x.meta && x.meta.isFolder); }); return '<select id="' + id + '"><option value="">(문서 연결 없음)</option>' + ds.map(function (x) { return '<option value="' + x.id + '" ' + (cur === x.id ? 'selected' : '') + '>' + gphEsc((x.emoji || '📄') + ' ' + (x.title || '제목없음')) + '</option>'; }).join('') + '</select>'; }
+    function gphLinkDocReverse(graphDoc, docId) { if (!docId || !graphDoc) return; var doc = (currentData.docs || []).find(function (x) { return x.id === docId; }); if (!doc) return; if (!Array.isArray(doc.linkedDocIds)) doc.linkedDocIds = []; if (doc.linkedDocIds.indexOf(graphDoc.id) === -1) { doc.linkedDocIds.push(graphDoc.id); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(doc); } } // 역방향: 문서의 연결바에 이 그래프가 뜸
+    function gphGoTask(tid) { if (tid && typeof navToTask === 'function') navToTask(tid); }
+    function gphGoDoc(did) { if (did && typeof navToDoc === 'function') navToDoc(did); }
     function gphPanelNode(panel, d, p) {
         var n = p.nodes.find(function (x) { return x.id === gphState.selected.id; }); if (!n) { gphState.selected = null; gphRenderPanel(); return; }
+        var st = n.status || 'pending';
         panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">노드 <span class="gph-pt-dim">— ' + gphEsc(n.title) + '</span></span><div style="display:flex;gap:6px;align-items:center"><label class="gph-chk"><input type="checkbox" id="gphNodeHi" ' + (n.highlighted ? 'checked' : '') + '> 강조</label><button class="gph-btn gph-btn-sm" id="gphNodeEdge">＋ 엣지</button><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphNodeDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphNodeClose">닫기</button></div></div>'
-            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphNodeTitle" value="' + gphEsc(n.title || '') + '"></div><div class="gph-fr"><label>파트 (색상)</label>' + gphPartSelect('gphNodePart', n.part) + '</div><div class="gph-fr"><label>메타</label><input type="text" id="gphNodeMeta" value="' + gphEsc(n.meta || '') + '"></div><div class="gph-fr"><label>크기 W×H</label><div style="display:flex;gap:4px"><input type="number" id="gphNodeW" value="' + n.w + '" min="80" max="600" step="10" style="width:50%"><input type="number" id="gphNodeH" value="' + n.h + '" min="50" max="400" step="10" style="width:50%"></div></div><div class="gph-fr"><label>위치 X,Y</label><div style="display:flex;gap:4px"><input type="number" id="gphNodeX" value="' + Math.round(n.x) + '" step="10" style="width:50%"><input type="number" id="gphNodeY" value="' + Math.round(n.y) + '" step="10" style="width:50%"></div></div><div class="gph-fr full"><label>본문</label><textarea id="gphNodeBody" rows="4">' + gphEsc(n.body || '') + '</textarea></div></div>';
+            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphNodeTitle" value="' + gphEsc(n.title || '') + '"></div><div class="gph-fr"><label>파트 (색상)</label>' + gphPartSelect('gphNodePart', n.part) + '</div>'
+            + '<div class="gph-fr"><label>담당자</label>' + gphMemberSel('gphNodeAssignee', n.assigneeId || '') + '</div>'
+            + '<div class="gph-fr"><label>상태</label><div style="display:flex;gap:4px"><select id="gphNodeStatus" style="flex:1"><option value="pending"' + (st === 'pending' ? ' selected' : '') + '>⏳ 대기중</option><option value="progress"' + (st === 'progress' ? ' selected' : '') + '>🔥 진행중</option><option value="done"' + (st === 'done' ? ' selected' : '') + '>✅ 완료</option></select><button class="gph-btn gph-btn-sm" id="gphNodeDone" title="완료 체크">✅</button></div></div>'
+            + '<div class="gph-fr"><label>카드 연결</label><div style="display:flex;gap:4px">' + gphTaskSel('gphNodeCard', n.linkedCardId || '') + (n.linkedCardId ? '<button class="gph-btn gph-btn-sm" id="gphNodeCardGo" title="카드로 이동">↗</button>' : '') + '</div></div>'
+            + '<div class="gph-fr"><label>문서 연결</label><div style="display:flex;gap:4px">' + gphDocSel('gphNodeDoc', n.linkedDocId || '') + (n.linkedDocId ? '<button class="gph-btn gph-btn-sm" id="gphNodeDocGo" title="문서로 이동">↗</button>' : '') + '</div></div>'
+            + '<div class="gph-fr"><label>메타 (작은 글씨)</label><input type="text" id="gphNodeMeta" value="' + gphEsc(n.meta || '') + '"></div>'
+            + '<div class="gph-fr"><label>크기 W×H</label><div style="display:flex;gap:4px"><input type="number" id="gphNodeW" value="' + n.w + '" min="80" max="600" step="10" style="width:50%"><input type="number" id="gphNodeH" value="' + n.h + '" min="50" max="400" step="10" style="width:50%"></div></div>'
+            + '<div class="gph-fr"><label>위치 X,Y</label><div style="display:flex;gap:4px"><input type="number" id="gphNodeX" value="' + Math.round(n.x) + '" step="10" style="width:50%"><input type="number" id="gphNodeY" value="' + Math.round(n.y) + '" step="10" style="width:50%"></div></div>'
+            + '<div class="gph-fr full"><label>본문 / 메모</label><textarea id="gphNodeBody" rows="3">' + gphEsc(n.body || '') + '</textarea></div></div>';
         document.getElementById('gphNodeTitle').oninput = function (e) { n.title = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphNodePart').onchange = function (e) { n.part = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphNodeAssignee').onchange = function (e) { n.assigneeId = e.target.value || null; if (n.assigneeId && (!n.status || n.status === 'pending')) n.status = 'progress'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
+        document.getElementById('gphNodeStatus').onchange = function (e) { n.status = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphNodeDone').onclick = function () { n.status = 'done'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); showToast('✅ 완료 처리', 'success'); };
+        document.getElementById('gphNodeCard').onchange = function (e) { n.linkedCardId = e.target.value || null; gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
+        if (document.getElementById('gphNodeCardGo')) document.getElementById('gphNodeCardGo').onclick = function () { gphGoTask(n.linkedCardId); };
+        document.getElementById('gphNodeDoc').onchange = function (e) { n.linkedDocId = e.target.value || null; if (n.linkedDocId) gphLinkDocReverse(d, n.linkedDocId); gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
+        if (document.getElementById('gphNodeDocGo')) document.getElementById('gphNodeDocGo').onclick = function () { gphGoDoc(n.linkedDocId); };
         document.getElementById('gphNodeMeta').oninput = function (e) { n.meta = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphNodeBody').oninput = function (e) { n.body = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphNodeHi').onchange = function (e) { n.highlighted = e.target.checked; gphSave(d); gphRenderCanvas(); };
@@ -14570,9 +14633,16 @@ ${intrLog}
         var ed = p.edges.find(function (x) { return x.id === gphState.selected.id; }); if (!ed) { gphState.selected = null; gphRenderPanel(); return; }
         var fr = p.nodes.find(function (n) { return n.id === ed.from; }), to = p.nodes.find(function (n) { return n.id === ed.to; }), sv = ed.style || 'curve';
         panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">엣지 <span class="gph-pt-dim">— ' + gphEsc(fr ? fr.title : '?') + ' → ' + gphEsc(to ? to.title : '?') + '</span></span><div style="display:flex;gap:6px"><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphEdgeDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphEdgeClose">닫기</button></div></div>'
-            + '<div class="gph-form"><div class="gph-fr full"><label>라벨</label><input type="text" id="gphEdgeLabel" value="' + gphEsc(ed.label || '') + '" placeholder="(선택)"></div><div class="gph-fr"><label>스타일</label><select id="gphEdgeStyle"><option value="curve" ' + (sv === 'curve' ? 'selected' : '') + '>곡선</option><option value="straight" ' + (sv === 'straight' ? 'selected' : '') + '>직선</option><option value="orthogonal" ' + (sv === 'orthogonal' ? 'selected' : '') + '>직각</option><option value="dashed" ' + (sv === 'dashed' ? 'selected' : '') + '>점선</option></select></div></div>';
+            + '<div class="gph-form"><div class="gph-fr full"><label>라벨</label><input type="text" id="gphEdgeLabel" value="' + gphEsc(ed.label || '') + '" placeholder="(선택)"></div><div class="gph-fr"><label>스타일</label><select id="gphEdgeStyle"><option value="curve" ' + (sv === 'curve' ? 'selected' : '') + '>곡선</option><option value="straight" ' + (sv === 'straight' ? 'selected' : '') + '>직선</option><option value="orthogonal" ' + (sv === 'orthogonal' ? 'selected' : '') + '>직각</option><option value="dashed" ' + (sv === 'dashed' ? 'selected' : '') + '>점선</option></select></div>'
+            + '<div class="gph-fr"><label>담당자</label>' + gphMemberSel('gphEdgeAssignee', ed.assigneeId || '') + '</div>'
+            + '<div class="gph-fr"><label>카드 연결</label><div style="display:flex;gap:4px">' + gphTaskSel('gphEdgeCard', ed.linkedCardId || '') + (ed.linkedCardId ? '<button class="gph-btn gph-btn-sm" id="gphEdgeCardGo" title="카드로 이동">↗</button>' : '') + '</div></div>'
+            + '<div class="gph-fr full"><label>메모</label><textarea id="gphEdgeMemo" rows="2">' + gphEsc(ed.memo || '') + '</textarea></div></div>';
         document.getElementById('gphEdgeLabel').oninput = function (e) { ed.label = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphEdgeStyle').onchange = function (e) { ed.style = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphEdgeAssignee').onchange = function (e) { ed.assigneeId = e.target.value || null; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphEdgeCard').onchange = function (e) { ed.linkedCardId = e.target.value || null; gphSave(d); gphRenderPanel(); };
+        if (document.getElementById('gphEdgeCardGo')) document.getElementById('gphEdgeCardGo').onclick = function () { gphGoTask(ed.linkedCardId); };
+        document.getElementById('gphEdgeMemo').oninput = function (e) { ed.memo = e.target.value; gphSave(d); };
         document.getElementById('gphEdgeDel').onclick = gphDeleteSelected;
         document.getElementById('gphEdgeClose').onclick = function () { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); };
     }
