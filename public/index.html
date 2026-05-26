@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-26 r16 (graph flow: hierarchy/assignee/custom-parts/auto-folder/unlink/preview + move-confirm + part-discoverability) -->
+<!-- BUILD: 2026-05-26 r17 (r16 + 문서/게임위키 폴더 생성 + .html 드롭 가져오기) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2996,6 +2996,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                                 class="text-xs px-2 py-1 rounded shadow-sm transition-all"
                                 style="background:#e7e3d8;color:#9b968a;cursor:not-allowed;"
                                 title="문서 위치 변경 되돌리기 (Ctrl+Z)">↶ 되돌리기</button>
+                            <button onclick="createNewFolder(null)" class="text-xs px-2 py-1 rounded shadow-sm" style="background:var(--c-accent-soft,#efe7dd);color:var(--c-accent,#c96442);font-weight:700;" title="최상위 폴더 생성">📁 폴더</button>
                             <button onclick="createNewDoc(null)" class="bg-blue-600 text-white text-xs px-2 py-1 rounded hover:bg-blue-700 shadow-sm" title="최상위 문서 생성">+ New</button>
                             <button onclick="toggleDocSidebar()" class="text-gray-400 hover:text-gray-700 px-1 font-bold ml-1 text-lg" title="사이드바 축소">◀</button>
                         </div>
@@ -6131,7 +6132,7 @@ return data;
         }
 
         function toggleDocCollapse(docId, e) {
-            e.stopPropagation();
+            if (e) e.stopPropagation();
             const doc = currentData.docs.find(d => d.id === docId);
             if(doc) {
                 doc.isCollapsed = !doc.isCollapsed;
@@ -6714,8 +6715,11 @@ return data;
             children.forEach(doc => {
                 const isActive = activeDocId === doc.id ? 'active' : '';
                 const hasChildren = cache.hasChildrenSet.has(doc.id); // O(1) lookup
-                const caretHtml = hasChildren ? `<span class="inline-block w-4 text-center cursor-pointer text-gray-400 hover:text-gray-700 transition-transform ${doc.isCollapsed ? '' : 'rotate-90'}" onclick="toggleDocCollapse('${doc.id}', event)">▶</span>` : `<span class="inline-block w-4"></span>`;
-                
+                const isFolder = !!(doc.meta && doc.meta.isFolder);
+                const caretHtml = (hasChildren || isFolder) ? `<span class="inline-block w-4 text-center cursor-pointer text-gray-400 hover:text-gray-700 transition-transform ${doc.isCollapsed ? '' : 'rotate-90'}" onclick="toggleDocCollapse('${doc.id}', event)">▶</span>` : `<span class="inline-block w-4"></span>`;
+                const iconHtml = isFolder
+                    ? `<span class="flex-shrink-0" title="폴더" style="${doc.deprecated ? 'opacity:0.45;filter:grayscale(1);' : ''}">${(!doc.isCollapsed && hasChildren) ? '📂' : '📁'}</span>`
+                    : `<span class="cursor-pointer hover:bg-gray-200 rounded px-0.5 flex-shrink-0" onclick="changeDocEmoji('${doc.id}', event)" title="이모티콘 변경" style="${doc.deprecated ? 'opacity:0.45;filter:grayscale(1);' : ''}">${doc.emoji || '📄'}</span>`;
                 const dotClass = getDocDotClass(doc);
                 const depClass = doc.deprecated ? 'doc-deprecated' : '';
                 const depStyle = doc.deprecated ? 'opacity:0.45;filter:grayscale(1);' : '';
@@ -6727,7 +6731,7 @@ return data;
                             <div class="tree-item-label-wrap">
                                 ${caretHtml}
                                 <span class="tab-dot ${dotClass}"></span>
-                                <span class="cursor-pointer hover:bg-gray-200 rounded px-0.5 flex-shrink-0" onclick="changeDocEmoji('${doc.id}', event)" title="이모티콘 변경" style="${depStyle}">${doc.emoji || '📄'}</span>
+                                ${iconHtml}
                                 <span class="doc-title-text" style="${depStyle}" title="${timeTip}">${doc.title}</span>
                                 ${(doc.kind === 'canon' && doc.meta && doc.meta.status === 'approved') ? '<span class="official-check" title="승인됨 · Official">✔</span>' : ''}
                                 ${(function() {
@@ -6766,6 +6770,9 @@ return data;
         }
 
         function openDoc(docId) {
+            // [폴더] 폴더 행 클릭 시 에디터를 열지 않고 펼침/접힘 토글
+            var _maybeFolder = currentData.docs ? currentData.docs.find(function (d) { return d.id === docId; }) : null;
+            if (_maybeFolder && _maybeFolder.meta && _maybeFolder.meta.isFolder) { toggleDocCollapse(docId); return; }
             var prevDocId = activeDocId;
             activeDocId = docId;
             if (typeof activeDocIdByKind === 'object' && activeDocIdByKind) activeDocIdByKind[currentDocKind] = docId; // [통합엔진] kind별 활성문서 기억
@@ -7484,16 +7491,24 @@ return data;
             });
         }
 
-        async function createNewDoc(parentId) {
-            const title = await uiPrompt({ title: '새 문서', label: '문서 제목을 입력하세요', value: "새 문서" });
+        async function createNewDoc(parentId, opts) {
+            opts = opts || {};
+            var isFolder = !!opts.isFolder;
+            const title = await uiPrompt({ title: isFolder ? '새 폴더' : '새 문서', label: isFolder ? '폴더 이름을 입력하세요' : '문서 제목을 입력하세요', value: isFolder ? "새 폴더" : "새 문서" });
             if (title === null || !title.trim()) return;
             var _newMeta = currentDocKind === 'canon' ? { version: 1, status: 'draft', versionHistory: [] }
                 : (currentDocKind === 'personal' ? { owner: (currentUser && currentUser.id) || null, visibility: 'private' } : {});
+            if (isFolder) { _newMeta = (currentDocKind === 'personal') ? { owner: (currentUser && currentUser.id) || null, visibility: 'private', isFolder: true } : { isFolder: true }; }
             if (currentDocKind === 'personal' && currentUser) personalViewUserId = currentUser.id; // 새 개인문서는 내 소유 → 내 뷰로
-            var _newEmoji = currentDocKind === 'canon' ? '📜' : (currentDocKind === 'personal' ? '🔒' : '📄');
-            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId, title: title, emoji: _newEmoji, isCollapsed: false, content: '# ' + title + '\n\n여기에 내용을 작성하세요...', createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta };
-            currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc); openDoc(newDoc.id); 
+            var _newEmoji = isFolder ? '📁' : (currentDocKind === 'canon' ? '📜' : (currentDocKind === 'personal' ? '🔒' : '📄'));
+            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), emoji: _newEmoji, isCollapsed: false, content: isFolder ? '' : ('# ' + title + '\n\n여기에 내용을 작성하세요...'), createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta };
+            currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc);
+            if (isFolder) {
+                if (parentId) { var _pp = currentData.docs.find(function (d) { return d.id === parentId; }); if (_pp) { _pp.isCollapsed = false; } }
+                renderDocTree(); showToast('📁 폴더 "' + title.trim() + '" 생성됨', 'success');
+            } else { openDoc(newDoc.id); }
         }
+        function createNewFolder(parentId) { return createNewDoc(parentId, { isFolder: true }); }
 
         async function moveAllDocsToCurrentProject() {
             if(!currentData || !currentData.docs) return;
@@ -11622,6 +11637,9 @@ ${intrLog}
                 .filter(function(p){ return p.id !== activeProjectId; })
                 .map(function(p){ return '<div class="ctx-menu-item" onclick="moveDocToProjectCtx(\''+docId+'\',\''+p.id+'\')" ><span>📁</span>'+p.name+'으로 이동</div>'; }).join('');
             menu.innerHTML =
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();createNewDoc(\''+docId+'\')"><span>📄</span> 새 하위 문서</div>' +
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();createNewFolder(\''+docId+'\')"><span>📁</span> 새 하위 폴더</div>' +
+                '<div class="ctx-menu-sep"></div>' +
                 '<div class="ctx-menu-item" onclick="ctxMoveUp()"><span>⬆️</span> 위로 이동</div>' +
                 '<div class="ctx-menu-item" onclick="ctxMoveDown()"><span>⬇️</span> 아래로 이동</div>' +
                 '<div class="ctx-menu-sep"></div>' + projOptions +
@@ -11898,10 +11916,11 @@ ${intrLog}
 
         function processEditorFile(file) {
             const ext = (file.name.split('.').pop() || '').toLowerCase();
-            const supported = (ext === 'docx' || ext === 'md' || ext === 'txt');
+            const isHtml = (ext === 'html' || ext === 'htm');
+            const supported = (ext === 'docx' || ext === 'md' || ext === 'txt' || isHtml);
 
             // 진행 모달 표시 — 즉시 (사용자가 드롭한 순간을 시각적으로 확인)
-            var skipSteps = (ext === 'docx') ? [] : ['parser','convert'];
+            var skipSteps = (ext === 'docx' || isHtml) ? [] : ['parser','convert'];
             showFileProgress(file, { skipSteps: skipSteps });
 
             // ── 0) 사전 검증
@@ -11982,6 +12001,49 @@ ${intrLog}
                     });
                 };
                 reader.readAsArrayBuffer(file);
+            } else if (isHtml) {
+                // .html / .htm — Turndown으로 HTML → Markdown 변환 (DOCX 파이프라인의 변환 단계 재사용)
+                reader.onload = function(ev) {
+                    updateFileProgress('read', 'done', _fpFormatBytes(file.size));
+                    updateFileProgress('parser', 'active', 'turndown.js 로딩 중...');
+                    loadTurndown().then(function() {
+                        updateFileProgress('parser', 'done', '변환기 준비 완료');
+                        updateFileProgress('convert', 'active', 'HTML → 마크다운 변환 중...');
+                        var md;
+                        try {
+                            var htmlText = ev.target.result || '';
+                            var bodyHtml = htmlText;
+                            try {
+                                var parsed = new DOMParser().parseFromString(htmlText, 'text/html');
+                                if (parsed && parsed.body) {
+                                    parsed.querySelectorAll('script,style,noscript,template,link,meta,title').forEach(function(el){ el.remove(); });
+                                    bodyHtml = parsed.body.innerHTML || htmlText;
+                                }
+                            } catch(_pe) {}
+                            md = htmlToMarkdownWithTables(bodyHtml);
+                        } catch(convErr) {
+                            updateFileProgress('convert', 'error', '변환 오류: ' + (convErr.message || convErr));
+                            showToast('HTML 변환 실패: ' + (convErr.message || convErr), 'alert');
+                            return;
+                        }
+                        updateFileProgress('convert', 'done', md.length.toLocaleString() + '자 변환됨');
+                        updateFileProgress('insert', 'active', '커서 위치에 삽입 중...');
+                        insertAtCursor(md);
+                        updateFileProgress('insert', 'done', '삽입 완료');
+                        updateFileProgress('save', 'active', 'Supabase에 저장 중...');
+                        clearTimeout(_docSaveTimer);
+                        flushDocSave(function(err) {
+                            if(err) { updateFileProgress('save', 'error', err.message || '저장 실패'); }
+                            else { updateFileProgress('save', 'done', supabaseClient ? 'DB 저장 완료' : '로컬 저장 완료'); completeFileProgress('"' + file.name + '" 삽입 완료'); }
+                        });
+                        showToast('"' + file.name + '" 삽입 완료 (HTML)', 'success');
+                    }).catch(function(err) {
+                        updateFileProgress('parser', 'error', 'turndown 로드 실패 (네트워크 확인)');
+                        showToast('HTML 처리 실패: ' + (err && err.message ? err.message : err), 'alert');
+                        console.error('[processEditorFile html]', err);
+                    });
+                };
+                reader.readAsText(file, 'UTF-8');
             } else {
                 // .md, .txt
                 reader.onload = function(ev) {
