@@ -2194,6 +2194,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .review-chk-mem { gap: 7px; }
         .review-chk-name { font-weight: 600; }
         .review-chk-email { color: var(--c-text3); font-size: 10.5px; margin-left: auto; }
+        /* [라운드12] 결재선 흐름(기안→병렬 합의자→최종)·코멘트·이력 */
+        .rv-flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .rv-flow-col { display: flex; flex-direction: column; gap: 8px; }
+        .rv-flow-reviewers { gap: 8px; padding: 6px; border: 1px dashed var(--c-border); border-radius: 9px; background: var(--c-card); }
+        .rv-step { align-items: flex-start; min-width: 0; }
+        .rv-step-row { display: flex; align-items: center; gap: 7px; }
+        .rv-step-meta { display: flex; flex-direction: column; gap: 1px; }
+        .rv-step .rv-step-name { max-width: 110px; }
+        .rv-step-cmt { font-size: 9.5px; color: var(--c-text2); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; background: var(--ios-fill); border-radius: 5px; padding: 1px 6px; }
+        .rv-step-empty { font-size: 11px; color: var(--c-text3); padding: 6px; }
+        .rv-final { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 2px solid; border-radius: 10px; padding: 7px 12px; min-width: 62px; }
+        .rv-final-ico { font-size: 17px; line-height: 1; }
+        .rv-final-label { font-size: 11px; font-weight: 800; white-space: nowrap; }
+        .rv-log { margin: 8px 0; padding: 8px 11px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; }
+        .rv-log-h { font-size: 11px; font-weight: 700; color: var(--c-text3); margin-bottom: 6px; }
+        .rv-log-row { display: flex; align-items: baseline; gap: 7px; font-size: 11.5px; padding: 2px 0; flex-wrap: wrap; }
+        .rv-log-who { font-weight: 700; color: var(--c-accent); }
+        .rv-log-act { font-weight: 700; color: var(--c-text2); }
+        .rv-log-cmt { color: var(--c-text); flex: 1; min-width: 80px; }
+        .rv-log-nocmt { color: var(--c-text3); font-style: italic; }
+        .rv-log-at { color: var(--c-text3); font-size: 10px; margin-left: auto; }
         .spv-goal-ta { width: 100%; min-height: 120px; resize: vertical; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
         .spv-goal-ta:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .spv-goal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -5275,14 +5296,15 @@ return data;
                 expires_at: review.expiresAt || null,
                 decided_at: review.decidedAt || null,
                 title: review.title || '',
-                deleted: !!review.deleted
+                deleted: !!review.deleted,
+                log: review.log || []
             };
             let { error } = await supabaseClient.from('review_requests').upsert(payload);
-            // [라운드10] title/deleted 컬럼 미생성 환경 보호: 해당 필드만 빼고 재시도(기존 저장 보존)
-            if (error && /(title|deleted)/.test(error.message || '')) {
-                delete payload.title; delete payload.deleted;
+            // [라운드10·12] title/deleted/log 컬럼 미생성 환경 보호: 해당 필드만 빼고 재시도(기존 저장 보존)
+            if (error && /\b(title|deleted|log)\b/.test(error.message || '')) {
+                delete payload.title; delete payload.deleted; delete payload.log;
                 ({ error } = await supabaseClient.from('review_requests').upsert(payload));
-                if (!error) console.warn('[dbUpsertReview] title/deleted 컬럼 없음 — 제외 저장. SQL: alter table review_requests add column if not exists title text; alter table review_requests add column if not exists deleted boolean default false;');
+                if (!error) console.warn('[dbUpsertReview] title/deleted/log 컬럼 없음 — 제외 저장. SQL: alter table review_requests add column if not exists title text; alter table review_requests add column if not exists deleted boolean default false; alter table review_requests add column if not exists log jsonb default \'[]\'::jsonb;');
             }
             if (error) {
                 console.error('[dbUpsertReview]', error);
@@ -5345,7 +5367,7 @@ return data;
                 reason: r.reason || '', votes: r.votes || [],
                 status: r.status || 'pending', decisionTag: r.decision_tag || null,
                 createdAt: r.created_at || null, expiresAt: r.expires_at || null, decidedAt: r.decided_at || null,
-                title: r.title || '', deleted: !!r.deleted
+                title: r.title || '', deleted: !!r.deleted, log: r.log || []
             };
         }
         // [v40 B3] canon_docs row(snake) → app 객체(camel)
@@ -8828,6 +8850,9 @@ return data;
             const existing = review.votes.find(v => v.userId === currentUser.id);
             if (existing) { existing.decision = decision; existing.comment = comment; existing.votedAt = new Date().toISOString(); }
             else review.votes.push({ userId: currentUser.id, userName: myNickname || '', decision: decision, comment: comment, votedAt: new Date().toISOString() });
+            // [코멘트 이력] 승인/거부/불참 + 코멘트를 append-only 로그로 보존
+            if (!Array.isArray(review.log)) review.log = [];
+            review.log.push({ action: 'vote', decision: decision, userId: currentUser.id, userName: myNickname || '', comment: comment, at: new Date().toISOString() });
             await finalizeIfDecided(review, false);
             _safeLocalCache(currentData);
             await dbUpsertReview(review);
@@ -8840,7 +8865,8 @@ return data;
         // ── 표시 ──
         function _reviewStatusBadge(status) {
             const map = { pending: ['🔔 리뷰 중', '#fef9c3', '#854d0e'], approved: ['✅ 승인', '#d1fae5', '#065f46'],
-                rejected: ['❌ 거부', '#fee2e2', '#991b1b'], forced: ['⚡ 강제', '#ece0d2', '#7a5a48'], expired: ['⏰ 만료', '#e7e3d8', '#6f6b5d'] };
+                rejected: ['❌ 거부', '#fee2e2', '#991b1b'], forced: ['⚡ 강제', '#ece0d2', '#7a5a48'], expired: ['⏰ 만료', '#e7e3d8', '#6f6b5d'],
+                closed: ['⛔ 종결', '#ddd6cc', '#5f5a52'] };
             const m = map[status] || map.pending;
             return `<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:9px;background:${m[1]};color:${m[2]};">${m[0]}</span>`;
         }
@@ -8910,28 +8936,65 @@ return data;
         function _reviewTypeLabel(type) {
             return ({ decision: '🗳 결정', intrusion: '⚡ 끼어들기', standard_change: '🔓 변경요청', canon_approval: '📜 게임위키 승인' })[type] || '🗳 결정';
         }
-        // [#2] 결재선: 기안자 → 합의자 순서 + 각 상태 + 현재 결재 상태
+        // [#3] 최종 상태 노드 라벨 (기안 / 결재중(x/N) / 승인(x/N) / 거부 / 종결 / 만료 / 강제)
+        function _approvalFinalState(review, N, approvals) {
+            var st = review.status;
+            if (st === 'closed') return { icon: '⛔', label: '종결', color: '#5f5a52' };
+            if (st === 'rejected') return { icon: '❌', label: '거부', color: '#ef4444' };
+            if (st === 'forced') return { icon: '⚡', label: '강제 통과', color: '#c96442' };
+            if (st === 'expired') return { icon: '⏰', label: '만료', color: '#9a8f80' };
+            if (st === 'approved') return { icon: '✅', label: '승인 (' + approvals + '/' + N + ')', color: '#10b981' };
+            if (approvals === 0) return { icon: '🖊', label: '기안', color: 'var(--c-accent)' };
+            return { icon: '⏳', label: '결재 중 (' + approvals + '/' + N + ')', color: '#b08968' };
+        }
+        // [#3] 결재선: 기안자 → (합의자 세로 병렬) → 최종 상태 노드. 합의자 코멘트도 표시.
         function _renderApprovalLine(review) {
             var members = getMembers();
             var voteOf = function (uid) { return (review.votes || []).find(function (v) { return v.userId === uid; }); };
             var voterIds;
             if (review.rule && review.rule.type === 'specific_approver' && Array.isArray(review.rule.requiredApprovers)) voterIds = review.rule.requiredApprovers.slice();
             else voterIds = members.filter(function (m) { return m.id !== review.proposerId; }).map(function (m) { return m.id; });
-            var steps = [{ role: '기안', name: review.proposerName || getMemberName(review.proposerId), member: members.find(function (m) { return m.id === review.proposerId; }), state: 'approve', isProposer: true }];
-            voterIds.forEach(function (uid) {
+            var N = voterIds.length;
+            var approvals = voterIds.filter(function (uid) { var v = voteOf(uid); return v && v.decision === 'approve'; }).length;
+            var stepNode = function (opts) {
+                var ss = _reviewStepState(opts.state);
+                var av = opts.member ? _avatarHtml(opts.member, 26) : _avatarHtml({ displayName: opts.name }, 26);
+                var cmt = opts.comment ? ('<div class="rv-step-cmt" title="' + _sprintEsc(opts.comment) + '">💬 ' + _sprintEsc(opts.comment) + '</div>') : '';
+                return '<div class="rv-step" title="' + (opts.isProposer ? '기안자' : '합의자') + ' · ' + _sprintEsc(opts.name) + ' · ' + ss[1] + (opts.comment ? (' · ' + _sprintEsc(opts.comment)) : '') + '">'
+                    + '<div class="rv-step-row"><div class="rv-step-av">' + av + '<span class="rv-step-badge" style="background:' + ss[2] + ';">' + ss[0] + '</span></div>'
+                    + '<div class="rv-step-meta"><div class="rv-step-name">' + _sprintEsc(opts.name) + '</div><div class="rv-step-role" style="color:' + (opts.isProposer ? 'var(--c-accent)' : ss[2]) + ';">' + (opts.isProposer ? '기안' : ss[1]) + '</div></div></div>'
+                    + cmt + '</div>';
+            };
+            var proposerHtml = stepNode({ name: review.proposerName || getMemberName(review.proposerId), member: members.find(function (m) { return m.id === review.proposerId; }), state: 'approve', isProposer: true });
+            var reviewersHtml = N ? voterIds.map(function (uid) {
                 var v = voteOf(uid);
-                steps.push({ role: '합의', name: getMemberName(uid), member: members.find(function (m) { return m.id === uid; }), state: v ? v.decision : 'pending' });
-            });
-            var stepHtml = steps.map(function (s, i) {
-                var ss = _reviewStepState(s.state);
-                var av = s.member ? _avatarHtml(s.member, 24) : _avatarHtml({ displayName: s.name }, 24);
-                return (i ? '<span class="rv-line-arrow">→</span>' : '')
-                    + '<div class="rv-step" title="' + (s.isProposer ? '기안자' : '합의자') + ' · ' + _sprintEsc(s.name) + ' · ' + ss[1] + '">'
-                    + '<div class="rv-step-av">' + av + '<span class="rv-step-badge" style="background:' + ss[2] + ';">' + ss[0] + '</span></div>'
-                    + '<div class="rv-step-name">' + _sprintEsc(s.name) + '</div>'
-                    + '<div class="rv-step-role" style="color:' + (s.isProposer ? 'var(--c-accent)' : ss[2]) + ';">' + (s.isProposer ? '기안' : ss[1]) + '</div></div>';
+                return stepNode({ name: getMemberName(uid), member: members.find(function (m) { return m.id === uid; }), state: v ? v.decision : 'pending', comment: v ? v.comment : '' });
+            }).join('') : '<div class="rv-step-empty">합의 대상 없음</div>';
+            var fin = _approvalFinalState(review, N, approvals);
+            var finalHtml = '<div class="rv-final" style="border-color:' + fin.color + ';color:' + fin.color + ';"><div class="rv-final-ico">' + fin.icon + '</div><div class="rv-final-label">' + fin.label + '</div></div>';
+            return '<div class="rv-approval" onclick="event.stopPropagation()">'
+                + '<div class="rv-approval-h">📋 결재선 · 현재 ' + _reviewStatusBadge(review.status) + '</div>'
+                + '<div class="rv-flow">'
+                + '<div class="rv-flow-col">' + proposerHtml + '</div>'
+                + '<span class="rv-line-arrow">→</span>'
+                + '<div class="rv-flow-col rv-flow-reviewers">' + reviewersHtml + '</div>'
+                + '<span class="rv-line-arrow">→</span>'
+                + '<div class="rv-flow-col">' + finalHtml + '</div>'
+                + '</div></div>';
+        }
+        // [코멘트 이력] 펼친 칩에 표시할 vote/close 로그
+        function _renderReviewLog(review) {
+            var log = Array.isArray(review.log) ? review.log : [];
+            if (!log.length) return '';
+            var dec = { approve: '👍 승인', reject: '👎 거부', skip: '⏭ 불참' };
+            var rows = log.slice().reverse().map(function (e) {
+                var when = e.at ? new Date(e.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                var act = e.action === 'close' ? '⛔ 종결' : (dec[e.decision] || e.decision || '');
+                return '<div class="rv-log-row"><span class="rv-log-who">' + _sprintEsc(e.userName || '?') + '</span><span class="rv-log-act">' + act + '</span>'
+                    + (e.comment ? '<span class="rv-log-cmt">"' + _sprintEsc(e.comment) + '"</span>' : '<span class="rv-log-cmt rv-log-nocmt">(코멘트 없음)</span>')
+                    + '<span class="rv-log-at">' + when + '</span></div>';
             }).join('');
-            return '<div class="rv-approval" onclick="event.stopPropagation()"><div class="rv-approval-h">📋 결재선 · 현재 ' + _reviewStatusBadge(review.status) + '</div><div class="rv-line">' + stepHtml + '</div></div>';
+            return '<div class="rv-log" onclick="event.stopPropagation()"><div class="rv-log-h">💬 코멘트·이력</div>' + rows + '</div>';
         }
         function renderReviewChip(review) {
             var expanded = !!_reviewExpanded[review.id];
@@ -8986,6 +9049,8 @@ return data;
             }
             var footer = '<div class="rv-foot" onclick="event.stopPropagation()">';
             if (_reviewEditable(review) && !editing) footer += '<button class="rv-foot-btn" onclick="startReviewEdit(\'' + review.id + '\')" title="제목·내용 수정 (기안 상태에서만)">✏️ 편집</button>';
+            // [종결] 기안자 본인 + 진행 중이면 종결 버튼
+            if (currentUser && review.proposerId === currentUser.id && review.status === 'pending' && !del) footer += '<button class="rv-foot-btn" onclick="closeReview(\'' + review.id + '\')" title="기안자 종결 — 승인 완료 전이라도 종결(코멘트는 이력에 기록)">⛔ 종결</button>';
             if (del) footer += '<button class="rv-foot-btn" onclick="restoreReview(\'' + review.id + '\')" title="삭제 취소">♻️ 복원</button>';
             else footer += '<button class="rv-foot-btn danger" onclick="deleteReview(\'' + review.id + '\')" title="이 리뷰 삭제(삭제됨 표시)">🗑 삭제</button>';
             footer += '</div>';
@@ -8996,6 +9061,7 @@ return data;
                 + _renderApprovalLine(review)
                 + contentHtml
                 + voteBlock
+                + _renderReviewLog(review)
                 + footer
                 + '</div>';
         }
@@ -9062,6 +9128,22 @@ return data;
             if (typeof renderBoard === 'function') renderBoard();
             showToast('♻️ 복원되었습니다.', 'success');
         }
+        // [종결] 기안자 본인이 승인 완료 전이라도 리뷰를 종결(close) — 코멘트는 이력에 보존
+        async function closeReview(id) {
+            var rv = (currentData.reviews || []).find(function (r) { return r.id === id; }); if (!rv) return;
+            if (!currentUser || rv.proposerId !== currentUser.id) { showToast('기안자 본인만 종결할 수 있습니다.', 'alert'); return; }
+            if (rv.status !== 'pending') { showToast('진행 중인 리뷰만 종결할 수 있습니다.', 'alert'); return; }
+            var cmt = await uiPrompt({ title: '리뷰 종결', label: '종결 사유 (선택) — 이력에 기록됩니다', placeholder: '예: 보류 / 더 이상 불필요', multiline: true });
+            if (cmt === null) return; // 취소
+            rv.status = 'closed'; rv.decidedAt = new Date().toISOString();
+            if (typeof buildDecisionTag === 'function') rv.decisionTag = buildDecisionTag(rv, 'closed');
+            if (!Array.isArray(rv.log)) rv.log = [];
+            rv.log.push({ action: 'close', userId: currentUser.id, userName: myNickname || '', comment: (cmt || '').trim(), at: new Date().toISOString() });
+            _safeLocalCache(currentData); await dbUpsertReview(rv);
+            if (typeof renderReviewBadge === 'function') renderReviewBadge();
+            _rerenderReviews();
+            showToast('⛔ 리뷰를 종결했습니다.', 'info');
+        }
 
         // [리뷰함] 페이지 렌더 (통계·내 리뷰 대기·필터·검색)
         var _reviewFilter = { status: 'pending', type: 'all', sort: 'recent', q: '', mine: false }; // [#2] 기본=리뷰 중
@@ -9086,13 +9168,13 @@ return data;
             var live = all.filter(function (r) { return !r.deleted; });           // [#3] 삭제 안 된 것
             var deletedN = all.length - live.length;
             // 통계 (삭제됨 제외 카운트)
-            var c = { pending: 0, approved: 0, rejected: 0, forced: 0, expired: 0 };
+            var c = { pending: 0, approved: 0, rejected: 0, forced: 0, expired: 0, closed: 0 };
             live.forEach(function (r) { c[r.status] = (c[r.status] || 0) + 1; });
             var sp = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
             var statsEl = document.getElementById('rvp-stats');
             if (statsEl) {
                 var cur = _reviewFilter.status;
-                var stats = [['all', '전체', live.length], ['pending', '🔔 리뷰 중', c.pending], ['approved', '✅ 승인', c.approved], ['rejected', '❌ 거부', c.rejected], ['forced', '⚡ 강제', c.forced], ['expired', '⏰ 만료', c.expired], ['deleted', '🗑 삭제됨', deletedN]];
+                var stats = [['all', '전체', live.length], ['pending', '🔔 리뷰 중', c.pending], ['approved', '✅ 승인', c.approved], ['rejected', '❌ 거부', c.rejected], ['closed', '⛔ 종결', c.closed], ['forced', '⚡ 강제', c.forced], ['expired', '⏰ 만료', c.expired], ['deleted', '🗑 삭제됨', deletedN]];
                 statsEl.innerHTML = stats.map(function (s) { return '<span class="rvp-stat' + (cur === s[0] ? ' on' : '') + '" onclick="setReviewStatusFilter(\'' + s[0] + '\')" title="' + s[1] + '만 보기"><b>' + s[2] + '</b>' + s[1] + '</span>'; }).join('')
                     + (sp ? '<span class="rvp-stat rvp-stat-accent" title="이번 스프린트 끼어들기 횟수"><b>' + (sp.intrusionCount || 0) + '</b>⚡ 끼어들기</span>' : '');
             }
@@ -9119,7 +9201,7 @@ return data;
                 if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
                 return (b.createdAt || '').localeCompare(a.createdAt || '');
             });
-            var _stLabel = ({ all: '전체', pending: '🔔 리뷰 중', approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제', expired: '⏰ 만료', deleted: '🗑 삭제됨' })[_reviewFilter.status] || '전체';
+            var _stLabel = ({ all: '전체', pending: '🔔 리뷰 중', approved: '✅ 승인', rejected: '❌ 거부', closed: '⛔ 종결', forced: '⚡ 강제', expired: '⏰ 만료', deleted: '🗑 삭제됨' })[_reviewFilter.status] || '전체';
             listEl.innerHTML = '<div class="rvp-section-h"><span>' + _stLabel + '</span><span class="rvp-sh-n">' + list.length + '건</span></div>'
                 + (list.length ? list.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:24px;text-align:center;">조건에 맞는 리뷰가 없습니다.</div>');
         }
