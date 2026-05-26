@@ -4145,6 +4145,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // ==========================================
         let currentView = 'kanban'; 
         let activeDocId = null;
+        let currentDocKind = 'wiki'; // [통합 문서엔진] 'wiki'(문서) | 'canon'(게임 위키)
+        let activeDocIdByKind = { wiki: null, canon: null };
         let docSaveTimeout = null;
 
         let isDocSidebarOpen = true;
@@ -4169,7 +4171,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (_csD) _csD.classList.toggle('active', viewName === 'docs');
             // [v40 B3] 게임 정전 뷰 토글
             var _csC = document.getElementById('cs-nav-canon'); if (_csC) _csC.classList.toggle('active', viewName === 'canon');
-            var _cvw = document.getElementById('canon-view'); if (_cvw) { _cvw.classList.toggle('hidden', viewName !== 'canon'); _cvw.classList.toggle('block', viewName === 'canon'); }
+            var _cvw = document.getElementById('canon-view'); if (_cvw) { _cvw.classList.add('hidden'); _cvw.classList.remove('block'); } // [통합엔진] 정전 전용뷰 retire — 게임위키는 docs-view(kind=canon) 재사용
             // [결재함] 페이지 토글
             var _csR = document.getElementById('cs-nav-review'); if (_csR) _csR.classList.toggle('active', viewName === 'review');
             var _rvw = document.getElementById('review-view'); if (_rvw) { _rvw.classList.toggle('hidden', viewName !== 'review'); _rvw.classList.toggle('block', viewName === 'review'); }
@@ -4195,6 +4197,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var pg=document.getElementById('pc-btn-gif');
                 if(pg)pg.style.display='inline-flex'; // GIF shown in docs view
             } else if (viewName === 'docs') {
+                if (currentDocKind !== 'wiki') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'wiki'; activeDocId = activeDocIdByKind.wiki || null; }
                 document.getElementById('kanban-view').classList.remove('block');
                 document.getElementById('kanban-view').classList.add('hidden');
                 var dv=document.getElementById('docs-view'); dv.classList.remove('hidden'); dv.classList.add('flex-show');
@@ -4212,16 +4215,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var pg2=document.getElementById('pc-btn-gif');
                 if(pg2)pg2.style.display='none'; // GIF hidden in kanban
                 
-                if(!isDocSidebarOpen) document.getElementById('doc-sidebar-mini-count').innerText = currentData.docs ? currentData.docs.filter(d=>d.projectId===activeProjectId).length : 0;
+                if(!isDocSidebarOpen) document.getElementById('doc-sidebar-mini-count').innerText = currentData.docs ? currentData.docs.filter(d=>d.projectId===activeProjectId && (d.kind||'wiki')==='wiki').length : 0;
                 updateProjectTitle();
                 renderDocTree();
+                if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar();
+                if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
             } else if (viewName === 'canon') {
-                // [v40 B3] 게임 정전 뷰
-                var _kvc = document.getElementById('kanban-view'); if (_kvc) { _kvc.classList.add('hidden'); _kvc.classList.remove('block'); }
-                var _dvc = document.getElementById('docs-view'); if (_dvc) { _dvc.classList.add('hidden'); _dvc.classList.remove('flex-show'); }
-                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
-                var _gpc = document.getElementById('gif-picker'); if (_gpc) _gpc.style.display = 'none';
-                if (typeof renderCanonView === 'function') renderCanonView();
+                // [통합 문서엔진] 게임 위키 = docs-view 재사용 (kind='canon')
+                if (currentDocKind !== 'canon') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'canon'; activeDocId = activeDocIdByKind.canon || null; }
+                document.getElementById('kanban-view').classList.remove('block');
+                document.getElementById('kanban-view').classList.add('hidden');
+                var dvc=document.getElementById('docs-view'); dvc.classList.remove('hidden'); dvc.classList.add('flex-show');
+                previewBtn.classList.remove('hidden'); previewBtn.classList.add('flex');
+                editorBtn.classList.remove('hidden'); editorBtn.classList.add('flex');
+                gifBtn.classList.remove('hidden'); gifBtn.classList.add('flex');
+                var ssbC=document.getElementById('sidebar-search-bar'); if(ssbC) ssbC.style.display='none';
+                if(typeof hideWikiResults === 'function') hideWikiResults();
+                var pgC=document.getElementById('pc-btn-gif'); if(pgC)pgC.style.display='none';
+                if(!isDocSidebarOpen) document.getElementById('doc-sidebar-mini-count').innerText = currentData.docs ? currentData.docs.filter(d=>d.projectId===activeProjectId && (d.kind||'wiki')==='canon').length : 0;
+                updateProjectTitle();
+                renderDocTree();
+                if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar();
+                if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
             } else if (viewName === 'review') {
                 // [결재함] 결정/리뷰 페이지
                 var _kvr = document.getElementById('kanban-view'); if (_kvr) { _kvr.classList.add('hidden'); _kvr.classList.remove('block'); }
@@ -4844,6 +4859,8 @@ return data;
                 linked_doc_ids: doc.linkedDocIds || [],
                 doc_type: doc.docType || 'plan', // [v40 Day3 청크3]
                 is_locked: doc.isLocked || false, // [v40 Day4 §5.4]
+                kind: doc.kind || 'wiki', // [통합 문서엔진] 문서/게임위키 구분
+                meta: doc.meta || {}, // [게임위키] 버전/승인 등
                 updated_at: Date.now()
             });
             if (error) {
@@ -5063,6 +5080,7 @@ return data;
                     _contentLoaded: (typeof d._contentLoaded === 'boolean') ? d._contentLoaded : (typeof d.content === 'string' && d.content.length > 0),
                     // [v40] 신규 필드
                     docType: d.doc_type || 'plan',
+                    kind: d.kind || 'wiki', meta: d.meta || {},
                     linkedTaskIds: d.linked_task_ids || [],
                     linkedDocIds: d.linked_doc_ids || [],
                     isLocked: d.is_locked || false,
@@ -5150,7 +5168,7 @@ return data;
                 // [v21 PERF B4+B5] wiki_docs는 메타 컬럼만 먼저 가져오고, content는 문서 열 때 별도 fetch
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
-                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type, is_locked'; // [v40 Day3 청크1/3·Day4] 링크·doc_type·is_locked 메타 포함 (없으면 dbUpsertDoc이 덮어씀)
+                const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type, is_locked, kind, meta'; // [v40 Day3 청크1/3·Day4] 링크·doc_type·is_locked 메타 포함 (없으면 dbUpsertDoc이 덮어씀)
                 const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes, canonRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
@@ -5246,6 +5264,7 @@ return data;
                                     title: d.title, content: d.content || '', emoji: d.emoji,
                                     sortOrder: d.sort_order, isCollapsed: d.is_collapsed,
                                     deprecated: d.is_deprecated,
+                                    kind: d.kind || 'wiki', meta: d.meta || {},
                                     _contentLoaded: typeof d.content === 'string' // payload에 content가 있으면 true
                                 });
                                 if (currentView === 'docs') renderDocTree();
@@ -6097,7 +6116,7 @@ return data;
         function _buildDocTreeCache() {
             const childrenMap = new Map();
             const hasChildrenSet = new Set();
-            const projDocs = currentData.docs.filter(d => d.projectId === activeProjectId);
+            const projDocs = currentData.docs.filter(d => d.projectId === activeProjectId && (d.kind || 'wiki') === currentDocKind);
             projDocs.forEach(d => {
                 const pid = (d.parentId && d.parentId.trim()) ? d.parentId.trim() : '__root__';
                 if (!childrenMap.has(pid)) childrenMap.set(pid, []);
@@ -6195,6 +6214,7 @@ return data;
         function openDoc(docId) {
             var prevDocId = activeDocId;
             activeDocId = docId;
+            if (typeof activeDocIdByKind === 'object' && activeDocIdByKind) activeDocIdByKind[currentDocKind] = docId; // [통합엔진] kind별 활성문서 기억
             _docLastSavedContent = null; // 새 문서 열면 저장 기준 초기화
             // 다른 문서 열면 접기 상태 초기화 (같은 문서는 유지)
             if(prevDocId !== docId) { /* collapsed state persists per doc */ }
@@ -6907,7 +6927,7 @@ return data;
         async function createNewDoc(parentId) {
             const title = await uiPrompt({ title: '새 문서', label: '문서 제목을 입력하세요', value: "새 문서" });
             if (title === null || !title.trim()) return;
-            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId, title: title, emoji: '📄', isCollapsed: false, content: '# ' + title + '\n\n여기에 내용을 작성하세요...', createdAt: Date.now(), updatedAt: Date.now() };
+            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId, title: title, emoji: currentDocKind === 'canon' ? '📜' : '📄', isCollapsed: false, content: '# ' + title + '\n\n여기에 내용을 작성하세요...', createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: (currentDocKind === 'canon' ? { version: 1, status: 'draft', versionHistory: [] } : {}) };
             currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc); openDoc(newDoc.id); 
         }
 
