@@ -8866,6 +8866,15 @@ return data;
         // ==========================================
         // [v40 Day3 청크3] 결정 적용 (intrusion → Now) + ADR 자동 생성
         // ==========================================
+        // [버그수정] sort_order는 정수 컬럼 — Date.now()(ms) 사용 시 integer 범위 초과로 저장 실패.
+        // 같은 부모(폴더) 형제 중 최대 sortOrder+1을 반환(정수 안전, 새 문서는 맨 끝).
+        function _nextDocSortOrder(parentId) {
+            var pid = parentId || null, max = 0;
+            (currentData.docs || []).forEach(function (d) {
+                if ((d.projectId === activeProjectId) && ((d.parentId || null) === pid) && typeof d.sortOrder === 'number' && d.sortOrder < 2147483647 && d.sortOrder > max) max = d.sortOrder;
+            });
+            return max + 1;
+        }
         function getDecisionFolderId() {
             const docs = (currentData.docs || []).filter(d => d.projectId === activeProjectId && !d.parentId);
             let folder = docs.find(d => d.docType === 'decision');
@@ -8921,7 +8930,7 @@ ${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
             const now = Date.now();
             const adrDoc = {
                 id: adrId, projectId: activeProjectId, parentId: getDecisionFolderId(),
-                title: title, emoji: '🧭', content: content, sortOrder: now,
+                title: title, emoji: '🧭', content: content, sortOrder: _nextDocSortOrder(getDecisionFolderId()),
                 isCollapsed: false, deprecated: false, docType: 'decision',
                 linkedTaskIds: review.targetTaskId ? [review.targetTaskId] : [],
                 linkedDocIds: review.targetDocId ? [review.targetDocId] : [],
@@ -9027,7 +9036,7 @@ ${intrLog}
             const now = Date.now();
             const retroDoc = {
                 id: retroId, projectId: activeProjectId, parentId: getOpsFolderId(),
-                title: `회고: ${sprint.weekLabel}`, emoji: '🗓', content: content, sortOrder: now,
+                title: `회고: ${sprint.weekLabel}`, emoji: '🗓', content: content, sortOrder: _nextDocSortOrder(getOpsFolderId()),
                 isCollapsed: false, deprecated: false, docType: 'ops',
                 linkedTaskIds: completed.concat(incomplete).map(t => t.id), linkedDocIds: [],
                 isLocked: false, _contentLoaded: true, createdAt: now, updatedAt: now
@@ -9108,7 +9117,7 @@ ${intrLog}
                 version: 1, status: 'draft',
                 createdBy: currentUser.id, createdByName: myNickname, createdAt: now,
                 updatedBy: currentUser.id, updatedByName: myNickname, updatedAt: now,
-                approvedBy: null, approvedByName: '', approvedAt: null, versionHistory: [], sortOrder: Date.now()
+                approvedBy: null, approvedByName: '', approvedAt: null, versionHistory: [], sortOrder: ((currentData.canon || []).reduce(function (m, c) { return (typeof c.sortOrder === 'number' && c.sortOrder < 2147483647 && c.sortOrder > m) ? c.sortOrder : m; }, 0) + 1)
             };
             if (!Array.isArray(currentData.canon)) currentData.canon = [];
             currentData.canon.push(doc);
