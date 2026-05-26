@@ -571,7 +571,8 @@
         body.dark #review-create-modal .bg-white, body.dark #review-inbox-modal .bg-white { background: #2f2e2b !important; }
 
         /* [v40 Day3 청크1] 연결 패널/칩/피커 */
-        .linked-panel { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e7e3d8; }
+        .linked-panel { margin-top: 10px; padding: 8px 20px 0; border-top: 1px dashed #e7e3d8; }
+        html.is-mobile .linked-panel { padding: 8px 16px 0; }
         .linked-panel-head { font-size: 11px; font-weight: 700; color: #6f6b5d; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
         .linked-chips { display: flex; flex-wrap: wrap; gap: 5px; }
         .link-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; background: #f3e6df; color: #6f5446; border: 1px solid #e0896b; border-radius: 12px; padding: 2px 4px 2px 9px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2007,7 +2008,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         #wikilink-ac .wlac-empty { padding: 10px; font-size: 12px; color: var(--c-text3); text-align: center; }
 
         /* ============================================================
-           [결재함] 결정/리뷰 페이지 (#review-view) + 리뷰칩 삭제버튼
+           [리뷰함] 결정/리뷰 페이지 (#review-view) + 리뷰칩 삭제버튼
            ============================================================ */
         html.is-desktop #review-view { padding: 8px 16px 48px; }
         html.is-mobile #review-view { padding: 8px 16px 90px; }
@@ -2291,7 +2292,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         </button>
         <button onclick="switchView('review')" id="mob-tab-review" class="mob-tab">
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            <span class="mob-lbl">결재함</span>
+            <span class="mob-lbl">리뷰함</span>
             <span class="mob-badge" id="mob-review-badge">0</span>
         </button>
         <button onclick="openMoreSheet()" class="mob-tab">
@@ -2412,7 +2413,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
             <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="문서"><span class="cs-ico">📚</span><span class="cs-label">문서</span></button>
             <button class="cs-nav" id="cs-nav-canon" onclick="switchView('canon')" title="게임 위키"><span class="cs-ico">🎮</span><span class="cs-label">게임 위키</span></button>
-            <button class="cs-nav" id="cs-nav-review" onclick="openReviewInbox()" title="결재함"><span class="cs-ico">🗳</span><span class="cs-label">결재함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
+            <button class="cs-nav" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
             <button class="cs-nav" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
             <div class="cs-section cs-label">도구</div>
             <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
@@ -2455,7 +2456,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <span id="header-online-count">1</span>
                 </div>
                 <!-- [v40 Day3 청크2] 결정/리뷰 인박스 + 알림 뱃지 -->
-                <button onclick="openReviewInbox()" class="ios-topbar-btn" title="결재함" style="position:relative;">
+                <button onclick="openReviewInbox()" class="ios-topbar-btn" title="리뷰함" style="position:relative;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                     <span id="review-badge-count" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 3px;background:#dc2626;color:white;border-radius:8px;font-size:10px;font-weight:800;align-items:center;justify-content:center;">0</span>
                 </button>
@@ -2635,15 +2636,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <!-- ========================================== -->
         <!-- 💡 WIKI DOCS VIEW (계층형 에디터) -->
         <!-- ========================================== -->
-        <!-- [결재함] 결정/리뷰 페이지 -->
+        <!-- [리뷰함] 결정/리뷰 페이지 -->
         <div id="review-view" class="hidden" onclick="event.stopPropagation()">
             <div class="rvp-wrap">
                 <div class="rvp-head">
                     <div>
-                        <div class="rvp-title">🗳 결재함</div>
-                        <div class="rvp-sub">팀 의사결정을 투표(전체합의·다수결·특정인·강제)로 처리하고, 확정 시 <b>03_결정 로그</b>에 ADR이 자동 생성됩니다. 보통은 칸반 카드/문서를 우클릭 → "결재 요청"으로 만드세요.</div>
+                        <div class="rvp-title">🗳 리뷰함</div>
+                        <div class="rvp-sub">팀 의사결정을 투표(전체합의·다수결·특정인·강제)로 처리하고, 확정 시 <b>03_결정 로그</b>에 ADR이 자동 생성됩니다. 보통은 칸반 카드/문서를 우클릭 → "리뷰 요청"으로 만드세요.</div>
                     </div>
-                    <button class="rvp-new" onclick="openReviewModal('decision',null,null)">+ 새 결재 요청</button>
+                    <button class="rvp-new" onclick="openReviewModal('decision',null,null)">+ 새 리뷰 요청</button>
                 </div>
                 <div id="rvp-stats" class="rvp-stats"></div>
                 <div class="rvp-toolbar">
@@ -2865,7 +2866,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     <div id="review-create-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('review-create-modal')">
         <div class="bg-white p-5 rounded-xl w-[480px] max-w-[92vw] shadow-2xl border border-gray-200 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-3 border-b pb-2">
-                <h2 class="text-lg font-black text-gray-800">🗳 결재 요청</h2>
+                <h2 class="text-lg font-black text-gray-800">🗳 리뷰 요청</h2>
                 <button onclick="closeModal('review-create-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
             </div>
             <div class="overflow-y-auto pr-1">
@@ -2896,15 +2897,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     <div id="review-inbox-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('review-inbox-modal')">
         <div class="bg-white p-5 rounded-xl w-[560px] max-w-[94vw] shadow-2xl border border-gray-200 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-3 border-b pb-2">
-                <h2 class="text-lg font-black text-gray-800">🗳 결재함</h2>
+                <h2 class="text-lg font-black text-gray-800">🗳 리뷰함</h2>
                 <div class="flex items-center gap-2">
-                    <button onclick="openReviewModal('decision',null,null)" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-100">+ 새 결재 요청</button>
+                    <button onclick="openReviewModal('decision',null,null)" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-100">+ 새 리뷰 요청</button>
                     <button onclick="closeModal('review-inbox-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
                 </div>
             </div>
             <p style="font-size:12px;color:var(--c-text2);background:var(--c-accent-soft);border-radius:8px;padding:8px 12px;margin-bottom:10px;line-height:1.5;">
                 팀 의사결정을 <b>투표(전체합의·다수결·특정인·강제)</b>로 처리하고, 결정 시 <b>03_결정 로그</b>에 ADR이 자동 생성됩니다.
-                보통은 <b>칸반 카드/문서를 우클릭 → "결재 요청"</b> 으로 대상별 요청을 만드세요. (아래 + 버튼은 대상 없는 일반 결재용)
+                보통은 <b>칸반 카드/문서를 우클릭 → "리뷰 요청"</b> 으로 대상별 요청을 만드세요. (아래 + 버튼은 대상 없는 일반 리뷰용)
             </p>
             <div id="review-inbox-list" class="flex-1 overflow-y-auto pr-1" style="min-height:160px;display:flex;flex-direction:column;gap:8px;"></div>
         </div>
@@ -4222,6 +4223,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var el = document.getElementById(p[0]); if (el) el.classList.toggle('active', view === p[1]);
             });
         }
+        // [#2] 문서의 kind에 맞는 뷰 이름 반환 (변경 로그/알림 점프 라우팅)
+        function getViewForDoc(docId) {
+            var d = (currentData.docs || []).find(function (x) { return x.id === docId; });
+            var k = d ? (d.kind || 'wiki') : 'wiki';
+            return k === 'canon' ? 'canon' : (k === 'personal' ? 'personal' : 'docs');
+        }
         function switchView(viewName) {
             currentView = viewName;
             updateMobNav(viewName);
@@ -4233,7 +4240,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [v40 B3] 게임 정전 뷰 토글
             var _csC = document.getElementById('cs-nav-canon'); if (_csC) _csC.classList.toggle('active', viewName === 'canon');
             var _cvw = document.getElementById('canon-view'); if (_cvw) { _cvw.classList.add('hidden'); _cvw.classList.remove('block'); } // [통합엔진] 정전 전용뷰 retire — 게임위키는 docs-view(kind=canon) 재사용
-            // [결재함] 페이지 토글
+            // [리뷰함] 페이지 토글
             var _csR = document.getElementById('cs-nav-review'); if (_csR) _csR.classList.toggle('active', viewName === 'review');
             var _rvw = document.getElementById('review-view'); if (_rvw) { _rvw.classList.toggle('hidden', viewName !== 'review'); _rvw.classList.toggle('block', viewName === 'review'); }
             // [스프린트] 페이지 토글
@@ -4304,7 +4311,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar();
                 if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
             } else if (viewName === 'review') {
-                // [결재함] 결정/리뷰 페이지
+                // [리뷰함] 결정/리뷰 페이지
                 var _kvr = document.getElementById('kanban-view'); if (_kvr) { _kvr.classList.add('hidden'); _kvr.classList.remove('block'); }
                 var _dvr = document.getElementById('docs-view'); if (_dvr) { _dvr.classList.add('hidden'); _dvr.classList.remove('flex-show'); }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
@@ -5485,7 +5492,7 @@ return data;
                             const mine = currentUser && mapped.proposerId === currentUser.id;
                             if (ev === 'INSERT' && !mine && mapped.status === 'pending') {
                                 playNotificationSound && playNotificationSound('comment');
-                                showToast(`🗳 새 결재 요청: ${mapped.reason ? mapped.reason.slice(0, 30) : mapped.type}`, 'info');
+                                showToast(`🗳 새 리뷰 요청: ${mapped.reason ? mapped.reason.slice(0, 30) : mapped.type}`, 'info');
                             } else if (ev === 'UPDATE' && prevStatus === 'pending' && mapped.status !== 'pending') {
                                 const label = { approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제 통과', expired: '⏰ 만료' }[mapped.status] || mapped.status;
                                 showToast(`결정 완료 — ${label}: ${mapped.reason ? mapped.reason.slice(0, 24) : mapped.type}`, 'info');
@@ -6520,14 +6527,9 @@ return data;
             var statusEl = document.getElementById('doc-save-status');
             if (!statusEl || !doc) return;
             var savedRel = _formatRelativeTime(doc.updatedAt);
-            // "5분 전 저장됨 · 2일 전 생성됨" 형태. 두 시간이 같거나 createdAt이 없으면 한쪽만 표시
-            var text;
-            if (!doc.createdAt || doc.createdAt === doc.updatedAt) {
-                text = savedRel + ' 저장됨';
-            } else {
-                var createdRel = _formatRelativeTime(doc.createdAt);
-                text = savedRel + ' 저장됨 · ' + createdRel + ' 생성';
-            }
+            // [#8] 수정(상대) + 최초작성일(절대 날짜) 항상 노출
+            var createdAbs = doc.createdAt ? String(_formatAbsoluteTime(doc.createdAt)).slice(0, 10) : '';
+            var text = '💾 ' + savedRel + ' 저장' + (createdAbs ? (' · 📅 최초 ' + createdAbs) : '');
             statusEl.textContent = text;
             statusEl.style.color = '#b4afa3';
             statusEl.style.cursor = 'help';
@@ -7730,8 +7732,8 @@ return data;
                 : '<span class="cmb-badge cmb-draft">✎ 초안 · v' + ver + '</span>';
             var apprBtn = approved
                 ? '<button class="cmb-btn" onclick="canonRevokeApproval()">승인 해제</button>'
-                : (pendingAppr ? '<button class="cmb-btn on" onclick="switchView(\'review\')" title="리뷰함에서 결재 진행">⏳ 승인 심사 중</button>'
-                    : '<button class="cmb-btn" onclick="canonRequestApproval()" title="팀 결재(리뷰)로 승인 요청">🗳 승인 요청</button>');
+                : (pendingAppr ? '<button class="cmb-btn on" onclick="switchView(\'review\')" title="리뷰함에서 리뷰 진행">⏳ 승인 심사 중</button>'
+                    : '<button class="cmb-btn" onclick="canonRequestApproval()" title="팀 리뷰(리뷰)로 승인 요청">🗳 승인 요청</button>');
             bar.innerHTML = badge
                 + '<button class="cmb-btn" onclick="canonNewVersion()" title="현재 내용을 새 버전으로 저장">📌 새 버전</button>'
                 + apprBtn
@@ -7816,7 +7818,7 @@ return data;
             _safeLocalCache(currentData); dbUpsertDoc(doc); renderCanonMetaBar();
             showToast('📌 v' + doc.meta.version + ' 저장됨', 'success');
         }
-        // [게임위키 #3] 승인은 리뷰(결재)를 통해서만 — 승인 요청 리뷰 생성
+        // [게임위키 #3] 승인은 리뷰(리뷰)를 통해서만 — 승인 요청 리뷰 생성
         function canonRequestApproval() {
             if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
             var doc = _activeCanonDoc(); if (!doc) return;
@@ -7932,7 +7934,7 @@ return data;
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','task')">+ 태스크</button>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','doc')">+ 문서</button>
                 <span class="link-sep"></span>
-                <button class="link-add-btn" onclick="openReviewModal('decision',null,'${doc.id}')">🗳 결재요청</button>
+                <button class="link-add-btn" onclick="openReviewModal('decision',null,'${doc.id}')">🗳 리뷰요청</button>
                 ${lockBtn}
                 ${doc.isLocked ? '<span style="font-size:11px;color:#92400e;font-weight:700;">🔒 잠김 — 편집하려면 변경 요청 승인 필요</span>' : ''}
                 ${taskChips}${docChips}${(!taskChips && !docChips) ? '<span class="linked-empty">연결 없음 — 버튼 또는 본문에 [[task:ID]]/[[doc:ID]]</span>' : ''}
@@ -8192,7 +8194,7 @@ return data;
             renderReviewBadge(); renderBoard();
             if (typeof renderReviewInbox === 'function') renderReviewInbox();
             if (currentView === 'docs') renderDocLinksBar();
-            if (!error) showToast(ruleType === 'force' ? '⚡ 강제 통과로 기록되었습니다.' : '🗳 결재 요청이 생성되었습니다.', 'success');
+            if (!error) showToast(ruleType === 'force' ? '⚡ 강제 통과로 기록되었습니다.' : '🗳 리뷰 요청이 생성되었습니다.', 'success');
         }
 
         async function castVote(reviewId, decision) {
@@ -8288,7 +8290,7 @@ return data;
             if (review.targetTaskId) tgt = `<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="${review.targetTaskId}">🗂 ${_sprintEsc(getTaskLabel(review.targetTaskId))}</a>`;
             else if (review.targetDocId) tgt = `<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="${review.targetDocId}">${_sprintEsc(getDocLabel(review.targetDocId))}</a>`;
             return `<div class="review-chip">
-                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span><button class="rv-del" onclick="event.stopPropagation();deleteReview('${review.id}')" title="이 결재 요청 삭제">🗑</button></div>
+                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span><button class="rv-del" onclick="event.stopPropagation();deleteReview('${review.id}')" title="이 리뷰 요청 삭제">🗑</button></div>
                 <div class="rv-reason">"${_sprintEsc(review.reason)}"</div>
                 ${tgt ? `<div class="rv-target">${tgt}</div>` : ''}
                 ${body}
@@ -8298,7 +8300,7 @@ return data;
             const list = (currentData.reviews || []).filter(r => r.targetTaskId === task.id);
             const chips = list.map(renderReviewChip).join('');
             return `<div class="linked-panel ${task.isCollapsed ? 'hidden' : ''}">
-                <div class="linked-panel-head">🗳 결재 <button class="link-add-btn" onclick="event.stopPropagation();openReviewModal('decision','${task.id}',null)">+ 결재 요청</button></div>
+                <div class="linked-panel-head">🗳 리뷰 <button class="link-add-btn" onclick="event.stopPropagation();openReviewModal('decision','${task.id}',null)">+ 리뷰 요청</button></div>
                 ${chips || '<span class="linked-empty">없음</span>'}
             </div>`;
         }
@@ -8317,7 +8319,7 @@ return data;
             if (mb) { mb.textContent = cnt; mb.style.display = cnt > 0 ? 'inline-flex' : 'none'; }
         }
         function renderReviewInbox() {
-            if (typeof renderReviewPage === 'function' && currentView === 'review') renderReviewPage(); // [결재함] 페이지도 갱신
+            if (typeof renderReviewPage === 'function' && currentView === 'review') renderReviewPage(); // [리뷰함] 페이지도 갱신
             const listEl = document.getElementById('review-inbox-list');
             if (!listEl) return;
             const order = s => s === 'pending' ? 0 : 1;
@@ -8330,13 +8332,13 @@ return data;
             const summary = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:4px 2px 12px;font-size:12px;color:var(--c-text2);font-weight:700;border-bottom:1px solid var(--c-border);margin-bottom:12px;"><span>🔔 대기 ${pendingN}</span><span>🙋 내 투표 필요 ${myN}</span><span style="color:var(--c-text3);">전체 ${all.length}</span></div>`;
             listEl.innerHTML = all.length ? (summary + all.map(renderReviewChip).join('')) : '<div class="linked-empty" style="padding:20px;text-align:center;">결정 요청이 없습니다.</div>';
         }
-        function openReviewInbox() { switchView('review'); } // [결재함] 모달→페이지 위임
+        function openReviewInbox() { switchView('review'); } // [리뷰함] 모달→페이지 위임
 
-        // [결재함] 리뷰 삭제
+        // [리뷰함] 리뷰 삭제
         async function deleteReview(id) {
             var rv = (currentData.reviews || []).find(function (r) { return r.id === id; });
             if (!rv) return;
-            var ok = await uiConfirm({ title: '결재 요청 삭제', message: '이 결재 요청을 삭제할까요? 되돌릴 수 없습니다.' + (rv.status === 'pending' ? '\n(아직 진행 중인 요청입니다)' : ''), confirmText: '삭제', danger: true });
+            var ok = await uiConfirm({ title: '리뷰 요청 삭제', message: '이 리뷰 요청을 삭제할까요? 되돌릴 수 없습니다.' + (rv.status === 'pending' ? '\n(아직 진행 중인 요청입니다)' : ''), confirmText: '삭제', danger: true });
             if (!ok) return;
             currentData.reviews = (currentData.reviews || []).filter(function (r) { return r.id !== id; });
             if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
@@ -8345,10 +8347,10 @@ return data;
             if (currentView === 'review') renderReviewPage();
             if (typeof renderBoard === 'function') renderBoard();
             if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
-            showToast('🗑 결재 요청이 삭제되었습니다.', 'info');
+            showToast('🗑 리뷰 요청이 삭제되었습니다.', 'info');
         }
 
-        // [결재함] 페이지 렌더 (통계·내 결재 대기·필터·검색)
+        // [리뷰함] 페이지 렌더 (통계·내 리뷰 대기·필터·검색)
         var _reviewFilter = { status: 'all', type: 'all', sort: 'recent', q: '' };
         function _reviewTargetLabel(r) {
             if (r.targetTaskId) return (typeof getTaskLabel === 'function') ? getTaskLabel(r.targetTaskId) : '';
@@ -8376,11 +8378,11 @@ return data;
                 statsEl.innerHTML = stats.map(function (s) { return '<span class="rvp-stat"><b>' + s[1] + '</b>' + s[0] + '</span>'; }).join('')
                     + (sp ? '<span class="rvp-stat rvp-stat-accent"><b>' + (sp.intrusionCount || 0) + '</b>⚡ 이번주 인트루전</span>' : '');
             }
-            // 내 결재 대기
+            // 내 리뷰 대기
             var mineEl = document.getElementById('rvp-mine');
             if (mineEl) {
                 var mine = all.filter(function (r) { return r.status === 'pending' && currentUser && r.proposerId !== currentUser.id && !(r.votes || []).find(function (v) { return v.userId === currentUser.id; }); });
-                mineEl.innerHTML = mine.length ? ('<div class="rvp-section-h">🙋 내 결재 대기 (' + mine.length + ')</div>' + mine.map(renderReviewChip).join('')) : '';
+                mineEl.innerHTML = mine.length ? ('<div class="rvp-section-h">🙋 내 리뷰 대기 (' + mine.length + ')</div>' + mine.map(renderReviewChip).join('')) : '';
             }
             // 필터 + 정렬
             var f = _reviewFilter;
@@ -8397,7 +8399,7 @@ return data;
                 return (b.createdAt || '').localeCompare(a.createdAt || '');
             });
             listEl.innerHTML = '<div class="rvp-section-h">전체 (' + list.length + ')</div>'
-                + (list.length ? list.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:24px;text-align:center;">조건에 맞는 결재 요청이 없습니다.</div>');
+                + (list.length ? list.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:24px;text-align:center;">조건에 맞는 리뷰 요청이 없습니다.</div>');
         }
 
         // ==========================================
@@ -8505,7 +8507,7 @@ ${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
                     cdoc.meta = cdoc.meta || {};
                     cdoc.meta.status = 'approved';
                     cdoc.meta.approvedBy = review.proposerId || null;
-                    cdoc.meta.approvedByName = review.proposerName || '팀 결재';
+                    cdoc.meta.approvedByName = review.proposerName || '팀 리뷰';
                     cdoc.meta.approvedAt = new Date().toISOString();
                     cdoc.meta.approvedVersion = cdoc.meta.version || 1;
                     await dbUpsertDoc(cdoc);
@@ -12155,7 +12157,8 @@ ${intrLog}
             var entry = changeLog[idx];
             if(!entry || !entry.docId) return;
             closeChangeLog();
-            if(currentView !== 'docs') switchView('docs');
+            var _jv = getViewForDoc(entry.docId);
+            if(currentView !== _jv) switchView(_jv);
             setTimeout(function() {
                 openDoc(entry.docId);
                 // Flash highlight the content area after doc loads
@@ -12248,7 +12251,8 @@ ${intrLog}
             notif.onclick = function() {
                 if(_notifDocId && currentData.docs && currentData.docs.find(function(d){ return d.id === _notifDocId; })) {
                     closeChangeLog();
-                    if(currentView !== 'docs') switchView('docs');
+                    var _nv = getViewForDoc(_notifDocId);
+                    if(currentView !== _nv) switchView(_nv);
                     setTimeout(function(){ openDoc(_notifDocId); }, 100);
                 } else {
                     openChangeLog();
