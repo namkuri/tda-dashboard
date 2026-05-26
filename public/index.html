@@ -2145,6 +2145,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-flow-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
         .spv-flow-item { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--c-text); padding: 5px 7px; border-radius: 6px; cursor: pointer; }
         .spv-flow-item:hover { background: var(--c-accent-soft); }
+        /* [흐름 미리보기 + 링크삭제] */
+        .spv-flow-item2 { border: 1px solid var(--c-border); border-radius: 8px; margin-bottom: 6px; overflow: hidden; background: var(--c-paper); }
+        .spv-flow-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 12.5px; color: var(--c-text); }
+        .spv-flow-head:hover { background: var(--c-accent-soft); }
+        .spv-flow-caret { width: 16px; text-align: center; color: var(--c-text3); cursor: pointer; font-size: 11px; flex: 0 0 auto; }
+        .spv-flow-name { flex: 1; min-width: 0; cursor: pointer; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .spv-flow-cnt { font-size: 10.5px; color: var(--c-text3); font-family: 'JetBrains Mono', monospace; flex: 0 0 auto; }
+        .spv-flow-mini { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700; cursor: pointer; flex: 0 0 auto; }
+        .spv-flow-mini:hover { background: var(--c-accent-soft); color: var(--c-accent); }
+        .spv-flow-mini.danger:hover { background: rgba(193,87,71,0.12); color: var(--st-danger); border-color: var(--st-danger); }
+        .spv-prev-host { border-top: 1px dashed var(--c-border); background: var(--c-card); height: 200px; width: 100%; }
+        .spv-prev-host svg { display: block; width: 100%; height: 100%; }
+        .spv-prev-node:hover rect, .spv-prev-node:hover circle { filter: brightness(1.06); }
+        #spv-flow-tip { position: fixed; z-index: 99999; max-width: 280px; background: var(--c-text); color: var(--c-paper); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 6px 24px rgba(0,0,0,0.28); pointer-events: none; opacity: 0; transition: opacity .12s; }
+        #spv-flow-tip.show { opacity: 1; }
+        #spv-flow-tip .tt-title { font-weight: 800; margin-bottom: 2px; }
+        #spv-flow-tip .tt-meta { font-size: 11px; opacity: 0.8; margin-bottom: 3px; }
+        #spv-flow-tip .tt-body { white-space: pre-wrap; opacity: 0.95; }
         /* [변경 로그] 기간 필터 바 */
         .cl-period-btn { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 8px; padding: 4px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
         .cl-period-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
@@ -8006,7 +8024,7 @@ return data;
         // ═══════════════════════════════════════════════
         // [스프린트] 스프린트 페이지 — 리스트/확장/.md 목표/카드 드래그
         // ═══════════════════════════════════════════════
-        var _sprintExpanded = {}; var _sprintCardOpen = {}; var _sprintGoalEditing = {};
+        var _sprintExpanded = {}; var _sprintCardOpen = {}; var _sprintGoalEditing = {}; var _sprintFlowOpen = {};
         function _sprintStatusBadge(s) {
             var m = { active: ['🏃 진행 중', 'var(--c-accent-soft)', 'var(--c-accent)'], closed: ['🏁 종료', 'var(--ios-fill)', 'var(--c-text3)'] };
             var x = m[s.status] || ['📋 예정', 'var(--ios-fill2)', 'var(--c-text2)'];
@@ -8177,17 +8195,66 @@ return data;
         // [스프린트 흐름] 스프린트별 그래프(흐름) — wiki_docs kind='diagram' + meta.sprintId
         function _sprintFlowsSection(sid) {
             var flows = (currentData.docs || []).filter(function (d) { return d.kind === 'diagram' && (d.projectId || 'default') === activeProjectId && d.meta && d.meta.sprintId === sid && !d.meta.isFolder; });
-            var items = flows.length ? flows.map(function (f) { var ap = f.meta && f.meta.status === 'approved'; return '<div class="spv-flow-item" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')">📈 ' + _sprintEsc(f.title || '(무제)') + (ap ? ' <span class="official-check" title="승인됨">✔</span>' : '') + '</div>'; }).join('') : '<div class="spv-empty" style="padding:6px;">연결된 흐름 없음 — "+ 새 흐름"으로 시작</div>';
+            var items = flows.length ? flows.map(function (f) {
+                var ap = f.meta && f.meta.status === 'approved';
+                var dg = (f.meta && f.meta.diagram) || {};
+                var cnt = dg.mode === 'graph' ? ((dg.nodes || []).length + '노드 · ' + (dg.edges || []).length + '엣지') : ((dg.points || []).length + '포인트');
+                var open = !!_sprintFlowOpen[f.id];
+                var head = '<div class="spv-flow-head">'
+                    + '<span class="spv-flow-caret" onclick="event.stopPropagation();toggleSprintFlow(\'' + f.id + '\')">' + (open ? '▾' : '▸') + '</span>'
+                    + '<span class="spv-flow-name" onclick="event.stopPropagation();toggleSprintFlow(\'' + f.id + '\')" title="미리보기 펼치기/접기">📈 ' + _sprintEsc(f.title || '(무제)') + (ap ? ' <span class="official-check" title="승인됨">✔</span>' : '') + '</span>'
+                    + '<span class="spv-flow-cnt">' + cnt + '</span>'
+                    + '<button class="spv-flow-mini" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="그래프 탭에서 편집">✏️ 편집</button>'
+                    + '<button class="spv-flow-mini danger" onclick="event.stopPropagation();sprintUnlinkFlow(\'' + f.id + '\',\'' + sid + '\')" title="흐름 링크 삭제">✕</button>'
+                    + '</div>';
+                var body = open ? ('<div class="spv-prev-host" data-flow-id="' + f.id + '" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="클릭하면 그래프 탭에서 편집">' + gphFlowPreviewSVG(f) + '</div>') : '';
+                return '<div class="spv-flow-item2">' + head + body + '</div>';
+            }).join('') : '<div class="spv-empty" style="padding:6px;">연결된 흐름 없음 — "+ 새 흐름"으로 시작</div>';
             return '<div class="spv-flows"><div class="spv-flows-h">🔀 흐름 (그래프) <button class="spv-flow-btn" onclick="event.stopPropagation();sprintNewFlow(\'' + sid + '\')">+ 새 흐름</button><button class="spv-flow-btn" onclick="event.stopPropagation();sprintImportFlow(event,\'' + sid + '\')">가져오기</button></div>' + items + '</div>';
+        }
+        function toggleSprintFlow(id) { _sprintFlowOpen[id] = !_sprintFlowOpen[id]; renderSprintView(); }
+        async function sprintUnlinkFlow(id, sid) {
+            var f = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!f) return;
+            var ok = await uiConfirm({ title: '흐름 링크 삭제', message: '"' + (f.title || '(무제)') + '" 흐름의 스프린트 연결을 해제할까요?\n\n흐름(그래프) 자체는 삭제되지 않고 그래프 탭에 그대로 남습니다.', confirmText: '링크 삭제', danger: true });
+            if (!ok) return;
+            if (!f.meta) f.meta = {}; f.meta.sprintId = null;
+            if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(f);
+            if (currentView === 'sprint') renderSprintView();
+            showToast('🔗 흐름 링크 해제됨', 'info');
+        }
+        // [흐름 자동 폴더] 그래프 > 프로젝트 > 스프린트 > <스프린트명> 계층 보장 후 하위 폴더 id 반환
+        function _gphSprintFolder(sid) {
+            if (!Array.isArray(currentData.docs)) currentData.docs = [];
+            var docs = currentData.docs;
+            var isProjDiagram = function (d) { return d.kind === 'diagram' && (d.projectId || 'default') === activeProjectId; };
+            // 1) 루트 "스프린트" 폴더
+            var root = docs.find(function (d) { return isProjDiagram(d) && d.meta && d.meta.isFolder && d.meta.sprintRoot && (!d.parentId); });
+            if (!root) {
+                root = { id: gphUid('doc'), projectId: activeProjectId, parentId: null, title: '스프린트', emoji: '📁', kind: 'diagram', content: '', meta: { scope: 'project', owner: null, isFolder: true, sprintRoot: true }, createdAt: Date.now(), updatedAt: Date.now(), sortOrder: (typeof gphNextOrder === 'function' ? gphNextOrder(null) : 1) };
+                docs.push(root); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(root);
+            }
+            // 2) "<스프린트명>" 하위 폴더
+            var s = (currentData.sprints || []).find(function (x) { return x.id === sid; });
+            var label = (s && (s.weekLabel || s.id)) || sid;
+            var sub = docs.find(function (d) { return isProjDiagram(d) && d.meta && d.meta.isFolder && d.meta.sprintFolderFor === sid; });
+            if (!sub) {
+                sub = { id: gphUid('doc'), projectId: activeProjectId, parentId: root.id, title: label, emoji: '📁', kind: 'diagram', content: '', meta: { scope: 'project', owner: null, isFolder: true, sprintFolderFor: sid }, createdAt: Date.now(), updatedAt: Date.now(), sortOrder: (typeof gphNextOrder === 'function' ? gphNextOrder(root.id) : 1) };
+                docs.push(sub); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(sub);
+            } else if (sub.title !== label || sub.parentId !== root.id) { // 스프린트명 변경 동기화
+                sub.title = label; sub.parentId = root.id; if (typeof dbUpsertDoc === 'function') dbUpsertDoc(sub);
+            }
+            if (gphState && gphState.expanded) { gphState.expanded[root.id] = true; gphState.expanded[sub.id] = true; }
+            return sub.id;
         }
         function sprintNewFlow(sid) {
             if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
-            var d = { id: gphUid('doc'), projectId: activeProjectId, parentId: null, title: '새 흐름', emoji: '📈', kind: 'diagram', content: '', meta: { scope: 'project', sprintId: sid, isFolder: false, diagram: { mode: 'graph', orientation: 'horizontal', points: [], nodes: [], edges: [], memos: [] }, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] }, createdAt: Date.now(), updatedAt: Date.now(), sortOrder: 1 };
+            var parentId = _gphSprintFolder(sid);
+            var d = { id: gphUid('doc'), projectId: activeProjectId, parentId: parentId, title: '새 흐름', emoji: '📈', kind: 'diagram', content: '', meta: { scope: 'project', sprintId: sid, isFolder: false, diagram: { mode: 'graph', orientation: 'horizontal', points: [], nodes: [], edges: [], memos: [] }, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] }, createdAt: Date.now(), updatedAt: Date.now(), sortOrder: (typeof gphNextOrder === 'function' ? gphNextOrder(parentId) : 1) };
             if (!Array.isArray(currentData.docs)) currentData.docs = [];
             currentData.docs.push(d);
             if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d);
             if (currentView === 'sprint') renderSprintView();
-            showToast('🔀 흐름 생성됨', 'success');
+            showToast('🔀 흐름 생성됨 (스프린트/' + _sprintEsc((((currentData.sprints || []).find(function (x) { return x.id === sid; }) || {}).weekLabel) || sid) + ')', 'success');
             gphOpenFromSprint(d.id);
         }
         function sprintImportFlow(e, sid) {
@@ -8197,7 +8264,7 @@ return data;
             _openCardMenu({ clientX: e ? e.clientX : 200, clientY: e ? e.clientY : 200, stopPropagation: function () {} }, html);
         }
         function sprintAttachFlow(gid, sid) { var d = (currentData.docs || []).find(function (x) { return x.id === gid; }); if (!d) return; if (!d.meta) d.meta = {}; d.meta.sprintId = sid; d.meta.scope = 'project'; if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d); if (currentView === 'sprint') renderSprintView(); showToast('🔀 흐름 연결됨', 'success'); }
-        function gphOpenFromSprint(id) { var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return; gphState.scope = (d.meta && d.meta.scope === 'personal') ? 'personal' : 'project'; gphState.currentId = id; gphState.selected = null; gphState.connecting = null; switchView('graph'); document.querySelectorAll('.gph-scope-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.scope === gphState.scope); }); gphRender(); }
+        function gphOpenFromSprint(id) { var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return; if (typeof _spvFlowTipHide === 'function') _spvFlowTipHide(); gphState.scope = (d.meta && d.meta.scope === 'personal') ? 'personal' : 'project'; gphState.currentId = id; gphState.selected = null; gphState.connecting = null; switchView('graph'); document.querySelectorAll('.gph-scope-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.scope === gphState.scope); }); gphRender(); }
         function renderSprintView() {
             var wrap = document.getElementById('sprint-view'); if (!wrap) return;
             var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
@@ -8242,6 +8309,7 @@ return data;
                     });
                 });
             }
+            if (typeof _wireSprintFlowPreviews === 'function') _wireSprintFlowPreviews(wrap);
         }
         // [#4] 스프린트 생성/편집 모달
         var _sprintEditId = null;
@@ -14090,8 +14158,33 @@ ${intrLog}
 
     function gphUid(p) { return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function gphCssVar(n) { return getComputedStyle(document.body).getPropertyValue(n).trim() || '#888'; }
-    function gphPartColor(part) { var el = document.getElementById('graph-view'); var v = el ? getComputedStyle(el).getPropertyValue('--gph-' + part) : ''; return (v && v.trim()) || '#8a8275'; }
-    function gphPartName(p) { return ({ ai: 'AI', terrain: '지형', scenario: '시나리오', planning: '기획', shared: '공유', extra1: 'Extra1', extra2: 'Extra2' })[p] || p; }
+    var _gphActiveParts = []; // [Phase4] 현재 렌더 중인 다이어그램의 사용자 정의 파트
+    function gphSetActiveParts(p) { _gphActiveParts = (p && Array.isArray(p.parts)) ? p.parts : []; }
+    function gphFindPart(key) { for (var i = 0; i < _gphActiveParts.length; i++) { if (_gphActiveParts[i].key === key) return _gphActiveParts[i]; } return null; }
+    function gphPartColor(part) { var c = gphFindPart(part); if (c && c.color) return c.color; var el = document.getElementById('graph-view'); var v = el ? getComputedStyle(el).getPropertyValue('--gph-' + part) : ''; return (v && v.trim()) || '#8a8275'; }
+    function gphPartName(p) { var c = gphFindPart(p); if (c && c.name) return c.name; return ({ ai: 'AI', terrain: '지형', scenario: '시나리오', planning: '기획', shared: '공유', extra1: 'Extra1', extra2: 'Extra2' })[p] || p; }
+    var GPH_BASE_PARTS = [['ai', 'AI'], ['terrain', '지형'], ['scenario', '시나리오'], ['planning', '기획'], ['shared', '공유'], ['extra1', 'Extra1'], ['extra2', 'Extra2']];
+    function gphPartList(p) { var seen = {}, out = []; GPH_BASE_PARTS.forEach(function (o) { seen[o[0]] = true; out.push({ key: o[0], name: o[1] }); }); ((p && p.parts) || []).forEach(function (c) { if (seen[c.key]) { for (var i = 0; i < out.length; i++) if (out[i].key === c.key) out[i].name = c.name; } else { seen[c.key] = true; out.push({ key: c.key, name: c.name }); } }); return out; }
+    // 사용자 정의 파트 추가 (이름 + 색상)
+    async function gphAddCustomPart(d) {
+        if (!d) return null; var p = gphPayload(d);
+        var name = await uiPrompt({ title: '사용자 정의 파트', label: '파트 이름', placeholder: '예: 사운드, QA …' });
+        if (name === null || !name.trim()) return null;
+        var color = await uiPrompt({ title: '사용자 정의 파트 색상', label: '색상 (HEX)', value: '#8a8275', placeholder: '#rrggbb' });
+        if (color === null) return null;
+        color = (color || '').trim(); if (!/^#[0-9a-fA-F]{3,8}$/.test(color)) color = '#8a8275';
+        if (!Array.isArray(p.parts)) p.parts = [];
+        var key = 'cp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+        p.parts.push({ key: key, name: name.trim(), color: color });
+        gphSetActiveParts(p); gphSave(d);
+        showToast('🎨 파트 추가: ' + name.trim(), 'success');
+        return key;
+    }
+    // 파트 select onchange 공통 처리 (사용자 정의 추가 분기). applyFn(key) 로 대상에 반영.
+    async function gphPartSelChange(sel, d, applyFn) {
+        if (sel.value === '__add') { var k = await gphAddCustomPart(d); if (!k) { gphRenderPanel(); return; } applyFn(k); gphSave(d); gphRenderCanvas(); gphRenderHeader(); gphRenderPanel(); return; }
+        applyFn(sel.value); gphSave(d); gphRenderCanvas(); gphRenderHeader();
+    }
     function gphEsc(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
     function gphEscX(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]; }); }
 
@@ -14177,21 +14270,21 @@ ${intrLog}
         var walk = function (parentKey, depth) {
             (byParent[parentKey] || []).forEach(function (d) {
                 var isF = gphIsFolder(d);
-                var hasKids = isF && (byParent[d.id] || []).length > 0;
+                var hasKids = (byParent[d.id] || []).length > 0;
                 var exp = !!gphState.expanded[d.id];
                 var active = d.id === gphState.currentId ? ' active' : '';
                 var approved = !isF && d.meta && d.meta.status === 'approved';
                 var visIco = (!isF && gphState.scope === 'personal') ? (d.meta && d.meta.visibility === 'public' ? '🌐' : '🔒') : '';
                 html += '<div class="gph-tree-row' + active + '" draggable="true" data-gid="' + d.id + '" style="padding-left:' + (8 + depth * 14) + 'px" onclick="gphSelectDiagram(\'' + d.id + '\')" oncontextmenu="gphTreeCtx(event,\'' + d.id + '\')">';
-                html += isF ? ('<span class="gph-tree-caret" onclick="event.stopPropagation();gphToggleFolder(\'' + d.id + '\')">' + (hasKids ? (exp ? '▾' : '▸') : '·') + '</span>') : '<span class="gph-tree-caret"></span>';
+                html += (isF || hasKids) ? ('<span class="gph-tree-caret" onclick="event.stopPropagation();gphToggleFolder(\'' + d.id + '\')">' + (hasKids ? (exp ? '▾' : '▸') : '·') + '</span>') : '<span class="gph-tree-caret"></span>';
                 html += '<span class="gph-tw-ico">' + (isF ? (exp ? '📂' : '📁') : '📈') + '</span>';
                 html += '<span class="gph-tw-name">' + gphEsc(d.title || '(무제)') + '</span>';
                 if (visIco) html += '<span class="gph-tw-act" style="opacity:.7" title="' + (d.meta.visibility === 'public' ? '공개' : '비공개') + '">' + visIco + '</span>';
                 if (approved) html += '<span class="gph-tw-check" title="승인됨">✔</span>';
-                html += '<span class="gph-tw-act" title="새 하위 그래프" onclick="event.stopPropagation();gphNewDiagram(\'' + (isF ? d.id : (d.parentId || '')) + '\')">＋</span>';
+                html += '<span class="gph-tw-act" title="새 하위 그래프" onclick="event.stopPropagation();gphNewDiagram(\'' + d.id + '\')">＋</span>';
                 html += '<span class="gph-tw-act" title="메뉴" onclick="event.stopPropagation();gphTreeCtx(event,\'' + d.id + '\')">⋯</span>';
                 html += '</div>';
-                if (isF && exp) walk(d.id, depth + 1);
+                if (exp && hasKids) walk(d.id, depth + 1);
             });
         };
         walk('__root', 0);
@@ -14215,7 +14308,7 @@ ${intrLog}
         var drag = gphById(dragId); if (!drag) return;
         var newParent;
         if (!dropId) newParent = null;
-        else { var drop = gphById(dropId); if (!drop) return; newParent = gphIsFolder(drop) ? drop.id : (drop.parentId || null); }
+        else { var drop = gphById(dropId); if (!drop) return; newParent = drop.id; }
         // 사이클 방지: drag가 폴더면 newParent가 자기 자손이면 안 됨
         if (newParent) { var cur = gphById(newParent); var guard = 0; while (cur && guard++ < 100) { if (cur.id === dragId) { showToast('하위 폴더로는 이동할 수 없습니다.', 'alert'); return; } cur = cur.parentId ? gphById(cur.parentId) : null; } }
         if ((drag.parentId || null) === (newParent || null)) return;
@@ -14230,7 +14323,8 @@ ${intrLog}
         var d = gphById(id); if (!d) return; var isF = gphIsFolder(d);
         var html = '';
         html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphRename(\'' + id + '\')"><span>✏️</span> 이름 변경</div>';
-        if (isF) { html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphNewDiagram(\'' + id + '\')"><span>📈</span> 새 하위 그래프</div>'; html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphNewFolder(\'' + id + '\')"><span>📁</span> 새 하위 폴더</div>'; }
+        html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphNewDiagram(\'' + id + '\')"><span>📈</span> 새 하위 그래프</div>';
+        if (isF) html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphNewFolder(\'' + id + '\')"><span>📁</span> 새 하위 폴더</div>';
         html += '<div class="ctx-menu-sep"></div>';
         var sc = (d.meta && d.meta.scope) || 'project';
         if (sc === 'personal') html += '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gphMoveScope(\'' + id + '\',\'project\')"><span>📁</span> 프로젝트로 이동</div>';
@@ -14254,7 +14348,7 @@ ${intrLog}
         var legend = document.getElementById('gph-legend');
         if (!d) { if (header) header.style.visibility = 'hidden'; if (legend) legend.style.display = 'none'; return; }
         header.style.visibility = 'visible';
-        var p = gphPayload(d);
+        var p = gphPayload(d); gphSetActiveParts(p);
         var nameEl = document.getElementById('gph-name'), descEl = document.getElementById('gph-desc');
         if (document.activeElement !== nameEl) nameEl.value = d.title || '';
         if (document.activeElement !== descEl) { descEl.value = p.description || ''; descEl.style.height = 'auto'; descEl.style.height = Math.min(descEl.scrollHeight, 80) + 'px'; }
@@ -14265,8 +14359,8 @@ ${intrLog}
         // legend
         if (legend) {
             legend.style.display = '';
-            var parts = ['ai', 'terrain', 'scenario', 'planning', 'shared', 'extra1', 'extra2'];
-            legend.innerHTML = parts.map(function (pt) { return '<div class="gph-legend-item"><span class="gph-legend-dot" style="background:' + gphPartColor(pt) + '"></span>' + gphPartName(pt) + '</div>'; }).join('')
+            var parts = gphPartList(p).map(function (o) { return o.key; });
+            legend.innerHTML = parts.map(function (pt) { return '<div class="gph-legend-item"><span class="gph-legend-dot" style="background:' + gphPartColor(pt) + '"></span>' + gphEsc(gphPartName(pt)) + '</div>'; }).join('')
                 + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴') + '</div>';
         }
         // 작성자 / 작성일 / 수정일 + 공개여부
@@ -14296,7 +14390,7 @@ ${intrLog}
         if (!svg || !wrap) return;
         var old = wrap.querySelector('.gph-empty'); if (old) old.remove();
         if (!d) { svg.innerHTML = ''; var e = document.createElement('div'); e.className = 'gph-empty'; e.innerHTML = '<div style="font-size:34px;opacity:.4">📈</div><div>왼쪽에서 그래프를 선택하거나<br>＋ 새 그래프로 추가하세요</div>'; wrap.appendChild(e); return; }
-        var p = gphPayload(d);
+        var p = gphPayload(d); gphSetActiveParts(p);
         if (p.mode === 'graph') gphRenderGraphCanvas(d, p, svg); else gphRenderLinearCanvas(d, p, svg);
     }
 
@@ -14324,7 +14418,9 @@ ${intrLog}
             if (pt.highlighted) parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (baseR + 5) + '" fill="none" stroke="' + color + '" stroke-width="1.5" opacity="0.4" stroke-dasharray="3,2"/>');
             parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + baseR + '" fill="' + color + '" stroke="' + cardBg + '" stroke-width="2.5" class="point-circle ' + (sel ? 'selected' : '') + '"/>');
             parts.push('<text x="' + cx + '" y="' + (cy + 3) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" pointer-events="none" font-family="JetBrains Mono,monospace">' + (i + 1) + '</text>');
-            var dir = i % 2 === 0 ? -1 : 1, dist = 30, titleText = pt.title || '(무제)', aw = Math.max(60, titleText.length * 7 + 16);
+            if (pt.status === 'done' || pt.status === 'progress') { var _bc = pt.status === 'done' ? gphCssVar('--st-success') : gphCssVar('--st-progress'); parts.push('<circle cx="' + (cx + baseR - 1) + '" cy="' + (cy - baseR + 1) + '" r="4.5" fill="' + _bc + '" stroke="' + cardBg + '" stroke-width="1.5"/>'); if (pt.status === 'done') parts.push('<text x="' + (cx + baseR - 1) + '" y="' + (cy - baseR + 3.6) + '" text-anchor="middle" font-size="6.5" font-weight="700" fill="#fff" pointer-events="none">✓</text>'); }
+            var suff = []; if (pt.assigneeId) suff.push('👤' + gphMemberName(pt.assigneeId)); if (pt.linkedCardId) suff.push('🗂'); if (pt.linkedDocId) suff.push('📄');
+            var dir = i % 2 === 0 ? -1 : 1, dist = 30, titleText = (pt.title || '(무제)') + (suff.length ? '  ' + suff.join(' ') : ''), aw = Math.max(60, titleText.length * 7 + 16);
             if (isH) {
                 var ly = cy + dir * dist, ty = cy + dir * (dist - 8), boxY = dir > 0 ? ly - 3 : ly - 13;
                 parts.push('<line x1="' + cx + '" y1="' + (cy + (dir > 0 ? baseR : -baseR)) + '" x2="' + cx + '" y2="' + ty + '" stroke="' + color + '" stroke-width="1" stroke-dasharray="2,2" opacity="0.7"/>');
@@ -14345,7 +14441,7 @@ ${intrLog}
         svg.querySelectorAll('[data-point-id]').forEach(function (g) {
             var ptId = g.dataset.pointId, circle = g.querySelector('.point-circle');
             gphPointDrag(circle, ptId, isH, x1, y1, x2, y2, w, h, svg);
-            gphTip(g, function () { var pp = (gphPayload(gphCurrent()).points || []).find(function (x) { return x.id === ptId; }); return pp ? { title: pp.title, meta: gphPartName(pp.part), body: pp.description } : null; });
+            gphTip(g, function () { var pp = (gphPayload(gphCurrent()).points || []).find(function (x) { return x.id === ptId; }); if (!pp) return null; var mt = gphStatusInfo(pp.status)[0] + (pp.assigneeId ? (' · 담당 ' + gphMemberName(pp.assigneeId)) : ' · 미배정') + ' · ' + gphPartName(pp.part); var bd = (pp.description || ''); if (pp.linkedCardId) { var t = (currentData.tasks || []).find(function (x) { return x.id === pp.linkedCardId; }); bd += (bd ? '\n' : '') + '🗂 카드: ' + (t ? (t.title || '') : '(삭제됨)'); } if (pp.linkedDocId) { var dc = (currentData.docs || []).find(function (x) { return x.id === pp.linkedDocId; }); bd += (bd ? '\n' : '') + '📄 문서: ' + (dc ? (dc.title || '') : '(삭제됨)'); } return { title: pp.title, meta: mt, body: bd }; });
         });
         svg.querySelectorAll('[data-hotspot="line"]').forEach(function (rect) {
             rect.addEventListener('dblclick', function (e) { e.stopPropagation(); var r = svg.getBoundingClientRect(), pos; if (isH) { var mx = (e.clientX - r.left) * (w / r.width); pos = (mx - x1) / (x2 - x1); } else { var my = (e.clientY - r.top) * (h / r.height); pos = (my - y1) / (y2 - y1); } pos = Math.max(0.05, Math.min(0.95, pos)); gphAddPoint(pos); });
@@ -14491,6 +14587,84 @@ ${intrLog}
     }
     function gphPosTip(e) { var tt = document.getElementById('gph-tooltip'), c = document.getElementById('gph-canvas-wrap'), cr = c.getBoundingClientRect(); var x = e.clientX - cr.left + 14, y = e.clientY - cr.top + 14; var tr = tt.getBoundingClientRect(); if (x + tr.width > cr.width - 10) x = e.clientX - cr.left - tr.width - 10; if (y + tr.height > cr.height - 10) y = e.clientY - cr.top - tr.height - 10; tt.style.left = x + 'px'; tt.style.top = y + 'px'; }
 
+    // ===== [스프린트 흐름 미리보기] 읽기전용 오버뷰 SVG (호버 툴팁 + 클릭=편집) =====
+    function gphFlowPreviewSVG(doc) {
+        var p = (doc && doc.meta && doc.meta.diagram) || {};
+        gphSetActiveParts(p);
+        var cardBg = gphCssVar('--c-card'), lineC = gphCssVar('--c-text3'), mutedC = gphCssVar('--c-text3');
+        var emptyMsg = function (m) { return '<svg viewBox="0 0 400 110" preserveAspectRatio="xMidYMid meet"><text x="200" y="60" text-anchor="middle" font-size="13" fill="' + mutedC + '" font-family="Pretendard,sans-serif">' + gphEscX(m) + '</text></svg>'; };
+        var parts = [];
+        if (p.mode === 'graph') {
+            var nodes = p.nodes || [], edges = p.edges || [];
+            if (!nodes.length) return emptyMsg('노드가 없습니다 — ✏️ 편집으로 추가하세요');
+            var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            nodes.forEach(function (n) { var w = n.w || 200, h = n.h || 80; minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); maxX = Math.max(maxX, n.x + w); maxY = Math.max(maxY, n.y + h); });
+            var pad = 24; minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+            var nmap = {}; nodes.forEach(function (n) { nmap[n.id] = n; });
+            edges.forEach(function (e) { var a = nmap[e.from], b = nmap[e.to]; if (!a || !b) return; var ax = a.x + (a.w || 200) / 2, ay = a.y + (a.h || 80) / 2, bx = b.x + (b.w || 200) / 2, by = b.y + (b.h || 80) / 2; parts.push('<line x1="' + ax + '" y1="' + ay + '" x2="' + bx + '" y2="' + by + '" stroke="' + lineC + '" stroke-width="1.6" opacity="0.45"/>'); });
+            nodes.forEach(function (n) {
+                var c = gphPartColor(n.part), w = n.w || 200, h = n.h || 80;
+                parts.push('<g class="spv-prev-node" data-prev-id="' + n.id + '">');
+                parts.push('<rect x="' + n.x + '" y="' + n.y + '" width="' + w + '" height="' + h + '" rx="7" fill="' + cardBg + '" stroke="' + c + '" stroke-width="2"/>');
+                parts.push('<rect x="' + n.x + '" y="' + n.y + '" width="4" height="' + h + '" rx="2" fill="' + c + '"/>');
+                parts.push('<text x="' + (n.x + 14) + '" y="' + (n.y + 25) + '" font-size="14" font-weight="700" fill="' + c + '" font-family="Pretendard,sans-serif">' + gphEscX(n.title || '(무제)') + '</text>');
+                if (n.status === 'done' || n.status === 'progress') { var bc = n.status === 'done' ? gphCssVar('--st-success') : gphCssVar('--st-progress'); parts.push('<circle cx="' + (n.x + w - 13) + '" cy="' + (n.y + 13) + '" r="5" fill="' + bc + '"/>'); }
+                var ex = []; if (n.assigneeId) ex.push('👤' + gphMemberName(n.assigneeId)); if (n.linkedCardId) ex.push('🗂'); if (n.linkedDocId) ex.push('📄');
+                if (ex.length) parts.push('<text x="' + (n.x + 14) + '" y="' + (n.y + 46) + '" font-size="12" fill="' + mutedC + '" font-family="Pretendard,sans-serif">' + gphEscX(ex.join('   ')) + '</text>');
+                parts.push('</g>');
+            });
+            return '<svg viewBox="' + minX + ' ' + minY + ' ' + (maxX - minX) + ' ' + (maxY - minY) + '" preserveAspectRatio="xMidYMid meet">' + parts.join('') + '</svg>';
+        }
+        var pts = (p.points || []).slice().sort(function (a, b) { return a.position - b.position; });
+        if (!pts.length) return emptyMsg('포인트가 없습니다 — ✏️ 편집으로 추가하세요');
+        var W = 1000, H = 200, x1 = 60, x2 = 940, midY = H / 2;
+        parts.push('<line x1="' + x1 + '" y1="' + midY + '" x2="' + x2 + '" y2="' + midY + '" stroke="' + lineC + '" stroke-width="2" opacity="0.6"/>');
+        parts.push('<polygon points="' + (x2 - 9) + ',' + (midY - 7) + ' ' + (x2 + 5) + ',' + midY + ' ' + (x2 - 9) + ',' + (midY + 7) + '" fill="' + lineC + '" opacity="0.6"/>');
+        pts.forEach(function (pt, i) {
+            var cx = x1 + (x2 - x1) * pt.position, c = gphPartColor(pt.part), r = pt.highlighted ? 10 : 8;
+            var dir = i % 2 === 0 ? -1 : 1, ly = midY + dir * 34;
+            var lbl = (pt.title || '(무제)') + (pt.assigneeId ? ('  👤' + gphMemberName(pt.assigneeId)) : '');
+            var aw = Math.max(60, lbl.length * 7 + 16);
+            parts.push('<g class="spv-prev-node" data-prev-id="' + pt.id + '">');
+            parts.push('<line x1="' + cx + '" y1="' + (midY + dir * r) + '" x2="' + cx + '" y2="' + (ly + (dir > 0 ? -8 : 8)) + '" stroke="' + c + '" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>');
+            parts.push('<rect x="' + (cx - aw / 2) + '" y="' + (ly - 13) + '" width="' + aw + '" height="20" rx="4" fill="' + cardBg + '" stroke="' + c + '" stroke-width="1"/>');
+            parts.push('<text x="' + cx + '" y="' + (ly + 1) + '" text-anchor="middle" font-size="11.5" font-weight="600" fill="' + c + '" font-family="Pretendard,sans-serif">' + gphEscX(lbl) + '</text>');
+            parts.push('<circle cx="' + cx + '" cy="' + midY + '" r="' + r + '" fill="' + c + '" stroke="' + cardBg + '" stroke-width="2.5"/>');
+            parts.push('<text x="' + cx + '" y="' + (midY + 3) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" font-family="JetBrains Mono,monospace">' + (i + 1) + '</text>');
+            if (pt.status === 'done' || pt.status === 'progress') { var bc = pt.status === 'done' ? gphCssVar('--st-success') : gphCssVar('--st-progress'); parts.push('<circle cx="' + (cx + r - 1) + '" cy="' + (midY - r + 1) + '" r="4.5" fill="' + bc + '" stroke="' + cardBg + '" stroke-width="1.5"/>'); }
+            parts.push('</g>');
+        });
+        return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' + parts.join('') + '</svg>';
+    }
+    function _wireSprintFlowPreviews(wrap) {
+        if (!wrap) return;
+        wrap.querySelectorAll('.spv-prev-host').forEach(function (host) {
+            var fid = host.dataset.flowId;
+            host.querySelectorAll('.spv-prev-node').forEach(function (g) {
+                g.style.cursor = 'pointer';
+                g.addEventListener('mouseenter', function (e) { _spvFlowTip(fid, g.getAttribute('data-prev-id'), e); });
+                g.addEventListener('mousemove', _spvFlowTipPos);
+                g.addEventListener('mouseleave', _spvFlowTipHide);
+            });
+        });
+    }
+    function _spvFlowTipEl() { var t = document.getElementById('spv-flow-tip'); if (!t) { t = document.createElement('div'); t.id = 'spv-flow-tip'; document.body.appendChild(t); } return t; }
+    function _spvFlowTip(fid, pid, e) {
+        var doc = (currentData.docs || []).find(function (x) { return x.id === fid; }); if (!doc) return;
+        var p = (doc.meta && doc.meta.diagram) || {};
+        var item = (p.nodes || []).find(function (x) { return x.id === pid; }) || (p.points || []).find(function (x) { return x.id === pid; }); if (!item) return;
+        gphSetActiveParts(p);
+        var meta = gphStatusInfo(item.status)[0] + (item.assigneeId ? (' · 담당 ' + gphMemberName(item.assigneeId)) : ' · 미배정') + ' · ' + gphPartName(item.part);
+        var body = item.body || item.description || '';
+        if (item.linkedCardId) { var t = (currentData.tasks || []).find(function (x) { return x.id === item.linkedCardId; }); body += (body ? '\n' : '') + '🗂 카드: ' + (t ? (t.title || '') : '(삭제됨)'); }
+        if (item.linkedDocId) { var dc = (currentData.docs || []).find(function (x) { return x.id === item.linkedDocId; }); body += (body ? '\n' : '') + '📄 문서: ' + (dc ? (dc.title || '') : '(삭제됨)'); }
+        var el = _spvFlowTipEl();
+        el.innerHTML = '<div class="tt-title">' + gphEsc(item.title || '(무제)') + '</div><div class="tt-meta">' + gphEsc(meta) + '</div>' + (body ? '<div class="tt-body">' + gphEsc(body) + '</div>' : '') + '<div class="tt-meta" style="margin-top:4px;opacity:.65">클릭 = 그래프 탭에서 편집</div>';
+        el.classList.add('show'); _spvFlowTipPos(e);
+    }
+    function _spvFlowTipPos(e) { var el = document.getElementById('spv-flow-tip'); if (!el || !el.classList.contains('show')) return; var x = e.clientX + 14, y = e.clientY + 14; var r = el.getBoundingClientRect(); if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 12; if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - 12; if (x < 6) x = 6; if (y < 6) y = 6; el.style.left = x + 'px'; el.style.top = y + 'px'; }
+    function _spvFlowTipHide() { var el = document.getElementById('spv-flow-tip'); if (el) el.classList.remove('show'); }
+
     // ===== Actions =====
     function gphAddPoint(position) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode !== 'linear') return; var id = gphUid('p'); p.points.push({ id: id, position: Math.max(0.02, Math.min(0.98, position)), part: 'ai', title: '새 포인트', description: '', highlighted: false }); gphState.selected = { type: 'point', id: id }; gphSave(d); gphRender(); setTimeout(function () { var el = document.getElementById('gphPtTitle'); if (el) { el.focus(); el.select(); } }, 50); }
     function gphAddNode(x, y) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode !== 'graph') return; var id = gphUid('n'); p.nodes.push({ id: id, x: x, y: y, w: 200, h: 80, part: 'ai', title: '새 노드', meta: '', body: '', highlighted: false }); gphState.selected = { type: 'node', id: id }; gphSave(d); gphRender(); setTimeout(function () { var el = document.getElementById('gphNodeTitle'); if (el) { el.focus(); el.select(); } }, 50); }
@@ -14553,12 +14727,17 @@ ${intrLog}
     }
 
     // ===== Bottom Panel =====
-    function gphPartSelect(id, cur) { var opts = [['ai', 'AI'], ['terrain', '지형'], ['scenario', '시나리오'], ['planning', '기획'], ['shared', '공유'], ['extra1', 'Extra1'], ['extra2', 'Extra2']]; return '<select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '" ' + (cur === o[0] ? 'selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; }
+    function gphPartSelect(id, cur) {
+        var d = gphCurrent(); var opts = gphPartList(d ? gphPayload(d) : null);
+        var seen = {}; opts.forEach(function (o) { seen[o.key] = true; });
+        if (cur && !seen[cur]) opts.push({ key: cur, name: cur });
+        return '<select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o.key + '" ' + (cur === o.key ? 'selected' : '') + '>' + gphEsc(o.name) + '</option>'; }).join('') + '<option value="__add">➕ 사용자 정의…</option></select>';
+    }
     function gphRenderPanel() {
         var panel = document.getElementById('gph-panel'); if (!panel) return;
         var d = gphCurrent();
         if (!d) { panel.innerHTML = '<div class="gph-panel-empty">그래프를 선택하거나 새로 만드세요</div>'; return; }
-        var p = gphPayload(d);
+        var p = gphPayload(d); gphSetActiveParts(p);
         if (!gphState.selected) { gphPanelInfo(panel, d, p); return; }
         if (gphState.selected.type === 'point') gphPanelPoint(panel, d, p);
         else if (gphState.selected.type === 'node') gphPanelNode(panel, d, p);
@@ -14580,10 +14759,23 @@ ${intrLog}
     }
     function gphPanelPoint(panel, d, p) {
         var pt = p.points.find(function (x) { return x.id === gphState.selected.id; }); if (!pt) { gphState.selected = null; gphRenderPanel(); return; }
+        var st = pt.status || 'pending';
         panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">포인트 <span class="gph-pt-dim">— ' + gphEsc(pt.title) + '</span></span><div style="display:flex;gap:6px;align-items:center"><label class="gph-chk"><input type="checkbox" id="gphPtHi" ' + (pt.highlighted ? 'checked' : '') + '> 강조</label><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphPtDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphPtClose">닫기</button></div></div>'
-            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphPtTitle" value="' + gphEsc(pt.title) + '"></div><div class="gph-fr"><label>파트</label>' + gphPartSelect('gphPtPart', pt.part) + '</div><div class="gph-fr full"><label>위치 (0.02~0.98)</label><input type="number" id="gphPtPos" value="' + pt.position.toFixed(2) + '" step="0.01" min="0.02" max="0.98"></div><div class="gph-fr full"><label>설명</label><textarea id="gphPtDesc" rows="3">' + gphEsc(pt.description || '') + '</textarea></div></div>';
+            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphPtTitle" value="' + gphEsc(pt.title) + '"></div><div class="gph-fr"><label>파트 (색상)</label>' + gphPartSelect('gphPtPart', pt.part) + '</div>'
+            + '<div class="gph-fr"><label>담당자</label>' + gphMemberSel('gphPtAssignee', pt.assigneeId || '') + '</div>'
+            + '<div class="gph-fr"><label>상태</label><div style="display:flex;gap:4px"><select id="gphPtStatus" style="flex:1"><option value="pending"' + (st === 'pending' ? ' selected' : '') + '>⏳ 대기중</option><option value="progress"' + (st === 'progress' ? ' selected' : '') + '>🔥 진행중</option><option value="done"' + (st === 'done' ? ' selected' : '') + '>✅ 완료</option></select><button class="gph-btn gph-btn-sm" id="gphPtDone" title="완료 체크">✅</button></div></div>'
+            + '<div class="gph-fr"><label>카드 연결</label><div style="display:flex;gap:4px">' + gphTaskSel('gphPtCard', pt.linkedCardId || '') + (pt.linkedCardId ? '<button class="gph-btn gph-btn-sm" id="gphPtCardGo" title="카드로 이동">↗</button>' : '') + '</div></div>'
+            + '<div class="gph-fr"><label>문서 연결</label><div style="display:flex;gap:4px">' + gphDocSel('gphPtDoc', pt.linkedDocId || '') + (pt.linkedDocId ? '<button class="gph-btn gph-btn-sm" id="gphPtDocGo" title="문서로 이동">↗</button>' : '') + '</div></div>'
+            + '<div class="gph-fr full"><label>위치 (0.02~0.98)</label><input type="number" id="gphPtPos" value="' + pt.position.toFixed(2) + '" step="0.01" min="0.02" max="0.98"></div><div class="gph-fr full"><label>설명</label><textarea id="gphPtDesc" rows="3">' + gphEsc(pt.description || '') + '</textarea></div></div>';
         document.getElementById('gphPtTitle').oninput = function (e) { pt.title = e.target.value; gphSave(d); gphRenderCanvas(); };
-        document.getElementById('gphPtPart').onchange = function (e) { pt.part = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphPtPart').onchange = function (e) { gphPartSelChange(e.target, d, function (k) { pt.part = k; }); };
+        document.getElementById('gphPtAssignee').onchange = function (e) { pt.assigneeId = e.target.value || null; if (pt.assigneeId && (!pt.status || pt.status === 'pending')) pt.status = 'progress'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
+        document.getElementById('gphPtStatus').onchange = function (e) { pt.status = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphPtDone').onclick = function () { pt.status = 'done'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); showToast('✅ 완료 처리', 'success'); };
+        document.getElementById('gphPtCard').onchange = function (e) { pt.linkedCardId = e.target.value || null; gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
+        if (document.getElementById('gphPtCardGo')) document.getElementById('gphPtCardGo').onclick = function () { gphGoTask(pt.linkedCardId); };
+        document.getElementById('gphPtDoc').onchange = function (e) { pt.linkedDocId = e.target.value || null; if (pt.linkedDocId) gphLinkDocReverse(d, pt.linkedDocId); gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
+        if (document.getElementById('gphPtDocGo')) document.getElementById('gphPtDocGo').onclick = function () { gphGoDoc(pt.linkedDocId); };
         document.getElementById('gphPtPos').onchange = function (e) { var v = parseFloat(e.target.value); if (isNaN(v)) return; pt.position = Math.max(0.02, Math.min(0.98, v)); e.target.value = pt.position.toFixed(2); gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphPtDesc').oninput = function (e) { pt.description = e.target.value; gphSave(d); };
         document.getElementById('gphPtHi').onchange = function (e) { pt.highlighted = e.target.checked; gphSave(d); gphRenderCanvas(); };
@@ -14613,7 +14805,7 @@ ${intrLog}
             + '<div class="gph-fr"><label>위치 X,Y</label><div style="display:flex;gap:4px"><input type="number" id="gphNodeX" value="' + Math.round(n.x) + '" step="10" style="width:50%"><input type="number" id="gphNodeY" value="' + Math.round(n.y) + '" step="10" style="width:50%"></div></div>'
             + '<div class="gph-fr full"><label>본문 / 메모</label><textarea id="gphNodeBody" rows="3">' + gphEsc(n.body || '') + '</textarea></div></div>';
         document.getElementById('gphNodeTitle').oninput = function (e) { n.title = e.target.value; gphSave(d); gphRenderCanvas(); };
-        document.getElementById('gphNodePart').onchange = function (e) { n.part = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphNodePart').onchange = function (e) { gphPartSelChange(e.target, d, function (k) { n.part = k; }); };
         document.getElementById('gphNodeAssignee').onchange = function (e) { n.assigneeId = e.target.value || null; if (n.assigneeId && (!n.status || n.status === 'pending')) n.status = 'progress'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
         document.getElementById('gphNodeStatus').onchange = function (e) { n.status = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphNodeDone').onclick = function () { n.status = 'done'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); showToast('✅ 완료 처리', 'success'); };
