@@ -211,6 +211,13 @@
         html.is-desktop .kanban-col-focused { flex: 4; min-width: 500px; width: 100%; }
         html.is-desktop .kanban-col-minimized { flex: 0 0 60px; overflow: hidden; cursor: pointer; background: #ece7dc; border: 2px solid #e7e3d8; align-items: center; }
         html.is-desktop .kanban-col-minimized:hover { background: #e7e3d8; }
+        /* [정렬] 카테고리별 진척률 박스를 칸반 보드 컬럼과 동일 좌우폭·수직 정렬 (보드 레이아웃 미러링) */
+        /* 보드: #board(padding:16px) + .kanban-col-normal(flex:0 0 340px) + gap 2rem → 동일하게 미러 */
+        html.is-desktop #progress-container { display: flex; flex-direction: column; gap: 2rem; width: 100%; padding-left: 16px; padding-right: 16px; }
+        @media (min-width: 1280px) { html.is-desktop #progress-container { flex-direction: row; } }
+        html.is-desktop #progress-container > div { flex: 0 0 340px; min-width: 340px; max-width: 340px; width: 340px; }
+        html.is-mobile #progress-container { display: flex; flex-direction: column; gap: 16px; width: 100%; padding-left: 16px; padding-right: 16px; }
+        html.is-mobile #progress-container > div { flex: 1; min-width: 280px; width: 100%; }
         html.is-desktop .kanban-col-minimized .col-header h2 { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; margin-top: 20px; font-size: 1.1rem; white-space: nowrap; color: #57544c; text-align: center; }
         html.is-desktop .kanban-col-minimized .col-header p,
         html.is-desktop .kanban-col-minimized .col-header .cat-controls,
@@ -2645,7 +2652,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <h2 class="text-2xl font-black text-gray-800">카테고리별 진척률 (Category Progress)</h2>
                     <button class="text-xl hover:scale-110 transition-transform bg-gray-100 p-2 rounded-lg border border-gray-300 shadow-sm" onclick="copyProgressToClipboard()" title="진척률 마크다운 복사">📋</button>
                 </div>
-                <div id="progress-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8" style="padding-bottom:60px;"></div>
+                <div id="progress-container" style="padding-bottom:60px;"></div>
             </div>
         </div>
 
