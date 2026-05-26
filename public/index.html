@@ -9529,8 +9529,9 @@ ${intrLog}
                 });
 
                 if (catTasks.length === 0) {
-                    const _rawCount = currentData.tasks.filter(t => t.catId === cat.id).length;
-                    const _emptyMsg = (isFiltering && _rawCount > 0)
+                    // [버그수정] 필터 활성 시 빈 컬럼은 카테고리별 차이 없이 일관되게 "필터 결과 없음" 표시
+                    // (이전: 숨겨진 비매칭 카드가 있는 컬럼만 다른 메시지 → 첫 카테고리만 다르게 보이는 혼란)
+                    const _emptyMsg = isFiltering
                         ? '<span class="ce-emoji">🔍</span>현재 필터에 맞는 카드가 없습니다.'
                         : '<span class="ce-emoji">🗂️</span>아직 할 일이 없어요.<br>아래 <b>+ 새 할일 추가</b>로 시작하세요.';
                     const _empty = document.createElement('div'); _empty.className = 'col-empty'; _empty.innerHTML = _emptyMsg;
