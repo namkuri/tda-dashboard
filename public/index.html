@@ -2758,6 +2758,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .gph-legend { display: flex; gap: 12px; padding: 5px 20px; border-bottom: 1px solid var(--c-border); background: var(--c-paper); font-size: 11px; color: var(--c-text2); flex-shrink: 0; overflow-x: auto; white-space: nowrap; }
         .gph-legend-item { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
         .gph-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .gph-legend-add { background: var(--c-accent-soft); border: 1px solid var(--c-border); color: var(--c-accent); border-radius: 6px; padding: 1px 8px; font-size: 11px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+        .gph-legend-add:hover { background: var(--c-accent); color: #fff; }
         .gph-legend-hint { margin-left: auto; color: var(--c-text3); flex-shrink: 0; }
         .gph-canvas-wrap { flex: 1; min-height: 280px; overflow: hidden; position: relative; background: var(--c-paper); background-image: linear-gradient(var(--c-border) 1px, transparent 1px), linear-gradient(90deg, var(--c-border) 1px, transparent 1px); background-size: 24px 24px; }
         .gph-main { overflow-y: auto; }
@@ -14180,6 +14182,8 @@ ${intrLog}
         showToast('🎨 파트 추가: ' + name.trim(), 'success');
         return key;
     }
+    // 범례의 ➕ 파트 버튼 → 현재 그래프에 사용자 정의 파트 추가 (발견성 향상)
+    async function gphAddCustomPartCurrent() { var d = gphCurrent(); if (!d) { showToast('먼저 그래프를 선택하세요.', 'alert'); return; } var k = await gphAddCustomPart(d); if (k) { gphRenderHeader(); gphRenderCanvas(); gphRenderPanel(); } }
     // 파트 select onchange 공통 처리 (사용자 정의 추가 분기). applyFn(key) 로 대상에 반영.
     async function gphPartSelChange(sel, d, applyFn) {
         if (sel.value === '__add') { var k = await gphAddCustomPart(d); if (!k) { gphRenderPanel(); return; } applyFn(k); gphSave(d); gphRenderCanvas(); gphRenderHeader(); gphRenderPanel(); return; }
@@ -14303,7 +14307,7 @@ ${intrLog}
         tree.ondragover = function (e) { e.preventDefault(); };
         tree.ondrop = function (e) { if (e.target === tree) { e.preventDefault(); gphReparent(dragId, ''); dragId = null; } };
     }
-    function gphReparent(dragId, dropId) {
+    async function gphReparent(dragId, dropId) {
         if (!dragId || dragId === dropId) return;
         var drag = gphById(dragId); if (!drag) return;
         var newParent;
@@ -14312,10 +14316,16 @@ ${intrLog}
         // 사이클 방지: drag가 폴더면 newParent가 자기 자손이면 안 됨
         if (newParent) { var cur = gphById(newParent); var guard = 0; while (cur && guard++ < 100) { if (cur.id === dragId) { showToast('하위 폴더로는 이동할 수 없습니다.', 'alert'); return; } cur = cur.parentId ? gphById(cur.parentId) : null; } }
         if ((drag.parentId || null) === (newParent || null)) return;
+        // [확인] 문서처럼 예/아니오 팝업
+        var pDoc = newParent ? gphById(newParent) : null;
+        var dragKind = gphIsFolder(drag) ? '폴더' : '그래프';
+        var msg = pDoc ? ('"' + (drag.title || '(무제)') + '" ' + dragKind + '을(를)\n"' + (pDoc.title || '(무제)') + '" ' + (gphIsFolder(pDoc) ? '폴더' : '그래프') + ' 아래로 이동할까요?') : ('"' + (drag.title || '(무제)') + '"을(를) 최상위로 이동할까요?');
+        var ok = await uiConfirm({ title: '하위로 이동', message: msg, confirmText: '이동' });
+        if (!ok) { gphRenderTree(); return; }
         drag.parentId = newParent || null;
         if (newParent) gphState.expanded[newParent] = true;
         gphSave(drag); gphRenderTree();
-        showToast('이동됨', 'info');
+        showToast('📂 이동됨', 'success');
     }
     // 트리 항목 컨텍스트 메뉴
     function gphTreeCtx(e, id) {
@@ -14361,6 +14371,7 @@ ${intrLog}
             legend.style.display = '';
             var parts = gphPartList(p).map(function (o) { return o.key; });
             legend.innerHTML = parts.map(function (pt) { return '<div class="gph-legend-item"><span class="gph-legend-dot" style="background:' + gphPartColor(pt) + '"></span>' + gphEsc(gphPartName(pt)) + '</div>'; }).join('')
+                + '<button class="gph-legend-add" onclick="gphAddCustomPartCurrent()" title="사용자 정의 파트(이름·색상) 추가">➕ 파트</button>'
                 + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴') + '</div>';
         }
         // 작성자 / 작성일 / 수정일 + 공개여부
@@ -14761,7 +14772,7 @@ ${intrLog}
         var pt = p.points.find(function (x) { return x.id === gphState.selected.id; }); if (!pt) { gphState.selected = null; gphRenderPanel(); return; }
         var st = pt.status || 'pending';
         panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">포인트 <span class="gph-pt-dim">— ' + gphEsc(pt.title) + '</span></span><div style="display:flex;gap:6px;align-items:center"><label class="gph-chk"><input type="checkbox" id="gphPtHi" ' + (pt.highlighted ? 'checked' : '') + '> 강조</label><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphPtDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphPtClose">닫기</button></div></div>'
-            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphPtTitle" value="' + gphEsc(pt.title) + '"></div><div class="gph-fr"><label>파트 (색상)</label>' + gphPartSelect('gphPtPart', pt.part) + '</div>'
+            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphPtTitle" value="' + gphEsc(pt.title) + '"></div><div class="gph-fr"><label>파트 (색상)</label><div style="display:flex;gap:4px">' + gphPartSelect('gphPtPart', pt.part) + '<button class="gph-btn gph-btn-sm" id="gphPtPartAdd" title="사용자 정의 파트 추가">➕</button></div></div>'
             + '<div class="gph-fr"><label>담당자</label>' + gphMemberSel('gphPtAssignee', pt.assigneeId || '') + '</div>'
             + '<div class="gph-fr"><label>상태</label><div style="display:flex;gap:4px"><select id="gphPtStatus" style="flex:1"><option value="pending"' + (st === 'pending' ? ' selected' : '') + '>⏳ 대기중</option><option value="progress"' + (st === 'progress' ? ' selected' : '') + '>🔥 진행중</option><option value="done"' + (st === 'done' ? ' selected' : '') + '>✅ 완료</option></select><button class="gph-btn gph-btn-sm" id="gphPtDone" title="완료 체크">✅</button></div></div>'
             + '<div class="gph-fr"><label>카드 연결</label><div style="display:flex;gap:4px">' + gphTaskSel('gphPtCard', pt.linkedCardId || '') + (pt.linkedCardId ? '<button class="gph-btn gph-btn-sm" id="gphPtCardGo" title="카드로 이동">↗</button>' : '') + '</div></div>'
@@ -14769,6 +14780,7 @@ ${intrLog}
             + '<div class="gph-fr full"><label>위치 (0.02~0.98)</label><input type="number" id="gphPtPos" value="' + pt.position.toFixed(2) + '" step="0.01" min="0.02" max="0.98"></div><div class="gph-fr full"><label>설명</label><textarea id="gphPtDesc" rows="3">' + gphEsc(pt.description || '') + '</textarea></div></div>';
         document.getElementById('gphPtTitle').oninput = function (e) { pt.title = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphPtPart').onchange = function (e) { gphPartSelChange(e.target, d, function (k) { pt.part = k; }); };
+        document.getElementById('gphPtPartAdd').onclick = async function () { var k = await gphAddCustomPart(d); if (k) { pt.part = k; gphSave(d); gphRenderCanvas(); gphRenderHeader(); gphRenderPanel(); } };
         document.getElementById('gphPtAssignee').onchange = function (e) { pt.assigneeId = e.target.value || null; if (pt.assigneeId && (!pt.status || pt.status === 'pending')) pt.status = 'progress'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
         document.getElementById('gphPtStatus').onchange = function (e) { pt.status = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphPtDone').onclick = function () { pt.status = 'done'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); showToast('✅ 완료 처리', 'success'); };
@@ -14795,7 +14807,7 @@ ${intrLog}
         var n = p.nodes.find(function (x) { return x.id === gphState.selected.id; }); if (!n) { gphState.selected = null; gphRenderPanel(); return; }
         var st = n.status || 'pending';
         panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">노드 <span class="gph-pt-dim">— ' + gphEsc(n.title) + '</span></span><div style="display:flex;gap:6px;align-items:center"><label class="gph-chk"><input type="checkbox" id="gphNodeHi" ' + (n.highlighted ? 'checked' : '') + '> 강조</label><button class="gph-btn gph-btn-sm" id="gphNodeEdge">＋ 엣지</button><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphNodeDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphNodeClose">닫기</button></div></div>'
-            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphNodeTitle" value="' + gphEsc(n.title || '') + '"></div><div class="gph-fr"><label>파트 (색상)</label>' + gphPartSelect('gphNodePart', n.part) + '</div>'
+            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphNodeTitle" value="' + gphEsc(n.title || '') + '"></div><div class="gph-fr"><label>파트 (색상)</label><div style="display:flex;gap:4px">' + gphPartSelect('gphNodePart', n.part) + '<button class="gph-btn gph-btn-sm" id="gphNodePartAdd" title="사용자 정의 파트 추가">➕</button></div></div>'
             + '<div class="gph-fr"><label>담당자</label>' + gphMemberSel('gphNodeAssignee', n.assigneeId || '') + '</div>'
             + '<div class="gph-fr"><label>상태</label><div style="display:flex;gap:4px"><select id="gphNodeStatus" style="flex:1"><option value="pending"' + (st === 'pending' ? ' selected' : '') + '>⏳ 대기중</option><option value="progress"' + (st === 'progress' ? ' selected' : '') + '>🔥 진행중</option><option value="done"' + (st === 'done' ? ' selected' : '') + '>✅ 완료</option></select><button class="gph-btn gph-btn-sm" id="gphNodeDone" title="완료 체크">✅</button></div></div>'
             + '<div class="gph-fr"><label>카드 연결</label><div style="display:flex;gap:4px">' + gphTaskSel('gphNodeCard', n.linkedCardId || '') + (n.linkedCardId ? '<button class="gph-btn gph-btn-sm" id="gphNodeCardGo" title="카드로 이동">↗</button>' : '') + '</div></div>'
@@ -14806,6 +14818,7 @@ ${intrLog}
             + '<div class="gph-fr full"><label>본문 / 메모</label><textarea id="gphNodeBody" rows="3">' + gphEsc(n.body || '') + '</textarea></div></div>';
         document.getElementById('gphNodeTitle').oninput = function (e) { n.title = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphNodePart').onchange = function (e) { gphPartSelChange(e.target, d, function (k) { n.part = k; }); };
+        document.getElementById('gphNodePartAdd').onclick = async function () { var k = await gphAddCustomPart(d); if (k) { n.part = k; gphSave(d); gphRenderCanvas(); gphRenderHeader(); gphRenderPanel(); } };
         document.getElementById('gphNodeAssignee').onchange = function (e) { n.assigneeId = e.target.value || null; if (n.assigneeId && (!n.status || n.status === 'pending')) n.status = 'progress'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); };
         document.getElementById('gphNodeStatus').onchange = function (e) { n.status = e.target.value; gphSave(d); gphRenderCanvas(); };
         document.getElementById('gphNodeDone').onclick = function () { n.status = 'done'; gphSave(d); gphRenderCanvas(); gphRenderPanel(); showToast('✅ 완료 처리', 'success'); };
