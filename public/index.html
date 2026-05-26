@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-26 r23 (r22 + 에디터 우클릭: 코드 가져오기/코드 인용/문서 인용 삽입 피커) -->
+<!-- BUILD: 2026-05-26 r24 (r23 + Git 전체폭 레이아웃 + 파일/히스토리/코드 우클릭: 문서로 인용·인용구/링크 복사) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3007,7 +3007,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         html.is-desktop #git-view { padding: 8px 16px 48px; }
         html.is-mobile #git-view { padding: 8px 16px 90px; }
         #git-view.hidden { display: none; }
-        .gitp-wrap { max-width: 1100px; margin: 0 auto; }
+        .gitp-wrap { max-width: none; margin: 0; width: 100%; }
         .gitp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
         .gitp-title { font-size: 22px; font-weight: 800; color: var(--c-text); letter-spacing: -0.02em; }
         .gitp-sub { font-size: 12.5px; color: var(--c-text3); margin-top: 3px; line-height: 1.5; max-width: 640px; }
@@ -3068,8 +3068,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .gitp-subtabs { display: flex; gap: 4px; margin-top: 10px; }
         .gitp-subtab { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 8px 8px 0 0; padding: 6px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
         .gitp-subtab.on { background: var(--c-accent-soft); color: var(--c-accent); border-color: var(--c-accent); border-bottom-color: transparent; }
-        .gitp-split { display: flex; gap: 10px; align-items: stretch; height: 62vh; min-height: 360px; }
-        .gitp-tree, .gitp-commits { flex: 0 0 300px; overflow: auto; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 6px; }
+        .gitp-split { display: flex; gap: 10px; align-items: stretch; height: 74vh; min-height: 420px; }
+        .gitp-tree, .gitp-commits { flex: 0 0 270px; overflow: auto; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 6px; }
         .gitp-viewer { flex: 1; min-width: 0; overflow: auto; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; }
         .gitp-viewer-empty { padding: 30px 16px; text-align: center; color: var(--c-text3); font-size: 13px; line-height: 1.6; }
         .gitp-tnode { font-size: 12.5px; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; color: var(--c-text); user-select: none; font-family: 'JetBrains Mono', monospace; }
@@ -15534,7 +15534,7 @@ ${intrLog}
         });
         node.files.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (f) {
             var sel = gitState.filePath === f.path;
-            html += '<div class="gitp-tnode gitp-tfile' + (sel ? ' sel' : '') + '" data-path="' + gitEsc(f.path) + '" style="padding-left:' + (6 + depth * 13 + 15) + 'px" onclick="gitSelectFile(\'' + _gitAttr(f.path) + '\')" title="' + gitEsc(f.path) + '">' + gitFileIcon(f.name) + ' ' + gitEsc(f.name) + '</div>';
+            html += '<div class="gitp-tnode gitp-tfile' + (sel ? ' sel' : '') + '" data-path="' + gitEsc(f.path) + '" style="padding-left:' + (6 + depth * 13 + 15) + 'px" onclick="gitSelectFile(\'' + _gitAttr(f.path) + '\')" oncontextmenu="gitCtxFile(event,\'' + _gitAttr(f.path) + '\')" title="' + gitEsc(f.path) + '">' + gitFileIcon(f.name) + ' ' + gitEsc(f.name) + '</div>';
         });
         return html;
     }
@@ -15571,7 +15571,7 @@ ${intrLog}
             var f = await gitFetchFile(full, ref, path);
             var lines = (f.text || '').split('\n'); var MAX = 800;
             var shown = lines.length > MAX ? lines.slice(0, MAX) : lines;
-            var table = '<div class="gitp-code"><table>' + shown.map(function (ln, i) { return '<tr><td class="gln">' + (i + 1) + '</td><td class="gtxt">' + gitEsc(ln === '' ? ' ' : ln) + '</td></tr>'; }).join('') + '</table></div>';
+            var table = '<div class="gitp-code" oncontextmenu="gitCtxCode(event)" title="우클릭: 문서로 인용 / 인용구·링크 복사 (텍스트 선택 시 해당 줄범위)"><table>' + shown.map(function (ln, i) { return '<tr><td class="gln">' + (i + 1) + '</td><td class="gtxt">' + gitEsc(ln === '' ? ' ' : ln) + '</td></tr>'; }).join('') + '</table></div>';
             var trunc = lines.length > MAX ? '<div class="gitp-trunc">⚠️ ' + lines.length + '줄 중 ' + MAX + '줄만 표시 — 전체는 GitHub에서 보세요.</div>' : '';
             viewer.innerHTML = '<div class="gitp-viewer-head"><span class="gitp-embed-path">' + gitEsc(path) + '</span><span class="gitp-embed-meta">' + lines.length + '줄</span>'
                 + '<button class="gitp-cite-btn" onclick="gitCiteFromFile(\'' + _gitAttr(path) + '\')" title="이 파일을 코드 인용으로 만들기">🔖 인용</button>'
@@ -15586,7 +15586,7 @@ ${intrLog}
             var el = document.getElementById('gitp-commits'); if (!el) return;
             el.innerHTML = commits.map(function (c) {
                 var when = new Date(c.commit.author.date).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                return '<div class="gitp-commititem' + (gitState.commitSha === c.sha ? ' sel' : '') + '" onclick="gitSelectCommit(\'' + c.sha + '\')"><div class="gitp-ci-msg">' + gitEsc((c.commit.message || '').split('\n')[0].slice(0, 54)) + '</div><div class="gitp-ci-meta"><span class="gitp-sha">' + c.sha.slice(0, 7) + '</span> ' + gitEsc(c.commit.author.name || '') + ' · ' + when + '</div></div>';
+                return '<div class="gitp-commititem' + (gitState.commitSha === c.sha ? ' sel' : '') + '" onclick="gitSelectCommit(\'' + c.sha + '\')" oncontextmenu="gitCtxCommit(event,\'' + c.sha + '\')"><div class="gitp-ci-msg">' + gitEsc((c.commit.message || '').split('\n')[0].slice(0, 54)) + '</div><div class="gitp-ci-meta"><span class="gitp-sha">' + c.sha.slice(0, 7) + '</span> ' + gitEsc(c.commit.author.name || '') + ' · ' + when + '</div></div>';
             }).join('') || '<div class="gitp-viewer-empty">커밋 없음</div>';
             if (gitState.commitSha) gitSelectCommit(gitState.commitSha);
         } catch (e) { var el2 = document.getElementById('gitp-commits'); if (el2) el2.innerHTML = '<div style="color:var(--st-danger);font-size:12px;">커밋 로드 실패: ' + gitEsc(e.message) + '</div>'; }
@@ -15624,6 +15624,85 @@ ${intrLog}
         body.innerHTML = '<div class="gitp-cite-form"><input class="gitp-path" id="gitp-path" placeholder="파일 경로 (예: public/index.html)" value="' + gitEsc(gitState.filePath || '') + '"><input class="gitp-ln" id="gitp-l1" type="number" min="1" placeholder="시작줄"><input class="gitp-ln" id="gitp-l2" type="number" min="1" placeholder="끝줄"><button class="gitp-cite-btn" onclick="gitNewRef(\'' + repo.id + '\')">🔖 코드 인용 만들기</button></div>'
             + '<div class="gitp-reflist-h">이 레포의 코드 인용 (' + refs.length + ')</div>'
             + (refs.length ? refs.map(function (r) { var m = r.meta || {}; return '<div class="gitp-reframe" onclick="gitSelectRef(\'' + r.id + '\')"><span class="gitp-rf-path">' + gitEsc(m.path || '') + '</span><span style="color:var(--c-text3);font-size:11px;">#L' + m.lineStart + (m.lineEnd && m.lineEnd !== m.lineStart ? ('-' + m.lineEnd) : '') + ' · ' + gitEsc(m.ref || '') + '</span><span class="gitp-rf-x" onclick="event.stopPropagation();gitDeleteRef(\'' + r.id + '\')">✕</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--c-text3);padding:6px 2px;">아직 인용이 없습니다. 📁 파일 탭에서 파일을 열고 🔖 인용을 누르거나, 위에 경로+줄 범위를 입력하세요.</div>');
+    }
+    // [Git 우클릭 컨텍스트] 파일·히스토리·코드 → 문서로 인용 / 인용구·링크 복사
+    function gitRefData(path, l1, l2) {
+        var repo = gitById(gitState.repoId); var full = (repo && repo.meta && repo.meta.fullName) || (repo && repo.title) || '';
+        var ref = gitState.viewCommit || gitState.branch || (repo && repo.meta && repo.meta.defaultBranch) || 'main';
+        return { repoId: repo ? repo.id : null, full: full, ref: ref, path: path, l1: l1 || null, l2: l2 || null };
+    }
+    function gitWebUrlOf(rd) { return gitProvider.webBase + '/' + rd.full + '/blob/' + rd.ref + '/' + rd.path.split('/').map(encodeURIComponent).join('/') + (rd.l1 ? ('#L' + rd.l1 + (rd.l2 && rd.l2 !== rd.l1 ? ('-L' + rd.l2) : '')) : ''); }
+    async function gitEnsureCoderef(rd) {
+        var f = await gitFetchFile(rd.full, rd.ref, rd.path); var lines = (f.text || '').split('\n');
+        var a, b; if (rd.l1 || rd.l2) { a = rd.l1 || rd.l2; b = rd.l2 || rd.l1; if (b < a) { var t = a; a = b; b = t; } } else { a = 1; b = Math.min(lines.length, 300); }
+        a = Math.max(1, Math.min(a, lines.length)); b = Math.max(a, Math.min(b, lines.length));
+        var snippet = lines.slice(a - 1, b).join('\n');
+        var doc = { id: gitUid('cr'), projectId: activeProjectId, parentId: rd.repoId, kind: 'coderef', title: rd.path.split('/').pop() + ' #L' + a + (b !== a ? ('-' + b) : ''), emoji: '🔖', content: '', meta: { repo: rd.full, ref: rd.ref, sha: f.sha, path: rd.path, lineStart: a, lineEnd: b, snippet: snippet, comments: [] }, createdAt: Date.now(), updatedAt: Date.now() };
+        if (!Array.isArray(currentData.docs)) currentData.docs = []; currentData.docs.push(doc); if (typeof gitSave === 'function') gitSave(doc);
+        return doc.id;
+    }
+    function gitCopyText(t, label) {
+        function fb() { try { var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast((label || '복사') + ' 복사됨', 'success'); } catch (e) { showToast('복사 실패 — 수동 복사: ' + t, 'info'); } }
+        try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { showToast((label || '복사') + ' 복사됨', 'success'); }, fb); else fb(); } catch (e) { fb(); }
+    }
+    async function gitCtxCopyCite(path, l1, l2) { try { showToast('인용 준비 중…', 'info'); var id = await gitEnsureCoderef(gitRefData(path, l1, l2)); gitCopyText('[[code:' + id + ']]', '인용구'); if (currentView === 'git') gitRenderMain(); } catch (e) { showToast('실패: ' + e.message, 'alert'); } }
+    async function gitCtxCiteToDoc(path, l1, l2) { try { showToast('인용 준비 중…', 'info'); var id = await gitEnsureCoderef(gitRefData(path, l1, l2)); gitPickDocForCite(id); if (currentView === 'git') gitRenderMain(); } catch (e) { showToast('실패: ' + e.message, 'alert'); } }
+    function gitPickDocForCite(coderefId) {
+        var KIND = [['wiki', '📄 문서'], ['canon', '🎮 게임 위키'], ['personal', '🔒 개인 문서']];
+        var pool = (currentData.docs || []).filter(function (d) { if ((d.projectId || 'default') !== activeProjectId) return false; if (d.meta && d.meta.isFolder) return false; var k = d.kind || 'wiki'; if (!(k === 'wiki' || k === 'canon' || k === 'personal')) return false; if (k === 'personal') { var o = d.meta && d.meta.owner; if (o && currentUser && o !== currentUser.id) return false; } return true; });
+        _openSimpleModal('📄 어느 문서에 인용할까요?', '<input id="gcd-search" class="gip-in" placeholder="문서 제목 검색" oninput="_gcdRender(this.value)"><div id="gcd-list" class="gip-files" style="margin-top:8px;max-height:46vh;"></div>');
+        window._gcdRender = function (q) { q = (q || '').toLowerCase(); var out = ''; KIND.forEach(function (g) { var grp = pool.filter(function (d) { return (d.kind || 'wiki') === g[0] && (!q || (d.title || '').toLowerCase().indexOf(q) >= 0); }); if (!grp.length) return; out += '<div class="gip-group">' + g[1] + ' <span style="opacity:.6">' + grp.length + '</span></div>' + grp.map(function (d) { return '<div class="gip-file" onclick="_gcdPick(\'' + d.id + '\')">' + _sprintEsc((d.emoji || '📄') + ' ' + (d.title || '제목없음')) + '</div>'; }).join(''); }); var le = document.getElementById('gcd-list'); if (le) le.innerHTML = out || '<span style="color:var(--c-text3);font-size:12px;">문서가 없습니다 (먼저 문서를 만드세요)</span>'; };
+        window._gcdPick = async function (docId) {
+            var d = (currentData.docs || []).find(function (x) { return x.id === docId; }); if (!d) return;
+            try {
+                if (d._contentLoaded === false && typeof _fetchDocContent === 'function') { d.content = (await _fetchDocContent(docId)) || ''; d._contentLoaded = true; }
+                d.content = (d.content || '') + '\n\n[[code:' + coderefId + ']]\n'; d.updatedAt = Date.now();
+                if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+                if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d);
+                if (typeof activeDocId !== 'undefined' && activeDocId === docId && typeof updateDocEditorUI === 'function') updateDocEditorUI();
+                _closeSimpleModal(); showToast('📄 "' + (d.title || '문서') + '"에 인용 추가됨', 'success');
+            } catch (e) { showToast('실패: ' + e.message, 'alert'); }
+        };
+        setTimeout(function () { window._gcdRender(''); }, 20);
+    }
+    function gitCtxFile(e, path) {
+        e.preventDefault(); e.stopPropagation();
+        var rd = gitRefData(path);
+        var html = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitSelectFile(\'' + _gitAttr(path) + '\')"><span>👁</span> 미리보기</div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitCtxCiteToDoc(\'' + _gitAttr(path) + '\')"><span>📄</span> 문서로 인용 (파일 전체)</div>'
+            + '<div class="ctx-menu-sep"></div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitCtxCopyCite(\'' + _gitAttr(path) + '\')"><span>📋</span> 인용구 복사 ([[code:]])</div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitCopyText(\'' + _gitAttr(gitWebUrlOf(rd)) + '\',\'GitHub 링크\')"><span>🔗</span> GitHub 링크 복사</div>';
+        _openCardMenu(e, html);
+    }
+    function gitCtxCommit(e, sha) {
+        e.preventDefault(); e.stopPropagation();
+        var repo = gitById(gitState.repoId); var full = (repo && repo.meta && repo.meta.fullName) || (repo && repo.title) || '';
+        var url = gitProvider.webBase + '/' + full + '/commit/' + sha;
+        var html = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitSelectCommit(\'' + sha + '\')"><span>👁</span> 변경 내역 보기</div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitUseVersion(\'' + sha + '\',\'\')"><span>📌</span> 이 버전 파일 보기</div>'
+            + '<div class="ctx-menu-sep"></div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitCopyText(\'' + url + '\',\'커밋 링크\')"><span>🔗</span> 커밋 링크 복사</div>';
+        _openCardMenu(e, html);
+    }
+    function _gitSelectedLines() {
+        try {
+            var s = window.getSelection(); if (!s || s.isCollapsed || !s.rangeCount) return null;
+            var r = s.getRangeAt(0);
+            function rowNum(node) { while (node && node.nodeType !== 1) node = node.parentNode; var tr = node ? (node.closest ? node.closest('tr') : null) : null; if (!tr) return null; var g = tr.querySelector('.gln'); return g ? parseInt(g.textContent, 10) : null; }
+            var a = rowNum(r.startContainer), b = rowNum(r.endContainer); if (!a || !b) return null; if (b < a) { var t = a; a = b; b = t; } return [a, b];
+        } catch (e) { return null; }
+    }
+    function gitCtxCode(e) {
+        e.preventDefault(); e.stopPropagation();
+        var path = gitState.filePath; if (!path) return;
+        var sel = _gitSelectedLines(); var l1 = sel ? sel[0] : null, l2 = sel ? sel[1] : null;
+        var rd = gitRefData(path, l1, l2);
+        var lbl = sel ? (' (L' + l1 + (l2 !== l1 ? ('-' + l2) : '') + ')') : ' (파일 전체)';
+        var html = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitCtxCiteToDoc(\'' + _gitAttr(path) + '\',' + (l1 || 'null') + ',' + (l2 || 'null') + ')"><span>📄</span> 문서로 인용' + lbl + '</div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitCtxCopyCite(\'' + _gitAttr(path) + '\',' + (l1 || 'null') + ',' + (l2 || 'null') + ')"><span>📋</span> 인용구 복사 ([[code:]])' + lbl + '</div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gitCopyText(\'' + _gitAttr(gitWebUrlOf(rd)) + '\',\'GitHub 링크\')"><span>🔗</span> GitHub 링크 복사' + lbl + '</div>';
+        _openCardMenu(e, html);
     }
     async function gitConnectRepo() {
         if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
