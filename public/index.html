@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-26 r20 (r19 + 문서연결 피커 종류별 그룹 + 연결 클릭 종류별 라우팅) -->
+<!-- BUILD: 2026-05-26 r21 (r20 + 데스크톱 페이지 스크롤 수정[스프린트·리뷰·Git] + 스프린트 흐름 노드 인라인 빠른편집) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1386,6 +1386,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             height: 100vh !important;
             overflow: hidden !important;
         }
+        /* [스크롤 수정] 전체 페이지형 뷰(스프린트·리뷰·Git·그래프)는 100vh app-wrapper(overflow:hidden) 안에서 내부 스크롤 */
+        html.is-desktop #sprint-view:not(.hidden),
+        html.is-desktop #review-view:not(.hidden),
+        html.is-desktop #git-view:not(.hidden) { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
         html.is-desktop #pc-header {
             flex-shrink: 0;
             padding: 6px 12px 0 12px;
@@ -2167,6 +2171,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         #spv-flow-tip .tt-title { font-weight: 800; margin-bottom: 2px; }
         #spv-flow-tip .tt-meta { font-size: 11px; opacity: 0.8; margin-bottom: 3px; }
         #spv-flow-tip .tt-body { white-space: pre-wrap; opacity: 0.95; }
+        /* [스프린트 흐름 인라인 빠른 편집 팝오버] */
+        #spv-flow-edit-pop { position: fixed; z-index: 100000; display: none; width: 250px; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); padding: 11px 13px; }
+        #spv-flow-edit-pop .spv-fe-h { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: var(--c-text); margin-bottom: 8px; }
+        #spv-flow-edit-pop .spv-fe-x { background: none; border: none; color: var(--c-text3); font-size: 14px; cursor: pointer; line-height: 1; }
+        #spv-flow-edit-pop .spv-fe-l { display: block; font-size: 10.5px; font-weight: 700; color: var(--c-text3); margin: 7px 0 2px; }
+        #spv-flow-edit-pop .spv-fe-in, #spv-flow-edit-pop select, #spv-flow-edit-pop .spv-fe-mem select { width: 100%; box-sizing: border-box; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 7px; padding: 5px 8px; font-size: 12.5px; }
+        #spv-flow-edit-pop .spv-fe-act { display: flex; gap: 6px; margin-top: 11px; }
+        #spv-flow-edit-pop .spv-fe-save { flex: 1; background: var(--c-accent); color: #fff; border: none; border-radius: 8px; padding: 7px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        #spv-flow-edit-pop .spv-fe-save:hover { background: var(--c-accent-hover); }
+        #spv-flow-edit-pop .spv-fe-open { background: var(--ios-fill); color: var(--c-text2); border: 1px solid var(--c-border); border-radius: 8px; padding: 7px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        #spv-flow-edit-pop .spv-fe-open:hover { background: var(--c-accent-soft); color: var(--c-accent); }
         /* [변경 로그] 기간 필터 바 */
         .cl-period-btn { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 8px; padding: 4px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
         .cl-period-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
@@ -15036,6 +15051,7 @@ ${intrLog}
                 g.addEventListener('mouseenter', function (e) { _spvFlowTip(fid, g.getAttribute('data-prev-id'), e); });
                 g.addEventListener('mousemove', _spvFlowTipPos);
                 g.addEventListener('mouseleave', _spvFlowTipHide);
+                g.addEventListener('click', function (e) { e.stopPropagation(); _spvFlowTipHide(); _spvFlowNodeEdit(fid, g.getAttribute('data-prev-id'), e); });
             });
         });
     }
@@ -15050,11 +15066,59 @@ ${intrLog}
         if (item.linkedCardId) { var t = (currentData.tasks || []).find(function (x) { return x.id === item.linkedCardId; }); body += (body ? '\n' : '') + '🗂 카드: ' + (t ? (t.title || '') : '(삭제됨)'); }
         if (item.linkedDocId) { var dc = (currentData.docs || []).find(function (x) { return x.id === item.linkedDocId; }); body += (body ? '\n' : '') + '📄 문서: ' + (dc ? (dc.title || '') : '(삭제됨)'); }
         var el = _spvFlowTipEl();
-        el.innerHTML = '<div class="tt-title">' + gphEsc(item.title || '(무제)') + '</div><div class="tt-meta">' + gphEsc(meta) + '</div>' + (body ? '<div class="tt-body">' + gphEsc(body) + '</div>' : '') + '<div class="tt-meta" style="margin-top:4px;opacity:.65">클릭 = 그래프 탭에서 편집</div>';
+        el.innerHTML = '<div class="tt-title">' + gphEsc(item.title || '(무제)') + '</div><div class="tt-meta">' + gphEsc(meta) + '</div>' + (body ? '<div class="tt-body">' + gphEsc(body) + '</div>' : '') + '<div class="tt-meta" style="margin-top:4px;opacity:.65">클릭 = 빠른 편집 (제목·파트·담당·상태)</div>';
         el.classList.add('show'); _spvFlowTipPos(e);
     }
     function _spvFlowTipPos(e) { var el = document.getElementById('spv-flow-tip'); if (!el || !el.classList.contains('show')) return; var x = e.clientX + 14, y = e.clientY + 14; var r = el.getBoundingClientRect(); if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 12; if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - 12; if (x < 6) x = 6; if (y < 6) y = 6; el.style.left = x + 'px'; el.style.top = y + 'px'; }
     function _spvFlowTipHide() { var el = document.getElementById('spv-flow-tip'); if (el) el.classList.remove('show'); }
+    // [스프린트 흐름 인라인 편집] 미리보기 노드/포인트 클릭 → 제목·파트·담당자·상태 빠른 편집(페이지 이탈 없이)
+    function _spvFlowNodeEdit(fid, pid, ev) {
+        var doc = (currentData.docs || []).find(function (x) { return x.id === fid; }); if (!doc) return;
+        var p = (doc.meta && doc.meta.diagram) || {};
+        var isPoint = false;
+        var item = (p.nodes || []).find(function (x) { return x.id === pid; });
+        if (!item) { item = (p.points || []).find(function (x) { return x.id === pid; }); isPoint = true; }
+        if (!item) return;
+        gphSetActiveParts(p);
+        var st = item.status || 'pending';
+        var partOpts = (typeof gphPartList === 'function') ? gphPartList(p) : [{ key: item.part, name: item.part }];
+        var partSel = '<select id="spv-edit-part" class="spv-fe-in">' + partOpts.map(function (o) { return '<option value="' + o.key + '"' + (item.part === o.key ? ' selected' : '') + '>' + gphEsc(o.name) + '</option>'; }).join('') + '</select>';
+        var memSel = (typeof gphMemberSel === 'function') ? gphMemberSel('spv-edit-assignee', item.assigneeId || '') : '<select id="spv-edit-assignee"><option value="">(담당자 없음)</option></select>';
+        var pop = document.getElementById('spv-flow-edit-pop'); if (!pop) { pop = document.createElement('div'); pop.id = 'spv-flow-edit-pop'; pop.onclick = function (e) { e.stopPropagation(); }; document.body.appendChild(pop); }
+        pop.innerHTML = '<div class="spv-fe-h">🔖 ' + (isPoint ? '포인트' : '노드') + ' 빠른 편집<button class="spv-fe-x" onclick="_spvFlowEditClose()">✕</button></div>'
+            + '<label class="spv-fe-l">제목</label><input id="spv-edit-title" class="spv-fe-in" value="' + gphEsc(item.title || '') + '">'
+            + '<label class="spv-fe-l">파트</label>' + partSel
+            + '<label class="spv-fe-l">담당자</label><span class="spv-fe-mem">' + memSel + '</span>'
+            + '<label class="spv-fe-l">상태</label><select id="spv-edit-status" class="spv-fe-in"><option value="pending"' + (st === 'pending' ? ' selected' : '') + '>⏳ 대기중</option><option value="progress"' + (st === 'progress' ? ' selected' : '') + '>🔥 진행중</option><option value="done"' + (st === 'done' ? ' selected' : '') + '>✅ 완료</option></select>'
+            + '<div class="spv-fe-act"><button class="spv-fe-save" onclick="_spvFlowEditSave(\'' + fid + '\',\'' + pid + '\')">저장</button><button class="spv-fe-open" onclick="_spvFlowEditClose();gphOpenFromSprint(\'' + fid + '\')">전체 편집 ↗</button></div>';
+        pop.style.display = 'block';
+        var x = ((ev && ev.clientX) || 200) + 12, y = ((ev && ev.clientY) || 200) + 12;
+        var r = pop.getBoundingClientRect();
+        if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+        if (y + r.height > window.innerHeight - 8) y = window.innerHeight - r.height - 8;
+        if (x < 6) x = 6; if (y < 6) y = 6;
+        pop.style.left = x + 'px'; pop.style.top = y + 'px';
+        setTimeout(function () { var t = document.getElementById('spv-edit-title'); if (t) { t.focus(); t.select(); } document.addEventListener('mousedown', _spvFeOutside, true); }, 0);
+    }
+    function _spvFeOutside(e) { var pop = document.getElementById('spv-flow-edit-pop'); if (pop && !pop.contains(e.target)) _spvFlowEditClose(); }
+    function _spvFlowEditClose() { var pop = document.getElementById('spv-flow-edit-pop'); if (pop) pop.style.display = 'none'; document.removeEventListener('mousedown', _spvFeOutside, true); }
+    function _spvFlowEditSave(fid, pid) {
+        var doc = (currentData.docs || []).find(function (x) { return x.id === fid; }); if (!doc) return;
+        var p = (doc.meta && doc.meta.diagram) || {};
+        var item = (p.nodes || []).find(function (x) { return x.id === pid; }) || (p.points || []).find(function (x) { return x.id === pid; }); if (!item) return;
+        var tEl = document.getElementById('spv-edit-title'); if (tEl) item.title = tEl.value;
+        var pEl = document.getElementById('spv-edit-part'); if (pEl && pEl.value) item.part = pEl.value;
+        var aEl = document.getElementById('spv-edit-assignee'); item.assigneeId = (aEl && aEl.value) || null;
+        var sEl = document.getElementById('spv-edit-status'); if (sEl && sEl.value) item.status = sEl.value;
+        if (item.assigneeId && (!item.status || item.status === 'pending')) item.status = 'progress';
+        doc.updatedAt = Date.now();
+        if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+        if (typeof dbUpsertDoc === 'function') dbUpsertDoc(doc);
+        _spvFlowEditClose();
+        if (currentView === 'sprint' && typeof renderSprintView === 'function') renderSprintView();
+        else if (typeof gphRender === 'function' && currentView === 'graph') gphRender();
+        if (typeof showToast === 'function') showToast('🔖 흐름 항목 수정됨', 'success');
+    }
 
     // ===== Actions =====
     function gphAddPoint(position) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode !== 'linear') return; var id = gphUid('p'); p.points.push({ id: id, position: Math.max(0.02, Math.min(0.98, position)), part: 'ai', title: '새 포인트', description: '', highlighted: false }); gphState.selected = { type: 'point', id: id }; gphSave(d); gphRender(); setTimeout(function () { var el = document.getElementById('gphPtTitle'); if (el) { el.focus(); el.select(); } }, 50); }
