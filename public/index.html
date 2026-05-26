@@ -4946,8 +4946,9 @@ return data;
         async function dbUpsertCategory(cat) {
             if (!supabaseClient) return;
             const { error } = await supabaseClient.from('kanban_categories').upsert({
-                id: cat.id, project_id: activeProjectId,
-                title: cat.title, subtitle: cat.subtitle || ''
+                id: cat.id, project_id: cat.projectId || activeProjectId,
+                title: cat.title, subtitle: cat.subtitle || '',
+                sprint_id: cat.sprintId || null
             });
             if (error) console.error('[dbUpsertCategory]', error);
         }
@@ -5166,7 +5167,7 @@ return data;
             return {
                 projects:   (projData || []),
                 categories: (catData || []).map(c => ({
-                    id: c.id, title: c.title, subtitle: c.subtitle, projectId: c.project_id || 'default'
+                    id: c.id, title: c.title, subtitle: c.subtitle, projectId: c.project_id || 'default', sprintId: c.sprint_id || null
                 })),
                 tasks: (taskData || []).map(t => ({
                     id: t.id, catId: t.cat_id, projectId: t.project_id || 'default', title: t.title,
@@ -5339,6 +5340,8 @@ return data;
                 await autoBuryOldCompleted();
                 // [v40 Day3 청크2] 만료된 pending 리뷰 정리
                 await sweepExpiredReviews();
+                // [#1] 스프린트별 카테고리 1회 전환(기존 카테고리/카드 귀속)
+                if (typeof migrateCategoriesToSprints === 'function') await migrateCategoriesToSprints();
 
                 // ★ Realtime: wiki_docs 변경 감지
                 supabaseClient.channel('rt-wiki-docs')
@@ -5682,6 +5685,8 @@ return data;
             activeDocId = null;
             focusedCategoryId = null;
             activeCanonId = null;
+            _boardSprintInit = false; // [#1] 새 프로젝트의 활성 스프린트로 보드 콤보 재설정
+            if (typeof migrateCategoriesToSprints === 'function') migrateCategoriesToSprints(); // 새 프로젝트도 1회 전환
             updateDocEditorUI();
             updateProjectTitle();
             renderDocTree();
@@ -7182,17 +7187,53 @@ return data;
             var sel = document.getElementById('filter-sprint'); if (!sel) return;
             var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
                 .slice().sort(function (a, b) { var r = (b.startDate || '').localeCompare(a.startDate || ''); return r !== 0 ? r : (b.id || '').localeCompare(a.id || ''); });
-            if (!_boardSprintInit) {
+            if (!sprints.length) { sel.innerHTML = '<option value="">(스프린트 없음 — 추가하세요)</option>'; return; }
+            // 기본/유효성: 활성→최신, 선택값이 사라졌으면 재설정
+            if (!_boardSprintInit || !sprints.find(function (s) { return s.id === selectedBoardSprintId; })) {
                 _boardSprintInit = true;
                 var act = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
-                selectedBoardSprintId = act ? act.id : (sprints.length ? sprints[0].id : 'all');
+                selectedBoardSprintId = (act && sprints.find(function (s) { return s.id === act.id; })) ? act.id : sprints[0].id;
             }
-            if (selectedBoardSprintId !== 'all' && selectedBoardSprintId !== 'none' && !sprints.find(function (s) { return s.id === selectedBoardSprintId; })) selectedBoardSprintId = 'all';
-            sel.innerHTML = '<option value="all">🗂 전체 스프린트</option><option value="none">📥 미지정</option>'
-                + sprints.map(function (s) { var b = s.status === 'active' ? '🏃 ' : (s.status === 'closed' ? '🏁 ' : '📋 '); return '<option value="' + s.id + '">' + b + _sprintEsc(s.weekLabel || s.id) + '</option>'; }).join('');
+            sel.innerHTML = sprints.map(function (s) { var b = s.status === 'active' ? '🏃 ' : (s.status === 'closed' ? '🏁 ' : '📋 '); return '<option value="' + s.id + '">' + b + _sprintEsc(s.weekLabel || s.id) + '</option>'; }).join('');
             sel.value = selectedBoardSprintId;
         }
 
+        // [#1] 새 스프린트에 직전 스프린트의 카테고리(컬럼)만 복제 — 카드는 복제 안 함
+        function _inheritCategories(newSprintId) {
+            var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId && s.id !== newSprintId; })
+                .slice().sort(function (a, b) { var r = (b.startDate || '').localeCompare(a.startDate || ''); return r !== 0 ? r : (b.id || '').localeCompare(a.id || ''); });
+            var prev = sprints[0]; if (!prev) return;
+            var prevCats = (currentData.categories || []).filter(function (c) { return (c.projectId || 'default') === activeProjectId && (c.sprintId || null) === prev.id; });
+            prevCats.forEach(function (c, i) {
+                var nc = { id: 'cat-' + Date.now() + '-' + i, title: c.title, subtitle: c.subtitle || '', projectId: activeProjectId, sprintId: newSprintId };
+                currentData.categories.push(nc); dbUpsertCategory(nc);
+            });
+        }
+        // [#1] 기존(스프린트 미지정) 카테고리·카드 → 활성/최신(없으면 신규 기본) 스프린트로 1회 귀속
+        async function migrateCategoriesToSprints() {
+            // 플래그 없이 멱등 실행: sprintId 없는 카테고리(+그 카드)를 활성/최신 스프린트에 귀속.
+            // (SQL 미실행으로 DB 영속이 실패해도 새로고침마다 in-memory 복구되어 보드가 비지 않음)
+            var orphan = (currentData.categories || []).filter(function (c) { return (c.projectId || 'default') === activeProjectId && !c.sprintId; });
+            if (!orphan.length) return;
+            var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
+                .slice().sort(function (a, b) { var r = (b.startDate || '').localeCompare(a.startDate || ''); return r !== 0 ? r : (b.id || '').localeCompare(a.id || ''); });
+            var target = (typeof getActiveSprint === 'function' && getActiveSprint()) || sprints[0] || null;
+            if (!target) {
+                var baseId = 'sprint-base-' + activeProjectId; // 안정 id → 재실행 중복 방지
+                target = (currentData.sprints || []).find(function (s) { return s.id === baseId; });
+                if (!target) {
+                    var now = new Date(); var w = getISOWeek(now); var mon = isoWeekMonday(now); var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+                    target = { id: baseId, projectId: activeProjectId, weekLabel: w.year + ' W' + _pad2(w.week), goal: '', status: 'active', intrusionCount: 0, intrusionLog: [], carryoverFromPrevious: [], milestoneCriteria: [], startDate: _fmtDate(mon), endDate: _fmtDate(sun), closedAt: null, history: [] };
+                    if (!Array.isArray(currentData.sprints)) currentData.sprints = [];
+                    currentData.sprints.push(target); if (typeof dbUpsertSprint === 'function') dbUpsertSprint(target);
+                }
+            }
+            orphan.forEach(function (c) { c.sprintId = target.id; dbUpsertCategory(c); });
+            var orphanIds = orphan.map(function (c) { return c.id; });
+            (currentData.tasks || []).forEach(function (t) { if ((t.projectId || 'default') === activeProjectId && orphanIds.indexOf(t.catId) >= 0) { t.sprintId = target.id; if (typeof dbUpsertTask === 'function') dbUpsertTask(t); } });
+            _boardSprintInit = false;
+            saveData();
+        }
         function updateJsonEditorView() { const editor = document.getElementById('json-editor'); if(editor) editor.value = JSON.stringify(currentData, null, 2); }
         function applyJsonFromEditor() { try { const parsed = JSON.parse(document.getElementById('json-editor').value); if(parsed.categories && parsed.tasks) { currentData = validateData(parsed); saveData(); showToast("JSON 데이터가 반영되었습니다.", "success"); if(currentView === 'docs') { updateProjectTitle(); renderDocTree(); } } else { showToast("유효한 구조가 아닙니다.", 'alert'); } } catch(err) { showToast("오류: " + err.message, 'alert'); } }
         function importJsonFile(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = function(evt) { document.getElementById('json-editor').value = evt.target.result; applyJsonFromEditor(); }; reader.readAsText(file); e.target.value = ""; }
@@ -7476,6 +7517,7 @@ return data;
                     history: [histEntry]
                 };
                 currentData.sprints.push(sprint);
+                _inheritCategories(sprint.id);
             }
             saveData();
             const { error } = await dbUpsertSprint(sprint);
@@ -7559,7 +7601,7 @@ return data;
         function toggleSprintCard(id) { _sprintCardOpen[id] = !_sprintCardOpen[id]; renderSprintView(); }
         // [#1] 한 스프린트(sid)의 카드를 카테고리별 섹션으로 (칸반 모사)
         function _sprintCatSections(sid) {
-            var cats = (currentData.categories || []).filter(function (c) { return (c.projectId || 'default') === activeProjectId; });
+            var cats = (currentData.categories || []).filter(function (c) { return (c.projectId || 'default') === activeProjectId && (c.sprintId || null) === sid; });
             var tasks = (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId && (t.sprintId || null) === sid; });
             var html = '';
             cats.forEach(function (cat) {
@@ -7672,7 +7714,7 @@ return data;
             } else {
                 var id = 'sprint-' + Date.now();
                 s = { id: id, projectId: activeProjectId, weekLabel: label, goal: '', status: 'planned', intrusionCount: 0, intrusionLog: [], carryoverFromPrevious: [], milestoneCriteria: [], startDate: start, endDate: end, closedAt: null, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] };
-                currentData.sprints.push(s); _sprintExpanded[id] = true;
+                currentData.sprints.push(s); _sprintExpanded[id] = true; _inheritCategories(id);
             }
             saveData(); await dbUpsertSprint(s); closeModal('sprint-edit-modal');
             if (currentView === 'sprint') renderSprintView();
@@ -8853,7 +8895,7 @@ ${intrLog}
         let activeTagEdit = null;
         async function editTag(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newTagName = await uiPrompt({ title: '태그 수정', label: '새 태그 이름', value: task.catBadge || '' }); if (newTagName === null) return; const finalTag = newTagName.trim() || task.catBadge; activeTagEdit = { oldTag: task.catBadge, newTag: finalTag }; const colorPicker = document.getElementById('hidden-color-picker'); colorPicker.value = currentData.tagColors[task.catBadge] || '#57544c'; setTimeout(() => colorPicker.click(), 100); }
         function onColorPicked(e) { if(!activeTagEdit) return; const newColor = e.target.value; const { oldTag, newTag } = activeTagEdit; const affectedTasks = []; currentData.tasks.forEach(t => { if(t.catBadge === oldTag) { t.catBadge = newTag; affectedTasks.push(t); } }); currentData.tagColors[newTag] = newColor; activeTagEdit = null; saveData(); dbUpsertTagColor(newTag, newColor); affectedTasks.forEach(t => dbUpsertTask(t)); }
-        async function addNewCategory() { const title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름을 입력하세요', placeholder: '예: 전투 시스템' }); if (title && title.trim()) { const newCat = { id: "cat-" + Date.now(), title: title.trim(), subtitle: "CUSTOM MODULE", projectId: activeProjectId }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); } }
+        async function addNewCategory() { const title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름을 입력하세요', placeholder: '예: 전투 시스템' }); if (title && title.trim()) { var _sid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId) ? selectedBoardSprintId : null; const newCat = { id: "cat-" + Date.now(), title: title.trim(), subtitle: "CUSTOM MODULE", projectId: activeProjectId, sprintId: _sid }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); renderBoard(); } }
         async function editCategoryName(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const newName = await uiPrompt({ title: '카테고리 이름 수정', label: '카테고리 이름', value: cat.title || '' }); if(newName && newName.trim()) { cat.title = newName.trim(); saveData(); dbUpsertCategory(cat); } }
         async function deleteCategory(e, catId) { e.stopPropagation(); if(await uiConfirm({ title: '카테고리 삭제', message: '카테고리와 내부 모든 할 일이 함께 삭제됩니다. 계속할까요?', confirmText: '삭제', danger: true })) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
         function addNewTask(catId, position = 'top') {
@@ -8885,7 +8927,9 @@ ${intrLog}
             const filterWarning = document.getElementById('filter-warning');
             if(isFiltering) filterWarning.classList.remove('hidden'); else filterWarning.classList.add('hidden');
 
-            const projCats = currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId);
+            // [#1] 스프린트별 카테고리: 선택 스프린트가 유효하면 그 스프린트 카테고리만, 아니면(스프린트 없음 등) 전부
+            const _spValid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId);
+            const projCats = currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId && (!_spValid || (_pc.sprintId || null) === selectedBoardSprintId));
             projCats.forEach(cat => {
                 const isFocused = focusedCategoryId === cat.id; const isMinimized = focusedCategoryId !== null && !isFocused;
                 const colClass = isFocused ? 'kanban-col-focused' : (isMinimized ? 'kanban-col-minimized' : 'kanban-col-normal');
@@ -8962,7 +9006,7 @@ ${intrLog}
                     colList.appendChild(_empty);
                 }
 
-                new Sortable(colList, { group: 'tasks', animation: 250, handle: '.drag-handle', filter: '.col-empty', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', disabled: isFiltering, onEnd: function (evt) { const taskId = evt.item.getAttribute('data-id'); const newCatId = evt.to.id; const movedTask = currentData.tasks.find(t => t.id === taskId); movedTask.catId = newCatId; const newTasksOrder = []; document.querySelectorAll('.task-card').forEach(el => { const id = el.getAttribute('data-id'); const found = currentData.tasks.find(t => t.id === id); if(found) newTasksOrder.push(found); }); currentData.tasks = newTasksOrder; saveData(); dbUpdateTaskSortOrders(newTasksOrder); } });
+                new Sortable(colList, { group: 'tasks', animation: 250, handle: '.drag-handle', filter: '.col-empty', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', disabled: isFiltering, onEnd: function (evt) { const taskId = evt.item.getAttribute('data-id'); const newCatId = evt.to.id; const movedTask = currentData.tasks.find(t => t.id === taskId); movedTask.catId = newCatId; var _tc = currentData.categories.find(c => c.id === newCatId); if (_tc) { movedTask.sprintId = _tc.sprintId || null; } dbUpsertTask(movedTask); const newTasksOrder = []; document.querySelectorAll('.task-card').forEach(el => { const id = el.getAttribute('data-id'); const found = currentData.tasks.find(t => t.id === id); if(found) newTasksOrder.push(found); }); currentData.tasks = newTasksOrder; saveData(); dbUpdateTaskSortOrders(newTasksOrder); } });
             });
 
             if (projCats.length === 0) {
