@@ -2131,6 +2131,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-part-list { display: flex; flex-direction: column; gap: 5px; max-height: 170px; overflow-y: auto; border: 1px solid var(--c-border); border-radius: 8px; padding: 8px; background: var(--c-paper); }
         .spv-part-chk { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--c-text); cursor: pointer; }
         .spv-part-chk input { accent-color: var(--c-accent); flex-shrink: 0; }
+        /* [변경 로그] 기간 필터 바 */
+        .cl-period-btn { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 8px; padding: 4px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .cl-period-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
+        .cl-period-btn.on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
+        .cl-date-in { background: var(--c-paper); border: 1px solid var(--c-border); color: var(--c-text); border-radius: 7px; padding: 3px 6px; font-size: 11px; }
         .spv-goal-ta { width: 100%; min-height: 120px; resize: vertical; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
         .spv-goal-ta:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .spv-goal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -2449,8 +2454,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     <div id="wiki-change-log-modal" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);" onclick="closeChangeLog()">
         <div id="change-log-panel" onclick="event.stopPropagation()" style="position:absolute;right:0;top:0;bottom:0;width:min(480px,100vw);background:white;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,0.18);">
             <div style="padding:16px 20px;border-bottom:1px solid #e7e3d8;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-                <span id="cl-title" style="font-size:16px;font-weight:800;color:#2f2e2b;">📋 실시간 변경 로그</span>
+                <span id="cl-title" style="font-size:16px;font-weight:800;color:#2f2e2b;">📋 변경 로그 · 결정 히스토리</span>
                 <button onclick="closeChangeLog()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6f6b5d;">✕</button>
+            </div>
+            <div id="cl-filter-bar" style="padding:10px 16px;border-bottom:1px solid var(--c-border);display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-shrink:0;">
+                <button id="cl-period-all" class="cl-period-btn on" onclick="setClPeriod('all')">전체</button>
+                <button id="cl-period-today" class="cl-period-btn" onclick="setClPeriod('today')">오늘</button>
+                <button id="cl-period-7d" class="cl-period-btn" onclick="setClPeriod('7d')">7일</button>
+                <button id="cl-period-30d" class="cl-period-btn" onclick="setClPeriod('30d')">30일</button>
+                <span style="width:1px;height:18px;background:var(--c-border);margin:0 2px;"></span>
+                <input type="date" id="cl-from" class="cl-date-in" onchange="applyClCustomPeriod()" title="시작일">
+                <span style="color:var(--c-text3);font-size:11px;">~</span>
+                <input type="date" id="cl-to" class="cl-date-in" onchange="applyClCustomPeriod()" title="종료일">
+                <button id="cl-period-custom" class="cl-period-btn" onclick="applyClCustomPeriod()">기간 적용</button>
             </div>
             <div id="change-log-list" style="flex:1;overflow-y:auto;padding:12px 16px;"></div>
         </div>
@@ -8884,6 +8900,32 @@ return data;
         function _two(n) { return String(n).padStart(2, '0'); }
         function _adrStamp(d) { return `${d.getFullYear()}${_two(d.getMonth() + 1)}${_two(d.getDate())}-${_two(d.getHours())}${_two(d.getMinutes())}`; }
 
+        // [변경] ADR 결정문서 자동 생성 토글 — 현재 OFF. 변경 로그 영구 기록으로 대체.
+        var ADR_AUTODOC = false;
+        // [변경] 리뷰 결정(승인/거부/강제/만료)을 변경 로그에 영구 기록
+        function logReviewDecision(review) {
+            try {
+                if (typeof addDecisionLogEntry !== 'function') return;
+                var statusMap = { approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제 통과', expired: '⏰ 만료(미결)', pending: '🔔 리뷰 중' };
+                var typeMap = { decision: '결정', intrusion: '인트루전', standard_change: '변경 요청', canon_approval: '게임위키 승인' };
+                var tag = review.decisionTag || {};
+                var target = (typeof _reviewTargetLabel === 'function') ? _reviewTargetLabel(review) : '';
+                var nm = function (arr) { return (arr || []).map(function (x) { return x.name || x.id; }).filter(Boolean).join('·'); };
+                var deciders = nm(tag.approvers);
+                var who = (review.status === 'expired') ? '⏰ 시스템(만료)' : (deciders || review.proposerName || '팀');
+                var lines = [];
+                lines.push('[' + (typeMap[review.type] || review.type) + '] ' + (statusMap[review.status] || review.status));
+                if (review.reason) lines.push('사유: ' + review.reason);
+                if (target) lines.push('대상: ' + target);
+                var votes = [];
+                if ((tag.approvers || []).length) votes.push('👍 ' + nm(tag.approvers));
+                if ((tag.rejecters || []).length) votes.push('👎 ' + nm(tag.rejecters));
+                if ((tag.skippers || []).length) votes.push('⏭ ' + nm(tag.skippers));
+                if (votes.length) lines.push(votes.join(' · '));
+                var label = '🗳 ' + (target || (typeMap[review.type] || '리뷰')) + ' — ' + (statusMap[review.status] || review.status);
+                addDecisionLogEntry(who, label, lines.join('\n'), review.status, review.targetDocId || null);
+            } catch (e) { console.warn('[logReviewDecision]', e); }
+        }
         async function generateADR(review) {
             if (!review || !review.decisionTag) return;
             const adrId = 'adr-' + review.id;
@@ -8986,8 +9028,10 @@ ${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
                     showToast('✅ 게임 위키 문서 승인됨 (v' + (cdoc.meta.version || 1) + ')', 'success');
                 }
             }
-            // 모든 결정 → ADR 자동 생성
-            await generateADR(review);
+            // [변경] ADR 문서 자동 생성은 기본 OFF (ADR_AUTODOC=true로 재활성화 가능).
+            // 대신 모든 결정을 변경 로그에 영구 기록.
+            if (typeof ADR_AUTODOC !== 'undefined' && ADR_AUTODOC) await generateADR(review);
+            if (typeof logReviewDecision === 'function') logReviewDecision(review);
         }
 
         // [v40 Day4] 05_운영 폴더 + 스프린트 회고 자동 생성
@@ -12642,34 +12686,88 @@ ${intrLog}
         // ════════════════════════════════════════════
         var changeLog = []; // { time, who, docTitle, diff }
 
+        function _clTimeStr(d) {
+            return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+        }
+        // [변경] 결정(decision)은 영구 보존, 그 외(edit/nav/create)는 최근 300개만 유지
+        var _CL_NONDECISION_CAP = 300;
+        function _trimChangeLog() {
+            [changeLog, currentData.changeLog].forEach(function (arr) {
+                if (!Array.isArray(arr)) return;
+                var others = 0;
+                for (var i = 0; i < arr.length; i++) { // 배열은 최신순(unshift)
+                    if (arr[i] && arr[i].type !== 'decision') {
+                        others++;
+                        if (others > _CL_NONDECISION_CAP) { arr.splice(i, 1); i--; }
+                    }
+                }
+            });
+        }
+        function _pushChangeLog(entry) {
+            changeLog.unshift(entry);
+            if (!currentData.changeLog) currentData.changeLog = [];
+            currentData.changeLog.unshift(entry);
+            _trimChangeLog();
+            // 영구 기록: 결정은 즉시, 그 외 비-내비는 디바운스 저장 (localStorage)
+            if (entry.type === 'decision') {
+                _safeLocalCache(currentData);
+            } else if (entry.type !== 'nav') {
+                clearTimeout(window._logSaveTimer);
+                window._logSaveTimer = setTimeout(function () { _safeLocalCache(currentData); }, 2000);
+            }
+            renderChangeLog();
+        }
         function addChangeLogEntry(who, docTitle, diff, docId, added, removed, type) {
             var now = new Date();
-            var ts  = now.getTime();
-            var timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0');
-            var entry = { ts: ts, time: timeStr, who: who, docTitle: docTitle, diff: diff||null, docId: docId||null, added: added||[], removed: removed||[], type: type||'edit' };
-
-            // Update local memory
-            changeLog.unshift(entry);
-            if(changeLog.length > 100) changeLog.pop();
-
-            // ★ Persist to DB via currentData.changeLog
-            if(!currentData.changeLog) currentData.changeLog = [];
-            currentData.changeLog.unshift(entry);
-            if(currentData.changeLog.length > 100) currentData.changeLog.pop();
-
-            // Only save nav entries occasionally (avoid DB spam) — save edits always
-            if(type !== 'nav') {
-                // Debounce: save log to DB within 2s of last edit log
-                clearTimeout(window._logSaveTimer);
-                window._logSaveTimer = setTimeout(function() {
-                    // ★ 변경 로그는 localStorage에만 기록 (dashboard_data 전체 저장 제거)
-                    _safeLocalCache(currentData);
-                }, 2000);
+            var entry = { ts: now.getTime(), time: _clTimeStr(now), who: who, docTitle: docTitle, diff: diff||null, docId: docId||null, added: added||[], removed: removed||[], type: type||'edit' };
+            if (type === 'edit') showRtNotification(who, docTitle, diff, docId); // 실제 편집만 알림
+            _pushChangeLog(entry);
+        }
+        // [변경] 리뷰 결정 전용 영구 로그 엔트리
+        function addDecisionLogEntry(who, label, text, status, docId) {
+            var now = new Date();
+            var entry = { ts: now.getTime(), time: _clTimeStr(now), who: who, docTitle: label, type: 'decision', text: text || '', status: status || '', docId: docId || null, added: [], removed: [] };
+            _pushChangeLog(entry);
+        }
+        // [변경] 변경 로그 기간 필터 상태
+        var _clPeriod = { mode: 'all', from: null, to: null }; // all | today | 7d | 30d | custom
+        function _clInRange(ts) {
+            if (!ts) return true;
+            var p = _clPeriod;
+            if (p.mode === 'all') return true;
+            var now = Date.now();
+            if (p.mode === 'today') { var s = new Date(); s.setHours(0,0,0,0); return ts >= s.getTime(); }
+            if (p.mode === '7d') return ts >= now - 7 * 86400000;
+            if (p.mode === '30d') return ts >= now - 30 * 86400000;
+            if (p.mode === 'custom') {
+                var okF = p.from ? (ts >= new Date(p.from + 'T00:00:00').getTime()) : true;
+                var okT = p.to ? (ts <= new Date(p.to + 'T23:59:59').getTime()) : true;
+                return okF && okT;
             }
-
-            // Only show notification for others' changes or real edits
-            if(type === 'edit') showRtNotification(who, docTitle, diff, docId);
-            renderChangeLog();
+            return true;
+        }
+        function setClPeriod(mode) {
+            _clPeriod.mode = mode;
+            if (mode !== 'custom') { _clPeriod.from = null; _clPeriod.to = null; }
+            _renderClFilterBar(); renderChangeLog();
+        }
+        function applyClCustomPeriod() {
+            var f = document.getElementById('cl-from'), t = document.getElementById('cl-to');
+            _clPeriod.mode = 'custom'; _clPeriod.from = (f && f.value) || null; _clPeriod.to = (t && t.value) || null;
+            _renderClFilterBar(); renderChangeLog();
+        }
+        function _renderClFilterBar() {
+            ['all','today','7d','30d','custom'].forEach(function (m) {
+                var b = document.getElementById('cl-period-' + m);
+                if (b) b.classList.toggle('on', _clPeriod.mode === m);
+            });
+        }
+        function _clWhen(e) {
+            if (!e.ts) return e.time || '';
+            var d = new Date(e.ts), now = new Date();
+            var sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+            var hh = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+            return sameDay ? hh : ((d.getMonth()+1) + '/' + d.getDate() + ' ' + hh);
         }
 
         function renderChangeLog() {
@@ -12688,8 +12786,34 @@ ${intrLog}
             var bgRem   = isDark ? 'rgba(69,10,10,0.6)'  : '#fef2f2';
             var colAdd  = isDark ? '#86efac' : '#166534';
             var colRem  = isDark ? '#fca5a5' : '#991b1b';
+            var _esc = function (s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
 
-            list.innerHTML = changeLog.map(function(e, idx) {
+            var rows = [];
+            changeLog.forEach(function (e, idx) {
+                if (!_clInRange(e.ts)) return; // [변경] 기간 필터
+                // [변경] 결정(decision) 엔트리 전용 렌더
+                if (e.type === 'decision') {
+                    var stColor = e.status === 'approved' ? '#10b981' : (e.status === 'rejected' ? '#ef4444' : (e.status === 'forced' ? '#c96442' : '#9a8f80'));
+                    var detail = (e.text || '').split('\n').filter(function (l) { return l.trim(); }).map(function (l) {
+                        return '<div style="font-size:11.5px;color:' + textSub + ';line-height:1.5;">' + _esc(l) + '</div>';
+                    }).join('');
+                    rows.push('<div class="change-log-item" style="background:' + bgCard + ';border-left:3px solid ' + stColor + ';margin-bottom:8px;padding:10px 12px;border-radius:8px;">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span style="font-weight:800;color:' + stColor + ';font-size:13px;">🗳 ' + _esc(e.who) + '</span>' +
+                        '<span style="font-size:10px;color:' + textSub + ';">' + _clWhen(e) + '</span></div>' +
+                        '<div style="font-size:12px;color:' + textMain + ';font-weight:700;margin-top:3px;">' + _esc(e.docTitle || '리뷰 결정') + '</div>' +
+                        '<div style="margin-top:5px;">' + detail + '</div></div>');
+                    return;
+                }
+                rows.push(_renderChangeLogItem(e, idx, { isDark: isDark, bgCard: bgCard, textSub: textSub, bgAdd: bgAdd, bgRem: bgRem, colAdd: colAdd, colRem: colRem }));
+            });
+            var countLine = '<div style="font-size:11px;color:' + textSub + ';margin:0 2px 8px;font-weight:600;">' + (_clPeriod.mode === 'all' ? '전체' : '선택 기간') + ' ' + rows.length + '건</div>';
+            list.innerHTML = countLine + (rows.length ? rows.join('') : '<div style="text-align:center;color:' + textSub + ';padding:36px 0;font-size:13px;">이 기간에 해당하는 기록이 없습니다.</div>');
+        }
+        // 일반(편집/내비/생성) 엔트리 렌더 — 기존 로직 유지
+        function _renderChangeLogItem(e, idx, c) {
+            var isDark = c.isDark, bgCard = c.bgCard, textSub = c.textSub, bgAdd = c.bgAdd, bgRem = c.bgRem, colAdd = c.colAdd, colRem = c.colRem;
+            return (function () {
                 var isNav    = e.type === 'nav';
                 var isCreate = e.type === 'create';
                 var typeIcon  = isNav ? '🔀' : isCreate ? '🆕' : '✏️';
@@ -12742,13 +12866,13 @@ ${intrLog}
                 return '<div class="change-log-item" style="background:'+bgCard+';'+clickable+'border-left:3px solid '+typeColor+';margin-bottom:8px;padding:10px 12px;border-radius:8px;" onclick="jumpToLogEntry('+idx+')">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;">' +
                     '<span style="font-weight:700;color:'+typeColor+';font-size:13px;">'+typeIcon+' '+e.who+'</span>' +
-                    '<span style="font-size:10px;color:'+textSub+';">'+e.time+'</span>' +
+                    '<span style="font-size:10px;color:'+textSub+';">'+_clWhen(e)+'</span>' +
                     '</div>' +
                     '<div style="font-size:12px;color:'+textSub+';margin-top:3px;">📄 '+(e.docTitle||'문서')+'</div>' +
                     diffHtml +
                     (e.docId && !isNav ? '' : (e.docId ? '<div style="font-size:10px;color:'+typeColor+';margin-top:6px;">▶ 클릭하여 문서 이동</div>' : '')) +
                     '</div>';
-            }).join('');
+            })();
         }
 
         function jumpToLogEntry(idx) {
@@ -12816,7 +12940,7 @@ ${intrLog}
                 if(missed.length) {
                     missed.forEach(function(e){ changeLog.unshift(e); });
                     changeLog.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
-                    if(changeLog.length > 100) changeLog.length = 100;
+                    _trimChangeLog(); // [변경] 결정은 영구 보존, 그 외만 캡
                 }
             }
             modal.style.display = 'block';
@@ -12829,7 +12953,7 @@ ${intrLog}
             if(title) title.style.color = isDark ? '#e7e3d8' : '#2f2e2b';
             var header = panel ? panel.querySelector('[style*="border-bottom"]') : null;
             if(header) header.style.borderColor = isDark ? '#3b3934' : '#e7e3d8';
-            renderChangeLog();
+            _renderClFilterBar(); renderChangeLog();
         }
         function closeChangeLog() {
             var modal = document.getElementById('wiki-change-log-modal');
