@@ -2151,6 +2151,38 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .filter-bar .filter-select { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); max-width: 160px; cursor: pointer; }
         .filter-bar .filter-select:hover { border-color: var(--c-accent); }
         html.is-desktop .filter-bar { gap: 10px; }
+        /* [라운드10] 리뷰칩 접기/펼치기·결재선·편집·삭제 */
+        .review-chip .rv-head { cursor: pointer; }
+        .rv-title { font-weight: 800; font-size: 12.5px; color: var(--c-text); flex: 1; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rv-caret { font-size: 10px; color: var(--c-text3); margin-left: auto; flex-shrink: 0; }
+        .rv-deleted-tag { font-size: 9.5px; font-weight: 800; color: #fff; background: var(--st-danger); border-radius: 7px; padding: 1px 6px; flex-shrink: 0; }
+        .review-chip.rv-is-deleted { opacity: 0.62; }
+        .review-chip.rv-expanded { box-shadow: 0 1px 10px rgba(0,0,0,0.06); }
+        .rv-body { font-size: 12.5px; color: var(--c-text); margin: 8px 0; padding: 8px 11px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; line-height: 1.55; }
+        .rv-approval { margin: 8px 0; padding: 9px 11px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; }
+        .rv-approval-h { font-size: 11px; font-weight: 700; color: var(--c-text3); margin-bottom: 9px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .rv-line { display: flex; align-items: flex-start; gap: 4px; flex-wrap: wrap; }
+        .rv-step { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; }
+        .rv-step-av { position: relative; line-height: 0; }
+        .rv-step-badge { position: absolute; right: -3px; bottom: -2px; font-size: 8px; width: 13px; height: 13px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.5px var(--c-card); }
+        .rv-step-name { font-size: 10px; color: var(--c-text2); max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rv-step-role { font-size: 9.5px; font-weight: 800; }
+        .rv-line-arrow { color: var(--c-text3); font-size: 12px; align-self: center; margin-top: 6px; }
+        .rv-foot { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+        .rv-foot-btn { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .rv-foot-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
+        .rv-foot-btn.danger:hover { color: var(--st-danger); background: var(--c-accent-soft); }
+        .rv-edit { margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+        .rv-edit-title { background: var(--c-paper); border: 1px solid var(--c-border); color: var(--c-text); border-radius: 7px; padding: 6px 9px; font-size: 13px; font-weight: 700; outline: none; }
+        .rv-edit-body { background: var(--c-paper); border: 1px solid var(--c-border); color: var(--c-text); border-radius: 7px; padding: 8px 9px; font-size: 12.5px; min-height: 100px; resize: vertical; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
+        .rv-edit-title:focus, .rv-edit-body:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
+        .rv-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
+        .rv-edit-save { background: var(--c-accent); color: #fff; border: none; border-radius: 7px; padding: 5px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .rv-edit-cancel { background: var(--ios-fill); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 7px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+        /* [#6] 스프린트 참여자 호버 툴팁 */
+        #spv-parts-tip { position: fixed; z-index: 9000; display: none; min-width: 150px; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; box-shadow: var(--ios-shadow); padding: 8px; }
+        .spv-tip-h { font-size: 10.5px; font-weight: 800; color: var(--c-text3); padding: 0 2px 5px; border-bottom: 1px solid var(--c-border); margin-bottom: 4px; }
+        .spv-tip-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--c-text); white-space: nowrap; padding: 2px; }
         .spv-goal-ta { width: 100%; min-height: 120px; resize: vertical; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
         .spv-goal-ta:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .spv-goal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -2723,7 +2755,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <select id="rvp-f-type" onchange="applyReviewFilters()" title="유형 필터">
                         <option value="all">모든 유형</option>
                         <option value="decision">결정</option>
-                        <option value="intrusion">인트루전</option>
+                        <option value="intrusion">끼어들기</option>
                         <option value="standard_change">문서 변경</option>
                     </select>
                     <select id="rvp-f-sort" onchange="applyReviewFilters()" title="정렬">
@@ -2934,8 +2966,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
             <div class="overflow-y-auto pr-1">
                 <div class="text-xs text-gray-500 mb-2">대상: <span id="review-context" class="font-bold text-gray-700"></span></div>
-                <label class="block text-xs font-bold text-gray-600 mb-1">사유 (필수)</label>
-                <textarea id="review-reason" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-3" placeholder="왜 이 결정이 필요한가요?"></textarea>
+                <label class="block text-xs font-bold text-gray-600 mb-1">제목 (필수)</label>
+                <input id="review-title" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-3" placeholder="예: 전투 밸런스 변경안">
+                <label class="block text-xs font-bold text-gray-600 mb-1">내용 (마크다운 · 선택)</label>
+                <textarea id="review-reason" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-3" placeholder="## 배경&#10;- 왜 이 결정이 필요한가&#10;- 상세 내용 (마크다운 지원)"></textarea>
                 <label class="block text-xs font-bold text-gray-600 mb-1">결정 룰</label>
                 <select id="review-rule" onchange="renderReviewRuleOptions()" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2">
                     <option value="majority">📊 다수결 (majority)</option>
@@ -5214,7 +5248,7 @@ return data;
         // [v40 Day3 청크2] 리뷰 요청 upsert
         async function dbUpsertReview(review) {
             if (!supabaseClient) return { error: null };
-            const { error } = await supabaseClient.from('review_requests').upsert({
+            const payload = {
                 id: review.id, type: review.type, rule: review.rule || {},
                 target_task_id: review.targetTaskId || null,
                 target_doc_id: review.targetDocId || null,
@@ -5227,8 +5261,17 @@ return data;
                 status: review.status || 'pending',
                 decision_tag: review.decisionTag || null,
                 expires_at: review.expiresAt || null,
-                decided_at: review.decidedAt || null
-            });
+                decided_at: review.decidedAt || null,
+                title: review.title || '',
+                deleted: !!review.deleted
+            };
+            let { error } = await supabaseClient.from('review_requests').upsert(payload);
+            // [라운드10] title/deleted 컬럼 미생성 환경 보호: 해당 필드만 빼고 재시도(기존 저장 보존)
+            if (error && /(title|deleted)/.test(error.message || '')) {
+                delete payload.title; delete payload.deleted;
+                ({ error } = await supabaseClient.from('review_requests').upsert(payload));
+                if (!error) console.warn('[dbUpsertReview] title/deleted 컬럼 없음 — 제외 저장. SQL: alter table review_requests add column if not exists title text; alter table review_requests add column if not exists deleted boolean default false;');
+            }
             if (error) {
                 console.error('[dbUpsertReview]', error);
                 if (typeof showToast === 'function') showToast('⚠️ 리뷰 저장 실패: ' + (error.message||''), 'alert');
@@ -5289,7 +5332,8 @@ return data;
                 proposerId: r.proposer_id || null, proposerName: r.proposer_name || '',
                 reason: r.reason || '', votes: r.votes || [],
                 status: r.status || 'pending', decisionTag: r.decision_tag || null,
-                createdAt: r.created_at || null, expiresAt: r.expires_at || null, decidedAt: r.decided_at || null
+                createdAt: r.created_at || null, expiresAt: r.expires_at || null, decidedAt: r.decided_at || null,
+                title: r.title || '', deleted: !!r.deleted
             };
         }
         // [v40 B3] canon_docs row(snake) → app 객체(camel)
@@ -7479,10 +7523,10 @@ return data;
             const _activeSp = getActiveSprint();
             if (nextZone === 'now' && _activeSp && task.sprintId !== _activeSp.id) {
                 const pending = (currentData.reviews || []).find(r => r.type === 'intrusion' && r.targetTaskId === taskId && r.status === 'pending');
-                if (pending) { showToast('이미 intrusion 리뷰가 진행 중입니다.', 'info'); openReviewInbox(); return; }
+                if (pending) { showToast('이미 끼어들기 리뷰가 진행 중입니다.', 'info'); openReviewInbox(); return; }
                 const goAhead = await uiConfirm({
                     title: '🔒 스프린트 잠금',
-                    message: `진행 중인 스프린트(${_activeSp.weekLabel})에 없는 카드를 Now로 올리려면 팀 결정(intrusion 리뷰)이 필요합니다.\n\n인트루전은 스프린트 집중을 깨는 끼어들기로 기록됩니다. 결정 요청을 생성할까요?`,
+                    message: `진행 중인 스프린트(${_activeSp.weekLabel})에 없는 카드를 Now로 올리려면 팀 결정(끼어들기 리뷰)이 필요합니다.\n\n끼어들기는 스프린트 집중을 깨는 추가 작업으로 기록됩니다. 결정 요청을 생성할까요?`,
                     confirmText: '결정 요청 생성',
                     cancelText: '취소'
                 });
@@ -7661,7 +7705,7 @@ return data;
                 + '<span>' + icon + ' ' + _sprintEsc(viewed.weekLabel || viewed.id) + '</span><span class="caret">▾</span></button>'
                 + (range ? '<span style="font-size:11px;color:var(--c-text2);font-weight:600;">' + range + '</span>' : '');
             if (isActive) {
-                html += '<span title="Intrusion(스프린트 외 추가) 횟수" style="font-size:10px;font-weight:700;color:var(--c-accent);background:var(--c-accent-soft);border-radius:8px;padding:1px 7px;">⚡' + (viewed.intrusionCount || 0) + '</span>'
+                html += '<span title="끼어들기(스프린트 외 추가) 횟수" style="font-size:10px;font-weight:700;color:var(--c-accent);background:var(--c-accent-soft);border-radius:8px;padding:1px 7px;">⚡' + (viewed.intrusionCount || 0) + '</span>'
                     + '<button onclick="editSprintGoal()" title="활성 스프린트 목표 수정" style="font-size:11px;font-weight:600;color:var(--c-text2);background:var(--ios-fill);border:1px solid var(--ios-sep);border-radius:7px;padding:3px 8px;cursor:pointer;">목표</button>'
                     + '<button onclick="endSprint()" style="font-size:11px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:7px;padding:3px 9px;cursor:pointer;">종료</button>';
             } else {
@@ -7736,7 +7780,7 @@ return data;
             const inSprint = currentData.tasks.filter(t => t.sprintId === active.id);
             const completed = inSprint.filter(t => t.status === 'completed');
             const incomplete = inSprint.filter(t => t.status !== 'completed');
-            if (!(await uiConfirm({ title: `스프린트 종료 — ${active.weekLabel}`, message: `포함 ${inSprint.length}개 · 완료 ${completed.length} · 미완료(이월) ${incomplete.length} · Intrusion ${active.intrusionCount || 0}회\n\n미완료 카드는 Shelf로 이월(carryover+1)되고, 회고가 05_운영에 자동 생성됩니다.`, confirmText: '종료' }))) return;
+            if (!(await uiConfirm({ title: `스프린트 종료 — ${active.weekLabel}`, message: `포함 ${inSprint.length}개 · 완료 ${completed.length} · 미완료(이월) ${incomplete.length} · 끼어들기 ${active.intrusionCount || 0}회\n\n미완료 카드는 Shelf로 이월(carryover+1)되고, 회고가 05_운영에 자동 생성됩니다.`, confirmText: '종료' }))) return;
             // [v40 Day4] 미완료 Now 카드 → Shelf 이월 (§1.4)
             for (const t of incomplete) {
                 t.zone = 'shelf';
@@ -7907,9 +7951,27 @@ return data;
             var members = getMembers();
             var shown = ids.slice(0, 5).map(function (id) { var m = members.find(function (x) { return x.id === id; }); return m ? _avatarHtml(m, 18) : _avatarHtml({ displayName: '?' }, 18); }).join('');
             var more = ids.length > 5 ? ('<span class="spv-part-more">+' + (ids.length - 5) + '</span>') : '';
-            var names = ids.map(function (id) { return getMemberName(id); }).join(', ');
-            return '<span class="spv-parts" title="참여자: ' + _sprintEsc(names) + '">' + shown + more + '</span>';
+            // [#6] 호버 시 프로필 사진 + 이름 툴팁(fixed 위치 — 스프린트 카드 overflow:hidden 회피)
+            return '<span class="spv-parts" onmouseenter="showSprintPartsTip(event,\'' + s.id + '\')" onmouseleave="hideSprintPartsTip()">' + shown + more + '</span>';
         }
+        function showSprintPartsTip(e, sid) {
+            var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!s) return;
+            var ids = Array.isArray(s.participants) ? s.participants : []; if (!ids.length) return;
+            var tip = document.getElementById('spv-parts-tip');
+            if (!tip) { tip = document.createElement('div'); tip.id = 'spv-parts-tip'; document.body.appendChild(tip); }
+            var members = getMembers();
+            tip.innerHTML = '<div class="spv-tip-h">👥 참여자 ' + ids.length + '명</div>' + ids.map(function (id) {
+                var m = members.find(function (x) { return x.id === id; });
+                return '<div class="spv-tip-row">' + (m ? _avatarHtml(m, 22) : _avatarHtml({ displayName: getMemberName(id) }, 22)) + '<span>' + _sprintEsc(getMemberName(id)) + '</span></div>';
+            }).join('');
+            tip.style.display = 'block';
+            var r = e.currentTarget.getBoundingClientRect();
+            var tw = tip.offsetWidth || 160, th = tip.offsetHeight || 80;
+            var x = Math.min(r.left, window.innerWidth - tw - 8); if (x < 6) x = 6;
+            var y = r.bottom + 6; if (y + th > window.innerHeight - 6) y = r.top - th - 6; if (y < 6) y = 6;
+            tip.style.left = x + 'px'; tip.style.top = y + 'px';
+        }
+        function hideSprintPartsTip() { var t = document.getElementById('spv-parts-tip'); if (t) t.style.display = 'none'; }
         function _renderSprintParticipantPicker(selectedIds) {
             var sel = Array.isArray(selectedIds) ? selectedIds : [];
             var members = getMembers();
@@ -8634,6 +8696,7 @@ return data;
         function openReviewModal(type, targetTaskId, targetDocId) {
             if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
             _reviewDraftTarget = { type: type || 'decision', targetTaskId: targetTaskId || null, targetDocId: targetDocId || null };
+            var _rt = document.getElementById('review-title'); if (_rt) _rt.value = '';
             document.getElementById('review-reason').value = '';
             // [v40 Day4] 타입별 권장 룰 기본값 (standard_change=전체합의, 그 외=다수결)
             document.getElementById('review-rule').value = (type === 'standard_change' || type === 'canon_approval') ? 'all_agree' : 'majority';
@@ -8667,8 +8730,9 @@ return data;
             }
         }
         async function createReview() {
+            const title = document.getElementById('review-title').value.trim();
             const reason = document.getElementById('review-reason').value.trim();
-            if (!reason) { showToast('사유를 입력하세요.', 'alert'); return; }
+            if (!title) { showToast('제목을 입력하세요.', 'alert'); return; }
             const ruleType = document.getElementById('review-rule').value;
             const hours = parseInt(document.getElementById('review-expiry').value, 10) || 24;
             const rule = { type: ruleType };
@@ -8689,7 +8753,7 @@ return data;
                 targetTaskId: t.targetTaskId || null, targetDocId: t.targetDocId || null,
                 sprintId: activeSp ? activeSp.id : null, projectId: activeProjectId,
                 proposerId: currentUser.id, proposerName: myNickname || '',
-                reason: reason, votes: [], status: 'pending', decisionTag: null,
+                title: title, reason: reason, deleted: false, votes: [], status: 'pending', decisionTag: null,
                 createdAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + hours * 3600 * 1000).toISOString(), decidedAt: null
             };
@@ -8784,44 +8848,121 @@ return data;
             const need = Math.max(0, threshold - approve);
             return need > 0 ? `다수결 · ${need}표 더 필요 (${approve}/${threshold})` : '다수결 · 통과 조건 충족';
         }
+        // [라운드10] 리뷰칩 접기/펼치기 + 편집 상태
+        var _reviewExpanded = {}; var _reviewEditing = {};
+        function _rerenderReviews() {
+            if (currentView === 'review' && typeof renderReviewPage === 'function') renderReviewPage();
+            if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
+            var inb = document.getElementById('review-inbox-list'); if (inb && inb.offsetParent && typeof renderReviewInbox === 'function') renderReviewInbox();
+        }
+        function toggleReviewExpand(id) { _reviewExpanded[id] = !_reviewExpanded[id]; if (!_reviewExpanded[id]) delete _reviewEditing[id]; _rerenderReviews(); }
+        function _reviewEditable(review) { return !!(currentUser && review.proposerId === currentUser.id && review.status === 'pending' && !review.deleted && (review.votes || []).length === 0); }
+        function startReviewEdit(id) { _reviewExpanded[id] = true; _reviewEditing[id] = true; _rerenderReviews(); setTimeout(function () { var t = document.getElementById('rv-edit-title-' + id); if (t) t.focus(); }, 40); }
+        function cancelReviewEdit(id) { delete _reviewEditing[id]; _rerenderReviews(); }
+        async function saveReviewEdit(id) {
+            var rv = (currentData.reviews || []).find(function (r) { return r.id === id; }); if (!rv) return;
+            if (!_reviewEditable(rv)) { showToast('기안 상태(합의 전)에서만 수정할 수 있습니다.', 'alert'); return; }
+            var tEl = document.getElementById('rv-edit-title-' + id), bEl = document.getElementById('rv-edit-body-' + id);
+            var nt = tEl ? tEl.value.trim() : (rv.title || '');
+            if (!nt) { showToast('제목을 입력하세요.', 'alert'); return; }
+            rv.title = nt; rv.reason = bEl ? bEl.value : rv.reason;
+            delete _reviewEditing[id];
+            _safeLocalCache(currentData); await dbUpsertReview(rv);
+            _rerenderReviews(); showToast('리뷰 수정됨', 'success');
+        }
+        function _reviewStepState(st) {
+            return ({ approve: ['✅', '승인', '#10b981'], reject: ['❌', '거부', '#ef4444'], skip: ['⏭', '불참', '#9a8f80'], pending: ['⏳', '대기', '#b08968'] })[st] || ['⏳', '대기', '#b08968'];
+        }
+        // [#2] 결재선: 기안자 → 합의자 순서 + 각 상태 + 현재 결재 상태
+        function _renderApprovalLine(review) {
+            var members = getMembers();
+            var voteOf = function (uid) { return (review.votes || []).find(function (v) { return v.userId === uid; }); };
+            var voterIds;
+            if (review.rule && review.rule.type === 'specific_approver' && Array.isArray(review.rule.requiredApprovers)) voterIds = review.rule.requiredApprovers.slice();
+            else voterIds = members.filter(function (m) { return m.id !== review.proposerId; }).map(function (m) { return m.id; });
+            var steps = [{ role: '기안', name: review.proposerName || getMemberName(review.proposerId), member: members.find(function (m) { return m.id === review.proposerId; }), state: 'approve', isProposer: true }];
+            voterIds.forEach(function (uid) {
+                var v = voteOf(uid);
+                steps.push({ role: '합의', name: getMemberName(uid), member: members.find(function (m) { return m.id === uid; }), state: v ? v.decision : 'pending' });
+            });
+            var stepHtml = steps.map(function (s, i) {
+                var ss = _reviewStepState(s.state);
+                var av = s.member ? _avatarHtml(s.member, 24) : _avatarHtml({ displayName: s.name }, 24);
+                return (i ? '<span class="rv-line-arrow">→</span>' : '')
+                    + '<div class="rv-step" title="' + (s.isProposer ? '기안자' : '합의자') + ' · ' + _sprintEsc(s.name) + ' · ' + ss[1] + '">'
+                    + '<div class="rv-step-av">' + av + '<span class="rv-step-badge" style="background:' + ss[2] + ';">' + ss[0] + '</span></div>'
+                    + '<div class="rv-step-name">' + _sprintEsc(s.name) + '</div>'
+                    + '<div class="rv-step-role" style="color:' + (s.isProposer ? 'var(--c-accent)' : ss[2]) + ';">' + (s.isProposer ? '기안' : ss[1]) + '</div></div>';
+            }).join('');
+            return '<div class="rv-approval" onclick="event.stopPropagation()"><div class="rv-approval-h">📋 결재선 · 현재 ' + _reviewStatusBadge(review.status) + '</div><div class="rv-line">' + stepHtml + '</div></div>';
+        }
         function renderReviewChip(review) {
-            const canVote = currentUser && review.status === 'pending' && review.proposerId !== currentUser.id;
-            const myVote = (review.votes || []).find(v => currentUser && v.userId === currentUser.id);
-            const vc = _voteCounts(review);
-            let body = '';
-            if (review.status === 'pending') {
-                const tl = _reviewTimeLeft(review);
-                const expHtml = tl ? ` · <span style="color:${tl.urgent ? 'var(--st-danger)' : 'var(--c-text3)'};font-weight:${tl.urgent ? '800' : '600'};">⏰ ${tl.text}</span>` : '';
-                const prog = _reviewProgressLabel(review);
-                body = `<div class="rv-tally">승인 ${vc.approvers.length} · 거부 ${vc.rejecters.length} · 불참 ${vc.skippers.length}${expHtml}</div>`;
-                if (prog) body += `<div class="rv-tally" style="color:var(--c-accent);font-weight:700;">🎯 ${prog}</div>`;
-                if (canVote) {
-                    body += `<input type="text" id="vote-comment-${review.id}" class="rv-comment" placeholder="코멘트(선택)" value="${myVote && myVote.comment ? _sprintEsc(myVote.comment) : ''}">
-                        <div class="rv-vote-btns">
-                            <button class="rv-btn rv-approve ${myVote && myVote.decision === 'approve' ? 'on' : ''}" onclick="event.stopPropagation();castVote('${review.id}','approve')">👍 승인</button>
-                            <button class="rv-btn rv-reject ${myVote && myVote.decision === 'reject' ? 'on' : ''}" onclick="event.stopPropagation();castVote('${review.id}','reject')">👎 거부</button>
-                            <button class="rv-btn rv-skip ${myVote && myVote.decision === 'skip' ? 'on' : ''}" onclick="event.stopPropagation();castVote('${review.id}','skip')">⏭ 불참</button>
-                        </div>`;
-                } else if (currentUser && review.proposerId === currentUser.id) {
-                    body += `<div class="rv-tally" style="font-style:italic;">내가 제안한 요청 (제안=승인). 응답을 기다리는 중.</div>`;
-                }
-            } else if (review.decisionTag) {
-                const dt = review.decisionTag;
-                const names = arr => (arr && arr.length) ? arr.map(x => _sprintEsc(x.name)).join(', ') : '없음';
-                body = `<div class="rv-tally">승인: ${names(dt.approvers)} · 거부: ${names(dt.rejecters)} · 불참: ${names(dt.skippers)}${review.decidedAt ? ` · ${new Date(review.decidedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}</div>`;
+            var expanded = !!_reviewExpanded[review.id];
+            var del = !!review.deleted;
+            var title = review.title || (review.reason ? review.reason.split('\n')[0].slice(0, 40) : '') || '(제목 없음)';
+            var createdStr = review.createdAt ? new Date(review.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+            var header = '<div class="rv-head" onclick="toggleReviewExpand(\'' + review.id + '\')">'
+                + _reviewStatusBadge(review.status)
+                + (del ? '<span class="rv-deleted-tag">🗑 삭제됨</span>' : '')
+                + '<span class="rv-title">' + _sprintEsc(title) + '</span>'
+                + '<span class="rv-rule">' + _ruleLabel(review.rule) + '</span>'
+                + '<span class="rv-proposer">' + _sprintEsc(review.proposerName) + '</span>'
+                + '<span class="rv-created">🕐 ' + createdStr + '</span>'
+                + '<span class="rv-caret">' + (expanded ? '▾' : '▸') + '</span></div>';
+            if (!expanded) return '<div class="review-chip' + (del ? ' rv-is-deleted' : '') + '">' + header + '</div>';
+
+            // ── 펼침 ──
+            var editing = !!_reviewEditing[review.id];
+            var tgt = '';
+            if (review.targetTaskId) tgt = '<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="' + review.targetTaskId + '">🗂 ' + _sprintEsc(getTaskLabel(review.targetTaskId)) + '</a>';
+            else if (review.targetDocId) tgt = '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + review.targetDocId + '">' + _sprintEsc(getDocLabel(review.targetDocId)) + '</a>';
+            var contentHtml;
+            if (editing) {
+                contentHtml = '<div class="rv-edit" onclick="event.stopPropagation()">'
+                    + '<input type="text" id="rv-edit-title-' + review.id + '" class="rv-edit-title" value="' + _sprintEsc(review.title || '') + '" placeholder="제목">'
+                    + '<textarea id="rv-edit-body-' + review.id + '" class="rv-edit-body" placeholder="## 내용 (마크다운)">' + _sprintEsc(review.reason || '') + '</textarea>'
+                    + '<div class="rv-edit-actions"><button class="rv-edit-save" onclick="saveReviewEdit(\'' + review.id + '\')">저장</button><button class="rv-edit-cancel" onclick="cancelReviewEdit(\'' + review.id + '\')">취소</button></div></div>';
+            } else {
+                var md = review.reason ? DOMPurify.sanitize(parseMarkdownWithTables(review.reason), domPurifyConfig) : '<span style="color:var(--c-text3);">내용 없음</span>';
+                contentHtml = '<div class="rv-body markdown-body" onclick="event.stopPropagation()">' + md + '</div>';
             }
-            let tgt = '';
-            if (review.targetTaskId) tgt = `<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="${review.targetTaskId}">🗂 ${_sprintEsc(getTaskLabel(review.targetTaskId))}</a>`;
-            else if (review.targetDocId) tgt = `<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="${review.targetDocId}">${_sprintEsc(getDocLabel(review.targetDocId))}</a>`;
-            return `<div class="review-chip">
-                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span><span class="rv-created">🕐 ${review.createdAt ? new Date(review.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</span><button class="rv-del" onclick="event.stopPropagation();deleteReview('${review.id}')" title="이 리뷰 요청 삭제">🗑</button></div>
-                <div class="rv-reason">"${_sprintEsc(review.reason)}"</div>
-                ${tgt ? `<div class="rv-target">${tgt}</div>` : ''}
-                ${body}
-            </div>`;
+            var vc = _voteCounts(review);
+            var canVote = currentUser && review.status === 'pending' && review.proposerId !== currentUser.id && !del;
+            var myVote = (review.votes || []).find(function (v) { return currentUser && v.userId === currentUser.id; });
+            var voteBlock = '';
+            if (review.status === 'pending') {
+                var tl = _reviewTimeLeft(review);
+                var expTxt = tl ? (' · <span style="color:' + (tl.urgent ? 'var(--st-danger)' : 'var(--c-text3)') + ';font-weight:' + (tl.urgent ? '800' : '600') + ';">⏰ ' + tl.text + '</span>') : '';
+                var prog = _reviewProgressLabel(review);
+                voteBlock = '<div class="rv-tally">승인 ' + vc.approvers.length + ' · 거부 ' + vc.rejecters.length + ' · 불참 ' + vc.skippers.length + expTxt + '</div>';
+                if (prog) voteBlock += '<div class="rv-tally" style="color:var(--c-accent);font-weight:700;">🎯 ' + prog + '</div>';
+                if (canVote) {
+                    voteBlock += '<input type="text" id="vote-comment-' + review.id + '" class="rv-comment" placeholder="코멘트(선택)" value="' + (myVote && myVote.comment ? _sprintEsc(myVote.comment) : '') + '" onclick="event.stopPropagation()">'
+                        + '<div class="rv-vote-btns" onclick="event.stopPropagation()">'
+                        + '<button class="rv-btn rv-approve ' + (myVote && myVote.decision === 'approve' ? 'on' : '') + '" onclick="event.stopPropagation();castVote(\'' + review.id + '\',\'approve\')">👍 승인</button>'
+                        + '<button class="rv-btn rv-reject ' + (myVote && myVote.decision === 'reject' ? 'on' : '') + '" onclick="event.stopPropagation();castVote(\'' + review.id + '\',\'reject\')">👎 거부</button>'
+                        + '<button class="rv-btn rv-skip ' + (myVote && myVote.decision === 'skip' ? 'on' : '') + '" onclick="event.stopPropagation();castVote(\'' + review.id + '\',\'skip\')">⏭ 불참</button></div>';
+                } else if (currentUser && review.proposerId === currentUser.id) {
+                    voteBlock += '<div class="rv-tally" style="font-style:italic;">내가 기안한 요청 (기안=승인). 합의를 기다리는 중.</div>';
+                }
+            }
+            var footer = '<div class="rv-foot" onclick="event.stopPropagation()">';
+            if (_reviewEditable(review) && !editing) footer += '<button class="rv-foot-btn" onclick="startReviewEdit(\'' + review.id + '\')" title="제목·내용 수정 (기안 상태에서만)">✏️ 편집</button>';
+            if (del) footer += '<button class="rv-foot-btn" onclick="restoreReview(\'' + review.id + '\')" title="삭제 취소">♻️ 복원</button>';
+            else footer += '<button class="rv-foot-btn danger" onclick="deleteReview(\'' + review.id + '\')" title="이 리뷰 삭제(삭제됨 표시)">🗑 삭제</button>';
+            footer += '</div>';
+
+            return '<div class="review-chip rv-expanded' + (del ? ' rv-is-deleted' : '') + '">'
+                + header
+                + (tgt ? '<div class="rv-target" onclick="event.stopPropagation()">' + tgt + '</div>' : '')
+                + _renderApprovalLine(review)
+                + contentHtml
+                + voteBlock
+                + footer
+                + '</div>';
         }
         function renderTaskReviewsPanel(task) {
-            const list = (currentData.reviews || []).filter(r => r.targetTaskId === task.id);
+            const list = (currentData.reviews || []).filter(r => r.targetTaskId === task.id && !r.deleted);
             const chips = list.map(renderReviewChip).join('');
             return `<div class="linked-panel ${task.isCollapsed ? 'hidden' : ''}">
                 <div class="linked-panel-head">🗳 리뷰 <button class="link-add-btn" onclick="event.stopPropagation();openReviewModal('decision','${task.id}',null)">+ 리뷰 요청</button></div>
@@ -8830,7 +8971,7 @@ return data;
         }
         function myPendingReviewCount() {
             if (!currentUser || !Array.isArray(currentData.reviews)) return 0;
-            return currentData.reviews.filter(r => r.status === 'pending' && (r.projectId || 'default') === activeProjectId && r.proposerId !== currentUser.id &&
+            return currentData.reviews.filter(r => r.status === 'pending' && !r.deleted && (r.projectId || 'default') === activeProjectId && r.proposerId !== currentUser.id &&
                 !(r.votes || []).find(v => v.userId === currentUser.id)).length;
         }
         function renderReviewBadge() {
@@ -8847,7 +8988,7 @@ return data;
             const listEl = document.getElementById('review-inbox-list');
             if (!listEl) return;
             const order = s => s === 'pending' ? 0 : 1;
-            const all = (currentData.reviews || []).filter(r => (r.projectId || 'default') === activeProjectId).slice().sort((a, b) => {
+            const all = (currentData.reviews || []).filter(r => (r.projectId || 'default') === activeProjectId && !r.deleted).slice().sort((a, b) => {
                 if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
                 return (b.createdAt || '').localeCompare(a.createdAt || '');
             });
@@ -8858,20 +8999,30 @@ return data;
         }
         function openReviewInbox() { switchView('review'); } // [리뷰함] 모달→페이지 위임
 
-        // [리뷰함] 리뷰 삭제
+        // [리뷰함] 리뷰 소프트 삭제 — 실제 삭제 대신 deleted 플래그 (복원 가능, 데이터 보존)
         async function deleteReview(id) {
             var rv = (currentData.reviews || []).find(function (r) { return r.id === id; });
             if (!rv) return;
-            var ok = await uiConfirm({ title: '리뷰 요청 삭제', message: '이 리뷰 요청을 삭제할까요? 되돌릴 수 없습니다.' + (rv.status === 'pending' ? '\n(아직 진행 중인 요청입니다)' : ''), confirmText: '삭제', danger: true });
+            var ok = await uiConfirm({ title: '리뷰 삭제', message: '이 리뷰를 "삭제됨"으로 표시할까요?\n영구 삭제가 아니라 삭제됨 필터에서 복원할 수 있습니다.', confirmText: '삭제', danger: true });
             if (!ok) return;
-            currentData.reviews = (currentData.reviews || []).filter(function (r) { return r.id !== id; });
+            rv.deleted = true;
             if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
-            await dbDeleteReview(id);
+            await dbUpsertReview(rv);
             if (typeof renderReviewBadge === 'function') renderReviewBadge();
             if (currentView === 'review') renderReviewPage();
             if (typeof renderBoard === 'function') renderBoard();
             if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
-            showToast('🗑 리뷰 요청이 삭제되었습니다.', 'info');
+            showToast('🗑 "삭제됨"으로 표시되었습니다. (삭제됨 필터에서 복원 가능)', 'info');
+        }
+        async function restoreReview(id) {
+            var rv = (currentData.reviews || []).find(function (r) { return r.id === id; }); if (!rv) return;
+            rv.deleted = false;
+            if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+            await dbUpsertReview(rv);
+            if (typeof renderReviewBadge === 'function') renderReviewBadge();
+            if (currentView === 'review') renderReviewPage();
+            if (typeof renderBoard === 'function') renderBoard();
+            showToast('♻️ 복원되었습니다.', 'success');
         }
 
         // [리뷰함] 페이지 렌더 (통계·내 리뷰 대기·필터·검색)
@@ -8893,29 +9044,32 @@ return data;
         function renderReviewPage() {
             var listEl = document.getElementById('rvp-list'); if (!listEl) return;
             var all = (currentData.reviews || []).filter(function (r) { return (r.projectId || 'default') === activeProjectId; });
-            // 통계
+            var live = all.filter(function (r) { return !r.deleted; });           // [#3] 삭제 안 된 것
+            var deletedN = all.length - live.length;
+            // 통계 (삭제됨 제외 카운트)
             var c = { pending: 0, approved: 0, rejected: 0, forced: 0, expired: 0 };
-            all.forEach(function (r) { c[r.status] = (c[r.status] || 0) + 1; });
+            live.forEach(function (r) { c[r.status] = (c[r.status] || 0) + 1; });
             var sp = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
             var statsEl = document.getElementById('rvp-stats');
             if (statsEl) {
                 var cur = _reviewFilter.status;
-                var stats = [['all', '전체', all.length], ['pending', '🔔 리뷰 중', c.pending], ['approved', '✅ 승인', c.approved], ['rejected', '❌ 거부', c.rejected], ['forced', '⚡ 강제', c.forced], ['expired', '⏰ 만료', c.expired]];
+                var stats = [['all', '전체', live.length], ['pending', '🔔 리뷰 중', c.pending], ['approved', '✅ 승인', c.approved], ['rejected', '❌ 거부', c.rejected], ['forced', '⚡ 강제', c.forced], ['expired', '⏰ 만료', c.expired], ['deleted', '🗑 삭제됨', deletedN]];
                 statsEl.innerHTML = stats.map(function (s) { return '<span class="rvp-stat' + (cur === s[0] ? ' on' : '') + '" onclick="setReviewStatusFilter(\'' + s[0] + '\')" title="' + s[1] + '만 보기"><b>' + s[2] + '</b>' + s[1] + '</span>'; }).join('')
-                    + (sp ? '<span class="rvp-stat rvp-stat-accent" title="이번 스프린트 인트루전 횟수"><b>' + (sp.intrusionCount || 0) + '</b>⚡ 인트루전</span>' : '');
+                    + (sp ? '<span class="rvp-stat rvp-stat-accent" title="이번 스프린트 끼어들기 횟수"><b>' + (sp.intrusionCount || 0) + '</b>⚡ 끼어들기</span>' : '');
             }
-            // 내 리뷰 대기
+            // 내 리뷰 대기 (삭제됨 제외)
             var mineEl = document.getElementById('rvp-mine');
             if (mineEl) {
-                var mine = all.filter(function (r) { return r.status === 'pending' && currentUser && r.proposerId !== currentUser.id && !(r.votes || []).find(function (v) { return v.userId === currentUser.id; }); });
+                var mine = live.filter(function (r) { return r.status === 'pending' && currentUser && r.proposerId !== currentUser.id && !(r.votes || []).find(function (v) { return v.userId === currentUser.id; }); });
                 mineEl.innerHTML = mine.length ? ('<div class="rvp-section-h"><span>🙋 내 리뷰 대기</span><span class="rvp-sh-n">' + mine.length + '건</span></div>' + mine.map(renderReviewChip).join('')) : '';
             }
             // 필터 + 정렬
             var f = _reviewFilter;
             var list = all.filter(function (r) {
-                if (f.status !== 'all' && r.status !== f.status) return false;
+                if (f.status === 'deleted') { if (!r.deleted) return false; }
+                else { if (r.deleted) return false; if (f.status !== 'all' && r.status !== f.status) return false; }
                 if (f.type !== 'all' && r.type !== f.type) return false;
-                if (f.q) { var hay = ((r.reason || '') + ' ' + (r.proposerName || '') + ' ' + _reviewTargetLabel(r)).toLowerCase(); if (hay.indexOf(f.q) === -1) return false; }
+                if (f.q) { var hay = ((r.title || '') + ' ' + (r.reason || '') + ' ' + (r.proposerName || '') + ' ' + _reviewTargetLabel(r)).toLowerCase(); if (hay.indexOf(f.q) === -1) return false; }
                 return true;
             });
             var order = function (s) { return s === 'pending' ? 0 : 1; };
@@ -8924,9 +9078,9 @@ return data;
                 if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
                 return (b.createdAt || '').localeCompare(a.createdAt || '');
             });
-            var _stLabel = ({ all: '전체', pending: '🔔 리뷰 중', approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제', expired: '⏰ 만료' })[_reviewFilter.status] || '전체';
+            var _stLabel = ({ all: '전체', pending: '🔔 리뷰 중', approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제', expired: '⏰ 만료', deleted: '🗑 삭제됨' })[_reviewFilter.status] || '전체';
             listEl.innerHTML = '<div class="rvp-section-h"><span>' + _stLabel + '</span><span class="rvp-sh-n">' + list.length + '건</span></div>'
-                + (list.length ? list.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:24px;text-align:center;">조건에 맞는 리뷰 요청이 없습니다.</div>');
+                + (list.length ? list.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:24px;text-align:center;">조건에 맞는 리뷰가 없습니다.</div>');
         }
 
         // ==========================================
@@ -8957,7 +9111,7 @@ return data;
             try {
                 if (typeof addDecisionLogEntry !== 'function') return;
                 var statusMap = { approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제 통과', expired: '⏰ 만료(미결)', pending: '🔔 리뷰 중' };
-                var typeMap = { decision: '결정', intrusion: '인트루전', standard_change: '변경 요청', canon_approval: '게임위키 승인' };
+                var typeMap = { decision: '결정', intrusion: '끼어들기', standard_change: '변경 요청', canon_approval: '게임위키 승인' };
                 var tag = review.decisionTag || {};
                 var target = (typeof _reviewTargetLabel === 'function') ? _reviewTargetLabel(review) : '';
                 var nm = function (arr) { return (arr || []).map(function (x) { return x.name || x.id; }).filter(Boolean).join('·'); };
@@ -9113,7 +9267,7 @@ ${sprint.goal || '(목표 미설정)'}
 ## 통계
 - 완료율: **${rate}%** (${completed.length}/${total})
 - 완료: ${completed.length}개 · 미완료(이월): ${incomplete.length}개
-- Intrusion(끼어들기) 시도: ${sprint.intrusionCount || 0}회
+- 끼어들기(스프린트 외 추가) 시도: ${sprint.intrusionCount || 0}회
 
 ## ✅ 완료 카드
 ${fmtList(completed)}
@@ -9121,7 +9275,7 @@ ${fmtList(completed)}
 ## ↩️ 이월 카드 (Shelf로 복귀, carryover+1)
 ${fmtList(incomplete)}
 
-## ⚡ Intrusion 로그
+## ⚡ 끼어들기 로그
 ${intrLog}
 
 ## 다음 스프린트 메모
