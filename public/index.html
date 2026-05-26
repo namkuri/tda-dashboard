@@ -2028,7 +2028,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .rvp-search { flex: 1; min-width: 180px; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 9px; padding: 8px 12px; font-size: 13px; outline: none; }
         .rvp-search:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .rvp-toolbar select { background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 9px; padding: 8px 10px; font-size: 12.5px; font-weight: 600; cursor: pointer; outline: none; }
-        .rvp-section-h { font-size: 12px; font-weight: 800; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 2px 2px; }
+        .rvp-section-h { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 800; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.04em; margin: 8px 2px 2px; }
+        .rvp-section-h .rvp-sh-n { background: var(--ios-fill2); color: var(--c-text2); border-radius: 8px; padding: 1px 9px; font-size: 11px; font-weight: 800; }
+        .rvp-stat { cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+        .rvp-stat.on { background: var(--c-accent-soft); border-color: var(--c-accent); color: var(--c-accent); }
+        .rvp-stat.on b { color: var(--c-accent); }
+        .review-chip .rv-created { font-size: 10px; color: var(--c-text3); font-weight: 600; }
         #rvp-mine, #rvp-list { display: flex; flex-direction: column; gap: 8px; }
         #rvp-mine:empty { display: none; }
         /* 리뷰 칩 헤더 flex + 삭제 버튼 */
@@ -2085,8 +2090,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-empty { font-size: 11.5px; color: var(--c-text3); text-align: center; padding: 8px; }
         .sortable-ghost { opacity: 0.4; }
         /* [스프린트 고도화] 카테고리 헤더·인라인 목표·행 버튼·카드 코멘트 */
-        .spv-cat-h { font-size: 11.5px; font-weight: 800; color: var(--c-text2); margin: 10px 2px 4px; padding: 2px 0 2px 8px; border-left: 3px solid var(--c-accent); }
-        .spv-cat-n { color: var(--c-text3); font-weight: 700; margin-left: 4px; }
+        .spv-cat-h { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 800; color: var(--c-text2); margin: 10px 2px 4px; padding: 2px 0 2px 8px; border-left: 3px solid var(--c-accent); }
+        .spv-cat-n { color: var(--c-text3); font-weight: 700; }
+        .spv-cat-add { margin-left: auto; background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-accent); border-radius: 6px; width: 22px; height: 22px; font-size: 14px; font-weight: 800; line-height: 1; cursor: pointer; flex-shrink: 0; padding: 0; }
+        .spv-cat-add:hover { background: var(--c-accent-soft); }
+        /* [#5] 클릭 가능 상태 배지 */
+        .spv-badge.clickable { cursor: pointer; transition: filter .12s, box-shadow .12s; }
+        .spv-badge.clickable:hover { filter: brightness(0.96); box-shadow: 0 0 0 2px var(--c-accent-soft); }
+        /* [#6] 히스토리 모달 */
+        .spv-hist-list { display: flex; flex-direction: column; gap: 7px; max-height: 56vh; overflow-y: auto; margin-top: 4px; }
+        .spv-hist-item { display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 9px; }
+        .spv-hist-act { font-size: 12px; font-weight: 800; color: var(--c-text); white-space: nowrap; }
+        .spv-hist-mid { flex: 1; min-width: 0; }
+        .spv-hist-detail { font-size: 11.5px; color: var(--c-text2); margin-top: 2px; word-break: break-word; }
+        .spv-hist-meta { font-size: 10.5px; color: var(--c-text3); font-weight: 600; white-space: nowrap; text-align: right; }
+        .spv-hist-by { color: var(--c-accent); font-weight: 700; }
+        .spv-hist-empty { font-size: 12px; color: var(--c-text3); text-align: center; padding: 24px; }
         .spv-goal-ta { width: 100%; min-height: 120px; resize: vertical; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
         .spv-goal-ta:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .spv-goal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -2646,14 +2665,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div id="rvp-stats" class="rvp-stats"></div>
                 <div class="rvp-toolbar">
                     <input id="rvp-search" class="rvp-search" placeholder="🔍 사유·제안자·대상 검색" oninput="applyReviewFilters()" autocomplete="off">
-                    <select id="rvp-f-status" onchange="applyReviewFilters()" title="상태 필터">
-                        <option value="all">모든 상태</option>
-                        <option value="pending">🔔 리뷰 중</option>
-                        <option value="approved">✅ 승인</option>
-                        <option value="rejected">❌ 거부</option>
-                        <option value="forced">⚡ 강제</option>
-                        <option value="expired">⏰ 만료</option>
-                    </select>
                     <select id="rvp-f-type" onchange="applyReviewFilters()" title="유형 필터">
                         <option value="all">모든 유형</option>
                         <option value="decision">결정</option>
@@ -2939,6 +2950,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button class="ui-dialog-btn cancel" onclick="closeModal('sprint-edit-modal')">취소</button>
                 <button class="ui-dialog-btn confirm" onclick="saveSprintEdit()">저장</button>
             </div>
+        </div>
+    </div>
+
+    <!-- [#6] 스프린트 변경 히스토리 모달 -->
+    <div id="sprint-history-modal" class="bg-black bg-opacity-60 z-[680] backdrop-blur-sm" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;" onclick="closeModal('sprint-history-modal')">
+        <div style="background:var(--c-card);border:1px solid var(--c-border);padding:18px 20px;border-radius:14px;width:480px;max-width:94vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--c-border);padding-bottom:10px;">
+                <h2 id="sprint-hist-title" style="font-size:15px;font-weight:800;color:var(--c-text);margin:0;">📜 히스토리</h2>
+                <button onclick="closeModal('sprint-history-modal')" style="background:none;border:none;color:var(--c-text3);font-weight:800;font-size:18px;cursor:pointer;">✕</button>
+            </div>
+            <div id="sprint-hist-body" class="spv-hist-list"></div>
         </div>
     </div>
 
@@ -7568,7 +7590,13 @@ return data;
         function _sprintStatusBadge(s) {
             var m = { active: ['🏃 진행 중', 'var(--c-accent-soft)', 'var(--c-accent)'], closed: ['🏁 종료', 'var(--ios-fill)', 'var(--c-text3)'] };
             var x = m[s.status] || ['📋 예정', 'var(--ios-fill2)', 'var(--c-text2)'];
-            return '<span class="spv-badge" style="background:' + x[1] + ';color:' + x[2] + ';">' + x[0] + '</span>';
+            return '<span class="spv-badge clickable" title="클릭하여 상태 변경 (예정 → 진행 중 → 종료)" onclick="event.stopPropagation();cycleSprintStatus(\'' + s.id + '\')" style="background:' + x[1] + ';color:' + x[2] + ';">' + x[0] + '</span>';
+        }
+        // [#6] 스프린트 히스토리 공통 기록 헬퍼 (행위자·시점·내용)
+        function _sprintLogHist(sprint, action, detail) {
+            if (!sprint) return;
+            if (!Array.isArray(sprint.history)) sprint.history = [];
+            sprint.history.push({ action: action, by: (currentUser ? currentUser.id : null), byName: myNickname, at: new Date().toISOString(), detail: detail || '' });
         }
         function _sprintDurationLabel(s) {
             if (!s.startDate || !s.endDate) return '';
@@ -7606,7 +7634,8 @@ return data;
             var html = '';
             cats.forEach(function (cat) {
                 var inCat = tasks.filter(function (t) { return t.catId === cat.id; });
-                html += '<div class="spv-cat-h">' + _sprintEsc(cat.title) + ' <span class="spv-cat-n">' + inCat.length + '</span></div>'
+                html += '<div class="spv-cat-h"><span>' + _sprintEsc(cat.title) + '</span><span class="spv-cat-n">' + inCat.length + '</span>'
+                    + '<button class="spv-cat-add" title="이 카테고리에 새 카드 추가" onclick="sprintAddCard(\'' + cat.id + '\',\'' + (sid || '') + '\')">+</button></div>'
                     + '<div class="spv-cards" data-sprintid="' + (sid || '') + '" data-catid="' + cat.id + '">'
                     + (inCat.length ? inCat.map(_sprintCardSummary).join('') : '<div class="spv-empty">비어있음 — 여기로 드래그</div>') + '</div>';
             });
@@ -7645,6 +7674,7 @@ return data;
                     + '<div class="spv-row" onclick="toggleSprintExpand(\'' + s.id + '\')">' + _sprintStatusBadge(s) + '<b>' + _sprintEsc(s.weekLabel || s.id) + '</b>'
                     + '<span class="spv-range">' + formatSprintRange(s.startDate, s.endDate) + (_sprintDurationLabel(s) ? (' · ' + _sprintDurationLabel(s)) : '') + '</span>'
                     + '<span class="spv-count">' + countOf(s.id) + ' 카드</span>'
+                    + '<button class="spv-row-btn" onclick="event.stopPropagation();openSprintHistory(\'' + s.id + '\')" title="변경 히스토리">📜</button>'
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();openSprintEditModal(\'' + s.id + '\')" title="제목·날짜 수정">✏️</button>'
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();deleteSprint(\'' + s.id + '\')" title="스프린트 삭제">🗑</button>'
                     + '<span class="spv-caret">' + (exp ? '▾' : '▸') + '</span></div>';
@@ -7734,6 +7764,81 @@ return data;
             if (typeof renderBoardSprintPicker === 'function') renderBoardSprintPicker();
             if (typeof renderSprintBand === 'function') renderSprintBand();
             showToast('🗑 스프린트 삭제됨', 'info');
+        }
+        // [#5] 상태 순환 변경: 예정 → 진행 중 → 종료 → 예정 (단일 활성 규칙)
+        async function cycleSprintStatus(sid) {
+            var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!s) return;
+            var labelMap = { planned: '📋 예정', active: '🏃 진행 중', closed: '🏁 종료' };
+            var order = ['planned', 'active', 'closed'];
+            var cur = order.indexOf(s.status); if (cur < 0) cur = 0;
+            var next = order[(cur + 1) % order.length];
+            // 진행 중으로 전환 시: 같은 프로젝트에 이미 활성 스프린트가 있으면 자동 종료(단일 활성)
+            if (next === 'active') {
+                var others = (currentData.sprints || []).filter(function (x) { return x.id !== sid && (x.projectId || 'default') === (s.projectId || 'default') && x.status === 'active'; });
+                if (others.length) {
+                    var ok = await uiConfirm({ title: '활성 스프린트 교체', message: '이미 진행 중인 스프린트(' + others.map(function (o) { return o.weekLabel || o.id; }).join(', ') + ')가 있습니다.\n기존 스프린트를 종료하고 이 스프린트를 진행 중으로 바꿀까요?', confirmText: '교체' });
+                    if (!ok) return;
+                    others.forEach(function (o) {
+                        o.status = 'closed'; o.closedAt = new Date().toISOString();
+                        _sprintLogHist(o, 'status', '진행 중 → 종료 (다른 스프린트 시작으로 자동 종료)');
+                        dbUpsertSprint(o);
+                    });
+                }
+            }
+            var fromL = labelMap[s.status] || s.status;
+            s.status = next;
+            if (next === 'closed') s.closedAt = new Date().toISOString();
+            if (next === 'planned') s.closedAt = null;
+            _sprintLogHist(s, 'status', fromL + ' → ' + (labelMap[next] || next));
+            saveData(); dbUpsertSprint(s);
+            if (currentView === 'sprint') renderSprintView();
+            if (typeof renderSprintBand === 'function') renderSprintBand();
+            if (typeof renderBoardSprintPicker === 'function') renderBoardSprintPicker();
+            if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
+            showToast('상태 변경 → ' + (labelMap[next] || next), 'info');
+        }
+        // [#4] 스프린트 탭에서 특정 (스프린트, 카테고리)에 새 카드 생성
+        function sprintAddCard(catId, sid) {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var realSid = sid || null;
+            var cat = (currentData.categories || []).find(function (c) { return c.id === catId; });
+            var newTask = {
+                id: 't-' + Date.now(), catId: catId, projectId: activeProjectId,
+                priority: 'p1', dev: 'Dev A', catBadge: 'NEW',
+                title: '새로운 카드 (New Card)', desc: '요약 설명을 입력하세요',
+                details: '클릭하여 상세 내용을 마크다운으로 작성하세요...', scripts: ['NewScript.cs'],
+                status: 'pending', isStarred: false, time: null, isCollapsed: false,
+                comments: [], zone: 'shelf', sprintId: realSid
+            };
+            if (!Array.isArray(currentData.tasks)) currentData.tasks = [];
+            currentData.tasks.unshift(newTask);
+            saveData(); dbUpsertTask(newTask);
+            var s = (currentData.sprints || []).find(function (x) { return x.id === realSid; });
+            if (s) { _sprintLogHist(s, 'card-add', '카드 "' + newTask.title + '" 추가' + (cat ? (' · 카테고리: ' + cat.title) : '')); dbUpsertSprint(s); }
+            _sprintCardOpen[newTask.id] = true;
+            if (currentView === 'sprint') renderSprintView();
+            if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
+            showToast('➕ 새 카드 추가됨 — 카드를 펼쳐 편집하세요', 'success');
+        }
+        // [#6] 스프린트 히스토리 뷰어
+        function _sprintHistInfo(action) {
+            var m = { create: '🆕 생성', edit: '✏️ 정보 수정', status: '🔄 상태 변경', start: '🏃 시작', end: '🏁 종료', 'card-add': '➕ 카드 추가', 'category-add': '🗂 카테고리 추가' };
+            return m[action] || ('• ' + (action || ''));
+        }
+        function openSprintHistory(sid) {
+            var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!s) return;
+            var hist = Array.isArray(s.history) ? s.history.slice() : [];
+            hist.sort(function (a, b) { return (b.at || '').localeCompare(a.at || ''); });
+            var body = hist.length ? hist.map(function (h) {
+                var when = h.at ? new Date(h.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+                return '<div class="spv-hist-item"><div class="spv-hist-act">' + _sprintHistInfo(h.action) + '</div>'
+                    + '<div class="spv-hist-mid"><div class="spv-hist-by">' + _sprintEsc(h.byName || '알 수 없음') + '</div>'
+                    + (h.detail ? '<div class="spv-hist-detail">' + _sprintEsc(h.detail) + '</div>' : '') + '</div>'
+                    + '<div class="spv-hist-meta">' + when + '</div></div>';
+            }).join('') : '<div class="spv-hist-empty">기록된 히스토리가 없습니다.</div>';
+            var tEl = document.getElementById('sprint-hist-title'); if (tEl) tEl.textContent = '📜 ' + (s.weekLabel || s.id) + ' 히스토리';
+            var bEl = document.getElementById('sprint-hist-body'); if (bEl) bEl.innerHTML = body;
+            openModal('sprint-history-modal');
         }
 
         // 새 카드 DB 반영 (intrusion 결정 후 또는 활성 스프린트 없을 때 즉시)
@@ -8444,7 +8549,7 @@ return data;
             if (review.targetTaskId) tgt = `<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="${review.targetTaskId}">🗂 ${_sprintEsc(getTaskLabel(review.targetTaskId))}</a>`;
             else if (review.targetDocId) tgt = `<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="${review.targetDocId}">${_sprintEsc(getDocLabel(review.targetDocId))}</a>`;
             return `<div class="review-chip">
-                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span><button class="rv-del" onclick="event.stopPropagation();deleteReview('${review.id}')" title="이 리뷰 요청 삭제">🗑</button></div>
+                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span><span class="rv-created">🕐 ${review.createdAt ? new Date(review.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</span><button class="rv-del" onclick="event.stopPropagation();deleteReview('${review.id}')" title="이 리뷰 요청 삭제">🗑</button></div>
                 <div class="rv-reason">"${_sprintEsc(review.reason)}"</div>
                 ${tgt ? `<div class="rv-target">${tgt}</div>` : ''}
                 ${body}
@@ -8505,7 +8610,8 @@ return data;
         }
 
         // [리뷰함] 페이지 렌더 (통계·내 리뷰 대기·필터·검색)
-        var _reviewFilter = { status: 'all', type: 'all', sort: 'recent', q: '' };
+        var _reviewFilter = { status: 'pending', type: 'all', sort: 'recent', q: '' }; // [#2] 기본=리뷰 중
+        function setReviewStatusFilter(s) { _reviewFilter.status = s || 'all'; renderReviewPage(); }
         function _reviewTargetLabel(r) {
             if (r.targetTaskId) return (typeof getTaskLabel === 'function') ? getTaskLabel(r.targetTaskId) : '';
             if (r.targetDocId) return (typeof getDocLabel === 'function') ? getDocLabel(r.targetDocId) : '';
@@ -8513,7 +8619,7 @@ return data;
         }
         function applyReviewFilters() {
             var g = function (id) { var el = document.getElementById(id); return el ? el.value : null; };
-            _reviewFilter.status = g('rvp-f-status') || 'all';
+            // status는 상단 통계칩(setReviewStatusFilter)이 관리
             _reviewFilter.type = g('rvp-f-type') || 'all';
             _reviewFilter.sort = g('rvp-f-sort') || 'recent';
             _reviewFilter.q = ((g('rvp-search') || '')).toLowerCase().trim();
@@ -8528,15 +8634,16 @@ return data;
             var sp = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
             var statsEl = document.getElementById('rvp-stats');
             if (statsEl) {
-                var stats = [['🔔 리뷰 중', c.pending], ['✅ 승인', c.approved], ['❌ 거부', c.rejected], ['⚡ 강제', c.forced], ['⏰ 만료', c.expired]];
-                statsEl.innerHTML = stats.map(function (s) { return '<span class="rvp-stat"><b>' + s[1] + '</b>' + s[0] + '</span>'; }).join('')
-                    + (sp ? '<span class="rvp-stat rvp-stat-accent"><b>' + (sp.intrusionCount || 0) + '</b>⚡ 이번주 인트루전</span>' : '');
+                var cur = _reviewFilter.status;
+                var stats = [['all', '전체', all.length], ['pending', '🔔 리뷰 중', c.pending], ['approved', '✅ 승인', c.approved], ['rejected', '❌ 거부', c.rejected], ['forced', '⚡ 강제', c.forced], ['expired', '⏰ 만료', c.expired]];
+                statsEl.innerHTML = stats.map(function (s) { return '<span class="rvp-stat' + (cur === s[0] ? ' on' : '') + '" onclick="setReviewStatusFilter(\'' + s[0] + '\')" title="' + s[1] + '만 보기"><b>' + s[2] + '</b>' + s[1] + '</span>'; }).join('')
+                    + (sp ? '<span class="rvp-stat rvp-stat-accent" title="이번 스프린트 인트루전 횟수"><b>' + (sp.intrusionCount || 0) + '</b>⚡ 인트루전</span>' : '');
             }
             // 내 리뷰 대기
             var mineEl = document.getElementById('rvp-mine');
             if (mineEl) {
                 var mine = all.filter(function (r) { return r.status === 'pending' && currentUser && r.proposerId !== currentUser.id && !(r.votes || []).find(function (v) { return v.userId === currentUser.id; }); });
-                mineEl.innerHTML = mine.length ? ('<div class="rvp-section-h">🙋 내 리뷰 대기 (' + mine.length + ')</div>' + mine.map(renderReviewChip).join('')) : '';
+                mineEl.innerHTML = mine.length ? ('<div class="rvp-section-h"><span>🙋 내 리뷰 대기</span><span class="rvp-sh-n">' + mine.length + '건</span></div>' + mine.map(renderReviewChip).join('')) : '';
             }
             // 필터 + 정렬
             var f = _reviewFilter;
@@ -8552,7 +8659,8 @@ return data;
                 if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
                 return (b.createdAt || '').localeCompare(a.createdAt || '');
             });
-            listEl.innerHTML = '<div class="rvp-section-h">전체 (' + list.length + ')</div>'
+            var _stLabel = ({ all: '전체', pending: '🔔 리뷰 중', approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제', expired: '⏰ 만료' })[_reviewFilter.status] || '전체';
+            listEl.innerHTML = '<div class="rvp-section-h"><span>' + _stLabel + '</span><span class="rvp-sh-n">' + list.length + '건</span></div>'
                 + (list.length ? list.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:24px;text-align:center;">조건에 맞는 리뷰 요청이 없습니다.</div>');
         }
 
@@ -8895,7 +9003,7 @@ ${intrLog}
         let activeTagEdit = null;
         async function editTag(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newTagName = await uiPrompt({ title: '태그 수정', label: '새 태그 이름', value: task.catBadge || '' }); if (newTagName === null) return; const finalTag = newTagName.trim() || task.catBadge; activeTagEdit = { oldTag: task.catBadge, newTag: finalTag }; const colorPicker = document.getElementById('hidden-color-picker'); colorPicker.value = currentData.tagColors[task.catBadge] || '#57544c'; setTimeout(() => colorPicker.click(), 100); }
         function onColorPicked(e) { if(!activeTagEdit) return; const newColor = e.target.value; const { oldTag, newTag } = activeTagEdit; const affectedTasks = []; currentData.tasks.forEach(t => { if(t.catBadge === oldTag) { t.catBadge = newTag; affectedTasks.push(t); } }); currentData.tagColors[newTag] = newColor; activeTagEdit = null; saveData(); dbUpsertTagColor(newTag, newColor); affectedTasks.forEach(t => dbUpsertTask(t)); }
-        async function addNewCategory() { const title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름을 입력하세요', placeholder: '예: 전투 시스템' }); if (title && title.trim()) { var _sid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId) ? selectedBoardSprintId : null; const newCat = { id: "cat-" + Date.now(), title: title.trim(), subtitle: "CUSTOM MODULE", projectId: activeProjectId, sprintId: _sid }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); renderBoard(); } }
+        async function addNewCategory() { const title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름을 입력하세요', placeholder: '예: 전투 시스템' }); if (title && title.trim()) { var _sid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId) ? selectedBoardSprintId : null; const newCat = { id: "cat-" + Date.now(), title: title.trim(), subtitle: "CUSTOM MODULE", projectId: activeProjectId, sprintId: _sid }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); var _cs = (currentData.sprints || []).find(x => x.id === _sid); if (_cs && typeof _sprintLogHist === 'function') { _sprintLogHist(_cs, 'category-add', '카테고리 "' + newCat.title + '" 추가'); dbUpsertSprint(_cs); } renderBoard(); } }
         async function editCategoryName(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const newName = await uiPrompt({ title: '카테고리 이름 수정', label: '카테고리 이름', value: cat.title || '' }); if(newName && newName.trim()) { cat.title = newName.trim(); saveData(); dbUpsertCategory(cat); } }
         async function deleteCategory(e, catId) { e.stopPropagation(); if(await uiConfirm({ title: '카테고리 삭제', message: '카테고리와 내부 모든 할 일이 함께 삭제됩니다. 계속할까요?', confirmText: '삭제', danger: true })) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
         function addNewTask(catId, position = 'top') {
