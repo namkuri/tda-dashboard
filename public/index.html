@@ -5741,7 +5741,7 @@ return data;
                         // [실시간] 리뷰함 페이지가 열려 있으면 즉시 갱신 (이전엔 레거시 모달만 갱신해 화면이 안 바뀜)
                         if (currentView === 'review' && typeof renderReviewPage === 'function') renderReviewPage();
                         if (typeof renderReviewInbox === 'function' && document.getElementById('review-inbox-modal') && document.getElementById('review-inbox-modal').classList.contains('modal-open')) renderReviewInbox();
-                        if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
+                        if (_inDocsView() && typeof renderDocLinksBar === 'function') renderDocLinksBar();
                         _safeLocalCache(currentData);
                     }).subscribe(function(status, err) {
                         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -8508,6 +8508,8 @@ return data;
             showToast('📥 정전 ' + legacy.length + '건을 게임 위키로 가져왔습니다.', 'success');
         }
 
+        // [버그수정] 문서/게임위키/개인문서 모두 docs-view DOM을 공유 → 리뷰칩·연결바 갱신 대상
+        function _inDocsView() { return currentView === 'docs' || currentView === 'canon' || currentView === 'personal'; }
         var _docReviewsAllShown = {}; // [#4] 문서별 리뷰 내역 펼침 상태
         function toggleDocReviewsAll(docId) {
             var willShowAll = !_docReviewsAllShown[docId];
@@ -8811,7 +8813,7 @@ return data;
             if (review.status === 'forced') await applyReviewDecision(review); // 강제는 즉시 적용 + ADR
             renderReviewBadge(); renderBoard();
             if (typeof renderReviewInbox === 'function') renderReviewInbox();
-            if (currentView === 'docs') renderDocLinksBar();
+            if (_inDocsView()) renderDocLinksBar();
             if (!error) showToast(ruleType === 'force' ? '⚡ 강제 통과로 기록되었습니다.' : '🗳 리뷰 요청이 생성되었습니다.', 'success');
         }
 
@@ -8831,7 +8833,7 @@ return data;
             await dbUpsertReview(review);
             renderReviewBadge(); renderBoard();
             if (typeof renderReviewInbox === 'function') renderReviewInbox();
-            if (currentView === 'docs') renderDocLinksBar();
+            if (_inDocsView()) renderDocLinksBar();
             showToast('투표 완료: ' + ({ approve: '승인', reject: '거부', skip: '불참' }[decision] || decision), 'success');
         }
 
@@ -8882,7 +8884,7 @@ return data;
         var _reviewExpanded = {}; var _reviewEditing = {};
         function _rerenderReviews() {
             if (currentView === 'review' && typeof renderReviewPage === 'function') renderReviewPage();
-            if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar(); // [버그수정] 문서 뷰에서 리뷰칩 클릭 시 즉시 반영
+            if (_inDocsView() && typeof renderDocLinksBar === 'function') renderDocLinksBar(); // [버그수정] 문서/게임위키/개인문서에서 리뷰칩 클릭 즉시 반영
             if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
             var inb = document.getElementById('review-inbox-list'); if (inb && inb.offsetParent && typeof renderReviewInbox === 'function') renderReviewInbox();
         }
@@ -9047,7 +9049,7 @@ return data;
             if (typeof renderReviewBadge === 'function') renderReviewBadge();
             if (currentView === 'review') renderReviewPage();
             if (typeof renderBoard === 'function') renderBoard();
-            if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
+            if (_inDocsView() && typeof renderDocLinksBar === 'function') renderDocLinksBar();
             showToast('🗑 "삭제됨"으로 표시되었습니다. (삭제됨 필터에서 복원 가능)', 'info');
         }
         async function restoreReview(id) {
@@ -9251,7 +9253,7 @@ ${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
                 if (doc && doc.isLocked) {
                     doc.isLocked = false;
                     await dbUpsertDoc(doc);
-                    if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
+                    if (_inDocsView() && typeof renderDocLinksBar === 'function') renderDocLinksBar();
                     showToast('🔓 변경 승인 — 문서 잠금 해제됨', 'success');
                 }
             }
