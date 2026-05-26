@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r29 (r28 + 버그4: 마감모달 zoom고정·완료상태변경·파트삭제·리뷰코멘트 로그병합) -->
+<!-- BUILD: 2026-05-27 r30 (r29 + 리뷰코멘트 크로스계정 동기화: dbUpsertReview granular 폴백(log 보존)+log 단조 read-merge+DB도구 스키마점검/마이그레이션SQL) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2504,6 +2504,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button onclick="moveAllDocsToCurrentProject()" class="bg-purple-500 hover:bg-purple-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow-sm">📁 선택 프로젝트로 이동</button>
             </div>
             <button onclick="showAllDocsDebug()" class="text-xs text-yellow-700 underline text-left">📋 전체 문서 목록 보기 (프로젝트별)</button>
+        </div>
+        <div class="p-4 border-b flex flex-col gap-2" style="background:var(--c-paper);">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold" style="color:var(--c-text);">🗃️ DB 스키마 점검 · 동기화 복구</span>
+                <button onclick="dbCheckSchema(this)" class="text-xs px-3 py-1.5 rounded-lg font-bold shadow-sm" style="background:var(--c-accent);color:#fff;">🔍 점검</button>
+            </div>
+            <div class="text-[11px]" style="color:var(--c-text2);line-height:1.5;">리뷰 <b>코멘트</b>·제목·버전 체인 등이 <b>다른 계정과 공유</b>되려면 DB에 컬럼이 있어야 합니다. 누락 시 아래 SQL을 <b>Supabase → SQL Editor</b>에 1회 붙여넣고 실행하세요. (기존 데이터·실행 모두 안전한 멱등 SQL)</div>
+            <pre id="schema-check-result" style="display:none;white-space:pre-wrap;font-size:11px;line-height:1.55;background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:8px;color:var(--c-text);margin:0;"></pre>
+            <textarea id="db-migration-sql" readonly spellcheck="false" onclick="this.select()" style="height:132px;width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;line-height:1.45;background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:8px;color:var(--c-text);resize:vertical;"></textarea>
+            <button onclick="copyTextToClipboard(document.getElementById('db-migration-sql').value, '📋 마이그레이션 SQL 복사됨 — Supabase SQL Editor에 붙여넣어 실행하세요')" class="text-xs px-3 py-1.5 rounded-lg font-bold shadow-sm self-end" style="background:var(--c-accent-soft);border:1px solid var(--c-border);color:var(--c-accent);">📋 SQL 복사</button>
         </div>
         <div class="p-4 border-b bg-indigo-50 flex flex-col gap-2">
             <h3 class="font-black text-indigo-900 text-sm flex items-center gap-2">
@@ -5737,8 +5747,10 @@ return data;
             if (error) console.error('[dbDeleteSprint]', error);
         }
         // [v40 Day3 청크2] 리뷰 요청 upsert
+        var _reviewDroppedCols = {}; // 세션 중 알아낸 누락 컬럼 캐시 — 반복 실패 라운드트립 방지
         async function dbUpsertReview(review) {
             if (!supabaseClient) return { error: null };
+            const OPTIONAL_COLS = ['title', 'deleted', 'log', 'prior_review_id', 'next_review_id', 'submitted_version'];
             const payload = {
                 id: review.id, type: review.type, rule: review.rule || {},
                 target_task_id: review.targetTaskId || null,
@@ -5760,14 +5772,32 @@ return data;
                 next_review_id: review.nextReviewId || null,
                 submitted_version: review.submittedVersion || null
             };
-            let { error } = await supabaseClient.from('review_requests').upsert(payload);
-            // [라운드10·12·19] 신규 컬럼 미생성 환경 보호: 해당 필드만 빼고 재시도(기존 저장 보존)
-            if (error && /\b(title|deleted|log|prior_review_id|next_review_id|submitted_version)\b/.test(error.message || '')) {
-                delete payload.title; delete payload.deleted; delete payload.log;
-                delete payload.prior_review_id; delete payload.next_review_id; delete payload.submitted_version;
-                ({ error } = await supabaseClient.from('review_requests').upsert(payload));
-                if (!error) console.warn('[dbUpsertReview] 선택 컬럼 없음 — 제외 저장. SQL: alter table review_requests add column if not exists title text; add deleted boolean default false; add log jsonb default \'[]\'::jsonb; add prior_review_id text; add next_review_id text; add submitted_version int;');
+            // [라운드30] 누락 컬럼 보호를 "전부 드롭" → "에러에 지목된 컬럼만 드롭"으로 granular화.
+            //   기존 코드는 prior_review_id 등 하나만 없어도 log까지 통째로 버려 코멘트가 다른 계정에 동기화 안 됐음.
+            //   이제 실제로 없는 컬럼만 제거 → log 컬럼이 있으면 코멘트가 보존·동기화됨. (SQL 실행 불필요)
+            OPTIONAL_COLS.forEach(function (c) { if (_reviewDroppedCols[c]) delete payload[c]; });
+            // [라운드30] log 단조 보존: 저장 직전 DB 최신 log와 union → 두 계정이 동시에 코멘트해도 서로 덮어쓰지 않음
+            if (!_reviewDroppedCols['log'] && Array.isArray(payload.log)) {
+                try {
+                    const cur = await supabaseClient.from('review_requests').select('log').eq('id', payload.id).limit(1);
+                    if (cur && !cur.error && cur.data && cur.data[0] && Array.isArray(cur.data[0].log)) {
+                        payload.log = _mergeReviewLog(cur.data[0].log, payload.log); review.log = payload.log;
+                    } else if (cur && cur.error && /\blog\b/.test((cur.error.message || '') + ' ' + (cur.error.details || ''))) {
+                        _reviewDroppedCols['log'] = true; delete payload.log;
+                    }
+                } catch (e) { /* 네트워크 등 — 병합 생략하고 그대로 저장 */ }
             }
+            let error, dropped = [];
+            for (let attempt = 0; attempt < 8; attempt++) {
+                ({ error } = await supabaseClient.from('review_requests').upsert(payload));
+                if (!error) break;
+                const msg = (error.message || '') + ' ' + (error.details || '') + ' ' + (error.hint || '');
+                let hit = null;
+                for (let k = 0; k < OPTIONAL_COLS.length; k++) { const col = OPTIONAL_COLS[k]; if ((col in payload) && new RegExp('\\b' + col + '\\b').test(msg)) { hit = col; break; } }
+                if (!hit) break; // 컬럼 누락 문제가 아니면 중단
+                delete payload[hit]; _reviewDroppedCols[hit] = true; dropped.push(hit);
+            }
+            if (!error && dropped.length) console.warn('[dbUpsertReview] 누락 컬럼 제외 저장: ' + dropped.join(', ') + ' — DB 도구→🗃️ 스키마 점검에서 SQL 실행 권장 (log 보존됨)');
             if (error) {
                 console.error('[dbUpsertReview]', error);
                 if (typeof showToast === 'function') showToast('⚠️ 리뷰 저장 실패: ' + (error.message||''), 'alert');
@@ -5779,6 +5809,48 @@ return data;
             const { error } = await supabaseClient.from('review_requests').delete().eq('id', id);
             if (error) { console.error('[dbDeleteReview]', error); if (typeof showToast === 'function') showToast('⚠️ 삭제 실패: ' + (error.message || ''), 'alert'); }
             return { error };
+        }
+        // ===== DB 스키마 마이그레이션 헬퍼 =====
+        // 선택 컬럼이 없으면 dbUpsert*가 그 필드를 드롭하고 저장 → 코멘트/제목/버전체인 등이 DB에 안 남아 다른 계정과 동기화 안 됨.
+        var DB_OPTIONAL_COLUMNS = [
+            ['review_requests', 'title', 'text'],
+            ['review_requests', 'deleted', 'boolean default false'],
+            ['review_requests', 'log', "jsonb default '[]'::jsonb"],
+            ['review_requests', 'prior_review_id', 'text'],
+            ['review_requests', 'next_review_id', 'text'],
+            ['review_requests', 'submitted_version', 'int'],
+            ['tasks', 'due_date', 'date'],
+            ['sprints', 'participants', "jsonb default '[]'::jsonb"],
+            ['kanban_categories', 'sprint_id', 'text'],
+            ['wiki_docs', 'kind', "text default 'wiki'"],
+            ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"]
+        ];
+        function dbMigrationSql() {
+            var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존'];
+            DB_OPTIONAL_COLUMNS.forEach(function (c) { lines.push('alter table ' + c[0] + ' add column if not exists ' + c[1] + ' ' + c[2] + ';'); });
+            return lines.join('\n');
+        }
+        // 각 선택 컬럼을 select 시도해 누락분을 찾아 보고
+        async function dbCheckSchema(btn) {
+            var box = document.getElementById('schema-check-result');
+            if (!supabaseClient) { if (box) { box.style.display = 'block'; box.textContent = '⚠️ DB(Supabase) 연결이 없어 점검할 수 없습니다.'; } if (typeof showToast === 'function') showToast('DB 연결 없음', 'alert'); return; }
+            var prev = btn ? btn.textContent : null; if (btn) { btn.textContent = '점검 중…'; btn.disabled = true; }
+            var missing = [];
+            for (var i = 0; i < DB_OPTIONAL_COLUMNS.length; i++) {
+                var t = DB_OPTIONAL_COLUMNS[i][0], col = DB_OPTIONAL_COLUMNS[i][1];
+                try {
+                    var res = await supabaseClient.from(t).select(col).limit(1);
+                    if (res && res.error) { var m = (res.error.message || '') + ' ' + (res.error.code || ''); if (/does not exist|42703|could not find|schema cache/i.test(m)) missing.push(t + '.' + col); }
+                } catch (e) { /* 네트워크 등 — 스킵 */ }
+            }
+            if (btn) { btn.textContent = prev; btn.disabled = false; }
+            if (box) {
+                box.style.display = 'block';
+                if (!missing.length) box.textContent = '✅ 모든 선택 컬럼이 존재합니다.\n리뷰 코멘트·제목·버전 체인이 다른 계정과 정상 동기화됩니다.';
+                else box.textContent = '⚠️ 누락 컬럼 ' + missing.length + '개:\n· ' + missing.join('\n· ') + '\n\n→ 아래 SQL을 복사해 Supabase SQL Editor에서 실행한 뒤 새로고침하세요.';
+            }
+            if (typeof showToast === 'function') showToast(missing.length ? ('⚠️ 누락 컬럼 ' + missing.length + '개 — SQL 실행 필요') : '✅ 스키마 최신', missing.length ? 'alert' : 'success');
+            return missing;
         }
         // [v40 B3] canon 문서 upsert / delete
         async function dbUpsertCanonDoc(c) {
@@ -8040,7 +8112,7 @@ return data;
             _boardSprintInit = false;
             saveData();
         }
-        function updateJsonEditorView() { const editor = document.getElementById('json-editor'); if(editor) editor.value = JSON.stringify(currentData, null, 2); }
+        function updateJsonEditorView() { const editor = document.getElementById('json-editor'); if(editor) editor.value = JSON.stringify(currentData, null, 2); const mig = document.getElementById('db-migration-sql'); if (mig && !mig.value) mig.value = dbMigrationSql(); }
         function applyJsonFromEditor() { try { const parsed = JSON.parse(document.getElementById('json-editor').value); if(parsed.categories && parsed.tasks) { currentData = validateData(parsed); saveData(); showToast("JSON 데이터가 반영되었습니다.", "success"); if(currentView === 'docs') { updateProjectTitle(); renderDocTree(); } } else { showToast("유효한 구조가 아닙니다.", 'alert'); } } catch(err) { showToast("오류: " + err.message, 'alert'); } }
         function importJsonFile(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = function(evt) { document.getElementById('json-editor').value = evt.target.result; applyJsonFromEditor(); }; reader.readAsText(file); e.target.value = ""; }
         function copyTextToClipboard(text, successMessage) { const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); showToast(successMessage || '복사되었습니다.', 'success'); } catch (err) { showToast('복사에 실패했습니다.', 'alert'); } document.body.removeChild(textArea); }
