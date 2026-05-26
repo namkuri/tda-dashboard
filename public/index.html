@@ -2035,6 +2035,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .rv-del { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--c-text3); font-size: 12px; padding: 2px 5px; border-radius: 6px; line-height: 1; }
         .rv-del:hover { color: var(--st-danger); background: var(--st-danger-soft); }
 
+        /* ============================================================
+           [게임위키] 버전/승인 메타 바 (kind='canon' 문서 에디터 상단)
+           ============================================================ */
+        #canon-meta-bar { display: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--c-border); background: var(--c-accent-soft); font-size: 12px; flex-shrink: 0; }
+        #canon-meta-bar .cmb-badge { font-weight: 800; font-size: 11px; padding: 3px 10px; border-radius: 9px; }
+        #canon-meta-bar .cmb-approved { background: #d1fae5; color: #0a7a4a; }
+        body.dark #canon-meta-bar .cmb-approved { background: #20402e; color: #7fe0a8; }
+        #canon-meta-bar .cmb-draft { background: var(--ios-fill2); color: var(--c-text2); }
+        #canon-meta-bar .cmb-btn { background: var(--c-card); border: 1px solid var(--c-border); color: var(--c-text); border-radius: 7px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer; transition: background .12s; }
+        #canon-meta-bar .cmb-btn:hover { background: var(--c-accent-soft); }
+        #canon-meta-bar .cmb-btn.on { background: var(--c-accent); color: #fff; border-color: transparent; }
+
     </style>
 </head>
 <body>
@@ -2710,6 +2722,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         </div>
                     </div>
 
+                    <!-- [게임위키] 버전/승인 메타 바 (kind='canon'일 때만 표시) -->
+                    <div id="canon-meta-bar"></div>
                     <!-- [v40 Day3 청크1] 문서 연결 링크 바 -->
                     <div id="doc-links-bar" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid #e7e3d8;background:#fbfcfe;font-size:12px;flex-shrink:0;"></div>
 
@@ -6150,8 +6164,13 @@ return data;
                     const totalInProject = cache.totalInProject;
                     const badge = document.getElementById('doc-count-badge');
                     if(badge) badge.textContent = totalInProject + '개';
+                    var _isCanonKind = (typeof currentDocKind !== 'undefined' && currentDocKind === 'canon');
+                    var _legacyCanonN = (_isCanonKind && Array.isArray(currentData.canon)) ? currentData.canon.filter(function (c) { return (c.projectId || 'default') === activeProjectId; }).length : 0;
+                    var _emptyMain = _isCanonKind
+                        ? '<div class="tree-empty"><span class="te-emoji">📜</span>게임 위키가 비어 있어요.<br>상단 <b>+ New</b>로 첫 문서를 만들어보세요.' + (_legacyCanonN ? ('<br><br><span style="color:var(--c-text2);">기존 정전 ' + _legacyCanonN + '건을 트리로 옮길 수 있어요.</span><br><button onclick="migrateCanonToWikiDocs()" style="margin-top:8px;background:var(--c-accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer;">📥 정전 ' + _legacyCanonN + '건 가져오기</button>') : '') + '</div>'
+                        : '<div class="tree-empty"><span class="te-emoji">📄</span>아직 문서가 없어요.<br>상단 <b>+ New</b>로 첫 문서를 만들어보세요.</div>';
                     container.innerHTML = totalInProject === 0
-                        ? '<div class="tree-empty"><span class="te-emoji">📄</span>아직 문서가 없어요.<br>상단 <b>+ New</b>로 첫 문서를 만들어보세요.</div>'
+                        ? _emptyMain
                         : '<div class="text-center text-orange-400 text-xs mt-4 px-2">⚠️ ' + totalInProject + '개 문서가 있지만 현재 뷰에서 표시되지 않습니다.<br><button onclick="repairDocs()" class="mt-2 bg-orange-500 text-white px-3 py-1 rounded text-xs font-bold">🔧 문서 복구</button></div>';
                 }
                 return '';
@@ -6306,6 +6325,7 @@ return data;
             const emptyState = document.getElementById('doc-editor-empty');
             const titleEl = document.getElementById('doc-editor-title');
             const textarea = document.getElementById('doc-editor-textarea');
+            if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar(); // [게임위키] 버전/승인 바 동기화
 
             if (!activeDocId) {
                 emptyState.classList.remove('hidden'); textarea.value = ''; updateDocPreview('');
@@ -6463,8 +6483,16 @@ return data;
             if(statusEl) { statusEl.textContent = '💾 저장 중...'; statusEl.style.color = '#c96442'; }
             updateSaveIndicator('saving');
 
+            // [게임위키] 승인된 문서를 편집·저장하면 초안으로 되돌림(재승인 필요)
+            var _canonReverted = false;
+            if (doc.kind === 'canon' && doc.meta && doc.meta.status === 'approved') {
+                doc.meta.status = 'draft'; doc.meta.approvedBy = null; doc.meta.approvedByName = ''; doc.meta.approvedAt = null;
+                _canonReverted = true;
+            }
             // localStorage 즉시
             _safeLocalCache(currentData);
+            if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar();
+            if (_canonReverted) showToast('✏️ 내용 변경으로 승인이 해제됨 (재승인 필요)', 'update');
 
             if(supabaseClient) {
                 // ★ 핵심: 전체 JSON이 아닌 wiki_docs의 이 Row 1개만 UPDATE
@@ -6472,6 +6500,7 @@ return data;
                     .update({
                         content:    content,
                         title:      doc.title,
+                        meta:       doc.meta || {},
                         updated_at: Date.now()
                     })
                     .eq('id', activeDocId)
@@ -7492,6 +7521,114 @@ return data;
         }
 
         // ── 연결 바 렌더 (문서 뷰) ──
+        // ═══════════════════════════════════════════════
+        // [게임위키] 버전/승인 (meta 기반) — kind='canon' 문서 전용
+        // ═══════════════════════════════════════════════
+        function _activeCanonDoc() {
+            if (currentDocKind !== 'canon' || !activeDocId) return null;
+            var d = (currentData.docs || []).find(function (x) { return x.id === activeDocId; });
+            return (d && (d.kind || 'wiki') === 'canon') ? d : null;
+        }
+        function renderCanonMetaBar() {
+            var bar = document.getElementById('canon-meta-bar'); if (!bar) return;
+            var doc = _activeCanonDoc();
+            if (!doc) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+            var meta = doc.meta || (doc.meta = {});
+            var ver = meta.version || 1;
+            var approved = meta.status === 'approved';
+            var badge = approved
+                ? '<span class="cmb-badge cmb-approved">✅ 승인됨 · v' + ver + (meta.approvedByName ? (' · ' + _sprintEsc(meta.approvedByName)) : '') + '</span>'
+                : '<span class="cmb-badge cmb-draft">✎ 초안 · v' + ver + '</span>';
+            bar.innerHTML = badge
+                + '<button class="cmb-btn" onclick="canonSnapshotVersion()" title="현재 내용을 새 버전으로 스냅샷">📌 새 버전</button>'
+                + '<button class="cmb-btn ' + (approved ? 'on' : '') + '" onclick="canonToggleApprove()">' + (approved ? '승인 해제' : '✅ 승인') + '</button>'
+                + '<button class="cmb-btn" onclick="canonOpenHistory()">🕓 버전 기록 (' + ((meta.versionHistory || []).length) + ')</button>';
+            bar.style.display = 'flex';
+        }
+        function canonSnapshotVersion() {
+            var doc = _activeCanonDoc(); if (!doc) return;
+            if (typeof flushDocSave === 'function') flushDocSave();
+            var meta = doc.meta || (doc.meta = {});
+            if (!Array.isArray(meta.versionHistory)) meta.versionHistory = [];
+            meta.versionHistory.push({ version: meta.version || 1, title: doc.title, content: doc.content, by: currentUser ? currentUser.id : null, byName: myNickname, at: new Date().toISOString() });
+            if (meta.versionHistory.length > 50) meta.versionHistory = meta.versionHistory.slice(-50);
+            meta.version = (meta.version || 1) + 1;
+            _safeLocalCache(currentData); dbUpsertDoc(doc); renderCanonMetaBar();
+            showToast('📌 v' + meta.version + ' 스냅샷 저장됨', 'success');
+        }
+        async function canonToggleApprove() {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var doc = _activeCanonDoc(); if (!doc) return;
+            var meta = doc.meta || (doc.meta = {});
+            if (meta.status === 'approved') {
+                if (!(await uiConfirm({ title: '승인 해제', message: '이 게임 위키 문서(v' + (meta.version || 1) + ')의 승인을 해제하고 초안으로 되돌릴까요?', confirmText: '승인 해제' }))) return;
+                meta.status = 'draft'; meta.approvedBy = null; meta.approvedByName = ''; meta.approvedAt = null;
+            } else {
+                meta.status = 'approved'; meta.approvedBy = currentUser.id; meta.approvedByName = myNickname; meta.approvedAt = new Date().toISOString();
+            }
+            _safeLocalCache(currentData); dbUpsertDoc(doc); renderCanonMetaBar();
+            showToast(meta.status === 'approved' ? ('✅ v' + (meta.version || 1) + ' 승인됨') : '승인 해제됨', 'success');
+        }
+        function canonOpenHistory() {
+            var doc = _activeCanonDoc(); if (!doc) return;
+            var listEl = document.getElementById('canon-history-list'); if (!listEl) return;
+            var meta = doc.meta || {}; var fmt = function (t) { return t ? new Date(t).toLocaleString('ko-KR') : '-'; };
+            var hist = (meta.versionHistory || []).slice().reverse();
+            var html = '<div class="canon-ver-item"><div class="cv-meta">현재 <b>v' + (meta.version || 1) + '</b>' + (meta.status === 'approved' ? ' · ✅승인' : '') + '</div></div>';
+            html += hist.map(function (v) { return '<div class="canon-ver-item"><div class="cv-meta"><b>v' + v.version + '</b> · ' + _sprintEsc(v.byName || '?') + ' · ' + fmt(v.at) + '</div><button class="canon-btn-ghost" onclick="canonViewVersion(' + v.version + ')">보기</button><button class="canon-btn-ghost" onclick="canonRestoreVersion(' + v.version + ')">복원</button></div>'; }).join('');
+            if (hist.length === 0) html += '<div class="linked-empty" style="padding:12px;">이전 버전 없음 (📌 새 버전으로 누적)</div>';
+            listEl.innerHTML = html; openModal('canon-history-modal');
+        }
+        function canonViewVersion(ver) {
+            var doc = _activeCanonDoc(); if (!doc) return;
+            var v = ((doc.meta && doc.meta.versionHistory) || []).find(function (x) { return x.version === ver; }); if (!v) return;
+            var pv = document.getElementById('doc-preview-container');
+            if (pv) pv.innerHTML = '<div style="font-size:11px;color:var(--c-accent);font-weight:700;margin-bottom:8px;">📜 v' + ver + ' 미리보기 (복원 전까지 저장 안 됨)</div>' + DOMPurify.sanitize(parseMarkdownWithTables(v.content || ''), domPurifyConfig);
+            closeModal('canon-history-modal');
+        }
+        async function canonRestoreVersion(ver) {
+            var doc = _activeCanonDoc(); if (!doc) return;
+            var v = ((doc.meta && doc.meta.versionHistory) || []).find(function (x) { return x.version === ver; }); if (!v) return;
+            if (!(await uiConfirm({ title: '버전 복원', message: 'v' + ver + ' 내용으로 복원할까요?\n현재 내용은 새 버전으로 먼저 스냅샷됩니다.', confirmText: '복원' }))) return;
+            canonSnapshotVersion();
+            doc.title = v.title || doc.title; doc.content = v.content || '';
+            _docLastSavedContent = null;
+            closeModal('canon-history-modal');
+            _safeLocalCache(currentData); dbUpsertDoc(doc);
+            if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
+            if (typeof renderDocTree === 'function') renderDocTree();
+            showToast('↩ v' + ver + ' 복원됨', 'success');
+        }
+        // [게임위키] 기존 canon_docs → wiki_docs(kind='canon') 1회 이관 (수동, ADD-only)
+        async function migrateCanonToWikiDocs() {
+            var legacy = (currentData.canon || []).filter(function (c) { return (c.projectId || 'default') === activeProjectId; });
+            if (legacy.length === 0) { showToast('이 프로젝트에 가져올 정전 문서가 없습니다.', 'info'); return; }
+            var ok = await uiConfirm({ title: '정전 가져오기', message: '기존 정전 ' + legacy.length + '건을 게임 위키 트리로 가져옵니다.\n카테고리는 폴더로 변환됩니다. (원본은 보존)', confirmText: '가져오기' });
+            if (!ok) return;
+            var cats = {}; var created = [];
+            legacy.forEach(function (c) {
+                var cat = c.category || '일반';
+                if (!cats[cat]) {
+                    var fid = 'doc_cat_' + Date.now() + '_' + Object.keys(cats).length;
+                    var folder = { id: fid, projectId: activeProjectId, parentId: null, title: cat, emoji: '📁', isCollapsed: false, content: '', kind: 'canon', meta: {}, sortOrder: Object.keys(cats).length, createdAt: Date.now(), updatedAt: Date.now() };
+                    cats[cat] = folder; currentData.docs.push(folder); created.push(folder);
+                }
+            });
+            legacy.forEach(function (c, i) {
+                if (currentData.docs.find(function (d) { return d.id === c.id; })) return; // 이미 이관됨
+                var folder = cats[c.category || '일반'];
+                created.push((function () {
+                    var nd = { id: c.id, projectId: activeProjectId, parentId: folder.id, title: c.title || '제목 없음', emoji: '📜', isCollapsed: false, content: c.content || '', kind: 'canon', sortOrder: i, createdAt: Date.now(), updatedAt: Date.now(), meta: { version: c.version || 1, status: c.status || 'draft', approvedBy: c.approvedBy || null, approvedByName: c.approvedByName || '', approvedAt: c.approvedAt || null, versionHistory: c.versionHistory || [] } };
+                    currentData.docs.push(nd); return nd;
+                })());
+            });
+            _safeLocalCache(currentData);
+            for (var k = 0; k < created.length; k++) { await dbUpsertDoc(created[k]); }
+            try { localStorage.setItem('pb3_canon_migrated_' + activeProjectId, '1'); } catch (e) {}
+            if (currentView === 'canon') renderDocTree();
+            showToast('📥 정전 ' + legacy.length + '건을 게임 위키로 가져왔습니다.', 'success');
+        }
+
         function renderDocLinksBar() {
             const bar = document.getElementById('doc-links-bar');
             if (!bar) return;
