@@ -2006,6 +2006,35 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         #wikilink-ac .wlac-item.sel .wlac-kind, #wikilink-ac .wlac-item:hover .wlac-kind { color: var(--c-accent); }
         #wikilink-ac .wlac-empty { padding: 10px; font-size: 12px; color: var(--c-text3); text-align: center; }
 
+        /* ============================================================
+           [결재함] 결정/리뷰 페이지 (#review-view) + 리뷰칩 삭제버튼
+           ============================================================ */
+        html.is-desktop #review-view { padding: 8px 16px 48px; }
+        html.is-mobile #review-view { padding: 8px 16px 90px; }
+        #review-view.hidden { display: none; }
+        .rvp-wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+        .rvp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .rvp-title { font-size: 22px; font-weight: 800; color: var(--c-text); letter-spacing: -0.02em; }
+        .rvp-sub { font-size: 12.5px; color: var(--c-text3); margin-top: 3px; line-height: 1.5; max-width: 560px; }
+        .rvp-new { background: var(--c-accent); color: #fff; border: none; border-radius: 10px; padding: 9px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .12s; }
+        .rvp-new:hover { background: var(--c-accent-hover); }
+        .rvp-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+        .rvp-stat { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 8px 13px; font-size: 12px; color: var(--c-text2); font-weight: 600; }
+        .rvp-stat b { color: var(--c-text); font-size: 15px; font-weight: 800; margin-right: 3px; }
+        .rvp-stat.rvp-stat-accent { background: var(--c-accent-soft); border-color: transparent; color: var(--c-accent); }
+        .rvp-stat.rvp-stat-accent b { color: var(--c-accent); }
+        .rvp-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .rvp-search { flex: 1; min-width: 180px; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 9px; padding: 8px 12px; font-size: 13px; outline: none; }
+        .rvp-search:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
+        .rvp-toolbar select { background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 9px; padding: 8px 10px; font-size: 12.5px; font-weight: 600; cursor: pointer; outline: none; }
+        .rvp-section-h { font-size: 12px; font-weight: 800; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 2px 2px; }
+        #rvp-mine, #rvp-list { display: flex; flex-direction: column; gap: 8px; }
+        #rvp-mine:empty { display: none; }
+        /* 리뷰 칩 헤더 flex + 삭제 버튼 */
+        .review-chip .rv-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .rv-del { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--c-text3); font-size: 12px; padding: 2px 5px; border-radius: 6px; line-height: 1; }
+        .rv-del:hover { color: var(--st-danger); background: var(--st-danger-soft); }
+
     </style>
 </head>
 <body>
@@ -2209,7 +2238,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
             <span class="mob-lbl">게임위키</span>
         </button>
-        <button onclick="openReviewInbox()" class="mob-tab">
+        <button onclick="switchView('review')" id="mob-tab-review" class="mob-tab">
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             <span class="mob-lbl">결재함</span>
             <span class="mob-badge" id="mob-review-badge">0</span>
@@ -2549,6 +2578,42 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <!-- ========================================== -->
         <!-- 💡 WIKI DOCS VIEW (계층형 에디터) -->
         <!-- ========================================== -->
+        <!-- [결재함] 결정/리뷰 페이지 -->
+        <div id="review-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="rvp-wrap">
+                <div class="rvp-head">
+                    <div>
+                        <div class="rvp-title">🗳 결재함</div>
+                        <div class="rvp-sub">팀 의사결정을 투표(전체합의·다수결·특정인·강제)로 처리하고, 확정 시 <b>03_결정 로그</b>에 ADR이 자동 생성됩니다. 보통은 칸반 카드/문서를 우클릭 → "결재 요청"으로 만드세요.</div>
+                    </div>
+                    <button class="rvp-new" onclick="openReviewModal('decision',null,null)">+ 새 결재 요청</button>
+                </div>
+                <div id="rvp-stats" class="rvp-stats"></div>
+                <div class="rvp-toolbar">
+                    <input id="rvp-search" class="rvp-search" placeholder="🔍 사유·제안자·대상 검색" oninput="applyReviewFilters()" autocomplete="off">
+                    <select id="rvp-f-status" onchange="applyReviewFilters()" title="상태 필터">
+                        <option value="all">모든 상태</option>
+                        <option value="pending">🔔 리뷰 중</option>
+                        <option value="approved">✅ 승인</option>
+                        <option value="rejected">❌ 거부</option>
+                        <option value="forced">⚡ 강제</option>
+                        <option value="expired">⏰ 만료</option>
+                    </select>
+                    <select id="rvp-f-type" onchange="applyReviewFilters()" title="유형 필터">
+                        <option value="all">모든 유형</option>
+                        <option value="decision">결정</option>
+                        <option value="intrusion">인트루전</option>
+                        <option value="standard_change">문서 변경</option>
+                    </select>
+                    <select id="rvp-f-sort" onchange="applyReviewFilters()" title="정렬">
+                        <option value="recent">최신순</option>
+                        <option value="expiry">만료 임박순</option>
+                    </select>
+                </div>
+                <div id="rvp-mine"></div>
+                <div id="rvp-list"></div>
+            </div>
+        </div>
         <div id="docs-view" class="hidden" onclick="event.stopPropagation()">
             <div class="editor-split-pane relative">
                 
@@ -4090,7 +4155,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function closeMoreSheet() { var o = document.getElementById('more-sheet-overlay'); if (o) o.classList.remove('open'); }
         function updateMobNav(view) {
             view = view || currentView;
-            [['mob-tab-kanban', 'kanban'], ['mob-tab-docs', 'docs'], ['mob-tab-canon', 'canon']].forEach(function (p) {
+            [['mob-tab-kanban', 'kanban'], ['mob-tab-docs', 'docs'], ['mob-tab-canon', 'canon'], ['mob-tab-review', 'review']].forEach(function (p) {
                 var el = document.getElementById(p[0]); if (el) el.classList.toggle('active', view === p[1]);
             });
         }
@@ -4105,6 +4170,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [v40 B3] 게임 정전 뷰 토글
             var _csC = document.getElementById('cs-nav-canon'); if (_csC) _csC.classList.toggle('active', viewName === 'canon');
             var _cvw = document.getElementById('canon-view'); if (_cvw) { _cvw.classList.toggle('hidden', viewName !== 'canon'); _cvw.classList.toggle('block', viewName === 'canon'); }
+            // [결재함] 페이지 토글
+            var _csR = document.getElementById('cs-nav-review'); if (_csR) _csR.classList.toggle('active', viewName === 'review');
+            var _rvw = document.getElementById('review-view'); if (_rvw) { _rvw.classList.toggle('hidden', viewName !== 'review'); _rvw.classList.toggle('block', viewName === 'review'); }
             const previewBtn = document.getElementById('btn-toggle-preview');
             const editorBtn = document.getElementById('btn-toggle-editor');
             const gifBtn = document.getElementById('btn-gif-picker');
@@ -4154,6 +4222,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gpc = document.getElementById('gif-picker'); if (_gpc) _gpc.style.display = 'none';
                 if (typeof renderCanonView === 'function') renderCanonView();
+            } else if (viewName === 'review') {
+                // [결재함] 결정/리뷰 페이지
+                var _kvr = document.getElementById('kanban-view'); if (_kvr) { _kvr.classList.add('hidden'); _kvr.classList.remove('block'); }
+                var _dvr = document.getElementById('docs-view'); if (_dvr) { _dvr.classList.add('hidden'); _dvr.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpr = document.getElementById('gif-picker'); if (_gpr) _gpr.style.display = 'none';
+                if (typeof sweepExpiredReviews === 'function') { sweepExpiredReviews().then(function(){ if (currentView === 'review') renderReviewPage(); }); }
+                if (typeof renderReviewPage === 'function') renderReviewPage();
             }
         }
 
@@ -4871,6 +4947,12 @@ return data;
                 console.error('[dbUpsertReview]', error);
                 if (typeof showToast === 'function') showToast('⚠️ 리뷰 저장 실패: ' + (error.message||''), 'alert');
             }
+            return { error };
+        }
+        async function dbDeleteReview(id) {
+            if (!supabaseClient) return { error: null };
+            const { error } = await supabaseClient.from('review_requests').delete().eq('id', id);
+            if (error) { console.error('[dbDeleteReview]', error); if (typeof showToast === 'function') showToast('⚠️ 삭제 실패: ' + (error.message || ''), 'alert'); }
             return { error };
         }
         // [v40 B3] canon 문서 upsert / delete
@@ -7771,7 +7853,7 @@ return data;
             if (review.targetTaskId) tgt = `<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="${review.targetTaskId}">🗂 ${_sprintEsc(getTaskLabel(review.targetTaskId))}</a>`;
             else if (review.targetDocId) tgt = `<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="${review.targetDocId}">${_sprintEsc(getDocLabel(review.targetDocId))}</a>`;
             return `<div class="review-chip">
-                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span></div>
+                <div class="rv-head">${_reviewStatusBadge(review.status)} <span class="rv-rule">${_ruleLabel(review.rule)}</span> <span class="rv-proposer">제안: ${_sprintEsc(review.proposerName)}</span><button class="rv-del" onclick="event.stopPropagation();deleteReview('${review.id}')" title="이 결재 요청 삭제">🗑</button></div>
                 <div class="rv-reason">"${_sprintEsc(review.reason)}"</div>
                 ${tgt ? `<div class="rv-target">${tgt}</div>` : ''}
                 ${body}
@@ -7800,6 +7882,7 @@ return data;
             if (mb) { mb.textContent = cnt; mb.style.display = cnt > 0 ? 'inline-flex' : 'none'; }
         }
         function renderReviewInbox() {
+            if (typeof renderReviewPage === 'function' && currentView === 'review') renderReviewPage(); // [결재함] 페이지도 갱신
             const listEl = document.getElementById('review-inbox-list');
             if (!listEl) return;
             const order = s => s === 'pending' ? 0 : 1;
@@ -7812,7 +7895,75 @@ return data;
             const summary = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:4px 2px 12px;font-size:12px;color:var(--c-text2);font-weight:700;border-bottom:1px solid var(--c-border);margin-bottom:12px;"><span>🔔 대기 ${pendingN}</span><span>🙋 내 투표 필요 ${myN}</span><span style="color:var(--c-text3);">전체 ${all.length}</span></div>`;
             listEl.innerHTML = all.length ? (summary + all.map(renderReviewChip).join('')) : '<div class="linked-empty" style="padding:20px;text-align:center;">결정 요청이 없습니다.</div>';
         }
-        async function openReviewInbox() { if (typeof sweepExpiredReviews === 'function') await sweepExpiredReviews(); renderReviewInbox(); openModal('review-inbox-modal'); }
+        function openReviewInbox() { switchView('review'); } // [결재함] 모달→페이지 위임
+
+        // [결재함] 리뷰 삭제
+        async function deleteReview(id) {
+            var rv = (currentData.reviews || []).find(function (r) { return r.id === id; });
+            if (!rv) return;
+            var ok = await uiConfirm({ title: '결재 요청 삭제', message: '이 결재 요청을 삭제할까요? 되돌릴 수 없습니다.' + (rv.status === 'pending' ? '\n(아직 진행 중인 요청입니다)' : ''), confirmText: '삭제', danger: true });
+            if (!ok) return;
+            currentData.reviews = (currentData.reviews || []).filter(function (r) { return r.id !== id; });
+            if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+            await dbDeleteReview(id);
+            if (typeof renderReviewBadge === 'function') renderReviewBadge();
+            if (currentView === 'review') renderReviewPage();
+            if (typeof renderBoard === 'function') renderBoard();
+            if (currentView === 'docs' && typeof renderDocLinksBar === 'function') renderDocLinksBar();
+            showToast('🗑 결재 요청이 삭제되었습니다.', 'info');
+        }
+
+        // [결재함] 페이지 렌더 (통계·내 결재 대기·필터·검색)
+        var _reviewFilter = { status: 'all', type: 'all', sort: 'recent', q: '' };
+        function _reviewTargetLabel(r) {
+            if (r.targetTaskId) return (typeof getTaskLabel === 'function') ? getTaskLabel(r.targetTaskId) : '';
+            if (r.targetDocId) return (typeof getDocLabel === 'function') ? getDocLabel(r.targetDocId) : '';
+            return '';
+        }
+        function applyReviewFilters() {
+            var g = function (id) { var el = document.getElementById(id); return el ? el.value : null; };
+            _reviewFilter.status = g('rvp-f-status') || 'all';
+            _reviewFilter.type = g('rvp-f-type') || 'all';
+            _reviewFilter.sort = g('rvp-f-sort') || 'recent';
+            _reviewFilter.q = ((g('rvp-search') || '')).toLowerCase().trim();
+            renderReviewPage();
+        }
+        function renderReviewPage() {
+            var listEl = document.getElementById('rvp-list'); if (!listEl) return;
+            var all = (currentData.reviews || []).filter(function (r) { return (r.projectId || 'default') === activeProjectId; });
+            // 통계
+            var c = { pending: 0, approved: 0, rejected: 0, forced: 0, expired: 0 };
+            all.forEach(function (r) { c[r.status] = (c[r.status] || 0) + 1; });
+            var sp = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
+            var statsEl = document.getElementById('rvp-stats');
+            if (statsEl) {
+                var stats = [['🔔 리뷰 중', c.pending], ['✅ 승인', c.approved], ['❌ 거부', c.rejected], ['⚡ 강제', c.forced], ['⏰ 만료', c.expired]];
+                statsEl.innerHTML = stats.map(function (s) { return '<span class="rvp-stat"><b>' + s[1] + '</b>' + s[0] + '</span>'; }).join('')
+                    + (sp ? '<span class="rvp-stat rvp-stat-accent"><b>' + (sp.intrusionCount || 0) + '</b>⚡ 이번주 인트루전</span>' : '');
+            }
+            // 내 결재 대기
+            var mineEl = document.getElementById('rvp-mine');
+            if (mineEl) {
+                var mine = all.filter(function (r) { return r.status === 'pending' && currentUser && r.proposerId !== currentUser.id && !(r.votes || []).find(function (v) { return v.userId === currentUser.id; }); });
+                mineEl.innerHTML = mine.length ? ('<div class="rvp-section-h">🙋 내 결재 대기 (' + mine.length + ')</div>' + mine.map(renderReviewChip).join('')) : '';
+            }
+            // 필터 + 정렬
+            var f = _reviewFilter;
+            var list = all.filter(function (r) {
+                if (f.status !== 'all' && r.status !== f.status) return false;
+                if (f.type !== 'all' && r.type !== f.type) return false;
+                if (f.q) { var hay = ((r.reason || '') + ' ' + (r.proposerName || '') + ' ' + _reviewTargetLabel(r)).toLowerCase(); if (hay.indexOf(f.q) === -1) return false; }
+                return true;
+            });
+            var order = function (s) { return s === 'pending' ? 0 : 1; };
+            list.sort(function (a, b) {
+                if (f.sort === 'expiry') { return (a.expiresAt || '9999').localeCompare(b.expiresAt || '9999'); }
+                if (order(a.status) !== order(b.status)) return order(a.status) - order(b.status);
+                return (b.createdAt || '').localeCompare(a.createdAt || '');
+            });
+            listEl.innerHTML = '<div class="rvp-section-h">전체 (' + list.length + ')</div>'
+                + (list.length ? list.map(renderReviewChip).join('') : '<div class="linked-empty" style="padding:24px;text-align:center;">조건에 맞는 결재 요청이 없습니다.</div>');
+        }
 
         // ==========================================
         // [v40 Day3 청크3] 결정 적용 (intrusion → Now) + ADR 자동 생성
