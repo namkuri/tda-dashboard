@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-26 r17 (r16 + 문서/게임위키 폴더 생성 + .html 드롭 가져오기) -->
+<!-- BUILD: 2026-05-26 r18 (r17 + 리뷰 코멘트전용/다중·결재선 시각·문서버전·거절후 재기안) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2228,11 +2228,42 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .rv-step-row { display: flex; align-items: center; gap: 7px; }
         .rv-step-meta { display: flex; flex-direction: column; gap: 1px; }
         .rv-step .rv-step-name { max-width: 110px; }
-        .rv-step-cmt { font-size: 9.5px; color: var(--c-text2); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; background: var(--ios-fill); border-radius: 5px; padding: 1px 6px; }
+        .rv-step-cmts { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; }
+        .rv-step-cmt { font-size: 9.5px; color: var(--c-text2); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--ios-fill); border-radius: 5px; padding: 1px 6px; }
+        .rv-step-at { font-size: 9px; color: var(--c-text3); font-weight: 600; margin-top: 1px; }
         .rv-step-empty { font-size: 11px; color: var(--c-text3); padding: 6px; }
         .rv-final { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 2px solid; border-radius: 10px; padding: 7px 12px; min-width: 62px; }
         .rv-final-ico { font-size: 17px; line-height: 1; }
         .rv-final-label { font-size: 11px; font-weight: 800; white-space: nowrap; }
+        .rv-final-at { font-size: 8.5px; color: var(--c-text3); font-weight: 600; white-space: nowrap; }
+        /* [#3] 결재선 문서 버전 링크 */
+        .rv-ver-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+        .rv-ver-link { font-size: 11px; font-weight: 700; color: var(--c-accent); background: var(--c-accent-soft); border: 1px solid var(--c-border); border-radius: 7px; padding: 3px 9px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+        .rv-ver-link:hover { background: var(--c-accent); color: #fff; }
+        .rv-ver-prior { color: var(--st-danger); background: rgba(193,87,71,0.1); }
+        .rv-ver-prior:hover { background: var(--st-danger); color: #fff; }
+        .rv-ver-next { color: var(--st-progress); background: rgba(176,137,104,0.12); }
+        .rv-ver-next:hover { background: var(--st-progress); color: #fff; }
+        /* [#1·#5] 코멘트 전용 입력 */
+        .rv-addcmt { display: flex; gap: 6px; margin: 6px 0; align-items: center; }
+        .rv-addcmt .rv-comment { flex: 1; margin-top: 0; }
+        .rv-cmt-btn { background: var(--c-accent-soft); color: var(--c-accent); border: 1px solid var(--c-border); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .rv-cmt-btn:hover { background: var(--c-accent); color: #fff; }
+        /* [#2] 경량 공용 모달 (버전 기록) */
+        #simple-modal-overlay { display: none; position: fixed; inset: 0; z-index: 650; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); align-items: center; justify-content: center; }
+        .simple-modal-box { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 14px; width: 540px; max-width: 92vw; max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 12px 48px rgba(0,0,0,0.3); }
+        .simple-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--c-border); font-weight: 800; font-size: 15px; color: var(--c-text); }
+        .simple-modal-x { background: none; border: none; color: var(--c-text3); font-size: 17px; cursor: pointer; line-height: 1; }
+        .simple-modal-body { padding: 12px 16px 16px; overflow-y: auto; }
+        .dvh-list { display: flex; flex-direction: column; gap: 6px; }
+        .dvh-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 8px 11px; border: 1px solid var(--c-border); border-radius: 9px; background: var(--c-paper); font-size: 12.5px; color: var(--c-text); }
+        .dvh-row.dvh-cur { border-color: var(--c-accent); background: var(--c-accent-soft); }
+        .dvh-row b { color: var(--c-accent); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+        .dvh-tag { font-size: 10px; font-weight: 800; color: var(--c-accent); background: var(--c-card); border-radius: 7px; padding: 1px 7px; }
+        .dvh-meta { flex: 1; min-width: 100px; color: var(--c-text2); }
+        .dvh-by { font-size: 10.5px; color: var(--c-text3); white-space: nowrap; }
+        .dvh-restore { background: var(--c-card); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .dvh-restore:hover { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
         .rv-log { margin: 8px 0; padding: 8px 11px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; }
         .rv-log-h { font-size: 11px; font-weight: 700; color: var(--c-text3); margin-bottom: 6px; }
         .rv-log-row { display: flex; align-items: baseline; gap: 7px; font-size: 11.5px; padding: 2px 0; flex-wrap: wrap; }
@@ -3037,6 +3068,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <div style="display:flex;align-items:center;border-bottom:1px solid var(--c-border);background:var(--c-paper);flex-shrink:0;padding:0 8px 0 4px;gap:2px;">
                         <!-- 왼쪽: 문서 제목 + 저장 상태 -->
                         <h3 id="doc-editor-title" style="font-weight:700;font-size:14px;color:var(--c-text);padding:0 8px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">문서 제목</h3>
+                        <span id="doc-version-badge" onclick="openDocVersionHistory(activeDocId)" title="버전 기록 보기" style="display:none;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:9px;white-space:nowrap;cursor:pointer;background:var(--c-accent-soft);color:var(--c-accent);margin-right:4px;">v1</span>
+                        <button id="doc-newver-btn" onclick="bumpDocVersion(activeDocId)" title="현재 내용을 새 버전으로 저장 (스냅샷)" style="display:none;font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;border:1px solid var(--c-border);background:var(--c-card);color:var(--c-text2);cursor:pointer;white-space:nowrap;margin-right:6px;">📌 새 버전</button>
                         <span id="doc-save-status" style="font-size:11px;color:var(--c-text3);margin-right:4px;white-space:nowrap;">All changes saved</span>
                         <span id="save-sync-badge" title="" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;cursor:help;background:#d1fae5;color:#065f46;">☁️ DB 저장됨</span>
                         <span id="presence-bar" style="display:none;align-items:center;gap:2px;margin-right:6px;"></span>
@@ -5476,14 +5509,18 @@ return data;
                 decided_at: review.decidedAt || null,
                 title: review.title || '',
                 deleted: !!review.deleted,
-                log: review.log || []
+                log: review.log || [],
+                prior_review_id: review.priorReviewId || null,
+                next_review_id: review.nextReviewId || null,
+                submitted_version: review.submittedVersion || null
             };
             let { error } = await supabaseClient.from('review_requests').upsert(payload);
-            // [라운드10·12] title/deleted/log 컬럼 미생성 환경 보호: 해당 필드만 빼고 재시도(기존 저장 보존)
-            if (error && /\b(title|deleted|log)\b/.test(error.message || '')) {
+            // [라운드10·12·19] 신규 컬럼 미생성 환경 보호: 해당 필드만 빼고 재시도(기존 저장 보존)
+            if (error && /\b(title|deleted|log|prior_review_id|next_review_id|submitted_version)\b/.test(error.message || '')) {
                 delete payload.title; delete payload.deleted; delete payload.log;
+                delete payload.prior_review_id; delete payload.next_review_id; delete payload.submitted_version;
                 ({ error } = await supabaseClient.from('review_requests').upsert(payload));
-                if (!error) console.warn('[dbUpsertReview] title/deleted/log 컬럼 없음 — 제외 저장. SQL: alter table review_requests add column if not exists title text; alter table review_requests add column if not exists deleted boolean default false; alter table review_requests add column if not exists log jsonb default \'[]\'::jsonb;');
+                if (!error) console.warn('[dbUpsertReview] 선택 컬럼 없음 — 제외 저장. SQL: alter table review_requests add column if not exists title text; add deleted boolean default false; add log jsonb default \'[]\'::jsonb; add prior_review_id text; add next_review_id text; add submitted_version int;');
             }
             if (error) {
                 console.error('[dbUpsertReview]', error);
@@ -5546,7 +5583,8 @@ return data;
                 reason: r.reason || '', votes: r.votes || [],
                 status: r.status || 'pending', decisionTag: r.decision_tag || null,
                 createdAt: r.created_at || null, expiresAt: r.expires_at || null, decidedAt: r.decided_at || null,
-                title: r.title || '', deleted: !!r.deleted, log: r.log || []
+                title: r.title || '', deleted: !!r.deleted, log: r.log || [],
+                priorReviewId: r.prior_review_id || null, nextReviewId: r.next_review_id || null, submittedVersion: r.submitted_version || null
             };
         }
         // [v40 B3] canon_docs row(snake) → app 객체(camel)
@@ -6887,6 +6925,11 @@ return data;
             // [v28] 타이틀에 hover 툴팁 — 최초/마지막 수정 시간
             titleEl.title = _buildDocTimeTooltip(doc);
             titleEl.style.cursor = 'help';
+            // [#2] 문서 버전 배지/버튼 (폴더 제외)
+            var _verB = document.getElementById('doc-version-badge'), _verBtn = document.getElementById('doc-newver-btn');
+            var _docIsFolder = !!(doc.meta && doc.meta.isFolder);
+            if (_verB) { if (_docIsFolder) { _verB.style.display = 'none'; } else { _verB.style.display = ''; _verB.textContent = 'v' + ((doc.meta && doc.meta.version) || 1); var _vhN = (doc.meta && Array.isArray(doc.meta.versionHistory)) ? doc.meta.versionHistory.length : 0; _verB.title = '버전 기록 ' + _vhN + '건 보기'; } }
+            if (_verBtn) _verBtn.style.display = _docIsFolder ? 'none' : '';
             // 저장 상태 영역도 시간 표시로 즉시 갱신 (dirty 아니면)
             var statusEl = document.getElementById('doc-save-status');
             if (statusEl) {
@@ -7509,6 +7552,59 @@ return data;
             } else { openDoc(newDoc.id); }
         }
         function createNewFolder(parentId) { return createNewDoc(parentId, { isFolder: true }); }
+
+        // [#2] 문서 버전: 현재 내용을 스냅샷으로 보존하고 버전 +1 (canon뿐 아니라 모든 문서)
+        async function bumpDocVersion(docId) {
+            if (!docId) { showToast('문서를 먼저 여세요.', 'info'); return; }
+            var doc = currentData.docs.find(function (d) { return d.id === docId; }); if (!doc) return;
+            if (doc.meta && doc.meta.isFolder) { showToast('폴더는 버전을 가질 수 없습니다.', 'info'); return; }
+            if (!doc.meta) doc.meta = {};
+            var note = await uiPrompt({ title: '📌 새 버전 저장', label: '이 버전 메모 (선택)', placeholder: '예: 1차 리뷰 반영 / 초안 완료' });
+            if (note === null) return;
+            if (!Array.isArray(doc.meta.versionHistory)) doc.meta.versionHistory = [];
+            doc.meta.versionHistory.push({ version: doc.meta.version || 1, title: doc.title, content: doc.content || '', by: currentUser ? currentUser.id : null, byName: myNickname, at: new Date().toISOString(), note: (note || '').trim() });
+            if (doc.meta.versionHistory.length > 50) doc.meta.versionHistory = doc.meta.versionHistory.slice(-50);
+            doc.meta.version = (doc.meta.version || 1) + 1;
+            doc.updatedAt = Date.now();
+            _safeLocalCache(currentData); dbUpsertDoc(doc);
+            if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
+            showToast('📌 v' + doc.meta.version + ' 저장됨 (이전 v' + (doc.meta.version - 1) + ' 기록 보존)', 'success');
+        }
+        function openDocVersionHistory(docId) {
+            var doc = currentData.docs.find(function (d) { return d.id === docId; }); if (!doc) return;
+            if (doc.meta && doc.meta.isFolder) return;
+            var vh = (doc.meta && Array.isArray(doc.meta.versionHistory)) ? doc.meta.versionHistory : [];
+            var curV = (doc.meta && doc.meta.version) || 1;
+            var rows = '<div class="dvh-row dvh-cur"><b>v' + curV + '</b> <span class="dvh-tag">현재</span><span class="dvh-meta">' + _sprintEsc(doc.title) + '</span></div>';
+            rows += vh.slice().reverse().map(function (h) {
+                var when = h.at ? new Date(h.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                return '<div class="dvh-row"><b>v' + h.version + '</b><span class="dvh-meta">' + _sprintEsc(h.note || '(메모 없음)') + '</span><span class="dvh-by">' + _sprintEsc(h.byName || '') + ' · ' + when + '</span><button class="dvh-restore" onclick="restoreDocVersion(\'' + docId + '\',' + h.version + ')">↩ 이 버전으로</button></div>';
+            }).join('') || '<div class="dvh-row" style="color:var(--c-text3);">이전 버전 기록이 없습니다. "📌 새 버전"으로 스냅샷을 만드세요.</div>';
+            _openSimpleModal('📌 버전 기록 — ' + _sprintEsc(doc.title), '<div class="dvh-list">' + rows + '</div>');
+        }
+        async function restoreDocVersion(docId, version) {
+            var doc = currentData.docs.find(function (d) { return d.id === docId; }); if (!doc || !doc.meta) return;
+            var h = (doc.meta.versionHistory || []).find(function (x) { return x.version === version; }); if (!h) return;
+            var ok = await uiConfirm({ title: '버전 되돌리기', message: '현재 내용을 새 버전으로 보존한 뒤 v' + version + ' 내용으로 되돌립니다. 진행할까요?', confirmText: '되돌리기' });
+            if (!ok) return;
+            if (!Array.isArray(doc.meta.versionHistory)) doc.meta.versionHistory = [];
+            doc.meta.versionHistory.push({ version: doc.meta.version || 1, title: doc.title, content: doc.content || '', by: currentUser ? currentUser.id : null, byName: myNickname, at: new Date().toISOString(), note: '되돌리기 전 스냅샷' });
+            doc.meta.version = (doc.meta.version || 1) + 1;
+            doc.content = h.content || '';
+            doc.updatedAt = Date.now();
+            _safeLocalCache(currentData); dbUpsertDoc(doc);
+            if (activeDocId === docId && typeof updateDocEditorUI === 'function') updateDocEditorUI();
+            _closeSimpleModal();
+            showToast('↩ v' + version + ' 내용으로 되돌림 (v' + doc.meta.version + '로 저장)', 'success');
+        }
+        // 경량 공용 모달 (버전 기록 등 읽기 표시용)
+        function _openSimpleModal(title, bodyHtml) {
+            var ov = document.getElementById('simple-modal-overlay');
+            if (!ov) { ov = document.createElement('div'); ov.id = 'simple-modal-overlay'; ov.onclick = function (e) { if (e.target === ov) _closeSimpleModal(); }; document.body.appendChild(ov); }
+            ov.innerHTML = '<div class="simple-modal-box"><div class="simple-modal-head"><span>' + title + '</span><button onclick="_closeSimpleModal()" class="simple-modal-x">✕</button></div><div class="simple-modal-body">' + bodyHtml + '</div></div>';
+            ov.style.display = 'flex';
+        }
+        function _closeSimpleModal() { var ov = document.getElementById('simple-modal-overlay'); if (ov) ov.style.display = 'none'; }
 
         async function moveAllDocsToCurrentProject() {
             if(!currentData || !currentData.docs) return;
@@ -9083,6 +9179,18 @@ return data;
                 review.decisionTag = buildDecisionTag(review, 'forced');
                 review.decidedAt = new Date().toISOString();
             }
+            // [#2·#3] 문서 대상이면 기안 시점 버전 기록 + 재기안이면 이전 리뷰와 연결
+            if (review.targetDocId) review.submittedVersion = _rvDocVersion(review.targetDocId);
+            var _priorRv = null;
+            if (t.priorReviewId) {
+                review.priorReviewId = t.priorReviewId;
+                _priorRv = (currentData.reviews || []).find(function (r) { return r.id === t.priorReviewId; });
+                if (_priorRv) {
+                    _priorRv.nextReviewId = review.id;
+                    if (!Array.isArray(_priorRv.log)) _priorRv.log = [];
+                    _priorRv.log.push({ action: 'resubmit', userId: currentUser.id, userName: myNickname || '', comment: '다음 버전(v' + (review.submittedVersion || '') + ')으로 재기안', at: new Date().toISOString() });
+                }
+            }
             if (!Array.isArray(currentData.reviews)) currentData.reviews = [];
             currentData.reviews.push(review);
             // [v40 Day3 청크3] intrusion 시도 → 스프린트 intrusionCount/log 기록
@@ -9099,6 +9207,7 @@ return data;
             _safeLocalCache(currentData);
             closeModal('review-create-modal');
             const { error } = await dbUpsertReview(review);
+            if (_priorRv) await dbUpsertReview(_priorRv); // [#3] 이전 리뷰의 nextReviewId 저장
             if (review.status === 'forced') await applyReviewDecision(review); // 강제는 즉시 적용 + ADR
             renderReviewBadge(); renderBoard();
             if (typeof renderReviewInbox === 'function') renderReviewInbox();
@@ -9127,6 +9236,50 @@ return data;
             if (typeof renderReviewInbox === 'function') renderReviewInbox();
             if (_inDocsView()) renderDocLinksBar();
             showToast('투표 완료: ' + ({ approve: '승인', reject: '거부', skip: '불참' }[decision] || decision), 'success');
+        }
+
+        // [#1·#5] 승인/거절 없이 코멘트만 추가 (기안자 포함 누구나, 결정 후에도 여러 번)
+        async function addReviewComment(reviewId) {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var review = (currentData.reviews || []).find(function (r) { return r.id === reviewId; });
+            if (!review) return;
+            var el = document.getElementById('rv-cmt-' + reviewId);
+            var c = el ? el.value.trim() : '';
+            if (!c) { showToast('코멘트를 입력하세요.', 'info'); if (el) el.focus(); return; }
+            if (!Array.isArray(review.log)) review.log = [];
+            review.log.push({ action: 'comment', userId: currentUser.id, userName: myNickname || '', comment: c, at: new Date().toISOString() });
+            if (el) el.value = '';
+            _safeLocalCache(currentData); await dbUpsertReview(review);
+            renderReviewBadge();
+            if (typeof renderReviewInbox === 'function') renderReviewInbox();
+            if (_inDocsView && _inDocsView()) renderDocLinksBar();
+            _rerenderReviews();
+            showToast('💬 코멘트 등록됨', 'success');
+        }
+
+        // [#3] 거부/종결된 문서 리뷰를 다음 버전으로 재기안 — 이전/현재 버전을 결재선에 링크
+        async function resubmitReview(oldId) {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var old = (currentData.reviews || []).find(function (r) { return r.id === oldId; });
+            if (!old || !old.targetDocId) { showToast('재기안할 대상 문서가 없습니다.', 'alert'); return; }
+            if (old.nextReviewId) { showToast('이미 후속 재기안이 있습니다.', 'info'); scrollToReview(old.nextReviewId); return; }
+            var doc = (currentData.docs || []).find(function (d) { return d.id === old.targetDocId; });
+            if (!doc) { showToast('원본 문서를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
+            var curV = _rvDocVersion(doc.id);
+            var ok = await uiConfirm({ title: '재기안 (다음 버전)', message: '"' + getDocLabel(doc.id) + '" 의 다음 버전을 만들어 재기안할까요?\n\n• 현재 v' + curV + ' → v' + (curV + 1) + ' 스냅샷 생성\n• 새 리뷰 결재선에 이전 기안(v' + (old.submittedVersion || curV) + ' · 거부)이 함께 링크됩니다.', confirmText: '재기안' });
+            if (!ok) return;
+            if (!doc.meta) doc.meta = {};
+            if (!Array.isArray(doc.meta.versionHistory)) doc.meta.versionHistory = [];
+            doc.meta.versionHistory.push({ version: doc.meta.version || 1, title: doc.title, content: doc.content || '', by: currentUser.id, byName: myNickname, at: new Date().toISOString(), note: '재기안 전 스냅샷' });
+            if (doc.meta.versionHistory.length > 50) doc.meta.versionHistory = doc.meta.versionHistory.slice(-50);
+            doc.meta.version = (doc.meta.version || 1) + 1;
+            doc.updatedAt = Date.now();
+            _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(doc);
+            if (typeof updateDocEditorUI === 'function' && activeDocId === doc.id) updateDocEditorUI();
+            openReviewModal(old.type || 'decision', null, doc.id);
+            _reviewDraftTarget.priorReviewId = oldId;
+            var _t = document.getElementById('review-title'); if (_t) _t.value = (old.title || '') + ' (재기안 v' + doc.meta.version + ')';
+            var _r = document.getElementById('review-reason'); if (_r) _r.value = old.reason || '';
         }
 
         // ── 표시 ──
@@ -9214,7 +9367,35 @@ return data;
             if (approvals === 0) return { icon: '🖊', label: '기안', color: 'var(--c-accent)' };
             return { icon: '⏳', label: '결재 중 (' + approvals + '/' + N + ')', color: '#b08968' };
         }
-        // [#3] 결재선: 기안자 → (합의자 세로 병렬) → 최종 상태 노드. 합의자 코멘트도 표시.
+        // [리뷰 시각/버전 헬퍼]
+        function _rvShortTime(iso) { if (!iso) return ''; var d = new Date(iso); if (isNaN(d.getTime())) return ''; return d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+        function _rvStatusText(s) { return ({ pending: '리뷰중', approved: '승인', rejected: '거부', forced: '강제', expired: '만료', closed: '종결' })[s] || s; }
+        function _rvDocVersion(docId) { if (!docId) return 1; var d = (currentData.docs || []).find(function (x) { return x.id === docId; }); return (d && d.meta && d.meta.version) || 1; }
+        // 한 사용자가 남긴 모든 코멘트(투표·코멘트전용·종결) 수집 — [#5] 여러 개
+        function _rvCommentsByUser(review, uid) { return (Array.isArray(review.log) ? review.log : []).filter(function (e) { return e.userId === uid && e.comment && String(e.comment).trim(); }).map(function (e) { return { text: String(e.comment).trim(), at: e.at, action: e.action, decision: e.decision }; }); }
+        function scrollToReview(id) {
+            _reviewExpanded[id] = true;
+            if (typeof renderReviewPage === 'function' && currentView === 'review') renderReviewPage(); else _rerenderReviews();
+            setTimeout(function () { var el = document.getElementById('rvchip-' + id); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.boxShadow = '0 0 0 2px var(--c-accent)'; setTimeout(function () { el.style.boxShadow = ''; }, 1600); } }, 90);
+        }
+        // [#3] 결재선 상단 문서 버전 링크 (기안 시점 문서 / 이전 기안 / 후속 재기안)
+        function _rvVersionLinks(review) {
+            var parts = [];
+            if (review.targetDocId) {
+                var ver = review.submittedVersion || _rvDocVersion(review.targetDocId);
+                parts.push('<a class="rv-ver-link wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + review.targetDocId + '" title="기안 시점 문서로 이동">📄 ' + _sprintEsc(getDocLabel(review.targetDocId)) + ' <b>v' + ver + '</b></a>');
+            }
+            if (review.priorReviewId) {
+                var pr = (currentData.reviews || []).find(function (r) { return r.id === review.priorReviewId; });
+                if (pr) parts.push('<a class="rv-ver-link rv-ver-prior" onclick="event.stopPropagation();scrollToReview(\'' + pr.id + '\')" title="이전 기안(거부) 보기">↩ 이전 기안 v' + (pr.submittedVersion || _rvDocVersion(pr.targetDocId)) + ' · ' + _rvStatusText(pr.status) + '</a>');
+            }
+            if (review.nextReviewId) {
+                var nx = (currentData.reviews || []).find(function (r) { return r.id === review.nextReviewId; });
+                if (nx) parts.push('<a class="rv-ver-link rv-ver-next" onclick="event.stopPropagation();scrollToReview(\'' + nx.id + '\')" title="후속 재기안 보기">↪ 후속 재기안 v' + (nx.submittedVersion || _rvDocVersion(nx.targetDocId)) + '</a>');
+            }
+            return parts.length ? ('<div class="rv-ver-row">' + parts.join('') + '</div>') : '';
+        }
+        // [#3] 결재선: 기안자 → (합의자 세로 병렬) → 최종 상태 노드. 시점(#4)·다중 코멘트(#5)·버전 링크 표시.
         function _renderApprovalLine(review) {
             var members = getMembers();
             var voteOf = function (uid) { return (review.votes || []).find(function (v) { return v.userId === uid; }); };
@@ -9226,21 +9407,26 @@ return data;
             var stepNode = function (opts) {
                 var ss = _reviewStepState(opts.state);
                 var av = opts.member ? _avatarHtml(opts.member, 26) : _avatarHtml({ displayName: opts.name }, 26);
-                var cmt = opts.comment ? ('<div class="rv-step-cmt" title="' + _sprintEsc(opts.comment) + '">💬 ' + _sprintEsc(opts.comment) + '</div>') : '';
-                return '<div class="rv-step" title="' + (opts.isProposer ? '기안자' : '합의자') + ' · ' + _sprintEsc(opts.name) + ' · ' + ss[1] + (opts.comment ? (' · ' + _sprintEsc(opts.comment)) : '') + '">'
+                var cmts = (opts.comments && opts.comments.length)
+                    ? '<div class="rv-step-cmts">' + opts.comments.map(function (c) { return '<div class="rv-step-cmt" title="' + _sprintEsc(c.text) + (c.at ? (' · ' + _rvShortTime(c.at)) : '') + '">💬 ' + _sprintEsc(c.text) + '</div>'; }).join('') + '</div>'
+                    : '';
+                var at = opts.at ? ('<div class="rv-step-at">🕐 ' + _rvShortTime(opts.at) + '</div>') : '';
+                return '<div class="rv-step">'
                     + '<div class="rv-step-row"><div class="rv-step-av">' + av + '<span class="rv-step-badge" style="background:' + ss[2] + ';">' + ss[0] + '</span></div>'
-                    + '<div class="rv-step-meta"><div class="rv-step-name">' + _sprintEsc(opts.name) + '</div><div class="rv-step-role" style="color:' + (opts.isProposer ? 'var(--c-accent)' : ss[2]) + ';">' + (opts.isProposer ? '기안' : ss[1]) + '</div></div></div>'
-                    + cmt + '</div>';
+                    + '<div class="rv-step-meta"><div class="rv-step-name">' + _sprintEsc(opts.name) + '</div><div class="rv-step-role" style="color:' + (opts.isProposer ? 'var(--c-accent)' : ss[2]) + ';">' + (opts.isProposer ? '기안' : ss[1]) + '</div>' + at + '</div></div>'
+                    + cmts + '</div>';
             };
-            var proposerHtml = stepNode({ name: review.proposerName || getMemberName(review.proposerId), member: members.find(function (m) { return m.id === review.proposerId; }), state: 'approve', isProposer: true });
+            var proposerHtml = stepNode({ name: review.proposerName || getMemberName(review.proposerId), member: members.find(function (m) { return m.id === review.proposerId; }), state: 'approve', isProposer: true, at: review.createdAt, comments: _rvCommentsByUser(review, review.proposerId) });
             var reviewersHtml = N ? voterIds.map(function (uid) {
                 var v = voteOf(uid);
-                return stepNode({ name: getMemberName(uid), member: members.find(function (m) { return m.id === uid; }), state: v ? v.decision : 'pending', comment: v ? v.comment : '' });
+                return stepNode({ name: getMemberName(uid), member: members.find(function (m) { return m.id === uid; }), state: v ? v.decision : 'pending', at: v ? v.votedAt : '', comments: _rvCommentsByUser(review, uid) });
             }).join('') : '<div class="rv-step-empty">합의 대상 없음</div>';
             var fin = _approvalFinalState(review, N, approvals);
-            var finalHtml = '<div class="rv-final" style="border-color:' + fin.color + ';color:' + fin.color + ';"><div class="rv-final-ico">' + fin.icon + '</div><div class="rv-final-label">' + fin.label + '</div></div>';
+            var finAt = review.decidedAt ? ('<div class="rv-final-at">🕐 ' + _rvShortTime(review.decidedAt) + '</div>') : '';
+            var finalHtml = '<div class="rv-final" style="border-color:' + fin.color + ';color:' + fin.color + ';"><div class="rv-final-ico">' + fin.icon + '</div><div class="rv-final-label">' + fin.label + '</div>' + finAt + '</div>';
             return '<div class="rv-approval" onclick="event.stopPropagation()">'
                 + '<div class="rv-approval-h">📋 결재선 · 현재 ' + _reviewStatusBadge(review.status) + '</div>'
+                + _rvVersionLinks(review)
                 + '<div class="rv-flow">'
                 + '<div class="rv-flow-col">' + proposerHtml + '</div>'
                 + '<span class="rv-line-arrow">→</span>'
@@ -9256,7 +9442,7 @@ return data;
             var dec = { approve: '👍 승인', reject: '👎 거부', skip: '⏭ 불참' };
             var rows = log.slice().reverse().map(function (e) {
                 var when = e.at ? new Date(e.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-                var act = e.action === 'close' ? '⛔ 종결' : (dec[e.decision] || e.decision || '');
+                var act = e.action === 'close' ? '⛔ 종결' : (e.action === 'comment' ? '💬 코멘트' : (e.action === 'resubmit' ? '🔄 재기안' : (dec[e.decision] || e.decision || '')));
                 return '<div class="rv-log-row"><span class="rv-log-who">' + _sprintEsc(e.userName || '?') + '</span><span class="rv-log-act">' + act + '</span>'
                     + (e.comment ? '<span class="rv-log-cmt">"' + _sprintEsc(e.comment) + '"</span>' : '<span class="rv-log-cmt rv-log-nocmt">(코멘트 없음)</span>')
                     + '<span class="rv-log-at">' + when + '</span></div>';
@@ -9277,7 +9463,7 @@ return data;
                 + '<span class="rv-proposer">' + _sprintEsc(review.proposerName) + '</span>'
                 + '<span class="rv-created">🕐 ' + createdStr + '</span>'
                 + '<span class="rv-caret">' + (expanded ? '▾' : '▸') + '</span></div>';
-            if (!expanded) return '<div class="review-chip' + (del ? ' rv-is-deleted' : '') + '">' + header + '</div>';
+            if (!expanded) return '<div class="review-chip' + (del ? ' rv-is-deleted' : '') + '" id="rvchip-' + review.id + '">' + header + '</div>';
 
             // ── 펼침 ──
             var editing = !!_reviewEditing[review.id];
@@ -9314,20 +9500,30 @@ return data;
                     voteBlock += '<div class="rv-tally" style="font-style:italic;">내가 기안한 요청 (기안=승인). 합의를 기다리는 중.</div>';
                 }
             }
+            // [#1·#5] 코멘트 전용 입력 — 승인/거절 없이, 기안자 포함 누구나, 결정 후에도 가능
+            var commentAdd = '';
+            if (currentUser && !del) {
+                commentAdd = '<div class="rv-addcmt" onclick="event.stopPropagation()">'
+                    + '<input type="text" id="rv-cmt-' + review.id + '" class="rv-comment" placeholder="코멘트 남기기 (승인·거절 없이)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addReviewComment(\'' + review.id + '\');}">'
+                    + '<button class="rv-btn rv-cmt-btn" onclick="event.stopPropagation();addReviewComment(\'' + review.id + '\')">💬 코멘트</button></div>';
+            }
             var footer = '<div class="rv-foot" onclick="event.stopPropagation()">';
             if (_reviewEditable(review) && !editing) footer += '<button class="rv-foot-btn" onclick="startReviewEdit(\'' + review.id + '\')" title="제목·내용 수정 (기안 상태에서만)">✏️ 편집</button>';
             // [종결] 기안자 본인 + 진행 중이면 종결 버튼
             if (currentUser && review.proposerId === currentUser.id && review.status === 'pending' && !del) footer += '<button class="rv-foot-btn" onclick="closeReview(\'' + review.id + '\')" title="기안자 종결 — 승인 완료 전이라도 종결(코멘트는 이력에 기록)">⛔ 종결</button>';
+            // [#3] 거부/종결된 문서 리뷰 → 다음 버전으로 재기안 (후속 미생성 시)
+            if (currentUser && (review.status === 'rejected' || review.status === 'closed') && review.targetDocId && !review.nextReviewId && !del) footer += '<button class="rv-foot-btn" onclick="resubmitReview(\'' + review.id + '\')" title="다음 버전을 만들어 재기안 — 결재선에 이전/현재 버전이 함께 표시됩니다">🔄 재기안 (다음 버전)</button>';
             if (del) footer += '<button class="rv-foot-btn" onclick="restoreReview(\'' + review.id + '\')" title="삭제 취소">♻️ 복원</button>';
             else footer += '<button class="rv-foot-btn danger" onclick="deleteReview(\'' + review.id + '\')" title="이 리뷰 삭제(삭제됨 표시)">🗑 삭제</button>';
             footer += '</div>';
 
-            return '<div class="review-chip rv-expanded' + (del ? ' rv-is-deleted' : '') + '">'
+            return '<div class="review-chip rv-expanded' + (del ? ' rv-is-deleted' : '') + '" id="rvchip-' + review.id + '">'
                 + header
                 + (tgt ? '<div class="rv-target" onclick="event.stopPropagation()">' + tgt + '</div>' : '')
                 + _renderApprovalLine(review)
                 + contentHtml
                 + voteBlock
+                + commentAdd
                 + _renderReviewLog(review)
                 + footer
                 + '</div>';
