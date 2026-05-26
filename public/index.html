@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r28 (r27 + 칸반 조용한 카드: 기본 접힘 요약+호버 액션+헤더 ⋯메뉴+얇은 구분선) -->
+<!-- BUILD: 2026-05-27 r29 (r28 + 버그4: 마감모달 zoom고정·완료상태변경·파트삭제·리뷰코멘트 로그병합) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2855,6 +2855,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .gph-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
         .gph-legend-add { background: var(--c-accent-soft); border: 1px solid var(--c-border); color: var(--c-accent); border-radius: 6px; padding: 1px 8px; font-size: 11px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
         .gph-legend-add:hover { background: var(--c-accent); color: #fff; }
+        .gph-legend-del { margin-left: 4px; cursor: pointer; color: var(--c-text3); font-size: 10px; font-weight: 700; line-height: 1; opacity: .55; transition: opacity .12s, color .12s; }
+        .gph-legend-item:hover .gph-legend-del { opacity: 1; }
+        .gph-legend-del:hover { color: #d9534f; opacity: 1; }
         .gph-legend-hint { margin-left: auto; color: var(--c-text3); flex-shrink: 0; }
         .gph-canvas-wrap { flex: 1; min-height: 280px; overflow: hidden; position: relative; background: var(--c-paper); background-image: linear-gradient(var(--c-border) 1px, transparent 1px), linear-gradient(90deg, var(--c-border) 1px, transparent 1px); background-size: 24px 24px; }
         .gph-main { overflow-y: auto; }
@@ -5830,6 +5833,19 @@ return data;
                 priorReviewId: r.prior_review_id || null, nextReviewId: r.next_review_id || null, submittedVersion: r.submitted_version || null
             };
         }
+        // [실시간] 리뷰 로그 병합 — DB에 log 컬럼이 없으면 realtime echo의 log가 비어 와서(_mapReviewRow→[])
+        //   방금 단 코멘트가 지워짐. log는 append-only라 union(키 중복 제거)으로 합치면 로컬 코멘트가 보존됨.
+        function _mergeReviewLog(localLog, incomingLog) {
+            var a = Array.isArray(localLog) ? localLog : [];
+            var b = Array.isArray(incomingLog) ? incomingLog : [];
+            if (!a.length) return b.slice();
+            if (!b.length) return a.slice();
+            var seen = {}, out = [];
+            function keyOf(e) { return [e.at || '', e.userId || '', e.action || '', e.decision || '', e.comment || ''].join('|'); }
+            a.concat(b).forEach(function (e) { if (!e) return; var k = keyOf(e); if (seen[k]) return; seen[k] = true; out.push(e); });
+            out.sort(function (x, y) { return String(x.at || '').localeCompare(String(y.at || '')); });
+            return out;
+        }
         // [v40 B3] canon_docs row(snake) → app 객체(camel)
         function _mapCanonRow(c) {
             return {
@@ -6206,7 +6222,12 @@ return data;
                             const mapped = _mapReviewRow(payload.new);
                             const idx = currentData.reviews.findIndex(x => x.id === mapped.id);
                             const prevStatus = idx > -1 ? currentData.reviews[idx].status : null;
-                            if (idx > -1) currentData.reviews[idx] = mapped; else currentData.reviews.push(mapped);
+                            if (idx > -1) {
+                                // log/votes append-only → echo가 비워 와도 로컬 코멘트·투표가 사라지지 않게 병합
+                                mapped.log = _mergeReviewLog(currentData.reviews[idx].log, mapped.log);
+                                if ((!mapped.votes || !mapped.votes.length) && currentData.reviews[idx].votes && currentData.reviews[idx].votes.length) mapped.votes = currentData.reviews[idx].votes;
+                                currentData.reviews[idx] = mapped;
+                            } else currentData.reviews.push(mapped);
                             const mine = currentUser && mapped.proposerId === currentUser.id;
                             if (ev === 'INSERT' && !mine && mapped.status === 'pending') {
                                 playNotificationSound && playNotificationSound('comment');
@@ -8081,7 +8102,7 @@ return data;
         function _cardSummaryMeta(task, statusInfo) {
             var parts = [];
             var si = statusInfo || getStatusInfo(task.status);
-            parts.push('<span class="badge ' + si.class + '">' + si.text + '</span>');
+            parts.push('<span class="badge ' + si.class + '" onclick="event.stopPropagation();cycleStatus(event,\'' + task.id + '\')" title="클릭하여 상태 변경 (대기→진행→완료)">' + si.text + '</span>');
             var a = (typeof renderAssigneeBadge === 'function') ? renderAssigneeBadge(task, 'board') : ''; if (a) parts.push(a);
             var d = (typeof renderDueBadge === 'function') ? renderDueBadge(task, 'board') : ''; if (d) parts.push(d);
             var nd = Array.isArray(task.linkedDocIds) ? task.linkedDocIds.length : 0;
@@ -8105,7 +8126,7 @@ return data;
         }
         function cyclePriority(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.priority = task.priority === 'p0' ? 'p1' : (task.priority === 'p1' ? 'p2' : 'p0'); saveData(); dbUpsertTask(task); }
         function sortCategory(e, catId, order) { e.stopPropagation(); const catTasks = currentData.tasks.filter(t => t.catId === catId); const otherTasks = currentData.tasks.filter(t => t.catId !== catId); catTasks.sort((a, b) => { const weight = { 'p0': 0, 'p1': 1, 'p2': 2 }; return order === 'asc' ? weight[a.priority] - weight[b.priority] : weight[b.priority] - weight[a.priority]; }); currentData.tasks = [...otherTasks, ...catTasks]; saveData(); dbUpdateTaskSortOrders(currentData.tasks); }
-        function cycleStatus(e, taskId) { e.stopPropagation(); const taskIndex = currentData.tasks.findIndex(t => t.id === taskId); if (taskIndex === -1) return; const task = currentData.tasks[taskIndex]; if(task.status === 'pending') { task.status = 'progress'; } else if(task.status === 'progress') { task.status = 'completed'; task.time = new Date().toLocaleString(); task.doneAt = new Date().toISOString(); /* [v40] auto-bury 기준 시각 */ } else { task.status = 'pending'; task.time = null; task.doneAt = null; } if (task.status === 'completed') { currentData.tasks.splice(taskIndex, 1); currentData.tasks.push(task); } saveData(); dbUpsertTask(task); }
+        function cycleStatus(e, taskId) { e.stopPropagation(); const taskIndex = currentData.tasks.findIndex(t => t.id === taskId); if (taskIndex === -1) return; const task = currentData.tasks[taskIndex]; if(task.status === 'pending') { task.status = 'progress'; } else if(task.status === 'progress') { task.status = 'completed'; task.time = new Date().toLocaleString(); task.doneAt = new Date().toISOString(); /* [v40] auto-bury 기준 시각 */ } else { task.status = 'pending'; task.time = null; task.doneAt = null; } if (task.status === 'completed') { currentData.tasks.splice(taskIndex, 1); currentData.tasks.push(task); } saveData(); dbUpsertTask(task); renderBoard(); }
 
         // [v40 Day2 청크 1] Zone 순환 (Shelf → Now → Buried → Shelf)
         async function cycleZone(e, taskId) {
@@ -10625,6 +10646,8 @@ ${intrLog}
         function openModal(id) {
             const el = document.getElementById(id);
             if(!el) return;
+            // [zoom-fix] #app-wrapper(zoom) 안에 있으면 position:fixed가 Chrome에서 어긋남 → body로 빼서 뷰포트 기준 고정
+            if (el.parentNode !== document.body) document.body.appendChild(el);
             el.style.display = 'flex';
             el.classList.add('modal-open');
             // iOS: force repaint
@@ -14820,6 +14843,24 @@ ${intrLog}
     }
     // 범례의 ➕ 파트 버튼 → 현재 그래프에 사용자 정의 파트 추가 (발견성 향상)
     async function gphAddCustomPartCurrent() { var d = gphCurrent(); if (!d) { showToast('먼저 그래프를 선택하세요.', 'alert'); return; } var k = await gphAddCustomPart(d); if (k) { gphRenderHeader(); gphRenderCanvas(); gphRenderPanel(); } }
+    // 기본 파트(삭제 불가) 여부
+    function gphIsBasePart(key) { for (var i = 0; i < GPH_BASE_PARTS.length; i++) { if (GPH_BASE_PARTS[i][0] === key) return true; } return false; }
+    // 사용자 정의 파트 삭제 — 범례 ✕ 에서 호출. 이 파트를 쓰던 포인트/노드는 '공유'로 재배정.
+    async function gphRemoveCustomPart(key) {
+        if (gphIsBasePart(key)) { showToast('기본 파트는 삭제할 수 없습니다.', 'info'); return; }
+        var d = gphCurrent(); if (!d) return; var p = gphPayload(d);
+        if (!Array.isArray(p.parts)) p.parts = [];
+        var part = null; for (var i = 0; i < p.parts.length; i++) { if (p.parts[i].key === key) { part = p.parts[i]; break; } }
+        if (!part) return;
+        var ok = await uiConfirm({ title: '파트 삭제', message: "'" + (part.name || key) + "' 파트를 삭제할까요?\n이 파트를 쓰던 포인트·노드는 '공유'로 바뀝니다.", confirmText: '삭제', danger: true });
+        if (!ok) return;
+        p.parts = p.parts.filter(function (c) { return c.key !== key; });
+        (p.points || []).forEach(function (pt) { if (pt.part === key) pt.part = 'shared'; });
+        (p.nodes || []).forEach(function (n) { if (n.part === key) n.part = 'shared'; });
+        gphSetActiveParts(p); gphSave(d);
+        gphRenderHeader(); gphRenderCanvas(); gphRenderPanel();
+        showToast('🗑 파트 삭제: ' + (part.name || key), 'info');
+    }
     // 파트 select onchange 공통 처리 (사용자 정의 추가 분기). applyFn(key) 로 대상에 반영.
     async function gphPartSelChange(sel, d, applyFn) {
         if (sel.value === '__add') { var k = await gphAddCustomPart(d); if (!k) { gphRenderPanel(); return; } applyFn(k); gphSave(d); gphRenderCanvas(); gphRenderHeader(); gphRenderPanel(); return; }
@@ -15006,7 +15047,7 @@ ${intrLog}
         if (legend) {
             legend.style.display = '';
             var parts = gphPartList(p).map(function (o) { return o.key; });
-            legend.innerHTML = parts.map(function (pt) { return '<div class="gph-legend-item"><span class="gph-legend-dot" style="background:' + gphPartColor(pt) + '"></span>' + gphEsc(gphPartName(pt)) + '</div>'; }).join('')
+            legend.innerHTML = parts.map(function (pt) { var del = gphIsBasePart(pt) ? '' : '<span class="gph-legend-del" onclick="event.stopPropagation();gphRemoveCustomPart(\'' + gphEscX(pt) + '\')" title="이 사용자 정의 파트 삭제">✕</span>'; return '<div class="gph-legend-item"><span class="gph-legend-dot" style="background:' + gphPartColor(pt) + '"></span>' + gphEsc(gphPartName(pt)) + del + '</div>'; }).join('')
                 + '<button class="gph-legend-add" onclick="gphAddCustomPartCurrent()" title="사용자 정의 파트(이름·색상) 추가">➕ 파트</button>'
                 + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴') + '</div>';
         }
