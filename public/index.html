@@ -7323,6 +7323,7 @@ return data;
             var spSelect = document.getElementById('filter-sprint'); // [#2] 스프린트 스코프
             if (spSelect) selectedBoardSprintId = spSelect.value || 'all';
             renderBoard();
+            if (typeof renderProgress === 'function') renderProgress(); // [변경] 진척률도 현재 스프린트 카테고리로 동기화
         }
         // [#2] 칸반 상단 스프린트 콤보박스 채우기 (기본=활성→최신→전체)
         function renderBoardSprintPicker() {
@@ -9500,7 +9501,9 @@ ${intrLog}
 
         function renderProgress() {
             const container = document.getElementById('progress-container'); container.innerHTML = '';
-            currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId).forEach(cat => {
+            // [변경] 카테고리별 진척률도 칸반 보드처럼 "현재 보는 스프린트"의 카테고리만 표시
+            const _spValid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId);
+            currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId && (!_spValid || (_pc.sprintId || null) === selectedBoardSprintId)).forEach(cat => {
                 const catTasks = currentData.tasks.filter(t => t.catId === cat.id); const total = catTasks.length; const done = catTasks.filter(t => t.status === 'completed').length; const percent = total === 0 ? 0 : Math.round((done / total) * 100);
                 const div = document.createElement('div'); div.className = 'bg-white border-2 border-gray-100 p-5 rounded-xl shadow-sm'; div.innerHTML = ` <div class="flex justify-between items-center mb-3"> <span class="text-[15px] font-black text-gray-800">${cat.title}</span> <span class="text-sm font-mono font-black text-emerald-600">${percent}%</span> </div> <div class="progress-bar-container"><div class="progress-fill" style="width: ${percent}%"></div></div> <p class="text-[11px] text-gray-400 mt-3 font-mono font-bold uppercase tracking-wider">${done} / ${total} TASKS COMPLETE</p> `; container.appendChild(div);
             });
