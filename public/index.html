@@ -2573,6 +2573,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <button class="cs-nav" id="cs-nav-canon" onclick="switchView('canon')" title="게임 위키"><span class="cs-ico">🎮</span><span class="cs-label">게임 위키</span></button>
             <button class="cs-nav" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
             <button class="cs-nav" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
+            <button class="cs-nav" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
             <div class="cs-section cs-label">도구</div>
             <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
             <button class="cs-nav" onclick="openChangeLog()" title="변경 로그"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그</span></button>
@@ -2688,6 +2689,132 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <!-- ========================================== -->
         <!-- [스프린트] 스프린트 페이지 -->
         <div id="sprint-view" class="hidden" onclick="event.stopPropagation()"></div>
+
+        <!-- [그래프] 다이어그램 페이지 (wiki_docs kind='diagram') -->
+        <style>
+        /* [그래프 탭] 웜 테마 매핑 + 레이아웃 */
+        #graph-view { display: flex; flex-direction: row; height: calc(100vh - 52px); overflow: hidden;
+            --gph-ai:#4a7cb5; --gph-terrain:#6b8e5a; --gph-scenario:#b5677f; --gph-planning:#c2843e; --gph-shared:#8a8275; --gph-extra1:#8e6fa8; --gph-extra2:#bb7a3e; }
+        #graph-view.hidden { display: none; }
+        .gph-side { width: 256px; flex-shrink: 0; background: var(--c-card); border-right: 1px solid var(--c-border); display: flex; flex-direction: column; }
+        .gph-scope-tabs { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid var(--c-border); }
+        .gph-scope-tab { flex: 1; background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 8px; padding: 6px 4px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .gph-scope-tab.active { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
+        .gph-tree { flex: 1; overflow-y: auto; padding: 8px 6px; }
+        .gph-tree-row { display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 7px; cursor: pointer; user-select: none; font-size: 13px; color: var(--c-text); }
+        .gph-tree-row:hover { background: var(--c-accent-soft); }
+        .gph-tree-row.active { background: var(--c-accent-soft); color: var(--c-accent); font-weight: 700; }
+        .gph-tree-row .gph-tw-ico { width: 16px; text-align: center; flex-shrink: 0; font-size: 12px; }
+        .gph-tree-row .gph-tw-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .gph-tree-row .gph-tw-act { opacity: 0; font-size: 11px; color: var(--c-text3); padding: 0 3px; border-radius: 4px; }
+        .gph-tree-row:hover .gph-tw-act { opacity: 1; }
+        .gph-tree-row .gph-tw-act:hover { background: var(--c-card); color: var(--c-accent); }
+        .gph-tree-empty { font-size: 12px; color: var(--c-text3); text-align: center; padding: 24px 10px; font-style: italic; }
+        .gph-tree-caret { width: 12px; text-align: center; font-size: 9px; color: var(--c-text3); flex-shrink: 0; cursor: pointer; }
+        .gph-side-actions { padding: 10px; border-top: 1px solid var(--c-border); display: flex; flex-direction: column; gap: 5px; }
+        .gph-btn { background: var(--c-card); border: 1px solid var(--c-border); color: var(--c-text); border-radius: 7px; padding: 7px 11px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+        .gph-btn:hover { background: var(--c-accent-soft); border-color: var(--c-accent); }
+        .gph-btn-primary { background: var(--c-accent); border-color: var(--c-accent); color: #fff; text-align: center; }
+        .gph-btn-primary:hover { background: var(--c-accent-hover); }
+        .gph-btn-sm { padding: 4px 9px; font-size: 12px; }
+        .gph-btn-danger { color: var(--st-danger); }
+        .gph-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+        .gph-header { padding: 12px 20px 8px; border-bottom: 1px solid var(--c-border); background: var(--c-card); display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+        .gph-name-input { font-size: 19px; font-weight: 800; border: none; outline: none; background: transparent; color: var(--c-text); width: 100%; }
+        .gph-name-input:focus { box-shadow: inset 0 -2px 0 var(--c-accent); }
+        .gph-desc-input { font-size: 12.5px; border: none; outline: none; background: transparent; color: var(--c-text2); width: 100%; resize: none; line-height: 1.5; font-family: inherit; overflow: hidden; }
+        .gph-controls { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+        .gph-ctl-label { font-size: 10px; font-weight: 700; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.6px; }
+        .gph-toggle-group { display: inline-flex; border: 1px solid var(--c-border); border-radius: 7px; overflow: hidden; }
+        .gph-toggle { padding: 5px 11px; background: var(--c-card); border: none; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--c-text2); }
+        .gph-toggle:not(:last-child) { border-right: 1px solid var(--c-border); }
+        .gph-toggle.active { background: var(--c-accent); color: #fff; }
+        .gph-toggle:hover:not(.active) { background: var(--c-accent-soft); }
+        .gph-legend { display: flex; gap: 12px; padding: 5px 20px; border-bottom: 1px solid var(--c-border); background: var(--c-paper); font-size: 11px; color: var(--c-text2); flex-shrink: 0; overflow-x: auto; white-space: nowrap; }
+        .gph-legend-item { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        .gph-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .gph-legend-hint { margin-left: auto; color: var(--c-text3); flex-shrink: 0; }
+        .gph-canvas-wrap { flex: 1; min-height: 280px; overflow: hidden; position: relative; background: var(--c-paper); background-image: linear-gradient(var(--c-border) 1px, transparent 1px), linear-gradient(90deg, var(--c-border) 1px, transparent 1px); background-size: 24px 24px; }
+        .gph-main { overflow-y: auto; }
+        body.dark .gph-canvas-wrap, body.dark-pure .gph-canvas-wrap { background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); }
+        .gph-svg { width: 100%; height: 100%; display: block; }
+        .gph-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--c-text3); font-size: 14px; gap: 10px; pointer-events: none; text-align: center; }
+        .point-circle, .node-group, .node-rect { cursor: grab; }
+        .point-circle:hover, .node-rect:hover { filter: brightness(1.06); }
+        .point-circle.selected, .node-rect.selected { stroke: var(--c-text) !important; stroke-width: 3 !important; }
+        .node-connector { cursor: crosshair; opacity: 0; transition: opacity .15s; }
+        .node-group:hover .node-connector { opacity: 1; }
+        .node-rect.connecting-source { stroke-dasharray: 5,3; }
+        .edge-path { fill: none; } .edge-path:hover { stroke-width: 4; }
+        .edge-path.selected { stroke-width: 4 !important; }
+        .edge-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+        .add-hotspot { cursor: copy; fill: transparent; }
+        .gph-tooltip { position: absolute; background: var(--c-text); color: var(--c-paper); padding: 7px 11px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-width: 280px; white-space: pre-wrap; box-shadow: var(--ios-shadow); pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 50; }
+        .gph-tooltip.show { opacity: 0.97; }
+        .gph-tooltip .tt-title { font-weight: 800; margin-bottom: 3px; }
+        .gph-tooltip .tt-meta { font-size: 10.5px; opacity: 0.75; margin-bottom: 3px; font-family: 'JetBrains Mono',monospace; }
+        .gph-panel { border-top: 1px solid var(--c-border); background: var(--c-card); padding: 12px 20px; max-height: 300px; overflow-y: auto; flex-shrink: 0; }
+        .gph-panel-empty { color: var(--c-text3); font-size: 13px; text-align: center; padding: 18px 0; font-style: italic; }
+        .gph-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; padding-bottom: 7px; border-bottom: 1px solid var(--c-border); flex-wrap: wrap; gap: 8px; }
+        .gph-panel-title { font-size: 12px; font-weight: 800; color: var(--c-text); }
+        .gph-panel-title .gph-pt-dim { color: var(--c-text3); font-weight: 600; }
+        .gph-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+        .gph-fr { display: flex; flex-direction: column; gap: 3px; }
+        .gph-fr.full { grid-column: 1 / -1; }
+        .gph-fr label { font-size: 10px; font-weight: 700; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.5px; }
+        .gph-fr input, .gph-fr select, .gph-fr textarea { padding: 6px 9px; border: 1px solid var(--c-border); border-radius: 6px; font-size: 13px; background: var(--c-paper); color: var(--c-text); outline: none; font-family: inherit; }
+        .gph-fr input:focus, .gph-fr select:focus, .gph-fr textarea:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
+        .gph-fr textarea { resize: vertical; min-height: 48px; font-family: 'JetBrains Mono',monospace; font-size: 12px; line-height: 1.5; }
+        .gph-chk { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--c-text2); cursor: pointer; }
+        .gph-chk input { accent-color: var(--c-accent); }
+        .gph-stats { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+        .gph-stat-l { font-size: 10px; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.5px; }
+        .gph-stat-v { font-size: 14px; font-weight: 800; color: var(--c-text); font-family: 'JetBrains Mono',monospace; }
+        .gph-tip { font-size: 11.5px; color: var(--c-text3); margin-top: 7px; line-height: 1.5; }
+        .gph-tip code { font-family: 'JetBrains Mono',monospace; background: var(--ios-fill); padding: 1px 5px; border-radius: 3px; color: var(--c-text2); }
+        .gph-connecting { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); padding: 8px 16px; background: var(--c-accent); color: #fff; font-size: 12.5px; border-radius: 7px; z-index: 120; box-shadow: var(--ios-shadow); font-weight: 700; display: none; }
+        .gph-connecting.show { display: block; }
+        .gph-connecting .gph-esc { font-size: 10px; opacity: 0.85; margin-left: 8px; padding: 1px 5px; background: rgba(255,255,255,0.2); border-radius: 3px; }
+        @media (max-width: 820px) { #graph-view { flex-direction: column; height: calc(100vh - 100px); } .gph-side { width: 100%; height: 180px; border-right: none; border-bottom: 1px solid var(--c-border); } }
+        </style>
+        <div id="graph-view" class="hidden" onclick="event.stopPropagation()">
+            <aside class="gph-side">
+                <div class="gph-scope-tabs">
+                    <button class="gph-scope-tab active" data-scope="project" onclick="gphSetScope('project')">📁 프로젝트</button>
+                    <button class="gph-scope-tab" data-scope="personal" onclick="gphSetScope('personal')">🔒 개인</button>
+                </div>
+                <div class="gph-tree" id="gph-tree"></div>
+                <div class="gph-side-actions">
+                    <button class="gph-btn gph-btn-primary" onclick="gphNewDiagram(null)">＋ 새 그래프</button>
+                    <button class="gph-btn" onclick="gphNewFolder(null)">＋ 폴더</button>
+                </div>
+            </aside>
+            <main class="gph-main">
+                <div class="gph-header" id="gph-header">
+                    <input type="text" id="gph-name" class="gph-name-input" placeholder="그래프 이름..." oninput="gphOnNameInput(this.value)">
+                    <textarea id="gph-desc" class="gph-desc-input" rows="1" placeholder="설명 (선택)" oninput="gphOnDescInput(this.value)"></textarea>
+                    <div class="gph-controls">
+                        <span class="gph-ctl-label">모드</span>
+                        <div class="gph-toggle-group">
+                            <button class="gph-toggle" data-mode="linear" onclick="gphSetMode('linear')">↔ 흐름</button>
+                            <button class="gph-toggle" data-mode="graph" onclick="gphSetMode('graph')">⌬ 그래프</button>
+                        </div>
+                        <span class="gph-ctl-label" id="gph-orient-label">방향</span>
+                        <div class="gph-toggle-group" id="gph-orient-group">
+                            <button class="gph-toggle" data-orient="horizontal" onclick="gphSetOrient('horizontal')">↔ 가로</button>
+                            <button class="gph-toggle" data-orient="vertical" onclick="gphSetOrient('vertical')">↕ 세로</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="gph-legend" id="gph-legend"></div>
+                <div class="gph-canvas-wrap" id="gph-canvas-wrap">
+                    <svg class="gph-svg" id="gph-svg" preserveAspectRatio="xMidYMid meet"></svg>
+                    <div class="gph-tooltip" id="gph-tooltip"></div>
+                </div>
+                <div class="gph-panel" id="gph-panel"></div>
+            </main>
+            <div class="gph-connecting" id="gph-connecting">엣지 추가 모드 — 대상 노드 클릭<span class="gph-esc">ESC 취소</span></div>
+        </div>
         <!-- 💡 KANBAN VIEW -->
         <!-- ========================================== -->
         <div id="kanban-view" class="block">
@@ -4448,7 +4575,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function getViewForDoc(docId) {
             var d = (currentData.docs || []).find(function (x) { return x.id === docId; });
             var k = d ? (d.kind || 'wiki') : 'wiki';
-            return k === 'canon' ? 'canon' : (k === 'personal' ? 'personal' : 'docs');
+            return k === 'canon' ? 'canon' : (k === 'personal' ? 'personal' : (k === 'diagram' ? 'graph' : 'docs'));
         }
         function switchView(viewName) {
             currentView = viewName;
@@ -4467,6 +4594,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [스프린트] 페이지 토글
             var _csS = document.getElementById('cs-nav-sprint'); if (_csS) _csS.classList.toggle('active', viewName === 'sprint');
             var _svw = document.getElementById('sprint-view'); if (_svw) { _svw.classList.toggle('hidden', viewName !== 'sprint'); _svw.classList.toggle('block', viewName === 'sprint'); }
+            // [그래프] 페이지 토글
+            var _csGr = document.getElementById('cs-nav-graph'); if (_csGr) _csGr.classList.toggle('active', viewName === 'graph');
+            var _gvw = document.getElementById('graph-view'); if (_gvw) _gvw.classList.toggle('hidden', viewName !== 'graph');
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -4547,6 +4677,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gps = document.getElementById('gif-picker'); if (_gps) _gps.style.display = 'none';
                 if (typeof renderSprintView === 'function') renderSprintView();
+            } else if (viewName === 'graph') {
+                // [그래프] 다이어그램 페이지
+                var _kvg = document.getElementById('kanban-view'); if (_kvg) { _kvg.classList.add('hidden'); _kvg.classList.remove('block'); }
+                var _dvg = document.getElementById('docs-view'); if (_dvg) { _dvg.classList.add('hidden'); _dvg.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpg = document.getElementById('gif-picker'); if (_gpg) _gpg.style.display = 'none';
+                if (typeof gphRender === 'function') gphRender();
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
@@ -13893,6 +14030,395 @@ ${intrLog}
                 });
             }, 500);
         };
+    </script>
+
+    <!-- ====================================================== -->
+    <!-- [그래프 탭] 다이어그램 매니저 (wiki_docs kind='diagram' 재사용) -->
+    <!-- ====================================================== -->
+    <script>
+    "use strict";
+    var gphState = { scope: 'project', currentId: null, selected: null, connecting: null, expanded: {} };
+    var _gphSaveT = null;
+
+    function gphUid(p) { return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+    function gphCssVar(n) { return getComputedStyle(document.body).getPropertyValue(n).trim() || '#888'; }
+    function gphPartColor(part) { var el = document.getElementById('graph-view'); var v = el ? getComputedStyle(el).getPropertyValue('--gph-' + part) : ''; return (v && v.trim()) || '#8a8275'; }
+    function gphPartName(p) { return ({ ai: 'AI', terrain: '지형', scenario: '시나리오', planning: '기획', shared: '공유', extra1: 'Extra1', extra2: 'Extra2' })[p] || p; }
+    function gphEsc(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+    function gphEscX(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]; }); }
+
+    function gphAllDocs() { return (currentData.docs || []).filter(function (d) { return d.kind === 'diagram' && (d.projectId || 'default') === activeProjectId; }); }
+    function gphScopeMatch(d) { var sc = (d.meta && d.meta.scope) || 'project'; if (gphState.scope === 'personal') return sc === 'personal' && (!(d.meta && d.meta.owner) || !currentUser || d.meta.owner === currentUser.id); return sc !== 'personal'; }
+    function gphVisibleDocs() { return gphAllDocs().filter(gphScopeMatch); }
+    function gphById(id) { return (currentData.docs || []).find(function (d) { return d.id === id; }); }
+    function gphIsFolder(d) { return !!(d && d.meta && d.meta.isFolder); }
+    function gphPayload(d) {
+        if (!d.meta) d.meta = {};
+        if (!d.meta.diagram) d.meta.diagram = { mode: 'linear', orientation: 'horizontal', points: [], nodes: [], edges: [] };
+        var p = d.meta.diagram;
+        if (!Array.isArray(p.points)) p.points = []; if (!Array.isArray(p.nodes)) p.nodes = []; if (!Array.isArray(p.edges)) p.edges = [];
+        if (!p.mode) p.mode = 'linear'; if (!p.orientation) p.orientation = 'horizontal';
+        return p;
+    }
+    function gphCurrent() { var d = gphById(gphState.currentId); return (d && d.kind === 'diagram' && !gphIsFolder(d)) ? d : null; }
+    function gphNextOrder(parentId) { var m = 0; gphVisibleDocs().filter(function (d) { return (d.parentId || null) === (parentId || null); }).forEach(function (d) { if (typeof d.sortOrder === 'number' && d.sortOrder < 2147483647 && d.sortOrder > m) m = d.sortOrder; }); return m + 1; }
+    function gphSaveNow(d) { if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d); }
+    function gphSave(d) { if (!d) return; d.updatedAt = Date.now(); if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); clearTimeout(_gphSaveT); _gphSaveT = setTimeout(function () { if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d); }, 450); }
+
+    // ===== 생성 / 삭제 =====
+    function gphNewDiagram(parentId) {
+        if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+        var scope = gphState.scope;
+        var d = {
+            id: gphUid('doc'), projectId: activeProjectId, parentId: parentId || null, title: '새 그래프', emoji: '📈', kind: 'diagram', content: '',
+            meta: { scope: scope, owner: scope === 'personal' ? (currentUser ? currentUser.id : null) : null, isFolder: false, diagram: { mode: 'linear', orientation: 'horizontal', points: [], nodes: [], edges: [] }, history: [{ action: 'create', by: currentUser.id, byName: myNickname, at: new Date().toISOString() }] },
+            createdAt: Date.now(), updatedAt: Date.now(), sortOrder: gphNextOrder(parentId)
+        };
+        if (!Array.isArray(currentData.docs)) currentData.docs = [];
+        currentData.docs.push(d);
+        if (parentId) gphState.expanded[parentId] = true;
+        gphState.currentId = d.id; gphState.selected = null;
+        gphSaveNow(d); gphRender();
+        setTimeout(function () { var el = document.getElementById('gph-name'); if (el) { el.focus(); el.select(); } }, 60);
+    }
+    async function gphNewFolder(parentId) {
+        if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+        var name = await uiPrompt({ title: '새 폴더', label: '폴더 이름', placeholder: '예: AI 흐름도' });
+        if (name === null || !name.trim()) return;
+        var scope = gphState.scope;
+        var d = { id: gphUid('doc'), projectId: activeProjectId, parentId: parentId || null, title: name.trim(), emoji: '📁', kind: 'diagram', content: '', meta: { scope: scope, owner: scope === 'personal' ? (currentUser ? currentUser.id : null) : null, isFolder: true }, createdAt: Date.now(), updatedAt: Date.now(), sortOrder: gphNextOrder(parentId) };
+        currentData.docs.push(d); if (parentId) gphState.expanded[parentId] = true;
+        gphSaveNow(d); gphRenderTree();
+        showToast('📁 폴더 추가됨', 'success');
+    }
+    async function gphDeleteDoc(id) {
+        var d = gphById(id); if (!d) return;
+        var toDel = [id]; (function collect(pid) { gphAllDocs().filter(function (x) { return (x.parentId || null) === pid; }).forEach(function (c) { toDel.push(c.id); collect(c.id); }); })(id);
+        var msg = gphIsFolder(d) ? ('폴더 "' + (d.title || '') + '"' + (toDel.length > 1 ? (' 및 하위 ' + (toDel.length - 1) + '개') : '') + '를 삭제할까요?') : ('그래프 "' + (d.title || '') + '"를 삭제할까요?');
+        if (!(await uiConfirm({ title: '삭제', message: msg + '\n되돌릴 수 없습니다.', confirmText: '삭제', danger: true }))) return;
+        currentData.docs = (currentData.docs || []).filter(function (x) { return toDel.indexOf(x.id) === -1; });
+        toDel.forEach(function (did) { if (typeof dbDeleteDoc === 'function') dbDeleteDoc(did); });
+        if (toDel.indexOf(gphState.currentId) > -1) { gphState.currentId = null; gphState.selected = null; }
+        if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+        gphRender(); showToast('🗑 삭제됨', 'info');
+    }
+
+    // ===== 스코프 / 선택 / 헤더 입력 =====
+    function gphSetScope(s) { gphState.scope = s; gphState.currentId = null; gphState.selected = null; document.querySelectorAll('.gph-scope-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.scope === s); }); gphRender(); }
+    function gphSelectDiagram(id) {
+        var d = gphById(id); if (!d) return;
+        if (gphIsFolder(d)) { gphState.expanded[id] = !gphState.expanded[id]; gphRenderTree(); return; }
+        gphState.currentId = id; gphState.selected = null; gphState.connecting = null; gphUpdateConnecting(); gphRender();
+    }
+    function gphOnNameInput(v) { var d = gphById(gphState.currentId); if (!d) return; d.title = v; gphSave(d); gphRenderTree(); }
+    function gphOnDescInput(v) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); p.description = v; gphSave(d); var ta = document.getElementById('gph-desc'); if (ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 80) + 'px'; } }
+    function gphSetMode(m) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode === m) return; p.mode = m; gphState.selected = null; gphState.connecting = null; gphUpdateConnecting(); gphSave(d); gphRender(); }
+    function gphSetOrient(o) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode !== 'linear') return; p.orientation = o; gphSave(d); gphRender(); }
+
+    // ===== 렌더 진입 =====
+    function gphRender() { gphRenderTree(); gphRenderHeader(); gphRenderCanvas(); gphRenderPanel(); }
+
+    function gphRenderTree() {
+        var tree = document.getElementById('gph-tree'); if (!tree) return;
+        var docs = gphVisibleDocs();
+        if (!docs.length) { tree.innerHTML = '<div class="gph-tree-empty">' + (gphState.scope === 'personal' ? '개인 그래프가 없습니다.' : '프로젝트 그래프가 없습니다.') + '<br>아래 ＋ 로 추가하세요.</div>'; return; }
+        var byParent = {}; docs.forEach(function (d) { var k = d.parentId || '__root'; (byParent[k] = byParent[k] || []).push(d); });
+        Object.keys(byParent).forEach(function (k) { byParent[k].sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0) || (a.title || '').localeCompare(b.title || ''); }); });
+        var html = '';
+        var walk = function (parentKey, depth) {
+            (byParent[parentKey] || []).forEach(function (d) {
+                var isF = gphIsFolder(d);
+                var hasKids = isF && (byParent[d.id] || []).length > 0;
+                var exp = !!gphState.expanded[d.id];
+                var active = d.id === gphState.currentId ? ' active' : '';
+                html += '<div class="gph-tree-row' + active + '" style="padding-left:' + (8 + depth * 14) + 'px" onclick="gphSelectDiagram(\'' + d.id + '\')">';
+                html += isF ? ('<span class="gph-tree-caret" onclick="event.stopPropagation();gphToggleFolder(\'' + d.id + '\')">' + (hasKids ? (exp ? '▾' : '▸') : '·') + '</span>') : '<span class="gph-tree-caret"></span>';
+                html += '<span class="gph-tw-ico">' + (isF ? (exp ? '📂' : '📁') : '📈') + '</span>';
+                html += '<span class="gph-tw-name">' + gphEsc(d.title || '(무제)') + '</span>';
+                html += '<span class="gph-tw-act" title="새 하위 그래프" onclick="event.stopPropagation();gphNewDiagram(\'' + (isF ? d.id : (d.parentId || '')) + '\')">＋</span>';
+                html += '<span class="gph-tw-act" title="삭제" onclick="event.stopPropagation();gphDeleteDoc(\'' + d.id + '\')">✕</span>';
+                html += '</div>';
+                if (isF && exp) walk(d.id, depth + 1);
+            });
+        };
+        walk('__root', 0);
+        tree.innerHTML = html;
+    }
+    function gphToggleFolder(id) { gphState.expanded[id] = !gphState.expanded[id]; gphRenderTree(); }
+
+    function gphRenderHeader() {
+        var d = gphCurrent();
+        var header = document.getElementById('gph-header');
+        var legend = document.getElementById('gph-legend');
+        if (!d) { if (header) header.style.visibility = 'hidden'; if (legend) legend.style.display = 'none'; return; }
+        header.style.visibility = 'visible';
+        var p = gphPayload(d);
+        var nameEl = document.getElementById('gph-name'), descEl = document.getElementById('gph-desc');
+        if (document.activeElement !== nameEl) nameEl.value = d.title || '';
+        if (document.activeElement !== descEl) { descEl.value = p.description || ''; descEl.style.height = 'auto'; descEl.style.height = Math.min(descEl.scrollHeight, 80) + 'px'; }
+        document.querySelectorAll('#graph-view .gph-toggle[data-mode]').forEach(function (b) { b.classList.toggle('active', b.dataset.mode === p.mode); });
+        var og = document.getElementById('gph-orient-group'), ol = document.getElementById('gph-orient-label');
+        if (p.mode === 'linear') { og.style.display = ''; ol.style.display = ''; document.querySelectorAll('#graph-view .gph-toggle[data-orient]').forEach(function (b) { b.classList.toggle('active', b.dataset.orient === p.orientation); }); }
+        else { og.style.display = 'none'; ol.style.display = 'none'; }
+        // legend
+        if (legend) {
+            legend.style.display = '';
+            var parts = ['ai', 'terrain', 'scenario', 'planning', 'shared', 'extra1', 'extra2'];
+            legend.innerHTML = parts.map(function (pt) { return '<div class="gph-legend-item"><span class="gph-legend-dot" style="background:' + gphPartColor(pt) + '"></span>' + gphPartName(pt) + '</div>'; }).join('')
+                + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트' : '★ 빈 곳 더블클릭 = 새 노드 · 노드 호버 → 핸들 = 엣지') + '</div>';
+        }
+    }
+    </script>
+
+    <script>
+    "use strict";
+    // ===== Canvas dispatch =====
+    function gphRenderCanvas() {
+        var d = gphCurrent();
+        var svg = document.getElementById('gph-svg'), wrap = document.getElementById('gph-canvas-wrap');
+        if (!svg || !wrap) return;
+        var old = wrap.querySelector('.gph-empty'); if (old) old.remove();
+        if (!d) { svg.innerHTML = ''; var e = document.createElement('div'); e.className = 'gph-empty'; e.innerHTML = '<div style="font-size:34px;opacity:.4">📈</div><div>왼쪽에서 그래프를 선택하거나<br>＋ 새 그래프로 추가하세요</div>'; wrap.appendChild(e); return; }
+        var p = gphPayload(d);
+        if (p.mode === 'graph') gphRenderGraphCanvas(d, p, svg); else gphRenderLinearCanvas(d, p, svg);
+    }
+
+    // ===== Linear =====
+    function gphRenderLinearCanvas(d, loop, svg) {
+        var isH = loop.orientation === 'horizontal';
+        var w = svg.clientWidth || 1000, h = svg.clientHeight || 500;
+        svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+        var margin = 70, x1, y1, x2, y2;
+        if (isH) { x1 = margin; y1 = h / 2; x2 = w - margin; y2 = h / 2; } else { x1 = w / 2; y1 = margin; x2 = w / 2; y2 = h - margin; }
+        var lineC = gphCssVar('--c-text3'), cardBg = gphCssVar('--c-card');
+        var parts = [], hp = 30;
+        if (isH) parts.push('<rect class="add-hotspot" x="' + x1 + '" y="' + (y1 - hp) + '" width="' + (x2 - x1) + '" height="' + (hp * 2) + '" data-hotspot="line"/>');
+        else parts.push('<rect class="add-hotspot" x="' + (x1 - hp) + '" y="' + y1 + '" width="' + (hp * 2) + '" height="' + (y2 - y1) + '" data-hotspot="line"/>');
+        parts.push('<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + lineC + '" stroke-width="2" opacity="0.6"/>');
+        if (isH) parts.push('<polygon points="' + (x2 - 8) + ',' + (y2 - 7) + ' ' + (x2 + 5) + ',' + y2 + ' ' + (x2 - 8) + ',' + (y2 + 7) + '" fill="' + lineC + '" opacity="0.6"/>');
+        else parts.push('<polygon points="' + (x2 - 7) + ',' + (y2 - 8) + ' ' + (x2 + 7) + ',' + (y2 - 8) + ' ' + x2 + ',' + (y2 + 5) + '" fill="' + lineC + '" opacity="0.6"/>');
+        var sorted = loop.points.slice().sort(function (a, b) { return a.position - b.position; });
+        sorted.forEach(function (pt, i) {
+            var cx, cy; if (isH) { cx = x1 + (x2 - x1) * pt.position; cy = y1; } else { cx = x1; cy = y1 + (y2 - y1) * pt.position; }
+            var color = gphPartColor(pt.part);
+            var sel = gphState.selected && gphState.selected.type === 'point' && gphState.selected.id === pt.id;
+            var baseR = pt.highlighted ? 11 : 9;
+            parts.push('<g data-point-id="' + pt.id + '">');
+            if (pt.highlighted) parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (baseR + 5) + '" fill="none" stroke="' + color + '" stroke-width="1.5" opacity="0.4" stroke-dasharray="3,2"/>');
+            parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + baseR + '" fill="' + color + '" stroke="' + cardBg + '" stroke-width="2.5" class="point-circle ' + (sel ? 'selected' : '') + '"/>');
+            parts.push('<text x="' + cx + '" y="' + (cy + 3) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" pointer-events="none" font-family="JetBrains Mono,monospace">' + (i + 1) + '</text>');
+            var dir = i % 2 === 0 ? -1 : 1, dist = 30, titleText = pt.title || '(무제)', aw = Math.max(60, titleText.length * 7 + 16);
+            if (isH) {
+                var ly = cy + dir * dist, ty = cy + dir * (dist - 8), boxY = dir > 0 ? ly - 3 : ly - 13;
+                parts.push('<line x1="' + cx + '" y1="' + (cy + (dir > 0 ? baseR : -baseR)) + '" x2="' + cx + '" y2="' + ty + '" stroke="' + color + '" stroke-width="1" stroke-dasharray="2,2" opacity="0.7"/>');
+                parts.push('<rect x="' + (cx - aw / 2) + '" y="' + boxY + '" width="' + aw + '" height="18" fill="' + cardBg + '" stroke="' + color + '" stroke-width="1" rx="3"/>');
+                parts.push('<text x="' + cx + '" y="' + (boxY + 12) + '" text-anchor="middle" font-size="11" font-weight="600" fill="' + color + '" font-family="Pretendard,sans-serif">' + gphEscX(titleText) + '</text>');
+            } else {
+                var lx = cx + dir * dist, tx = cx + dir * (dist - 8), anchor = dir > 0 ? 'start' : 'end', boxX = dir > 0 ? lx : lx - aw;
+                parts.push('<line x1="' + (cx + (dir > 0 ? baseR : -baseR)) + '" y1="' + cy + '" x2="' + tx + '" y2="' + cy + '" stroke="' + color + '" stroke-width="1" stroke-dasharray="2,2" opacity="0.7"/>');
+                parts.push('<rect x="' + boxX + '" y="' + (cy - 9) + '" width="' + aw + '" height="18" fill="' + cardBg + '" stroke="' + color + '" stroke-width="1" rx="3"/>');
+                parts.push('<text x="' + lx + '" y="' + (cy + 3) + '" text-anchor="' + anchor + '" font-size="11" font-weight="600" fill="' + color + '" font-family="Pretendard,sans-serif" dx="' + (dir > 0 ? 4 : -4) + '">' + gphEscX(titleText) + '</text>');
+            }
+            parts.push('</g>');
+        });
+        svg.innerHTML = parts.join('');
+        svg.querySelectorAll('[data-point-id]').forEach(function (g) {
+            var ptId = g.dataset.pointId, circle = g.querySelector('.point-circle');
+            gphPointDrag(circle, ptId, isH, x1, y1, x2, y2, w, h, svg);
+            gphTip(g, function () { var pp = (gphPayload(gphCurrent()).points || []).find(function (x) { return x.id === ptId; }); return pp ? { title: pp.title, meta: gphPartName(pp.part), body: pp.description } : null; });
+        });
+        svg.querySelectorAll('[data-hotspot="line"]').forEach(function (rect) {
+            rect.addEventListener('dblclick', function (e) { e.stopPropagation(); var r = svg.getBoundingClientRect(), pos; if (isH) { var mx = (e.clientX - r.left) * (w / r.width); pos = (mx - x1) / (x2 - x1); } else { var my = (e.clientY - r.top) * (h / r.height); pos = (my - y1) / (y2 - y1); } pos = Math.max(0.05, Math.min(0.95, pos)); gphAddPoint(pos); });
+        });
+        svg.onclick = function (e) { if (e.target === svg || (e.target.classList && e.target.classList.contains('add-hotspot'))) { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); } };
+    }
+    function gphPointDrag(circle, ptId, isH, x1, y1, x2, y2, w, h, svg) {
+        var down = null, isDrag = false;
+        circle.addEventListener('mousedown', function (e) { e.stopPropagation(); down = { x: e.clientX, y: e.clientY }; isDrag = false; document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); });
+        circle.addEventListener('click', function (e) { if (isDrag) return; e.stopPropagation(); gphState.selected = { type: 'point', id: ptId }; gphRenderCanvas(); gphRenderPanel(); });
+        function mv(e) {
+            if (!down) return; if (Math.abs(e.clientX - down.x) < 4 && Math.abs(e.clientY - down.y) < 4 && !isDrag) return; isDrag = true;
+            var d = gphCurrent(); if (!d) return; var pt = gphPayload(d).points.find(function (x) { return x.id === ptId; }); if (!pt) return;
+            var r = svg.getBoundingClientRect(), pos;
+            if (isH) pos = ((e.clientX - r.left) * (w / r.width) - x1) / (x2 - x1); else pos = ((e.clientY - r.top) * (h / r.height) - y1) / (y2 - y1);
+            pt.position = Math.max(0.02, Math.min(0.98, pos)); gphRenderCanvas(); gphSave(d);
+            var pi = document.getElementById('gphPtPos'); if (pi) pi.value = pt.position.toFixed(2);
+        }
+        function up() { down = null; setTimeout(function () { isDrag = false; }, 50); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+    }
+
+    // ===== Graph =====
+    function gphRenderGraphCanvas(d, loop, svg) {
+        var w = svg.clientWidth || 1200, h = svg.clientHeight || 600;
+        var minX = 0, minY = 0, maxX = w, maxY = h;
+        if (loop.nodes.length) { minX = Math.min.apply(null, loop.nodes.map(function (n) { return n.x; })) - 50; minY = Math.min.apply(null, loop.nodes.map(function (n) { return n.y; })) - 50; maxX = Math.max.apply(null, loop.nodes.map(function (n) { return n.x + n.w; })) + 50; maxY = Math.max.apply(null, loop.nodes.map(function (n) { return n.y + n.h; })) + 50; }
+        var cw = Math.max(maxX - minX, w), ch = Math.max(maxY - minY, h);
+        svg.setAttribute('viewBox', minX + ' ' + minY + ' ' + cw + ' ' + ch);
+        var parts = [], as = 10;
+        parts.push('<defs>');
+        ['ai', 'terrain', 'scenario', 'planning', 'shared', 'extra1', 'extra2', 'neutral'].forEach(function (pp) { var color = pp === 'neutral' ? gphCssVar('--c-text3') : gphPartColor(pp); parts.push('<marker id="gph-arrow-' + pp + '" viewBox="0 0 ' + as + ' ' + as + '" refX="' + (as - 1) + '" refY="' + (as / 2) + '" markerWidth="' + as + '" markerHeight="' + as + '" orient="auto-start-reverse"><path d="M 0 0 L ' + as + ' ' + (as / 2) + ' L 0 ' + as + ' z" fill="' + color + '"/></marker>'); });
+        parts.push('</defs>');
+        parts.push('<rect class="add-hotspot" x="' + minX + '" y="' + minY + '" width="' + cw + '" height="' + ch + '" data-hotspot="empty" fill="transparent"/>');
+        var textC = gphCssVar('--c-text'), mutedC = gphCssVar('--c-text2'), cardBg = gphCssVar('--c-card');
+        loop.edges.forEach(function (edge) {
+            var from = loop.nodes.find(function (n) { return n.id === edge.from; }), to = loop.nodes.find(function (n) { return n.id === edge.to; }); if (!from || !to) return;
+            var strokeColor = gphPartColor(from.part), styleType = edge.style || 'curve';
+            var path = gphEdgePath(from, to, styleType);
+            var sel = gphState.selected && gphState.selected.type === 'edge' && gphState.selected.id === edge.id;
+            var dash = edge.style === 'dashed' ? '6,4' : '';
+            parts.push('<g data-edge-id="' + edge.id + '">');
+            parts.push('<path class="edge-hit" d="' + path + '"/>');
+            parts.push('<path class="edge-path ' + (sel ? 'selected' : '') + '" d="' + path + '" stroke="' + strokeColor + '" stroke-width="' + (sel ? 4 : 2.2) + '" stroke-dasharray="' + dash + '" marker-end="url(#gph-arrow-' + from.part + ')"/>');
+            if (edge.label) { var mid = gphMid(from, to); var lw = edge.label.length * 7 + 14; parts.push('<rect x="' + (mid.x - lw / 2) + '" y="' + (mid.y - 9) + '" width="' + lw + '" height="18" fill="' + cardBg + '" stroke="' + strokeColor + '" stroke-width="1" rx="3" opacity="0.95"/>'); parts.push('<text x="' + mid.x + '" y="' + (mid.y + 3) + '" text-anchor="middle" font-size="11" font-weight="500" fill="' + strokeColor + '" font-family="Pretendard,sans-serif" pointer-events="none">' + gphEscX(edge.label) + '</text>'); }
+            parts.push('</g>');
+        });
+        loop.nodes.forEach(function (node) {
+            var color = gphPartColor(node.part);
+            var sel = gphState.selected && gphState.selected.type === 'node' && gphState.selected.id === node.id;
+            var connSrc = gphState.connecting && gphState.connecting.sourceNodeId === node.id;
+            parts.push('<g class="node-group" data-node-id="' + node.id + '" transform="translate(' + node.x + ',' + node.y + ')">');
+            if (node.highlighted) parts.push('<rect x="-4" y="-4" width="' + (node.w + 8) + '" height="' + (node.h + 8) + '" rx="11" fill="none" stroke="' + color + '" stroke-width="1.5" opacity="0.35" stroke-dasharray="4,3"/>');
+            var rc = ['node-rect']; if (sel) rc.push('selected'); if (connSrc) rc.push('connecting-source');
+            parts.push('<rect class="' + rc.join(' ') + '" width="' + node.w + '" height="' + node.h + '" rx="7" fill="' + cardBg + '" stroke="' + color + '" stroke-width="2"/>');
+            parts.push('<rect x="0" y="0" width="4" height="' + node.h + '" rx="2" fill="' + color + '"/>');
+            var yo = 22;
+            parts.push('<text x="14" y="' + yo + '" font-family="Pretendard,sans-serif" font-size="13" font-weight="700" fill="' + color + '" pointer-events="none">' + gphEscX(node.title || '(무제)') + '</text>'); yo += 18;
+            if (node.meta) { parts.push('<text x="14" y="' + yo + '" font-family="JetBrains Mono,monospace" font-size="11" fill="' + mutedC + '" pointer-events="none">' + gphEscX(node.meta) + '</text>'); yo += 16; }
+            if (node.body) { var lines = node.body.split('\n'); var lh = 14; for (var i = 0; i < lines.length; i++) { var maxChars = Math.floor((node.w - 28) / 6.5); var ln = lines[i].length > maxChars ? lines[i].slice(0, maxChars - 1) + '…' : lines[i]; if (yo + lh > node.h - 4) break; parts.push('<text x="14" y="' + yo + '" font-family="Pretendard,sans-serif" font-size="11.5" fill="' + textC + '" pointer-events="none">' + gphEscX(ln) + '</text>'); yo += lh; } }
+            parts.push('<g class="node-connector" data-connector-source="' + node.id + '"><circle cx="' + node.w + '" cy="' + (node.h / 2) + '" r="9" fill="' + color + '" stroke="' + cardBg + '" stroke-width="2"/><text x="' + node.w + '" y="' + (node.h / 2 + 4) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" pointer-events="none" font-family="JetBrains Mono,monospace">→</text></g>');
+            parts.push('</g>');
+        });
+        svg.innerHTML = parts.join('');
+        svg.querySelectorAll('[data-hotspot="empty"]').forEach(function (rect) { rect.addEventListener('dblclick', function (e) { var r = svg.getBoundingClientRect(); var x = minX + (e.clientX - r.left) * (cw / r.width); var y = minY + (e.clientY - r.top) * (ch / r.height); gphAddNode(x, y); }); });
+        svg.querySelectorAll('.node-group').forEach(function (g) {
+            var nodeId = g.dataset.nodeId;
+            gphNodeDrag(g, nodeId, svg, minX, minY, cw, ch);
+            gphTip(g, function () { var n = (gphPayload(gphCurrent()).nodes || []).find(function (x) { return x.id === nodeId; }); return n ? { title: n.title, meta: (n.meta || '') + ' · ' + gphPartName(n.part), body: n.body } : null; });
+            var conn = g.querySelector('[data-connector-source]');
+            if (conn) conn.addEventListener('click', function (e) { e.stopPropagation(); if (gphState.connecting && gphState.connecting.sourceNodeId === nodeId) gphState.connecting = null; else gphState.connecting = { sourceNodeId: nodeId }; gphUpdateConnecting(); gphRenderCanvas(); });
+        });
+        svg.querySelectorAll('.node-rect').forEach(function (rect) {
+            rect.addEventListener('click', function (e) { e.stopPropagation(); var nodeId = rect.closest('.node-group').dataset.nodeId; if (gphState.connecting && gphState.connecting.sourceNodeId !== nodeId) { gphAddEdge(gphState.connecting.sourceNodeId, nodeId); gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas(); } else if (!gphState.connecting) { gphState.selected = { type: 'node', id: nodeId }; gphRenderCanvas(); gphRenderPanel(); } });
+        });
+        svg.querySelectorAll('[data-edge-id]').forEach(function (g) {
+            var edgeId = g.dataset.edgeId;
+            g.addEventListener('click', function (e) { e.stopPropagation(); gphState.selected = { type: 'edge', id: edgeId }; gphRenderCanvas(); gphRenderPanel(); });
+            gphTip(g, function () { var p = gphPayload(gphCurrent()); var ed = p.edges.find(function (x) { return x.id === edgeId; }); if (!ed) return null; var fr = p.nodes.find(function (n) { return n.id === ed.from; }), to = p.nodes.find(function (n) { return n.id === ed.to; }); return { title: ed.label || ((fr ? fr.title : '?') + ' → ' + (to ? to.title : '?')), meta: '엣지 · ' + (ed.style || 'curve'), body: '' }; });
+        });
+        svg.onclick = function (e) { if (e.target === svg || (e.target.classList && e.target.classList.contains('add-hotspot'))) { if (gphState.connecting) { gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas(); } else { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); } } };
+    }
+    function gphEdgePath(from, to, style) {
+        var fcx = from.x + from.w / 2, fcy = from.y + from.h / 2, tcx = to.x + to.w / 2, tcy = to.y + to.h / 2;
+        var exit = gphAnchor(from, tcx, tcy), entry = gphAnchor(to, fcx, fcy);
+        if (style === 'straight') return 'M ' + exit.x + ' ' + exit.y + ' L ' + entry.x + ' ' + entry.y;
+        if (style === 'orthogonal') { var dx = entry.x - exit.x, dy = entry.y - exit.y; if (Math.abs(dx) > Math.abs(dy)) { var mx = exit.x + dx / 2; return 'M ' + exit.x + ' ' + exit.y + ' L ' + mx + ' ' + exit.y + ' L ' + mx + ' ' + entry.y + ' L ' + entry.x + ' ' + entry.y; } else { var my = exit.y + dy / 2; return 'M ' + exit.x + ' ' + exit.y + ' L ' + exit.x + ' ' + my + ' L ' + entry.x + ' ' + my + ' L ' + entry.x + ' ' + entry.y; } }
+        var dx2 = entry.x - exit.x, dy2 = entry.y - exit.y, dist = Math.sqrt(dx2 * dx2 + dy2 * dy2), off = Math.min(120, dist / 2);
+        var c1x = exit.x, c1y = exit.y, c2x = entry.x, c2y = entry.y;
+        if (exit.side === 'right') c1x += off; else if (exit.side === 'left') c1x -= off; else if (exit.side === 'bottom') c1y += off; else if (exit.side === 'top') c1y -= off;
+        if (entry.side === 'right') c2x += off; else if (entry.side === 'left') c2x -= off; else if (entry.side === 'bottom') c2y += off; else if (entry.side === 'top') c2y -= off;
+        return 'M ' + exit.x + ' ' + exit.y + ' C ' + c1x + ' ' + c1y + ', ' + c2x + ' ' + c2y + ', ' + entry.x + ' ' + entry.y;
+    }
+    function gphAnchor(node, tx, ty) {
+        var cx = node.x + node.w / 2, cy = node.y + node.h / 2, dx = tx - cx, dy = ty - cy;
+        if (dx === 0 && dy === 0) return { x: cx, y: cy, side: 'right' };
+        var hw = node.w / 2, hh = node.h / 2, adx = Math.abs(dx), ady = Math.abs(dy);
+        var tH = adx > 0 ? hw / adx : Infinity, tV = ady > 0 ? hh / ady : Infinity;
+        if (tH < tV) return { x: cx + (dx > 0 ? hw : -hw), y: cy + dy * tH, side: dx > 0 ? 'right' : 'left' };
+        return { x: cx + dx * tV, y: cy + (dy > 0 ? hh : -hh), side: dy > 0 ? 'bottom' : 'top' };
+    }
+    function gphMid(from, to) { return { x: (from.x + from.w / 2 + to.x + to.w / 2) / 2, y: (from.y + from.h / 2 + to.y + to.h / 2) / 2 }; }
+    function gphNodeDrag(g, nodeId, svg, vbX, vbY, vbW, vbH) {
+        var rect = g.querySelector('.node-rect'), down = null, isDrag = false, startPos = null;
+        rect.addEventListener('mousedown', function (e) { e.stopPropagation(); if (gphState.connecting) return; down = { x: e.clientX, y: e.clientY }; isDrag = false; var n = gphPayload(gphCurrent()).nodes.find(function (x) { return x.id === nodeId; }); if (n) startPos = { x: n.x, y: n.y }; document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); });
+        function mv(e) { if (!down || !startPos) return; var dx = e.clientX - down.x, dy = e.clientY - down.y; if (!isDrag && Math.abs(dx) < 4 && Math.abs(dy) < 4) return; isDrag = true; var r = svg.getBoundingClientRect(); var d = gphCurrent(); if (!d) return; var n = gphPayload(d).nodes.find(function (x) { return x.id === nodeId; }); if (!n) return; n.x = startPos.x + dx * (vbW / r.width); n.y = startPos.y + dy * (vbH / r.height); gphRenderCanvas(); gphSave(d); var xi = document.getElementById('gphNodeX'), yi = document.getElementById('gphNodeY'); if (xi) xi.value = Math.round(n.x); if (yi) yi.value = Math.round(n.y); }
+        function up() { down = null; startPos = null; setTimeout(function () { isDrag = false; }, 50); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+    }
+    function gphUpdateConnecting() { var ind = document.getElementById('gph-connecting'); if (!ind) return; if (gphState.connecting) { var n = gphPayload(gphCurrent()).nodes.find(function (x) { return x.id === gphState.connecting.sourceNodeId; }); ind.firstChild.textContent = '엣지 추가 — "' + (n ? n.title : '') + '" → 대상 노드 클릭 '; ind.classList.add('show'); } else ind.classList.remove('show'); }
+
+    // ===== Tooltip =====
+    function gphTip(el, getData) {
+        el.addEventListener('mouseenter', function (e) { var d = getData(); if (!d || (!d.title && !d.body)) return; var tt = document.getElementById('gph-tooltip'); var ps = []; if (d.title) ps.push('<div class="tt-title">' + gphEsc(d.title) + '</div>'); if (d.meta) ps.push('<div class="tt-meta">' + gphEsc(d.meta) + '</div>'); if (d.body) ps.push('<div>' + gphEsc(d.body) + '</div>'); tt.innerHTML = ps.join(''); tt.classList.add('show'); gphPosTip(e); });
+        el.addEventListener('mousemove', function (e) { var tt = document.getElementById('gph-tooltip'); if (tt.classList.contains('show')) gphPosTip(e); });
+        el.addEventListener('mouseleave', function () { document.getElementById('gph-tooltip').classList.remove('show'); });
+    }
+    function gphPosTip(e) { var tt = document.getElementById('gph-tooltip'), c = document.getElementById('gph-canvas-wrap'), cr = c.getBoundingClientRect(); var x = e.clientX - cr.left + 14, y = e.clientY - cr.top + 14; var tr = tt.getBoundingClientRect(); if (x + tr.width > cr.width - 10) x = e.clientX - cr.left - tr.width - 10; if (y + tr.height > cr.height - 10) y = e.clientY - cr.top - tr.height - 10; tt.style.left = x + 'px'; tt.style.top = y + 'px'; }
+
+    // ===== Actions =====
+    function gphAddPoint(position) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode !== 'linear') return; var id = gphUid('p'); p.points.push({ id: id, position: Math.max(0.02, Math.min(0.98, position)), part: 'ai', title: '새 포인트', description: '', highlighted: false }); gphState.selected = { type: 'point', id: id }; gphSave(d); gphRender(); setTimeout(function () { var el = document.getElementById('gphPtTitle'); if (el) { el.focus(); el.select(); } }, 50); }
+    function gphAddNode(x, y) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode !== 'graph') return; var id = gphUid('n'); p.nodes.push({ id: id, x: x, y: y, w: 200, h: 80, part: 'ai', title: '새 노드', meta: '', body: '', highlighted: false }); gphState.selected = { type: 'node', id: id }; gphSave(d); gphRender(); setTimeout(function () { var el = document.getElementById('gphNodeTitle'); if (el) { el.focus(); el.select(); } }, 50); }
+    function gphAddEdge(fromId, toId) { var d = gphCurrent(); if (!d) return; var p = gphPayload(d); if (p.mode !== 'graph') return; if (p.edges.some(function (e) { return e.from === fromId && e.to === toId; })) { showToast('이미 동일 엣지가 있습니다.', 'info'); return; } var id = gphUid('e'); p.edges.push({ id: id, from: fromId, to: toId, label: '', style: 'curve' }); gphState.selected = { type: 'edge', id: id }; gphSave(d); gphRender(); }
+    function gphDeleteSelected() { if (!gphState.selected) return; var d = gphCurrent(); if (!d) return; var p = gphPayload(d), s = gphState.selected; if (s.type === 'point') p.points = p.points.filter(function (x) { return x.id !== s.id; }); else if (s.type === 'node') { p.nodes = p.nodes.filter(function (x) { return x.id !== s.id; }); p.edges = p.edges.filter(function (e) { return e.from !== s.id && e.to !== s.id; }); } else if (s.type === 'edge') p.edges = p.edges.filter(function (x) { return x.id !== s.id; }); gphState.selected = null; gphSave(d); gphRender(); }
+
+    // ===== Bottom Panel =====
+    function gphPartSelect(id, cur) { var opts = [['ai', 'AI'], ['terrain', '지형'], ['scenario', '시나리오'], ['planning', '기획'], ['shared', '공유'], ['extra1', 'Extra1'], ['extra2', 'Extra2']]; return '<select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '" ' + (cur === o[0] ? 'selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; }
+    function gphRenderPanel() {
+        var panel = document.getElementById('gph-panel'); if (!panel) return;
+        var d = gphCurrent();
+        if (!d) { panel.innerHTML = '<div class="gph-panel-empty">그래프를 선택하거나 새로 만드세요</div>'; return; }
+        var p = gphPayload(d);
+        if (!gphState.selected) { gphPanelInfo(panel, d, p); return; }
+        if (gphState.selected.type === 'point') gphPanelPoint(panel, d, p);
+        else if (gphState.selected.type === 'node') gphPanelNode(panel, d, p);
+        else if (gphState.selected.type === 'edge') gphPanelEdge(panel, d, p);
+    }
+    function gphPanelInfo(panel, d, p) {
+        var isG = p.mode === 'graph', items = isG ? p.nodes : p.points;
+        var pc = {}; items.forEach(function (x) { pc[x.part] = (pc[x.part] || 0) + 1; });
+        var pl = Object.keys(pc).map(function (k) { return '<span style="display:inline-block;padding:2px 8px;border-radius:9px;font-size:11px;font-weight:700;color:#fff;margin-right:4px;background:' + gphPartColor(k) + '">' + gphPartName(k) + ' ' + pc[k] + '</span>'; }).join('');
+        var hi = items.filter(function (x) { return x.highlighted; }).length;
+        var tip = isG ? '<strong>편집:</strong> 빈 곳 <code>더블클릭</code> 새 노드 · 노드 호버 <code>→</code> 클릭 후 대상 클릭 = 엣지 · <code>Delete</code> 삭제' : '<strong>편집:</strong> 라인 빈 곳 <code>더블클릭</code> 새 포인트 · <code>드래그</code> 이동 · <code>Delete</code> 삭제';
+        panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">정보 — ' + gphEsc(d.title) + '</span><div style="display:flex;gap:6px"><button class="gph-btn gph-btn-sm" onclick="' + (isG ? 'gphAddNode(60,60)' : 'gphAddPoint(0.5)') + '">＋ ' + (isG ? '노드' : '포인트') + '</button><button class="gph-btn gph-btn-sm gph-btn-danger" onclick="gphDeleteDoc(\'' + d.id + '\')">그래프 삭제</button></div></div>'
+            + '<div class="gph-stats"><div><div class="gph-stat-l">' + (isG ? '노드' : '포인트') + '</div><div class="gph-stat-v">' + items.length + '</div></div>'
+            + (isG ? '<div><div class="gph-stat-l">엣지</div><div class="gph-stat-v">' + p.edges.length + '</div></div>' : '')
+            + '<div><div class="gph-stat-l">강조</div><div class="gph-stat-v">' + hi + '</div></div>'
+            + '<div style="flex:1"><div class="gph-stat-l">파트 분포</div><div style="margin-top:3px">' + (pl || '<span style="color:var(--c-text3)">-</span>') + '</div></div></div>'
+            + '<div class="gph-tip">' + tip + '</div>';
+    }
+    function gphPanelPoint(panel, d, p) {
+        var pt = p.points.find(function (x) { return x.id === gphState.selected.id; }); if (!pt) { gphState.selected = null; gphRenderPanel(); return; }
+        panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">포인트 <span class="gph-pt-dim">— ' + gphEsc(pt.title) + '</span></span><div style="display:flex;gap:6px;align-items:center"><label class="gph-chk"><input type="checkbox" id="gphPtHi" ' + (pt.highlighted ? 'checked' : '') + '> 강조</label><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphPtDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphPtClose">닫기</button></div></div>'
+            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphPtTitle" value="' + gphEsc(pt.title) + '"></div><div class="gph-fr"><label>파트</label>' + gphPartSelect('gphPtPart', pt.part) + '</div><div class="gph-fr full"><label>위치 (0.02~0.98)</label><input type="number" id="gphPtPos" value="' + pt.position.toFixed(2) + '" step="0.01" min="0.02" max="0.98"></div><div class="gph-fr full"><label>설명</label><textarea id="gphPtDesc" rows="3">' + gphEsc(pt.description || '') + '</textarea></div></div>';
+        document.getElementById('gphPtTitle').oninput = function (e) { pt.title = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphPtPart').onchange = function (e) { pt.part = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphPtPos').onchange = function (e) { var v = parseFloat(e.target.value); if (isNaN(v)) return; pt.position = Math.max(0.02, Math.min(0.98, v)); e.target.value = pt.position.toFixed(2); gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphPtDesc').oninput = function (e) { pt.description = e.target.value; gphSave(d); };
+        document.getElementById('gphPtHi').onchange = function (e) { pt.highlighted = e.target.checked; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphPtDel').onclick = gphDeleteSelected;
+        document.getElementById('gphPtClose').onclick = function () { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); };
+    }
+    function gphPanelNode(panel, d, p) {
+        var n = p.nodes.find(function (x) { return x.id === gphState.selected.id; }); if (!n) { gphState.selected = null; gphRenderPanel(); return; }
+        panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">노드 <span class="gph-pt-dim">— ' + gphEsc(n.title) + '</span></span><div style="display:flex;gap:6px;align-items:center"><label class="gph-chk"><input type="checkbox" id="gphNodeHi" ' + (n.highlighted ? 'checked' : '') + '> 강조</label><button class="gph-btn gph-btn-sm" id="gphNodeEdge">＋ 엣지</button><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphNodeDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphNodeClose">닫기</button></div></div>'
+            + '<div class="gph-form"><div class="gph-fr"><label>제목</label><input type="text" id="gphNodeTitle" value="' + gphEsc(n.title || '') + '"></div><div class="gph-fr"><label>파트 (색상)</label>' + gphPartSelect('gphNodePart', n.part) + '</div><div class="gph-fr"><label>메타</label><input type="text" id="gphNodeMeta" value="' + gphEsc(n.meta || '') + '"></div><div class="gph-fr"><label>크기 W×H</label><div style="display:flex;gap:4px"><input type="number" id="gphNodeW" value="' + n.w + '" min="80" max="600" step="10" style="width:50%"><input type="number" id="gphNodeH" value="' + n.h + '" min="50" max="400" step="10" style="width:50%"></div></div><div class="gph-fr"><label>위치 X,Y</label><div style="display:flex;gap:4px"><input type="number" id="gphNodeX" value="' + Math.round(n.x) + '" step="10" style="width:50%"><input type="number" id="gphNodeY" value="' + Math.round(n.y) + '" step="10" style="width:50%"></div></div><div class="gph-fr full"><label>본문</label><textarea id="gphNodeBody" rows="4">' + gphEsc(n.body || '') + '</textarea></div></div>';
+        document.getElementById('gphNodeTitle').oninput = function (e) { n.title = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphNodePart').onchange = function (e) { n.part = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphNodeMeta').oninput = function (e) { n.meta = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphNodeBody').oninput = function (e) { n.body = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphNodeHi').onchange = function (e) { n.highlighted = e.target.checked; gphSave(d); gphRenderCanvas(); };
+        ['W', 'H', 'X', 'Y'].forEach(function (k) { document.getElementById('gphNode' + k).onchange = function (e) { var v = parseFloat(e.target.value); if (isNaN(v)) return; n[k.toLowerCase()] = v; gphSave(d); gphRenderCanvas(); }; });
+        document.getElementById('gphNodeEdge').onclick = function () { gphState.connecting = { sourceNodeId: n.id }; gphUpdateConnecting(); gphRenderCanvas(); };
+        document.getElementById('gphNodeDel').onclick = gphDeleteSelected;
+        document.getElementById('gphNodeClose').onclick = function () { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); };
+    }
+    function gphPanelEdge(panel, d, p) {
+        var ed = p.edges.find(function (x) { return x.id === gphState.selected.id; }); if (!ed) { gphState.selected = null; gphRenderPanel(); return; }
+        var fr = p.nodes.find(function (n) { return n.id === ed.from; }), to = p.nodes.find(function (n) { return n.id === ed.to; }), sv = ed.style || 'curve';
+        panel.innerHTML = '<div class="gph-panel-head"><span class="gph-panel-title">엣지 <span class="gph-pt-dim">— ' + gphEsc(fr ? fr.title : '?') + ' → ' + gphEsc(to ? to.title : '?') + '</span></span><div style="display:flex;gap:6px"><button class="gph-btn gph-btn-sm gph-btn-danger" id="gphEdgeDel">삭제</button><button class="gph-btn gph-btn-sm" id="gphEdgeClose">닫기</button></div></div>'
+            + '<div class="gph-form"><div class="gph-fr full"><label>라벨</label><input type="text" id="gphEdgeLabel" value="' + gphEsc(ed.label || '') + '" placeholder="(선택)"></div><div class="gph-fr"><label>스타일</label><select id="gphEdgeStyle"><option value="curve" ' + (sv === 'curve' ? 'selected' : '') + '>곡선</option><option value="straight" ' + (sv === 'straight' ? 'selected' : '') + '>직선</option><option value="orthogonal" ' + (sv === 'orthogonal' ? 'selected' : '') + '>직각</option><option value="dashed" ' + (sv === 'dashed' ? 'selected' : '') + '>점선</option></select></div></div>';
+        document.getElementById('gphEdgeLabel').oninput = function (e) { ed.label = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphEdgeStyle').onchange = function (e) { ed.style = e.target.value; gphSave(d); gphRenderCanvas(); };
+        document.getElementById('gphEdgeDel').onclick = gphDeleteSelected;
+        document.getElementById('gphEdgeClose').onclick = function () { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); };
+    }
+
+    // 키보드 + 리사이즈
+    document.addEventListener('keydown', function (e) {
+        if (currentView !== 'graph') return;
+        var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.key === 'Delete' || e.key === 'Backspace') { if (gphState.selected) { e.preventDefault(); gphDeleteSelected(); } }
+        else if (e.key === 'Escape') { if (gphState.connecting) { gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas(); } else if (gphState.selected) { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); } }
+    });
+    window.addEventListener('resize', function () { if (currentView === 'graph') gphRenderCanvas(); });
     </script>
 </body>
 </html>
