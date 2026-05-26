@@ -2203,15 +2203,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         </button>
         <button onclick="switchView('docs')" id="mob-tab-docs" class="mob-tab">
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-            <span class="mob-lbl">위키</span>
+            <span class="mob-lbl">문서</span>
         </button>
         <button onclick="switchView('canon')" id="mob-tab-canon" class="mob-tab">
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
-            <span class="mob-lbl">정전</span>
+            <span class="mob-lbl">게임위키</span>
         </button>
         <button onclick="openReviewInbox()" class="mob-tab">
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            <span class="mob-lbl">결정</span>
+            <span class="mob-lbl">결재함</span>
             <span class="mob-badge" id="mob-review-badge">0</span>
         </button>
         <button onclick="openMoreSheet()" class="mob-tab">
@@ -2327,9 +2327,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <span class="cs-label" style="margin-left:auto;font-size:10px;opacity:.55;">▾</span>
             </button>
             <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
-            <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="위키 문서"><span class="cs-ico">📚</span><span class="cs-label">위키 문서</span></button>
-            <button class="cs-nav" id="cs-nav-canon" onclick="switchView('canon')" title="게임 정전(Canon)"><span class="cs-ico">🎮</span><span class="cs-label">게임 정전</span></button>
-            <button class="cs-nav" onclick="openReviewInbox()" title="결정/리뷰"><span class="cs-ico">🗳</span><span class="cs-label">결정/리뷰</span><span class="cs-badge" id="cs-review-badge">0</span></button>
+            <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="문서"><span class="cs-ico">📚</span><span class="cs-label">문서</span></button>
+            <button class="cs-nav" id="cs-nav-canon" onclick="switchView('canon')" title="게임 위키"><span class="cs-ico">🎮</span><span class="cs-label">게임 위키</span></button>
+            <button class="cs-nav" id="cs-nav-review" onclick="openReviewInbox()" title="결재함"><span class="cs-ico">🗳</span><span class="cs-label">결재함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
             <div class="cs-section cs-label">도구</div>
             <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
             <button class="cs-nav" onclick="openChangeLog()" title="변경 로그"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그</span></button>
@@ -2354,7 +2354,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                                box-shadow:0 1px 3px rgba(0,0,0,0.12);transition:all 0.2s;">칸반</button>
                     <button onclick="switchView('docs')" id="tab-btn-docs"
                         style="font-size:13px;font-weight:600;padding:5px 14px;border-radius:7px;border:none;cursor:pointer;
-                               background:transparent;color:var(--ios-label2);transition:all 0.2s;">위키</button>
+                               background:transparent;color:var(--ios-label2);transition:all 0.2s;">문서</button>
                 </div>
                 <span id="db-status" style="font-size:11px;font-weight:600;color:var(--ios-label3);display:flex;align-items:center;gap:4px;">
                     🟡
@@ -2371,7 +2371,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <span id="header-online-count">1</span>
                 </div>
                 <!-- [v40 Day3 청크2] 결정/리뷰 인박스 + 알림 뱃지 -->
-                <button onclick="openReviewInbox()" class="ios-topbar-btn" title="결정/리뷰" style="position:relative;">
+                <button onclick="openReviewInbox()" class="ios-topbar-btn" title="결재함" style="position:relative;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                     <span id="review-badge-count" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 3px;background:#dc2626;color:white;border-radius:8px;font-size:10px;font-weight:800;align-items:center;justify-content:center;">0</span>
                 </button>
@@ -2406,7 +2406,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <!-- PC 탭 -->
             <div class="flex gap-6 mb-0 border-b-2 border-gray-200" style="align-items:center;">
                 <button onclick="switchView('kanban')" id="pc-tab-kanban" class="text-xl font-black text-blue-600 border-b-4 border-blue-600 pb-2 px-2 transition-colors">📋 칸반 보드 (Dashboard)</button>
-                <button onclick="switchView('docs')" id="pc-tab-docs" class="text-xl font-black text-gray-400 hover:text-gray-700 pb-2 px-2 transition-colors border-b-4 border-transparent">📚 위키 문서 (Wiki Docs)</button>
+                <button onclick="switchView('docs')" id="pc-tab-docs" class="text-xl font-black text-gray-400 hover:text-gray-700 pb-2 px-2 transition-colors border-b-4 border-transparent">📚 문서</button>
                 <div style="flex:1;"></div>
                 <button id="header-toggle-btn" onclick="toggleHeaderCollapse()" title="헤더 숨기기/보이기" style="margin-bottom:4px;padding:3px 10px;font-size:12px;font-weight:600;background:rgba(0,0,0,0.06);border:none;border-radius:6px;cursor:pointer;color:#6f6b5d;"><span id="header-toggle-label">▲ 헤더</span></button>
             </div>
@@ -2512,7 +2512,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="canon-wrap">
                 <div class="canon-list-pane">
                     <div class="canon-list-head">
-                        <span>🎮 게임 정전</span>
+                        <span>🎮 게임 위키</span>
                         <button onclick="createCanonDoc()" class="canon-add">+ 새 문서</button>
                     </div>
                     <input type="text" id="canon-search" oninput="renderCanonView()" placeholder="제목 검색..." class="canon-search">
@@ -2521,7 +2521,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="canon-editor-pane">
                     <div id="canon-empty" class="canon-empty">
                         <div style="font-size:40px;">🎮</div>
-                        <p>왼쪽에서 정전(canon) 문서를 선택하거나 <b>새로 만드세요</b>.</p>
+                        <p>왼쪽에서 게임 위키 문서를 선택하거나 <b>새로 만드세요</b>.</p>
                         <p style="font-size:12px;opacity:.7;">실제 게임과 일치하는 조합/게임루프 등을 버전관리·승인과 함께 보관합니다. (프로젝트별)</p>
                     </div>
                     <div id="canon-editor" class="canon-editor" style="display:none;">
@@ -2553,7 +2553,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="editor-split-pane relative">
                 
                 <div id="doc-sidebar-mini" class="hidden mr-4 pt-2">
-                    <button onclick="toggleDocSidebar()" class="flex items-center gap-2 bg-[#e8eef6] hover:bg-[#d8e2ed] text-[#4d4a44] px-3 py-2 rounded-full shadow-sm transition-colors border border-gray-200" title="문서 보관함 열기">
+                    <button onclick="toggleDocSidebar()" class="flex items-center gap-2 bg-[#e8eef6] hover:bg-[#d8e2ed] text-[#4d4a44] px-3 py-2 rounded-full shadow-sm transition-colors border border-gray-200" title="문서 열기">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                         <span id="doc-sidebar-mini-count" class="font-bold text-base font-mono">0</span>
                     </button>
@@ -2563,7 +2563,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <!-- 문서 보관함 헤더 (프로젝트 변경 지원) -->
                     <div class="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl flex justify-between items-center">
                         <div class="cursor-pointer hover:bg-gray-200 px-2 py-1 -ml-2 rounded flex items-center gap-1 transition-colors" onclick="openProjectModal()" title="프로젝트 변경">
-                            <span class="font-black text-gray-800" id="current-project-name">📂 문서 보관함</span>
+                            <span class="font-black text-gray-800" id="current-project-name">📂 문서</span>
                             <span class="text-[10px] text-gray-500">▼</span>
                         </div>
                         <!-- [v35] 사이드바 검색 아이콘 — 프로젝트 변경 아이콘 옆 -->
@@ -2740,7 +2740,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     <div id="review-create-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('review-create-modal')">
         <div class="bg-white p-5 rounded-xl w-[480px] max-w-[92vw] shadow-2xl border border-gray-200 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-3 border-b pb-2">
-                <h2 class="text-lg font-black text-gray-800">🗳 결정 요청</h2>
+                <h2 class="text-lg font-black text-gray-800">🗳 결재 요청</h2>
                 <button onclick="closeModal('review-create-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
             </div>
             <div class="overflow-y-auto pr-1">
@@ -2771,15 +2771,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     <div id="review-inbox-modal" class="bg-black bg-opacity-60 z-[600] backdrop-blur-sm" style="display:none;" onclick="closeModal('review-inbox-modal')">
         <div class="bg-white p-5 rounded-xl w-[560px] max-w-[94vw] shadow-2xl border border-gray-200 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-3 border-b pb-2">
-                <h2 class="text-lg font-black text-gray-800">🗳 결정 / 리뷰</h2>
+                <h2 class="text-lg font-black text-gray-800">🗳 결재함</h2>
                 <div class="flex items-center gap-2">
-                    <button onclick="openReviewModal('decision',null,null)" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-100">+ 새 결정 요청</button>
+                    <button onclick="openReviewModal('decision',null,null)" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-100">+ 새 결재 요청</button>
                     <button onclick="closeModal('review-inbox-modal')" class="text-gray-400 hover:text-gray-800 font-bold text-xl">✕</button>
                 </div>
             </div>
             <p style="font-size:12px;color:var(--c-text2);background:var(--c-accent-soft);border-radius:8px;padding:8px 12px;margin-bottom:10px;line-height:1.5;">
                 팀 의사결정을 <b>투표(전체합의·다수결·특정인·강제)</b>로 처리하고, 결정 시 <b>03_결정 로그</b>에 ADR이 자동 생성됩니다.
-                보통은 <b>칸반 카드/위키 문서를 우클릭 → "결정 요청"</b> 으로 대상별 요청을 만드세요. (아래 + 버튼은 대상 없는 일반 결정용)
+                보통은 <b>칸반 카드/문서를 우클릭 → "결재 요청"</b> 으로 대상별 요청을 만드세요. (아래 + 버튼은 대상 없는 일반 결재용)
             </p>
             <div id="review-inbox-list" class="flex-1 overflow-y-auto pr-1" style="min-height:160px;display:flex;flex-direction:column;gap:8px;"></div>
         </div>
@@ -5294,7 +5294,7 @@ return data;
                             const mine = currentUser && mapped.proposerId === currentUser.id;
                             if (ev === 'INSERT' && !mine && mapped.status === 'pending') {
                                 playNotificationSound && playNotificationSound('comment');
-                                showToast(`🗳 새 결정 요청: ${mapped.reason ? mapped.reason.slice(0, 30) : mapped.type}`, 'info');
+                                showToast(`🗳 새 결재 요청: ${mapped.reason ? mapped.reason.slice(0, 30) : mapped.type}`, 'info');
                             } else if (ev === 'UPDATE' && prevStatus === 'pending' && mapped.status !== 'pending') {
                                 const label = { approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제 통과', expired: '⏰ 만료' }[mapped.status] || mapped.status;
                                 showToast(`결정 완료 — ${label}: ${mapped.reason ? mapped.reason.slice(0, 24) : mapped.type}`, 'info');
@@ -5428,7 +5428,7 @@ return data;
         
         function updateProjectTitle() {
             const proj = currentData.projects.find(p => p.id === activeProjectId);
-            document.getElementById('current-project-name').innerText = proj ? `📁 ${proj.name}` : '📂 문서 보관함';
+            document.getElementById('current-project-name').innerText = proj ? `📁 ${proj.name}` : '📂 문서';
             var cs = document.getElementById('cs-project-name'); // [v40] 사이드바 프로젝트명
             if (cs) cs.innerText = proj ? proj.name : '프로젝트';
         }
@@ -7416,7 +7416,7 @@ return data;
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','task')">+ 태스크</button>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','doc')">+ 문서</button>
                 <span class="link-sep"></span>
-                <button class="link-add-btn" onclick="openReviewModal('decision',null,'${doc.id}')">🗳 결정요청</button>
+                <button class="link-add-btn" onclick="openReviewModal('decision',null,'${doc.id}')">🗳 결재요청</button>
                 ${lockBtn}
                 ${doc.isLocked ? '<span style="font-size:11px;color:#92400e;font-weight:700;">🔒 잠김 — 편집하려면 변경 요청 승인 필요</span>' : ''}
                 ${taskChips}${docChips}${(!taskChips && !docChips) ? '<span class="linked-empty">연결 없음 — 버튼 또는 본문에 [[task:ID]]/[[doc:ID]]</span>' : ''}
@@ -7675,7 +7675,7 @@ return data;
             renderReviewBadge(); renderBoard();
             if (typeof renderReviewInbox === 'function') renderReviewInbox();
             if (currentView === 'docs') renderDocLinksBar();
-            if (!error) showToast(ruleType === 'force' ? '⚡ 강제 통과로 기록되었습니다.' : '🗳 결정 요청이 생성되었습니다.', 'success');
+            if (!error) showToast(ruleType === 'force' ? '⚡ 강제 통과로 기록되었습니다.' : '🗳 결재 요청이 생성되었습니다.', 'success');
         }
 
         async function castVote(reviewId, decision) {
@@ -7781,7 +7781,7 @@ return data;
             const list = (currentData.reviews || []).filter(r => r.targetTaskId === task.id);
             const chips = list.map(renderReviewChip).join('');
             return `<div class="linked-panel ${task.isCollapsed ? 'hidden' : ''}">
-                <div class="linked-panel-head">🗳 결정 <button class="link-add-btn" onclick="event.stopPropagation();openReviewModal('decision','${task.id}',null)">+ 결정 요청</button></div>
+                <div class="linked-panel-head">🗳 결재 <button class="link-add-btn" onclick="event.stopPropagation();openReviewModal('decision','${task.id}',null)">+ 결재 요청</button></div>
                 ${chips || '<span class="linked-empty">없음</span>'}
             </div>`;
         }
@@ -10079,7 +10079,7 @@ ${intrLog}
                 return;
             }
             if(!activeDocId) {
-                updateFileProgress('read', 'error', '먼저 위키 문서를 열어주세요.');
+                updateFileProgress('read', 'error', '먼저 문서를 열어주세요.');
                 showToast('먼저 위키 트리에서 문서를 열어주세요.', 'alert');
                 return;
             }
@@ -11639,7 +11639,7 @@ ${intrLog}
             var notif = document.createElement('div');
             notif.className = 'rt-notif doc-change';
             notif.innerHTML = '<div style="font-weight:700;margin-bottom:2px;">✏️ ' + who + ' 님이 수정</div>' +
-                '<div style="color:#44423c;">📄 ' + (docTitle || '위키 문서') + '</div>' +
+                '<div style="color:#44423c;">📄 ' + (docTitle || '문서') + '</div>' +
                 (diff ? '<div style="font-size:11px;color:#6f6b5d;margin-top:2px;">' + diff.substring(0,60) + '...</div>' : '') +
                 '<div style="font-size:10px;color:#b4afa3;margin-top:4px;">클릭하면 변경 로그 보기</div>';
             var _notifDocId = docId;
