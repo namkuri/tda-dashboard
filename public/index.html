@@ -3235,8 +3235,40 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
+        // [로그인 에러 노출] OAuth 리다이렉트가 ?error=/#error= 로 돌아온 경우 파싱
+        function _parseAuthRedirectError() {
+            try {
+                var sp = new URLSearchParams(location.search || '');
+                var hp = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+                var err = { error: sp.get('error') || hp.get('error') || '', code: sp.get('error_code') || hp.get('error_code') || '', desc: sp.get('error_description') || hp.get('error_description') || '' };
+                if (!err.error && !err.code && !err.desc) return null;
+                return err;
+            } catch (e) { return null; }
+        }
+        function _friendlyAuthError(err) {
+            var code = (err.code || '').toLowerCase();
+            var desc = err.desc ? decodeURIComponent(String(err.desc).replace(/\+/g, ' ')) : '';
+            if (code === 'signup_disabled' || /signups?\s+not\s+allowed/i.test(desc)) {
+                return '🚫 아직 등록되지 않은 계정입니다.\n이 대시보드는 신규 가입이 막힌 비공개 팀 전용입니다. 관리자에게 계정 등록(초대)을 요청하세요.';
+            }
+            if (code === 'otp_expired' || /expired/i.test(desc)) return '인증 링크가 만료되었습니다. 다시 로그인해 주세요.';
+            if (code === 'access_denied') return '로그인이 취소되었거나 거부되었습니다. 다시 시도해 주세요.' + (desc ? ('\n(' + desc + ')') : '');
+            return '로그인 실패' + (desc ? (': ' + desc) : (err.error ? (': ' + err.error) : '.'));
+        }
+        function _showAuthError(msg) {
+            var el = document.getElementById('auth-error');
+            if (!el) return;
+            el.style.display = 'block';
+            el.style.whiteSpace = 'pre-line'; // \n 줄바꿈 표시
+            el.textContent = msg;
+        }
+        function _cleanAuthErrorFromUrl() {
+            try { if (location.search || location.hash) history.replaceState(null, '', location.pathname); } catch (e) {}
+        }
         async function checkAuthOnLoad() {
             // [v40] 페이지 로드 시 호출 — 세션 있으면 통과, 없으면 로그인 모달 표시
+            // [로그인 에러 노출] SDK가 해시를 처리하기 전에 먼저 에러 파라미터 캡처
+            const _authUrlErr = _parseAuthRedirectError();
             const client = await ensureSupabaseClient();
             if (!client) {
                 // ANON_KEY 미설정 등 — 로그인 모달은 보여주되 에러 안내
@@ -3252,6 +3284,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 return true;
             } else {
                 document.getElementById('auth-modal').style.display = 'flex';
+                // [로그인 에러 노출] 리다이렉트 에러가 있으면 안내 후 URL 정리
+                if (_authUrlErr) { _showAuthError(_friendlyAuthError(_authUrlErr)); _cleanAuthErrorFromUrl(); }
                 return false;
             }
         }
