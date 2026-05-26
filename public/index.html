@@ -2719,6 +2719,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <div id="wiki-search-list"></div>
                         </div>
                     </div>
+                    <div id="personal-picker-bar" style="display:none;padding:8px 10px;border-bottom:1px solid var(--c-border);background:var(--c-paper);"></div>
                     <div class="flex-1 overflow-y-auto p-3 bg-white rounded-b-xl" style="position:relative;" id="doc-tree-scroll">
                         <div id="doc-drop-indicator"></div>
                         <div id="doc-tree-container"></div>
@@ -4202,8 +4203,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // ==========================================
         let currentView = 'kanban'; 
         let activeDocId = null;
-        let currentDocKind = 'wiki'; // [통합 문서엔진] 'wiki'(문서) | 'canon'(게임 위키)
-        let activeDocIdByKind = { wiki: null, canon: null };
+        let currentDocKind = 'wiki'; // [통합 문서엔진] 'wiki'(문서) | 'canon'(게임 위키) | 'personal'(개인 문서)
+        let activeDocIdByKind = { wiki: null, canon: null, personal: null };
+        let personalViewUserId = null; // [개인문서] 현재 열람 중인 소유자 id (기본=나)
         let docSaveTimeout = null;
 
         let isDocSidebarOpen = true;
@@ -6202,7 +6204,18 @@ return data;
         function _buildDocTreeCache() {
             const childrenMap = new Map();
             const hasChildrenSet = new Set();
-            const projDocs = currentData.docs.filter(d => d.projectId === activeProjectId && (d.kind || 'wiki') === currentDocKind);
+            const projDocs = currentData.docs.filter(d => {
+                if (d.projectId !== activeProjectId) return false;
+                if ((d.kind || 'wiki') !== currentDocKind) return false;
+                if (currentDocKind === 'personal') {
+                    var owner = (d.meta && d.meta.owner) || null;
+                    var who = personalViewUserId || (currentUser && currentUser.id) || null;
+                    if (owner !== who) return false;
+                    var isMine = currentUser && owner === currentUser.id;
+                    if (!isMine && (d.meta && d.meta.visibility) !== 'public') return false; // 타인 비공개 숨김(클라 필터)
+                }
+                return true;
+            });
             projDocs.forEach(d => {
                 const pid = (d.parentId && d.parentId.trim()) ? d.parentId.trim() : '__root__';
                 if (!childrenMap.has(pid)) childrenMap.set(pid, []);
@@ -6398,6 +6411,7 @@ return data;
             const titleEl = document.getElementById('doc-editor-title');
             const textarea = document.getElementById('doc-editor-textarea');
             if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar(); // [게임위키] 버전/승인 바 동기화
+            if (typeof renderPersonalPicker === 'function') renderPersonalPicker(); // [개인문서] 소유자 콤보박스
 
             if (!activeDocId) {
                 emptyState.classList.remove('hidden'); textarea.value = ''; updateDocPreview('');
@@ -7028,7 +7042,11 @@ return data;
         async function createNewDoc(parentId) {
             const title = await uiPrompt({ title: '새 문서', label: '문서 제목을 입력하세요', value: "새 문서" });
             if (title === null || !title.trim()) return;
-            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId, title: title, emoji: currentDocKind === 'canon' ? '📜' : '📄', isCollapsed: false, content: '# ' + title + '\n\n여기에 내용을 작성하세요...', createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: (currentDocKind === 'canon' ? { version: 1, status: 'draft', versionHistory: [] } : {}) };
+            var _newMeta = currentDocKind === 'canon' ? { version: 1, status: 'draft', versionHistory: [] }
+                : (currentDocKind === 'personal' ? { owner: (currentUser && currentUser.id) || null, visibility: 'private' } : {});
+            if (currentDocKind === 'personal' && currentUser) personalViewUserId = currentUser.id; // 새 개인문서는 내 소유 → 내 뷰로
+            var _newEmoji = currentDocKind === 'canon' ? '📜' : (currentDocKind === 'personal' ? '🔒' : '📄');
+            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId, title: title, emoji: _newEmoji, isCollapsed: false, content: '# ' + title + '\n\n여기에 내용을 작성하세요...', createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta };
             currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc); openDoc(newDoc.id); 
         }
 
@@ -7697,6 +7715,7 @@ return data;
         }
         function renderCanonMetaBar() {
             var bar = document.getElementById('canon-meta-bar'); if (!bar) return;
+            if (currentDocKind === 'personal') { _renderPersonalMetaBar(bar); return; }
             var doc = _activeCanonDoc();
             if (!doc) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
             var meta = doc.meta || (doc.meta = {});
@@ -7710,6 +7729,47 @@ return data;
                 + '<button class="cmb-btn ' + (approved ? 'on' : '') + '" onclick="canonToggleApprove()">' + (approved ? '승인 해제' : '✅ 승인') + '</button>'
                 + '<button class="cmb-btn" onclick="canonOpenHistory()">🕓 버전 기록 (' + ((meta.versionHistory || []).length) + ')</button>';
             bar.style.display = 'flex';
+        }
+        // ── [개인문서] 소유자 콤보박스 + 공개/비공개 토글 ──
+        function renderPersonalPicker() {
+            var bar = document.getElementById('personal-picker-bar'); if (!bar) return;
+            if (currentDocKind !== 'personal') { bar.style.display = 'none'; return; }
+            if (!personalViewUserId) personalViewUserId = (currentUser && currentUser.id) || null;
+            var members = (typeof getMembers === 'function') ? getMembers() : [];
+            var opts = members.map(function (m) {
+                var me = currentUser && m.id === currentUser.id;
+                return '<option value="' + m.id + '"' + (m.id === personalViewUserId ? ' selected' : '') + '>' + _sprintEsc(m.displayName || m.email || m.id) + (me ? ' (나)' : '') + '</option>';
+            }).join('');
+            bar.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--c-text3);margin-bottom:4px;">👤 개인 문서 소유자</div>'
+                + '<select onchange="setPersonalViewUser(this.value)" style="width:100%;background:var(--c-card);color:var(--c-text);border:1px solid var(--c-border);border-radius:8px;padding:6px 8px;font-size:12.5px;font-weight:600;cursor:pointer;">' + (opts || '<option>나</option>') + '</select>';
+            bar.style.display = 'block';
+        }
+        function setPersonalViewUser(uid) {
+            personalViewUserId = uid; activeDocId = null;
+            if (typeof renderDocTree === 'function') renderDocTree();
+            if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
+        }
+        function _renderPersonalMetaBar(bar) {
+            if (!activeDocId) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+            var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
+            if (!doc || (doc.kind || 'wiki') !== 'personal') { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+            var meta = doc.meta || (doc.meta = {});
+            var isMine = currentUser && meta.owner === currentUser.id;
+            var pub = meta.visibility === 'public';
+            var badge = pub ? '<span class="cmb-badge cmb-approved">🌐 Public · 팀 공개</span>' : '<span class="cmb-badge cmb-draft">🔒 Private · 나만</span>';
+            var ctrl = isMine
+                ? '<button class="cmb-btn ' + (pub ? 'on' : '') + '" onclick="togglePersonalVisibility()">' + (pub ? '🔒 비공개로 전환' : '🌐 공개로 전환') + '</button>'
+                : '<span style="font-size:11px;color:var(--c-text3);">읽기 전용 (다른 팀원 문서)</span>';
+            bar.innerHTML = badge + ctrl;
+            bar.style.display = 'flex';
+        }
+        function togglePersonalVisibility() {
+            var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; }); if (!doc) return;
+            var meta = doc.meta || (doc.meta = {});
+            if (!(currentUser && meta.owner === currentUser.id)) { showToast('본인 문서만 공개 설정을 바꿀 수 있습니다.', 'alert'); return; }
+            meta.visibility = (meta.visibility === 'public') ? 'private' : 'public';
+            _safeLocalCache(currentData); dbUpsertDoc(doc); renderCanonMetaBar();
+            showToast(meta.visibility === 'public' ? '🌐 공개로 전환 — 팀원에게 노출됩니다.' : '🔒 비공개로 전환', 'success');
         }
         function canonSnapshotVersion() {
             var doc = _activeCanonDoc(); if (!doc) return;
