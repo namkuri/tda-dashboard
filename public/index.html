@@ -2143,6 +2143,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .cl-period-btn:hover { background: var(--c-accent-soft); color: var(--c-accent); }
         .cl-period-btn.on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
         .cl-date-in { background: var(--c-paper); border: 1px solid var(--c-border); color: var(--c-text); border-radius: 7px; padding: 3px 6px; font-size: 11px; }
+        /* [통합] 스프린트 제목 콤보 버튼 — 기존 타이틀 스타일 유지 + 드롭다운 캐럿 */
+        .sprint-title-btn { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; padding: 2px 5px; border-radius: 7px; cursor: pointer; font-weight: 800; font-size: 13px; color: var(--c-accent); line-height: 1.2; }
+        .sprint-title-btn:hover { background: var(--c-accent-soft); }
+        .sprint-title-btn .caret { font-size: 9px; color: var(--c-text3); font-weight: 700; }
+        /* [축소] 칸반 필터 콤보 — 폰트·패딩 축소 + 테마 일치 */
+        .filter-bar .filter-select { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); max-width: 160px; cursor: pointer; }
+        .filter-bar .filter-select:hover { border-color: var(--c-accent); }
+        html.is-desktop .filter-bar { gap: 10px; }
         .spv-goal-ta { width: 100%; min-height: 120px; resize: vertical; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1.5; outline: none; box-sizing: border-box; }
         .spv-goal-ta:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-soft); }
         .spv-goal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -2624,7 +2632,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div id="sprint-band" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
                 <span style="width:1px;height:18px;background:var(--c-border);margin:0 2px;flex-shrink:0;"></span>
                 <span class="font-black text-gray-700 text-sm">🔍</span>
-                <div><select id="filter-sprint" onchange="applyFilters()" class="filter-select border rounded p-1" title="스프린트 단위로 보기"></select></div>
                 <div><select id="filter-dev" onchange="applyFilters()" class="filter-select border rounded p-1"><option value="ALL">모든 담당자</option><option value="Dev A">Dev A 만 보기</option><option value="Dev B">Dev B 만 보기</option></select></div>
                 <div><select id="filter-status" onchange="applyFilters()" class="filter-select border rounded p-1"><option value="ALL">모든 진행 상태</option><option value="pending">대기중</option><option value="progress">진행중</option><option value="completed">완료됨</option></select></div>
                 <div><select id="filter-zone" onchange="applyFilters()" class="filter-select border rounded p-1" title="3-Zone Attention Model 필터"><option value="active">📌📦 Now + Shelf</option><option value="now">📌 Now만</option><option value="all">전체 (🗑 Buried)</option></select></div>
@@ -7334,18 +7341,21 @@ return data;
         }
         // [#2] 칸반 상단 스프린트 콤보박스 채우기 (기본=활성→최신→전체)
         function renderBoardSprintPicker() {
-            var sel = document.getElementById('filter-sprint'); if (!sel) return;
             var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
                 .slice().sort(function (a, b) { var r = (b.startDate || '').localeCompare(a.startDate || ''); return r !== 0 ? r : (b.id || '').localeCompare(a.id || ''); });
-            if (!sprints.length) { sel.innerHTML = '<option value="">(스프린트 없음 — 추가하세요)</option>'; return; }
-            // 기본/유효성: 활성→최신, 선택값이 사라졌으면 재설정
-            if (!_boardSprintInit || !sprints.find(function (s) { return s.id === selectedBoardSprintId; })) {
+            // [통합] 콤보 제거 후에도 기본 선택 로직은 유지(활성→최신, 사라진 선택값 보정)
+            if (sprints.length && (!_boardSprintInit || !sprints.find(function (s) { return s.id === selectedBoardSprintId; }))) {
                 _boardSprintInit = true;
                 var act = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
                 selectedBoardSprintId = (act && sprints.find(function (s) { return s.id === act.id; })) ? act.id : sprints[0].id;
             }
-            sel.innerHTML = sprints.map(function (s) { var b = s.status === 'active' ? '🏃 ' : (s.status === 'closed' ? '🏁 ' : '📋 '); return '<option value="' + s.id + '">' + b + _sprintEsc(s.weekLabel || s.id) + '</option>'; }).join('');
-            sel.value = selectedBoardSprintId;
+            // 레거시 select가 남아있으면 동기화 (현재는 제목 콤보로 대체됨)
+            var sel = document.getElementById('filter-sprint');
+            if (sel) {
+                if (!sprints.length) { sel.innerHTML = '<option value="">(스프린트 없음 — 추가하세요)</option>'; return; }
+                sel.innerHTML = sprints.map(function (s) { var b = s.status === 'active' ? '🏃 ' : (s.status === 'closed' ? '🏁 ' : '📋 '); return '<option value="' + s.id + '">' + b + _sprintEsc(s.weekLabel || s.id) + '</option>'; }).join('');
+                sel.value = selectedBoardSprintId;
+            }
         }
         // [#4] 담당자 필터를 실제 팀원(+레거시 담당자명) 기반으로 채움
         function renderDevFilter() {
@@ -7633,20 +7643,52 @@ return data;
         function renderSprintBand() {
             const el = document.getElementById('sprint-band');
             if (!el) return;
-            const active = getActiveSprint();
-            if (active) {
-                const range = formatSprintRange(active.startDate, active.endDate);
-                const intr = active.intrusionCount || 0;
-                el.innerHTML = '<span style="font-weight:800;font-size:13px;color:var(--c-accent);">🏃 ' + _sprintEsc(active.weekLabel) + '</span>'
-                    + (range ? '<span style="font-size:11px;color:var(--c-text2);font-weight:600;">' + range + '</span>' : '')
-                    + '<span title="Intrusion(스프린트 외 추가) 횟수" style="font-size:10px;font-weight:700;color:var(--c-accent);background:var(--c-accent-soft);border-radius:8px;padding:1px 7px;">⚡' + intr + '</span>'
+            var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
+                .slice().sort(function (a, b) { var r = (b.startDate || '').localeCompare(a.startDate || ''); return r !== 0 ? r : (b.id || '').localeCompare(a.id || ''); });
+            if (!sprints.length) {
+                const { week } = getISOWeek(new Date());
+                el.innerHTML = '<span style="font-size:12px;font-weight:700;color:var(--c-text2);">📅 스프린트 없음</span>'
+                    + '<button onclick="startSprint()" style="font-size:11px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:7px;padding:3px 10px;cursor:pointer;">+ 스프린트 시작 (W' + _pad2(week) + ')</button>';
+                return;
+            }
+            // [통합] 보드에서 보는 스프린트를 제목으로(클릭=콤보), 콤보 selectedBoardSprintId 기준
+            var viewed = sprints.find(function (s) { return s.id === selectedBoardSprintId; }) || getActiveSprint() || sprints[0];
+            if (viewed) selectedBoardSprintId = viewed.id;
+            var icon = viewed.status === 'active' ? '🏃' : (viewed.status === 'closed' ? '🏁' : '📋');
+            var range = formatSprintRange(viewed.startDate, viewed.endDate);
+            var isActive = viewed.status === 'active';
+            var html = '<button class="sprint-title-btn" onclick="openSprintViewPicker(event)" title="클릭하여 스프린트 선택">'
+                + '<span>' + icon + ' ' + _sprintEsc(viewed.weekLabel || viewed.id) + '</span><span class="caret">▾</span></button>'
+                + (range ? '<span style="font-size:11px;color:var(--c-text2);font-weight:600;">' + range + '</span>' : '');
+            if (isActive) {
+                html += '<span title="Intrusion(스프린트 외 추가) 횟수" style="font-size:10px;font-weight:700;color:var(--c-accent);background:var(--c-accent-soft);border-radius:8px;padding:1px 7px;">⚡' + (viewed.intrusionCount || 0) + '</span>'
                     + '<button onclick="editSprintGoal()" title="활성 스프린트 목표 수정" style="font-size:11px;font-weight:600;color:var(--c-text2);background:var(--ios-fill);border:1px solid var(--ios-sep);border-radius:7px;padding:3px 8px;cursor:pointer;">목표</button>'
                     + '<button onclick="endSprint()" style="font-size:11px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:7px;padding:3px 9px;cursor:pointer;">종료</button>';
             } else {
-                const { year, week } = getISOWeek(new Date());
-                el.innerHTML = '<span style="font-size:12px;font-weight:700;color:var(--c-text2);">📅 활성 스프린트 없음</span>'
-                    + '<button onclick="startSprint()" style="font-size:11px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:7px;padding:3px 10px;cursor:pointer;">+ 스프린트 시작 (W' + _pad2(week) + ')</button>';
+                var stChip = viewed.status === 'closed' ? ['종료', 'var(--ios-fill)', 'var(--c-text3)'] : ['예정', 'var(--ios-fill2)', 'var(--c-text2)'];
+                html += '<span style="font-size:10px;font-weight:700;color:' + stChip[2] + ';background:' + stChip[1] + ';border-radius:8px;padding:1px 8px;">' + stChip[0] + '</span>';
+                if (!getActiveSprint()) html += '<button onclick="startSprint()" style="font-size:11px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:7px;padding:3px 9px;cursor:pointer;">+ 시작</button>';
             }
+            el.innerHTML = html;
+        }
+        // [통합] 스프린트 제목 클릭 → 스프린트 선택 드롭다운 (보드 보기 스프린트 전환)
+        function openSprintViewPicker(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
+                .slice().sort(function (a, b) { var r = (b.startDate || '').localeCompare(a.startDate || ''); return r !== 0 ? r : (b.id || '').localeCompare(a.id || ''); });
+            if (!sprints.length) { showToast('스프린트가 없습니다.', 'info'); return; }
+            var icon = function (s) { return s.status === 'active' ? '🏃' : (s.status === 'closed' ? '🏁' : '📋'); };
+            var html = sprints.map(function (s) {
+                var rng = formatSprintRange(s.startDate, s.endDate);
+                return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();selectBoardSprint(\'' + s.id + '\')"><span>' + icon(s) + '</span><span style="flex:1;">' + _sprintEsc(s.weekLabel || s.id) + (rng ? (' <span style=\'color:var(--c-text3);font-size:10px;\'>' + rng + '</span>') : '') + '</span>' + (s.id === selectedBoardSprintId ? '<span>✓</span>' : '') + '</div>';
+            }).join('');
+            _openCardMenu(e, html);
+        }
+        function selectBoardSprint(sid) {
+            selectedBoardSprintId = sid; _boardSprintInit = true;
+            if (typeof renderBoard === 'function') renderBoard();
+            if (typeof renderProgress === 'function') renderProgress();
+            renderSprintBand();
         }
 
         async function startSprint() {
