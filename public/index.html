@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r33 (r32 + 레이아웃 컴팩트: 좌측내비 축소·문서트리 기본너비 166px+이름 페이드·축소시 흰막대→소형테마버튼) -->
+<!-- BUILD: 2026-05-27 r34 (r33 + 문서코멘트 개편: doc.meta 동기화·스크롤위치 정렬·대댓글·@멘션+알림·본인댓글 개별삭제·인용텍스트 숨김) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1310,6 +1310,32 @@
         }
         .ann-positioned-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
         body.dark .ann-positioned-card { background: #2f2e2b; border-color: #3b3934; }
+        /* [r34] 코멘트 카드 내부 — 댓글/답글/멘션/삭제 */
+        .ann-positioned-card { padding-top: 15px; }
+        .ann-x { position:absolute; top:3px; right:5px; border:none; background:none; color:var(--c-text3); font-size:12px; cursor:pointer; line-height:1; padding:2px; border-radius:4px; opacity:.45; }
+        .ann-positioned-card:hover .ann-x { opacity:1; }
+        .ann-x:hover { color:#d9534f; background:var(--c-paper); }
+        .ann-comment-item { margin-bottom:7px; }
+        .ann-c-head { display:flex; align-items:center; gap:6px; margin-bottom:2px; }
+        .ann-c-author { font-size:11px; font-weight:700; color:var(--c-accent); }
+        .ann-c-time { font-size:9.5px; color:var(--c-text3); }
+        .ann-del { margin-left:auto; border:none; background:none; cursor:pointer; font-size:10px; opacity:.4; padding:1px 3px; border-radius:4px; }
+        .ann-comment-item:hover .ann-del, .ann-reply-item:hover .ann-del { opacity:.9; }
+        .ann-del:hover { background:var(--c-paper); }
+        .ann-c-text { font-size:12px; color:var(--c-text); word-break:break-word; line-height:1.45; }
+        .ann-replies { margin:4px 0 2px 9px; padding-left:8px; border-left:2px solid var(--c-border); display:flex; flex-direction:column; gap:5px; }
+        .ann-empty { font-size:11px; color:var(--c-text3); margin-bottom:4px; }
+        .ann-link-btn { font-size:11px; padding:2px 0; margin-top:2px; background:none; border:none; color:var(--c-text2); cursor:pointer; font-weight:600; }
+        .ann-link-btn:hover { color:var(--c-accent); }
+        .ann-reply-box { margin-top:5px; }
+        .ann-reply-input { background:var(--c-paper); color:var(--c-text); border-color:var(--c-border); }
+        .ann-reply-input2 { width:100%; border:1px solid var(--c-border); border-radius:6px; padding:5px 7px; font-size:11.5px; outline:none; background:var(--c-paper); color:var(--c-text); box-sizing:border-box; }
+        .ann-reply-input2:focus { border-color:var(--c-accent); }
+        .ann-card-foot { margin-top:4px; }
+        .ann-mention { color:var(--c-accent); font-weight:700; }
+        .ann-mention-me { background:var(--c-accent-soft); border-radius:3px; padding:0 2px; }
+        #ann-mention-ac .ann-mac-item { padding:6px 10px; font-size:12.5px; border-radius:6px; cursor:pointer; color:var(--c-text); white-space:nowrap; }
+        #ann-mention-ac .ann-mac-item.sel, #ann-mention-ac .ann-mac-item:hover { background:var(--c-accent-soft); color:var(--c-accent); }
 
         /* preview pane: scroll correctly */
         #preview-annotation-wrapper {
@@ -6033,7 +6059,7 @@ return data;
             if (_localCacheData) {
                 try {
                     currentData = validateData(_localCacheData);
-                    wikiAnnotations = currentData.wikiAnnotations || {};
+                    rebuildWikiAnnotations(); // [r34] doc.meta.annotations에서 복원(+레거시 이관)
                     requestAnimationFrame(function() {
                         renderBoard(); renderProgress(); updateProjectTitle(); renderDocTree();
                     });
@@ -6143,6 +6169,15 @@ return data;
                                 if (typeof u.linked_doc_ids !== 'undefined') doc.linkedDocIds = u.linked_doc_ids || [];
                                 if (typeof u.is_locked !== 'undefined') doc.isLocked = !!u.is_locked; // [v40 Day4]
                                 if (typeof u.doc_type !== 'undefined') doc.docType = u.doc_type || 'plan';
+                                // [r34] 다른 사용자가 추가/수정한 코멘트(주석) 동기화 + 멘션 알림
+                                var _annSynced = false;
+                                if (u.meta && Array.isArray(u.meta.annotations)) {
+                                    if (!doc.meta) doc.meta = {};
+                                    doc.meta.annotations = u.meta.annotations;
+                                    if (typeof wikiAnnotations !== 'undefined') wikiAnnotations[u.id] = u.meta.annotations;
+                                    _annSynced = true;
+                                    if (typeof _annNotifyMentions === 'function') _annNotifyMentions(u.id);
+                                }
                                 if (currentView === 'docs') {
                                     renderDocTree();
                                     if (activeDocId === u.id && changed) {
@@ -6152,6 +6187,8 @@ return data;
                                         updateDocPreview(u.content);
                                         addChangeLogEntry('다른 사용자', u.title, null, u.id, [], [], 'edit');
                                     }
+                                    // [r34] 활성 문서면 코멘트 하이라이트/패널 갱신 (편집 중이 아닐 때만 — 내부 가드)
+                                    if (_annSynced && activeDocId === u.id && typeof applyAnnotationHighlights === 'function') applyAnnotationHighlights();
                                     // 캐시 무효화
                                     if (hasContent) _docContentCache.delete(u.id);
                                 }
@@ -11154,8 +11191,139 @@ ${intrLog}
         // ==========================================
         // 💡 WIKI ANNOTATIONS (Google Docs Style)
         // ==========================================
-        let wikiAnnotations = {}; // synced from currentData.wikiAnnotations on load
+        let wikiAnnotations = {}; // [r34] doc.meta.annotations 미러 (동기화)
         let annotationColors = ['#fef08a','#bbf7d0','#f3e6df','#fecaca','#ece0d2','#fed7aa'];
+        // [r34] 코멘트 동기화: 주석을 doc.meta.annotations에 저장 → dbUpsertDoc로 영속+wiki_docs 실시간 동기화 (기존엔 로컬 전용이라 다른 계정에 안 보였음)
+        function rebuildWikiAnnotations() {
+            var legacy = (currentData && currentData.wikiAnnotations) || {};
+            wikiAnnotations = {};
+            (currentData.docs || []).forEach(function (d) {
+                if (!d.meta) d.meta = {};
+                if (Array.isArray(d.meta.annotations)) { wikiAnnotations[d.id] = d.meta.annotations; }
+                else if (Array.isArray(legacy[d.id]) && legacy[d.id].length) {
+                    d.meta.annotations = legacy[d.id]; wikiAnnotations[d.id] = d.meta.annotations;
+                    if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d); // 레거시 로컬 주석 → 동기화로 승격
+                }
+            });
+            currentData.wikiAnnotations = wikiAnnotations;
+        }
+        function _annPersist(docId) {
+            var d = (currentData.docs || []).find(function (x) { return x.id === docId; });
+            if (!d) return;
+            if (!d.meta) d.meta = {};
+            d.meta.annotations = wikiAnnotations[docId] || [];
+            d.updatedAt = Date.now();
+            currentData.wikiAnnotations = wikiAnnotations;
+            if (typeof saveData === 'function') saveData();
+            if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d);
+        }
+        function _annEsc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        function _annMe(){ return (typeof currentUser!=='undefined' && currentUser) ? currentUser.id : null; }
+        function _annMembers(){ return (typeof getMembers==='function') ? getMembers() : (((currentData&&currentData.users)||[]).slice()); }
+        function _annMemberName(m){ return m.displayName || m.name || m.nickname || ''; }
+        // 본문에서 @닉네임(팀원 일치) → userId 배열
+        function _annParseMentions(text){
+            if(!text) return [];
+            var ids=[]; _annMembers().forEach(function(m){
+                var nm=_annMemberName(m); if(!nm) return;
+                var esc=nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+                var re=new RegExp('@'+esc+'(?=\\s|$|[^\\w가-힣])');
+                if(re.test(text) && ids.indexOf(m.id)===-1) ids.push(m.id);
+            });
+            return ids;
+        }
+        // 코멘트 표시: HTML escape + @닉네임 강조 (긴 이름 우선)
+        function _annRenderText(text){
+            var safe=_annEsc(text);
+            _annMembers().slice().sort(function(a,b){ return _annMemberName(b).length-_annMemberName(a).length; }).forEach(function(m){
+                var nm=_annMemberName(m); if(!nm) return;
+                var esc=_annEsc(nm).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+                var re=new RegExp('@'+esc+'(?=\\s|$|[^\\w가-힣])','g');
+                var mine=(m.id===_annMe());
+                safe=safe.replace(re,'<span class="ann-mention'+(mine?' ann-mention-me':'')+'">@'+_annEsc(nm)+'</span>');
+            });
+            return safe;
+        }
+        // ===== @멘션 자동완성 (주석 입력칸 공용, 위임 처리) =====
+        var _annMentionAC = { open:false, input:null, atPos:-1, items:[], sel:0 };
+        function _annMentionEl(){ var el=document.getElementById('ann-mention-ac'); if(!el){ el=document.createElement('div'); el.id='ann-mention-ac'; document.body.appendChild(el); } return el; }
+        function _annMentionClose(){ _annMentionAC.open=false; var el=document.getElementById('ann-mention-ac'); if(el) el.style.display='none'; }
+        function _annMentionScan(input){
+            if(!input){ return _annMentionClose(); }
+            var val=input.value, pos=input.selectionStart;
+            // 커서 앞에서 마지막 @ 찾기 (시작 or 공백 뒤)
+            var at=-1;
+            for(var i=pos-1;i>=0;i--){ var ch=val[i]; if(ch==='@'){ if(i===0||/\s/.test(val[i-1])){at=i;} break; } if(/\s/.test(ch)) break; }
+            if(at===-1){ return _annMentionClose(); }
+            var q=val.slice(at+1,pos).toLowerCase();
+            var matches=_annMembers().filter(function(m){ var nm=_annMemberName(m); return nm && (!q || nm.toLowerCase().indexOf(q)!==-1); }).slice(0,6);
+            if(!matches.length){ return _annMentionClose(); }
+            _annMentionAC={ open:true, input:input, atPos:at, items:matches, sel:0 };
+            var el=_annMentionEl();
+            el.innerHTML=matches.map(function(m,idx){ return '<div class="ann-mac-item'+(idx===0?' sel':'')+'" data-idx="'+idx+'" onmousedown="event.preventDefault();_annMentionPick('+idx+')">@'+_annEsc(_annMemberName(m))+'</div>'; }).join('');
+            var r=input.getBoundingClientRect();
+            el.style.cssText='position:fixed;z-index:100002;left:'+Math.round(r.left)+'px;top:'+Math.round(r.bottom+3)+'px;min-width:'+Math.max(150,Math.round(r.width))+'px;max-height:200px;overflow-y:auto;background:var(--c-card);border:1px solid var(--c-border);border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,0.28);padding:4px;display:block;';
+        }
+        function _annMentionPick(idx){
+            var ac=_annMentionAC; if(!ac.open||!ac.input) return;
+            var m=ac.items[idx]; if(!m) return;
+            var input=ac.input, val=input.value, pos=input.selectionStart;
+            var name=_annMemberName(m);
+            var before=val.slice(0,ac.atPos), after=val.slice(pos);
+            input.value=before+'@'+name+' '+after;
+            var np=(before+'@'+name+' ').length; input.selectionStart=input.selectionEnd=np;
+            _annMentionClose(); input.focus();
+        }
+        function _annMentionKey(e){
+            var ac=_annMentionAC; if(!ac.open) return false;
+            if(e.key==='ArrowDown'){ ac.sel=Math.min(ac.sel+1,ac.items.length-1); _annMentionHi(); e.preventDefault(); return true; }
+            if(e.key==='ArrowUp'){ ac.sel=Math.max(ac.sel-1,0); _annMentionHi(); e.preventDefault(); return true; }
+            if(e.key==='Enter'||e.key==='Tab'){ _annMentionPick(ac.sel); e.preventDefault(); return true; }
+            if(e.key==='Escape'){ _annMentionClose(); e.preventDefault(); return true; }
+            return false;
+        }
+        function _annMentionHi(){ var el=document.getElementById('ann-mention-ac'); if(!el) return; Array.prototype.forEach.call(el.children,function(c,i){ c.classList.toggle('sel',i===_annMentionAC.sel); }); }
+        // ===== 멘션 알림 + 히스토리 =====
+        function _annSeenKey(){ return 'tda_mention_seen_' + (_annMe()||'anon'); }
+        function _annSeenSet(){ try{ return new Set(JSON.parse(localStorage.getItem(_annSeenKey())||'[]')); }catch(e){ return new Set(); } }
+        function _annSeenSave(set){ try{ localStorage.setItem(_annSeenKey(), JSON.stringify(Array.prototype.slice.call(set).slice(-500))); }catch(e){} }
+        // 한 문서의 주석을 훑어 나를 멘션한 새 코멘트 토스트 (중복 방지: localStorage seen)
+        function _annNotifyMentions(docId, opts){
+            var me=_annMe(); if(!me) return;
+            var anns=wikiAnnotations[docId]||[]; var seen=_annSeenSet(); var fresh=[];
+            var doc=(currentData.docs||[]).find(function(d){return d.id===docId;}); var docTitle=doc?(doc.title||'문서'):'문서';
+            anns.forEach(function(a){
+                var all=(a.comments||[]).concat.apply([], (a.comments||[]).map(function(c){ return (c.replies||[]); }));
+                all.forEach(function(c){
+                    if(!c || c.userId===me) return;
+                    if(!(c.mentions&&c.mentions.indexOf(me)!==-1)) return;
+                    var key=docId+'|'+(c.id||c.ts||'')+'|'+(c.text||'').slice(0,20);
+                    if(seen.has(key)) return;
+                    seen.add(key); fresh.push({ from:c.author||'팀원', text:c.text||'', docTitle:docTitle });
+                });
+            });
+            if(fresh.length){
+                _annSeenSave(seen);
+                if(!opts || !opts.silent){
+                    fresh.slice(0,3).forEach(function(f){ if(typeof showToast==='function') showToast('💬 @멘션 — '+f.from+' ('+f.docTitle+'): '+(f.text.length>30?f.text.slice(0,30)+'…':f.text), 'info'); });
+                    if(typeof playNotificationSound==='function'){ try{ playNotificationSound('comment'); }catch(e){} }
+                }
+            }
+        }
+        // 미래 인박스 UI용: 나를 멘션한 모든 코멘트 (전 문서) 시간순
+        function getUnreadMentions(){
+            var me=_annMe(); if(!me) return [];
+            var out=[];
+            (currentData.docs||[]).forEach(function(d){
+                var anns=(d.meta&&d.meta.annotations)||wikiAnnotations[d.id]||[];
+                anns.forEach(function(a){
+                    var all=(a.comments||[]).concat.apply([], (a.comments||[]).map(function(c){ return (c.replies||[]); }));
+                    all.forEach(function(c){ if(c&&c.userId!==me&&c.mentions&&c.mentions.indexOf(me)!==-1){ out.push({ docId:d.id, docTitle:d.title, annId:a.id, from:c.author, text:c.text, at:c.ts||0 }); } });
+                });
+            });
+            out.sort(function(a,b){ return (b.at||0)-(a.at||0); });
+            return out;
+        }
 
         function handleEditorContextMenu(e) {
             const textarea = e.target;
@@ -11300,15 +11468,8 @@ ${intrLog}
             const id = 'ann_' + Date.now();
             const colorIdx = wikiAnnotations[activeDocId].length % annotationColors.length;
             const color = annotationColors[colorIdx];
-            wikiAnnotations[activeDocId].push({ id, quote: quotedText, color, comments: [], createdAt: Date.now() });
-            // Persist to currentData → DB
-            currentData.wikiAnnotations = wikiAnnotations;
-            saveData();
-            const _annDelDoc = currentData.docs.find(d => d.id === activeDocId);
-            if (_annDelDoc) dbUpsertDoc(_annDelDoc);
-            // Show annotations panel
-            const panel = document.getElementById('wiki-annotations-panel');
-            // panel shown via width
+            wikiAnnotations[activeDocId].push({ id, quote: quotedText, color, userId: _annMe(), comments: [], createdAt: Date.now() });
+            _annPersist(activeDocId); // doc.meta.annotations에 저장 → 동기화
             applyAnnotationHighlights();
             setTimeout(function() {
                 renderAnnotationsPanelPositioned();
@@ -11333,6 +11494,8 @@ ${intrLog}
                     annotations.forEach(ann => {
                         highlightTextInContainer(preview, ann.quote, ann.color, ann.id);
                     });
+                    // [r34] 마크가 적용된 뒤 카드 위치 재계산 (안 그러면 첫 렌더에 상단에 몰림)
+                    renderAnnotationsPanelPositioned();
                 }, 150);
             });
         }
@@ -11405,7 +11568,12 @@ ${intrLog}
         }
 
         function handleAnnKeydown(e, input) {
+            if(_annMentionKey(e)) return;
             if(e.key === 'Enter') submitAnnotationComment(input.dataset.annid, input);
+        }
+        function handleAnnReplyKeydown(e, input) {
+            if(_annMentionKey(e)) return;
+            if(e.key === 'Enter') submitAnnotationReply(input.dataset.annid, input.dataset.cid, input);
         }
 
         function showAnnotationInput(annId) {
@@ -11414,34 +11582,60 @@ ${intrLog}
         }
 
         function submitAnnotationComment(annId, input) {
-            const text = input.value.trim();
+            const text = (input.value||'').trim();
             if(!text || !activeDocId) return;
             const ann = (wikiAnnotations[activeDocId] || []).find(a => a.id === annId);
-            if(ann) {
-                ann.comments.push({ author: myNickname, text, time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}), ts: Date.now() });
-                input.value = '';
-                currentData.wikiAnnotations = wikiAnnotations;
-                saveData();
-                // wiki_annotations는 별도 테이블이나 upsert 복잡도로 doc content에 포함 처리
-                const _annDoc = currentData.docs.find(d => d.id === activeDocId);
-                if (_annDoc) dbUpsertDoc(_annDoc);
-                renderAnnotationsPanel();
-                showAnnotationInput(annId);
-            }
+            if(!ann) return;
+            if(!Array.isArray(ann.comments)) ann.comments = [];
+            ann.comments.push({ id:'c_'+Date.now()+Math.random().toString(36).slice(2,5), userId:_annMe(), author: myNickname, text: text, mentions:_annParseMentions(text), replies:[], time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}), ts: Date.now() });
+            input.value=''; _annMentionClose();
+            _annPersist(activeDocId);
+            _annNotifyMentions(activeDocId, { silent:true }); // 내가 단 멘션은 내 화면에 알림 X (seen 처리)
+            renderAnnotationsPanelPositioned();
+            showAnnotationInput(annId);
+        }
+        function submitAnnotationReply(annId, commentId, input) {
+            const text=(input.value||'').trim(); if(!text||!activeDocId) return;
+            const ann=(wikiAnnotations[activeDocId]||[]).find(a=>a.id===annId); if(!ann) return;
+            const c=(ann.comments||[]).find(x=>x.id===commentId); if(!c) return;
+            if(!Array.isArray(c.replies)) c.replies=[];
+            c.replies.push({ id:'r_'+Date.now()+Math.random().toString(36).slice(2,5), userId:_annMe(), author:myNickname, text:text, mentions:_annParseMentions(text), time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}), ts:Date.now() });
+            input.value=''; _annMentionClose();
+            _annPersist(activeDocId);
+            _annNotifyMentions(activeDocId,{ silent:true });
+            renderAnnotationsPanelPositioned();
+        }
+        function deleteAnnotationComment(annId, commentId) {
+            if(!activeDocId) return;
+            const ann=(wikiAnnotations[activeDocId]||[]).find(a=>a.id===annId); if(!ann) return;
+            const c=(ann.comments||[]).find(x=>x.id===commentId); if(!c) return;
+            if(c.userId && c.userId!==_annMe()){ showToast('본인 댓글만 삭제할 수 있습니다.','alert'); return; }
+            ann.comments=ann.comments.filter(x=>x.id!==commentId);
+            if(!ann.comments.length){ wikiAnnotations[activeDocId]=(wikiAnnotations[activeDocId]||[]).filter(a=>a.id!==annId); } // 댓글 0 → 하이라이트도 제거
+            _annPersist(activeDocId); applyAnnotationHighlights(); renderAnnotationsPanelPositioned();
+        }
+        function deleteAnnotationReply(annId, commentId, replyId) {
+            if(!activeDocId) return;
+            const ann=(wikiAnnotations[activeDocId]||[]).find(a=>a.id===annId); if(!ann) return;
+            const c=(ann.comments||[]).find(x=>x.id===commentId); if(!c||!Array.isArray(c.replies)) return;
+            const r=c.replies.find(x=>x.id===replyId); if(!r) return;
+            if(r.userId && r.userId!==_annMe()){ showToast('본인 댓글만 삭제할 수 있습니다.','alert'); return; }
+            c.replies=c.replies.filter(x=>x.id!==replyId);
+            _annPersist(activeDocId); renderAnnotationsPanelPositioned();
+        }
+        function toggleAnnReplyInput(commentId){
+            var box=document.getElementById('ann-reply-'+commentId);
+            if(box){ var show=(box.style.display==='none'||!box.style.display); box.style.display=show?'block':'none'; if(show){ var inp=box.querySelector('input'); if(inp) inp.focus(); } }
         }
 
         function deleteAnnotation(annId) {
             if(!activeDocId) return;
+            const ann=(wikiAnnotations[activeDocId]||[]).find(a=>a.id===annId);
+            if(ann && ann.userId && ann.userId!==_annMe()){ showToast('본인이 만든 코멘트만 제거할 수 있습니다.','alert'); return; }
             wikiAnnotations[activeDocId] = (wikiAnnotations[activeDocId] || []).filter(a => a.id !== annId);
-            currentData.wikiAnnotations = wikiAnnotations;
-            saveData();
-            const remaining = wikiAnnotations[activeDocId] || [];
-            if(remaining.length === 0) {
-                const panel = document.getElementById('wiki-annotations-panel');
-                // panel hidden via width
-            }
+            _annPersist(activeDocId);
             applyAnnotationHighlights();
-            renderAnnotationsPanel();
+            renderAnnotationsPanelPositioned();
         }
 
         function scrollToAnnotation(annId) {
@@ -12210,6 +12404,23 @@ ${intrLog}
         // ==================================================
         // 12. GOOGLE DOCS STYLE ANNOTATION POSITIONING
         // ==================================================
+        function _annOwn(o){ return !!(o && o.userId && _annMe() && o.userId===_annMe()); }
+        function _annCommentHtml(ann, c){
+            var sa=_annEsc(c.author||'팀원');
+            var del = _annOwn(c) ? '<button class="ann-del" title="내 댓글 삭제" onclick="deleteAnnotationComment(\''+ann.id+'\',\''+c.id+'\')">🗑</button>' : '';
+            var replies=(c.replies||[]).map(function(r){
+                var ra=_annEsc(r.author||'팀원');
+                var rdel=_annOwn(r)?'<button class="ann-del" title="내 댓글 삭제" onclick="deleteAnnotationReply(\''+ann.id+'\',\''+c.id+'\',\''+r.id+'\')">🗑</button>':'';
+                return '<div class="ann-reply-item"><div class="ann-c-head"><span class="ann-c-author">'+ra+'</span><span class="ann-c-time">'+_annEsc(r.time||'')+'</span>'+rdel+'</div><div class="ann-c-text">'+_annRenderText(r.text||'')+'</div></div>';
+            }).join('');
+            return '<div class="ann-comment-item">'+
+                '<div class="ann-c-head"><span class="ann-c-author">'+sa+'</span><span class="ann-c-time">'+_annEsc(c.time||'')+'</span>'+del+'</div>'+
+                '<div class="ann-c-text">'+_annRenderText(c.text||'')+'</div>'+
+                (replies?('<div class="ann-replies">'+replies+'</div>'):'')+
+                '<div class="ann-reply-box" id="ann-reply-'+c.id+'" style="display:none;"><input type="text" class="ann-reply-input2" placeholder="답글 (@멘션)" data-annid="'+ann.id+'" data-cid="'+c.id+'" oninput="_annMentionScan(this)" onkeydown="handleAnnReplyKeydown(event,this)"></div>'+
+                '<button class="ann-link-btn ann-reply-toggle" onclick="toggleAnnReplyInput(\''+c.id+'\')">↩ 답글</button>'+
+            '</div>';
+        }
         function renderAnnotationsPanelPositioned() {
             var panel = document.getElementById('wiki-annotations-panel');
             var list = document.getElementById('annotations-list');
@@ -12217,42 +12428,40 @@ ${intrLog}
             if(!list || !previewEl) return;
             var annotations = (activeDocId && wikiAnnotations[activeDocId]) ? wikiAnnotations[activeDocId] : [];
             list.innerHTML = '';
-            if(annotations.length === 0) { if(panel) panel.style.width = '0'; return; }
-            if(panel) panel.style.width = '280px';
-            var minY = 8;
-            annotations.forEach(function(ann) {
-                var markEl = previewEl.querySelector('mark[data-annotation="' + ann.id + '"]');
-                var topOffset = 8;
-                if(markEl) {
-                    var pRect = previewEl.getBoundingClientRect();
-                    var mRect = markEl.getBoundingClientRect();
-                    topOffset = (mRect.top - pRect.top) + previewEl.scrollTop - 4;
-                }
-                if(topOffset < minY) topOffset = minY;
-                var card = document.createElement('div');
-                card.id = 'ann-card-' + ann.id;
-                card.className = 'ann-positioned-card';
-                card.style.top = topOffset + 'px';
-                card.style.borderLeftColor = ann.color || '#fbbf24';
-                var qt = ann.quote.length > 50 ? ann.quote.substring(0,50)+'...' : ann.quote;
-                var sq = qt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-                var ch = ann.comments.map(function(c){
-                    var st=(c.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                    var sa=(c.author||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-                    return '<div class="ann-comment-item"><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:11px;font-weight:700;color:#b5573a;">'+sa+'</span><span style="font-size:10px;color:#9b968a;">'+(c.time||'')+'</span></div><div style="font-size:12px;color:#44423c;word-break:break-word;">'+st+'</div></div>';
-                }).join('');
-                if(!ann.comments.length) ch = '<div style="font-size:11px;color:#9b968a;margin-bottom:4px;">댓글 없음</div>';
+            if(!annotations.length){ if(panel) panel.style.width='0'; return; }
+            if(panel) panel.style.width='300px';
+            var pRect = previewEl.getBoundingClientRect();
+            // 1패스: 마크의 뷰포트 상대 위치(=텍스트 옆). scrollTop을 더하지 않음 — 더하면 스크롤 시 코멘트가 어긋남(기존 버그)
+            var entries = annotations.map(function(ann){
+                var markEl = previewEl.querySelector('mark[data-annotation="'+ann.id+'"]');
+                var desired=null, off=false;
+                if(markEl){ var mRect=markEl.getBoundingClientRect(); desired=(mRect.top - pRect.top) - 2; off=(mRect.bottom < pRect.top - 24)||(mRect.top > pRect.bottom + 24); }
+                return { ann:ann, desired:desired, off:off };
+            });
+            entries = entries.filter(function(e){ return !e.off; }); // 화면 밖 마크는 생략 → 보이는 텍스트 옆에만 표시(스크롤 시 따라옴)
+            entries.sort(function(a,b){ var av=(a.desired==null?-1:a.desired), bv=(b.desired==null?-1:b.desired); return av-bv; });
+            entries.forEach(function(e){
+                var ann=e.ann;
+                var comments=(ann.comments||[]);
+                var ch = comments.length ? comments.map(function(c){ return _annCommentHtml(ann,c); }).join('') : '<div class="ann-empty">댓글 없음</div>';
+                var card=document.createElement('div');
+                card.id='ann-card-'+ann.id; card.className='ann-positioned-card';
+                card.style.borderLeftColor=ann.color||'#fbbf24';
                 card.innerHTML =
-                    '<div style="font-size:11px;font-weight:600;color:#44423c;background:'+(ann.color||'#fef08a')+';padding:2px 6px;border-radius:3px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&quot;'+sq+'&quot;</div>' +
-                    '<div id="ann-comments-'+ann.id+'">'+ch+'</div>' +
-                    '<input type="text" class="ann-reply-input" id="ann-input-'+ann.id+'" placeholder="댓글 입력 후 Enter..." data-annid="'+ann.id+'" onkeydown="handleAnnKeydown(event,this)" style="display:none;">' +
-                    '<div style="display:flex;gap:4px;margin-top:6px;">' +
-                    '<button onclick="showAnnotationInput(\''+ann.id+'\')" style="font-size:11px;padding:3px 7px;border-radius:5px;background:#f6efe8;color:#b5573a;border:1px solid #f3e6df;cursor:pointer;font-weight:600;">💬</button>' +
-                    '<button onclick="deleteAnnotation(\''+ann.id+'\')" style="font-size:11px;padding:3px 7px;border-radius:5px;background:#fef2f2;color:#ef4444;border:1px solid #fecaca;cursor:pointer;font-weight:600;">🗑️</button>' +
-                    '</div>';
+                    (_annOwn(ann)?'<button class="ann-x" title="이 코멘트(하이라이트) 제거" onclick="deleteAnnotation(\''+ann.id+'\')">✕</button>':'')+
+                    '<div id="ann-comments-'+ann.id+'">'+ch+'</div>'+
+                    '<input type="text" class="ann-reply-input" id="ann-input-'+ann.id+'" placeholder="댓글 (@멘션)" data-annid="'+ann.id+'" oninput="_annMentionScan(this)" onkeydown="handleAnnKeydown(event,this)" style="display:'+(comments.length?'none':'block')+';">'+
+                    '<div class="ann-card-foot"><button class="ann-link-btn" onclick="showAnnotationInput(\''+ann.id+'\')">💬 댓글</button></div>';
                 list.appendChild(card);
-                // update minY after card is in DOM
-                requestAnimationFrame(function(){ minY = topOffset + (card.offsetHeight || 120) + 8; });
+                e.card=card;
+            });
+            // 2패스: 앵커 우선 + 겹침 해소(아래로 밀기)
+            var running=0;
+            entries.forEach(function(e){
+                var d=(e.desired==null?running:e.desired);
+                var top=Math.max(d, running, 6);
+                e.card.style.top=top+'px';
+                running = top + (e.card.offsetHeight||100) + 8;
             });
         }
 
