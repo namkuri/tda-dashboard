@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r39 (r38 + 트리 220px·투명 tab-dot 폭0(아이콘옆 빈공간 제거)·"N개" 제거·검색아이콘 박스화(되돌리기·폴더와 한 그룹)) -->
+<!-- BUILD: 2026-05-27 r40 (r39 + 공용 드라이브 탭(Supabase Storage)·서버 상태 탭(용량/설정점검)·문서 이미지 첨부/드래그/붙여넣기→Storage(base64 폴백)·drive_files 메타+설정SQL) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2773,10 +2773,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <button class="cs-nav" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
             <button class="cs-nav" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
             <button class="cs-nav" id="cs-nav-git" onclick="switchView('git')" title="Git"><span class="cs-ico">📦</span><span class="cs-label">Git</span></button>
+            <button class="cs-nav" id="cs-nav-drive" onclick="switchView('drive')" title="공용 드라이브"><span class="cs-ico">🗂️</span><span class="cs-label">공용 드라이브</span></button>
             <div class="cs-section cs-label">도구</div>
             <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
             <button class="cs-nav" onclick="openChangeLog()" title="변경 로그"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그</span></button>
             <button class="cs-nav" onclick="toggleJsonSidebar()" title="DB 도구"><span class="cs-ico">🗄️</span><span class="cs-label">DB 도구</span></button>
+            <button class="cs-nav" id="cs-nav-status" onclick="switchView('status')" title="서버 상태"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
             <div class="cs-spacer"></div>
             <div class="cs-foot">
                 <div class="cs-status"><span style="width:7px;height:7px;border-radius:50%;background:var(--ios-green);display:inline-block;flex-shrink:0;"></span> <span class="cs-label">접속 <span id="cs-online">1</span>명</span></div>
@@ -3237,7 +3239,70 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .gitp-diff .dd { background: rgba(209,69,59,0.14); color: var(--c-text); }
         .gitp-diff .dh { background: var(--ios-fill); color: var(--c-text3); font-weight: 700; }
         .gitp-diff .dc { color: var(--c-text2); }
+        /* [r40] 공용 드라이브 / 서버 상태 */
+        .drv-wrap { display:flex; flex-direction:column; gap:12px; height:100%; min-height:0; padding:16px 20px 60px; max-width:1100px; margin:0 auto; width:100%; }
+        .drv-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+        .drv-title { font-size:19px; font-weight:800; color:var(--c-text); letter-spacing:-0.02em; }
+        .drv-sub { font-size:12.5px; color:var(--c-text2); margin-top:3px; line-height:1.5; max-width:640px; }
+        .drv-upload { flex-shrink:0; background:var(--c-accent); color:#fff; border:none; border-radius:10px; padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.12); }
+        .drv-upload:hover { filter:brightness(1.05); }
+        .drv-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        .drv-search { flex:1; min-width:160px; background:var(--c-card); border:1px solid var(--c-border); border-radius:9px; padding:7px 11px; font-size:13px; color:var(--c-text); outline:none; }
+        .drv-search:focus { border-color:var(--c-accent); }
+        .drv-usage { font-size:12px; color:var(--c-text3); white-space:nowrap; }
+        .drv-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+        .drv-row { display:flex; align-items:center; gap:11px; padding:9px 12px; border:1px solid var(--c-border); border-radius:10px; background:var(--c-paper); transition:background .12s; }
+        .drv-row:hover { background:var(--c-accent-soft); }
+        .drv-ic { font-size:20px; flex-shrink:0; width:26px; text-align:center; }
+        .drv-thumb { width:34px; height:34px; object-fit:cover; border-radius:7px; flex-shrink:0; border:1px solid var(--c-border); }
+        .drv-meta { flex:1; min-width:0; }
+        .drv-name { font-size:13px; font-weight:700; color:var(--c-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .drv-info { font-size:11px; color:var(--c-text3); margin-top:1px; }
+        .drv-acts { display:flex; gap:5px; flex-shrink:0; }
+        .drv-btn { background:var(--c-card); border:1px solid var(--c-border); color:var(--c-text2); border-radius:7px; padding:4px 9px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
+        .drv-btn:hover { background:var(--c-accent); color:#fff; border-color:var(--c-accent); }
+        .drv-empty { text-align:center; color:var(--c-text3); padding:40px 12px; font-size:13px; line-height:1.7; }
+        .status-body { display:flex; flex-direction:column; gap:12px; overflow-y:auto; min-height:0; flex:1; }
+        .st-card { border:1px solid var(--c-border); border-radius:12px; background:var(--c-paper); padding:14px 16px; }
+        .st-card h3 { font-size:13px; font-weight:800; color:var(--c-text); margin:0 0 9px; display:flex; align-items:center; gap:7px; }
+        .st-row { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12.5px; color:var(--c-text2); padding:4px 0; }
+        .st-ok { color:#3fa45b; font-weight:700; } .st-bad { color:#d9534f; font-weight:700; } .st-warn { color:#d98a1f; font-weight:700; }
+        .st-bar { height:12px; border-radius:7px; background:var(--c-border); overflow:hidden; margin-top:8px; }
+        .st-bar-fill { height:100%; background:linear-gradient(90deg,var(--c-accent),#e0896b); transition:width .3s; }
+        .st-sql { width:100%; height:200px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; line-height:1.45; background:var(--c-bg,#f4f1e9); border:1px solid var(--c-border); border-radius:8px; padding:9px; color:var(--c-text); resize:vertical; }
+        body.dark .st-sql { background:#1f1e1c; }
         </style>
+        <div id="drive-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="drv-wrap">
+                <div class="drv-head">
+                    <div>
+                        <div class="drv-title">🗂️ 공용 드라이브</div>
+                        <div class="drv-sub">팀 공용 파일 저장소(Supabase Storage). 업로드한 파일은 소유자·업로드 기록과 함께 보관되고, 문서 작성 중 <b>삽입</b>하거나 이미 올린 파일을 <b>재사용</b>할 수 있어요.</div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                        <input type="file" id="drv-file-input" multiple style="display:none;" onchange="driveOnPick(event)">
+                        <button class="drv-upload" onclick="document.getElementById('drv-file-input').click()">⬆ 업로드</button>
+                    </div>
+                </div>
+                <div class="drv-toolbar">
+                    <input id="drv-search" class="drv-search" placeholder="🔍 파일 검색" oninput="driveState.q=this.value; renderDriveList();">
+                    <span id="drv-usage" class="drv-usage"></span>
+                </div>
+                <div id="drv-list" class="drv-list"></div>
+            </div>
+        </div>
+        <div id="status-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="drv-wrap">
+                <div class="drv-head">
+                    <div>
+                        <div class="drv-title">📡 서버 상태</div>
+                        <div class="drv-sub">Supabase 연결·스토리지 용량·설정 상태를 확인합니다.</div>
+                    </div>
+                    <button class="drv-upload" onclick="renderStatusView()">↻ 새로고침</button>
+                </div>
+                <div id="status-body" class="status-body"></div>
+            </div>
+        </div>
         <div id="git-view" class="hidden" onclick="event.stopPropagation()">
             <div class="gitp-wrap">
                 <div class="gitp-head">
@@ -4589,19 +4654,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     e.preventDefault();
                     const file = items[i].getAsFile();
                     if(!file) continue;
-                    const reader = new FileReader();
-                    reader.onload = function(ev) {
-                        const dataUrl = ev.target.result;
-                        if(!currentData.images) currentData.images = {};
-                        const imgId = 'img_' + Date.now();
-                        currentData.images[imgId] = dataUrl;
-                        // ★ 소스에는 짧은 내부 참조만 남김 → img://imgId
-                        const mdImg = '\n![이미지](img://' + imgId + ')\n';
-                        insertToActiveEditor(e.target, mdImg);
-                        saveData();
-                        showToast('이미지를 삽입했습니다. (내부 저장: ' + imgId + ')', 'success');
-                    };
-                    reader.readAsDataURL(file);
+                    var _tgt = e.target;
+                    // [r40] 우선 Supabase Storage(공용 드라이브)에 저장 → public URL 삽입. 실패(버킷 미설정 등) 시 base64 내부 저장으로 폴백.
+                    (async function(){
+                        var url = null;
+                        try { url = await uploadImageToStorage(file, activeDocId); } catch(err) { url = null; }
+                        if (url) {
+                            insertToActiveEditor(_tgt, '\n![' + (file.name || '이미지') + '](' + url + ')\n');
+                            showToast('🖼 이미지를 드라이브에 저장·삽입했습니다.', 'success');
+                            return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = function(ev) {
+                            const dataUrl = ev.target.result;
+                            if(!currentData.images) currentData.images = {};
+                            const imgId = 'img_' + Date.now();
+                            currentData.images[imgId] = dataUrl;
+                            insertToActiveEditor(_tgt, '\n![이미지](img://' + imgId + ')\n');
+                            saveData();
+                            showToast('이미지 삽입(임시 내부 저장) — 서버 상태 탭에서 드라이브 설정을 하면 공용 저장됩니다.', 'info');
+                        };
+                        reader.readAsDataURL(file);
+                    })();
                     return;
                 }
             }
@@ -4961,6 +5035,206 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var k = d ? (d.kind || 'wiki') : 'wiki';
             return k === 'canon' ? 'canon' : (k === 'personal' ? 'personal' : (k === 'diagram' ? 'graph' : 'docs'));
         }
+        // ============================================================
+        // [r40] 공용 드라이브 (Supabase Storage) + 서버 상태
+        //   공개 버킷 'drive' (다운로드 공개·쓰기 RLS). 메타: drive_files 테이블.
+        // ============================================================
+        var DRIVE_BUCKET = 'drive';
+        var DRIVE_QUOTA_BYTES = 5 * 1024 * 1024 * 1024; // 5GB 무료 티어
+        var driveState = { files: [], loaded: false, loading: false, q: '', bucketOk: null, tableOk: null };
+        function _driveUid() { return 'df_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+        function _driveEsc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function _driveFmt(n) { n = n || 0; if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB'; return (n / 1073741824).toFixed(2) + ' GB'; }
+        function _driveSafeName(name) { return (name || 'file').normalize('NFC').replace(/[^\w.\-가-힣]/g, '_').slice(-80); }
+        function _driveIsImage(mime, name) { return /^image\//.test(mime || '') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(name || ''); }
+        function _driveIcon(m) { var n = (m.name || '').toLowerCase(), mi = m.mime || ''; if (_driveIsImage(mi, n)) return '🖼️'; if (/pdf/.test(mi) || /\.pdf$/.test(n)) return '📕'; if (/\.(zip|rar|7z|tar|gz)$/.test(n)) return '🗜️'; if (/\.(html?|js|ts|css|json|py|java|c|cpp)$/.test(n)) return '📄'; if (/\.(mp4|webm|mov|avi)$/.test(n)) return '🎬'; if (/\.(mp3|wav|ogg|flac)$/.test(n)) return '🎵'; if (/\.(docx?|hwp)$/.test(n)) return '📝'; if (/\.(xlsx?|csv)$/.test(n)) return '📊'; return '📎'; }
+
+        function _mapDriveRow(d) { return { id: d.id, name: d.name, path: d.path, url: d.url, mime: d.mime || '', size: d.size || 0, projectId: d.project_id, uploadedBy: d.uploaded_by, uploadedByName: d.uploaded_by_name || '', createdAt: d.created_at ? new Date(d.created_at).getTime() : 0, updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : 0, history: d.history || [], linkedDocIds: d.linked_doc_ids || [], deleted: !!d.deleted }; }
+        async function dbUpsertDriveFile(m) {
+            if (!supabaseClient) return { error: null };
+            var payload = { id: m.id, name: m.name, path: m.path, url: m.url, mime: m.mime, size: m.size, project_id: m.projectId, uploaded_by: m.uploadedBy, uploaded_by_name: m.uploadedByName, created_at: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(), updated_at: new Date().toISOString(), history: m.history || [], linked_doc_ids: m.linkedDocIds || [], deleted: !!m.deleted };
+            var r = await supabaseClient.from('drive_files').upsert(payload);
+            if (r.error) { console.warn('[dbUpsertDriveFile]', r.error.message); }
+            return { error: r.error };
+        }
+        async function dbLoadDriveFiles() {
+            if (!supabaseClient) return { error: null, files: [] };
+            var r = await supabaseClient.from('drive_files').select('*').eq('deleted', false).order('created_at', { ascending: false });
+            if (r.error) return { error: r.error, files: [] };
+            return { error: null, files: (r.data || []).map(_mapDriveRow) };
+        }
+        // 파일 업로드 (Storage + 메타). 반환: 메타객체 or null
+        async function driveUploadFile(file, opts) {
+            opts = opts || {};
+            if (!file) return null;
+            if (!supabaseClient) { showToast('DB 연결이 없습니다.', 'alert'); return null; }
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return null; }
+            var id = _driveUid();
+            var path = (activeProjectId || 'default') + '/' + id + '_' + _driveSafeName(file.name || 'file');
+            var up;
+            try { up = await supabaseClient.storage.from(DRIVE_BUCKET).upload(path, file, { upsert: false, contentType: file.type || undefined }); }
+            catch (e) { up = { error: e }; }
+            if (up && up.error) { driveState.bucketOk = false; if (!opts.silent) showToast('업로드 실패: ' + (up.error.message || up.error) + ' — 서버 상태 탭에서 버킷/정책 설정을 확인하세요.', 'alert'); return null; }
+            driveState.bucketOk = true;
+            var url = '';
+            try { url = supabaseClient.storage.from(DRIVE_BUCKET).getPublicUrl(path).data.publicUrl; } catch (e) {}
+            var m = { id: id, name: file.name || 'file', path: path, url: url, mime: file.type || '', size: file.size || 0, projectId: activeProjectId, uploadedBy: currentUser.id, uploadedByName: myNickname || '', createdAt: Date.now(), updatedAt: Date.now(), history: [{ action: 'upload', userId: currentUser.id, userName: myNickname || '', at: Date.now() }], linkedDocIds: opts.docId ? [opts.docId] : [], deleted: false };
+            await dbUpsertDriveFile(m);
+            driveState.files.unshift(m);
+            return m;
+        }
+        // 이미지 → Storage 업로드 후 public URL 반환 (실패 시 null → 호출부가 base64 폴백)
+        async function uploadImageToStorage(file, docId) { var m = await driveUploadFile(file, { docId: docId, silent: true }); return m ? m.url : null; }
+        // 문서 툴바 🖼 이미지 버튼 — 파일 선택 → Storage 업로드 → 본문 삽입
+        function docAttachImage(docId) {
+            var inp = document.getElementById('_docImgInput');
+            if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.id = '_docImgInput'; inp.style.display = 'none'; document.body.appendChild(inp); }
+            inp.onchange = async function () {
+                var f = inp.files && inp.files[0]; inp.value = '';
+                if (!f) return;
+                showToast('🖼 업로드 중...', 'info');
+                var url = await uploadImageToStorage(f, docId || activeDocId);
+                if (url) { var ta = document.getElementById('doc-editor-textarea'); if (ta) insertAtCursor('\n![' + (f.name || '이미지') + '](' + url + ')\n'); showToast('🖼 이미지 첨부됨', 'success'); }
+                else showToast('업로드 실패 — 서버 상태 탭에서 드라이브 설정을 확인하세요.', 'alert');
+            };
+            inp.click();
+        }
+        async function driveOnPick(ev) {
+            var files = Array.prototype.slice.call(ev.target.files || []);
+            ev.target.value = '';
+            if (!files.length) return;
+            showToast('⬆ ' + files.length + '개 업로드 중...', 'info');
+            var ok = 0;
+            for (var i = 0; i < files.length; i++) { var m = await driveUploadFile(files[i]); if (m) ok++; }
+            if (ok) showToast('✅ ' + ok + '개 업로드 완료', 'success');
+            renderDriveList();
+        }
+        async function driveDelete(id) {
+            var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
+            if (m.uploadedBy && currentUser && m.uploadedBy !== currentUser.id) { showToast('본인이 올린 파일만 삭제할 수 있습니다.', 'alert'); return; }
+            var ok = await uiConfirm({ title: '파일 삭제', message: "'" + (m.name || '') + "' 을(를) 삭제할까요? 이 파일을 인용한 문서에서 링크가 깨질 수 있습니다.", confirmText: '삭제', danger: true });
+            if (!ok) return;
+            try { await supabaseClient.storage.from(DRIVE_BUCKET).remove([m.path]); } catch (e) {}
+            try { await supabaseClient.from('drive_files').update({ deleted: true, updated_at: new Date().toISOString() }).eq('id', id); } catch (e) {}
+            driveState.files = driveState.files.filter(function (f) { return f.id !== id; });
+            renderDriveList(); showToast('🗑 삭제됨', 'info');
+        }
+        function driveCopyLink(id) { var m = driveState.files.find(function (f) { return f.id === id; }); if (m && m.url) { copyTextToClipboard(m.url, '🔗 링크 복사됨'); } }
+        function driveDownload(id) { var m = driveState.files.find(function (f) { return f.id === id; }); if (m && m.url) window.open(m.url, '_blank'); }
+        // 활성 문서 본문에 파일 삽입 (이미지는 ![], 그 외는 링크)
+        function driveInsertToDoc(id) {
+            var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
+            if (!activeDocId) { showToast('먼저 문서를 여세요 (문서 탭).', 'alert'); return; }
+            var snippet = _driveIsImage(m.mime, m.name) ? ('\n![' + (m.name || '이미지') + '](' + m.url + ')\n') : ('\n[' + (m.name || '파일') + '](' + m.url + ')\n');
+            var ta = document.getElementById('doc-editor-textarea');
+            if (ta) { insertAtCursor(snippet); }
+            // 링크 기록
+            if (m.linkedDocIds.indexOf(activeDocId) === -1) { m.linkedDocIds.push(activeDocId); dbUpsertDriveFile(m); }
+            showToast('📎 문서에 삽입됨 (문서 탭에서 확인)', 'success');
+        }
+        async function renderDriveView() {
+            driveState.loading = true; renderDriveList();
+            var r = await dbLoadDriveFiles();
+            driveState.loading = false;
+            if (r.error) { driveState.tableOk = false; }
+            else { driveState.tableOk = true; driveState.files = r.files; driveState.loaded = true; }
+            renderDriveList();
+        }
+        function renderDriveList() {
+            var list = document.getElementById('drv-list'); if (!list) return;
+            var usage = document.getElementById('drv-usage');
+            var used = driveState.files.reduce(function (s, f) { return s + (f.size || 0); }, 0);
+            if (usage) usage.textContent = '사용량 ' + _driveFmt(used) + ' / 5 GB · ' + driveState.files.length + '개';
+            if (driveState.loading && !driveState.files.length) { list.innerHTML = '<div class="drv-empty">불러오는 중…</div>'; return; }
+            if (driveState.tableOk === false) { list.innerHTML = '<div class="drv-empty">⚠️ drive_files 테이블이 없습니다.<br><b>서버 상태</b> 탭에서 설정 SQL을 실행하세요.</div>'; return; }
+            var q = (driveState.q || '').toLowerCase().trim();
+            var files = driveState.files.filter(function (f) { return !q || (f.name || '').toLowerCase().indexOf(q) !== -1; });
+            if (!files.length) { list.innerHTML = '<div class="drv-empty">' + (q ? '검색 결과가 없습니다.' : '아직 파일이 없습니다.<br>⬆ 업로드 버튼으로 첫 파일을 올려보세요.') + '</div>'; return; }
+            list.innerHTML = files.map(function (m) {
+                var thumb = _driveIsImage(m.mime, m.name) && m.url ? '<img class="drv-thumb" src="' + _driveEsc(m.url) + '" alt="" loading="lazy">' : '<span class="drv-ic">' + _driveIcon(m) + '</span>';
+                var when = m.createdAt ? new Date(m.createdAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) : '';
+                var own = m.uploadedBy && currentUser && m.uploadedBy === currentUser.id;
+                return '<div class="drv-row">' + thumb +
+                    '<div class="drv-meta"><div class="drv-name" title="' + _driveEsc(m.name) + '">' + _driveEsc(m.name) + '</div>' +
+                    '<div class="drv-info">' + _driveEsc(m.uploadedByName || '?') + ' · ' + _driveFmt(m.size) + ' · ' + when + (m.linkedDocIds && m.linkedDocIds.length ? ' · 🔗' + m.linkedDocIds.length : '') + '</div></div>' +
+                    '<div class="drv-acts">' +
+                    '<button class="drv-btn" onclick="driveInsertToDoc(\'' + m.id + '\')" title="현재 문서에 삽입">＋문서</button>' +
+                    '<button class="drv-btn" onclick="driveDownload(\'' + m.id + '\')">열기</button>' +
+                    '<button class="drv-btn" onclick="driveCopyLink(\'' + m.id + '\')">링크</button>' +
+                    (own ? '<button class="drv-btn" onclick="driveDelete(\'' + m.id + '\')">🗑</button>' : '') +
+                    '</div></div>';
+            }).join('');
+        }
+        function driveStorageSetupSql() {
+            return [
+                '-- [1단계] Supabase 대시보드 → Storage → New bucket',
+                "--         이름: drive   /   Public bucket 체크 → Save",
+                '-- [2단계] 아래 SQL을 SQL Editor에 붙여넣고 실행 (메타 테이블 + 정책)',
+                'create table if not exists drive_files (',
+                '  id text primary key, name text, path text, url text, mime text, size bigint,',
+                '  project_id text, uploaded_by text, uploaded_by_name text,',
+                '  created_at timestamptz default now(), updated_at timestamptz default now(),',
+                "  history jsonb default '[]'::jsonb, linked_doc_ids jsonb default '[]'::jsonb, deleted boolean default false",
+                ');',
+                'alter table drive_files enable row level security;',
+                'drop policy if exists "drive_files_read" on drive_files;',
+                'create policy "drive_files_read" on drive_files for select using (true);',
+                'drop policy if exists "drive_files_write" on drive_files;',
+                'create policy "drive_files_write" on drive_files for insert with check (auth.role() = \'authenticated\');',
+                'drop policy if exists "drive_files_update" on drive_files;',
+                'create policy "drive_files_update" on drive_files for update using (auth.role() = \'authenticated\');',
+                'drop policy if exists "drive_files_delete" on drive_files;',
+                'create policy "drive_files_delete" on drive_files for delete using (auth.role() = \'authenticated\');',
+                '-- Storage 정책 (drive 버킷): 다운로드 공개, 업로드/수정/삭제는 로그인만',
+                'create policy "drive_obj_read" on storage.objects for select using ( bucket_id = \'drive\' );',
+                'create policy "drive_obj_insert" on storage.objects for insert with check ( bucket_id = \'drive\' and auth.role() = \'authenticated\' );',
+                'create policy "drive_obj_update" on storage.objects for update using ( bucket_id = \'drive\' and auth.role() = \'authenticated\' );',
+                'create policy "drive_obj_delete" on storage.objects for delete using ( bucket_id = \'drive\' and auth.role() = \'authenticated\' );'
+            ].join('\n');
+        }
+        async function _driveProbeBucket() {
+            if (!supabaseClient) return false;
+            try {
+                // getBucket이 가장 정확(존재 여부). 안 되면 list로 폴백.
+                if (supabaseClient.storage.getBucket) {
+                    var g = await supabaseClient.storage.getBucket(DRIVE_BUCKET);
+                    if (g && g.data && g.data.id) return true;
+                    if (g && g.error) return false;
+                }
+                var r = await supabaseClient.storage.from(DRIVE_BUCKET).list('', { limit: 1 });
+                return !r.error;
+            } catch (e) { return false; }
+        }
+        async function renderStatusView() {
+            var body = document.getElementById('status-body'); if (!body) return;
+            body.innerHTML = '<div class="st-card">점검 중…</div>';
+            var connected = !!supabaseClient;
+            var bucketOk = await _driveProbeBucket();
+            var load = await dbLoadDriveFiles();
+            var tableOk = !load.error;
+            if (tableOk) driveState.files = load.files;
+            var used = (load.files || []).reduce(function (s, f) { return s + (f.size || 0); }, 0);
+            var pct = Math.min(100, used / DRIVE_QUOTA_BYTES * 100);
+            var html = '';
+            html += '<div class="st-card"><h3>🔌 연결</h3>' +
+                '<div class="st-row"><span>Supabase 클라이언트</span><span class="' + (connected ? 'st-ok' : 'st-bad') + '">' + (connected ? '연결됨' : '없음') + '</span></div>' +
+                '<div class="st-row"><span>로그인 사용자</span><span class="' + (currentUser ? 'st-ok' : 'st-warn') + '">' + (currentUser ? _driveEsc(myNickname || currentUser.id) : '로그인 안 됨') + '</span></div>' +
+                '<div class="st-row"><span>실시간(Realtime)</span><span class="st-ok">채널 활성</span></div></div>';
+            html += '<div class="st-card"><h3>🗄️ 스토리지</h3>' +
+                '<div class="st-row"><span>버킷 <code>drive</code></span><span class="' + (bucketOk ? 'st-ok' : 'st-bad') + '">' + (bucketOk ? '있음 (공개)' : '없음 — 설정 필요') + '</span></div>' +
+                '<div class="st-row"><span>메타 테이블 <code>drive_files</code></span><span class="' + (tableOk ? 'st-ok' : 'st-bad') + '">' + (tableOk ? '있음' : '없음 — 설정 필요') + '</span></div>' +
+                '<div class="st-row"><span>파일 수</span><span>' + (load.files || []).length + '개</span></div>' +
+                '<div class="st-row"><span>사용 용량</span><span><b>' + _driveFmt(used) + '</b> / 5 GB (' + pct.toFixed(1) + '%)</span></div>' +
+                '<div class="st-bar"><div class="st-bar-fill" style="width:' + pct + '%;"></div></div></div>';
+            if (!bucketOk || !tableOk) {
+                html += '<div class="st-card"><h3>⚙️ 설정 (1회)</h3>' +
+                    '<div class="st-row" style="display:block;color:var(--c-text2);">아래 절차로 공용 드라이브를 활성화하세요. 버킷은 대시보드에서 만들고, SQL은 복사해 실행합니다.</div>' +
+                    '<textarea class="st-sql" readonly onclick="this.select()">' + _driveEsc(driveStorageSetupSql()) + '</textarea>' +
+                    '<button class="drv-btn" style="margin-top:8px;" onclick="copyTextToClipboard(driveStorageSetupSql(),\'📋 설정 SQL 복사됨 — Supabase SQL Editor에 붙여넣어 실행\')">📋 SQL 복사</button></div>';
+            }
+            body.innerHTML = html;
+        }
+
         function switchView(viewName) {
             currentView = viewName;
             updateMobNav(viewName);
@@ -4984,6 +5258,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [Git] 페이지 토글
             var _csGit = document.getElementById('cs-nav-git'); if (_csGit) _csGit.classList.toggle('active', viewName === 'git');
             var _gitvw = document.getElementById('git-view'); if (_gitvw) { _gitvw.classList.toggle('hidden', viewName !== 'git'); _gitvw.classList.toggle('block', viewName === 'git'); }
+            // [r40] 공용 드라이브 / 서버 상태 토글
+            var _csDrv = document.getElementById('cs-nav-drive'); if (_csDrv) _csDrv.classList.toggle('active', viewName === 'drive');
+            var _drvvw = document.getElementById('drive-view'); if (_drvvw) { _drvvw.classList.toggle('hidden', viewName !== 'drive'); _drvvw.classList.toggle('block', viewName === 'drive'); }
+            var _csSt = document.getElementById('cs-nav-status'); if (_csSt) _csSt.classList.toggle('active', viewName === 'status');
+            var _stvw = document.getElementById('status-view'); if (_stvw) { _stvw.classList.toggle('hidden', viewName !== 'status'); _stvw.classList.toggle('block', viewName === 'status'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -5078,6 +5357,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gpgit = document.getElementById('gif-picker'); if (_gpgit) _gpgit.style.display = 'none';
                 if (typeof gitRender === 'function') gitRender();
+            } else if (viewName === 'drive') {
+                // [r40] 공용 드라이브
+                var _kvd = document.getElementById('kanban-view'); if (_kvd) { _kvd.classList.add('hidden'); _kvd.classList.remove('block'); }
+                var _dvd = document.getElementById('docs-view'); if (_dvd) { _dvd.classList.add('hidden'); _dvd.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpd = document.getElementById('gif-picker'); if (_gpd) _gpd.style.display = 'none';
+                if (typeof renderDriveView === 'function') renderDriveView();
+            } else if (viewName === 'status') {
+                // [r40] 서버 상태
+                var _kvst = document.getElementById('kanban-view'); if (_kvst) { _kvst.classList.add('hidden'); _kvst.classList.remove('block'); }
+                var _dvst = document.getElementById('docs-view'); if (_dvst) { _dvst.classList.add('hidden'); _dvst.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpst = document.getElementById('gif-picker'); if (_gpst) _gpst.style.display = 'none';
+                if (typeof renderStatusView === 'function') renderStatusView();
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
@@ -9543,6 +9836,7 @@ return data;
             bar.innerHTML = `<b style="color:#4d4a44;">🔗 연결</b>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','task')">+ 태스크</button>
                 <button class="link-add-btn" onclick="openLinkPicker('doc','${doc.id}','doc')">+ 문서</button>
+                <button class="link-add-btn" onclick="docAttachImage('${doc.id}')" title="이미지를 공용 드라이브에 올리고 본문에 삽입">🖼 이미지</button>
                 <span class="link-sep"></span>
                 <button class="link-add-btn" onclick="openReviewModal('decision',null,'${doc.id}')">🗳 리뷰요청</button>
                 ${lockBtn}
@@ -11884,17 +12178,26 @@ ${intrLog}
         }
 
         function processDroppedImage(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const dataUrl = e.target.result;
-                const textarea = document.getElementById('doc-editor-textarea');
-                if(!textarea) return;
-                activeEditorId = 'doc-editor-textarea';
-                const markdownImg = '\n![' + file.name + '](' + dataUrl + ')\n';
-                insertToActiveEditor(textarea, markdownImg);
-                showToast("이미지 '" + file.name + "' 첨부됨", 'success');
-            };
-            reader.readAsDataURL(file);
+            const textarea = document.getElementById('doc-editor-textarea');
+            if(!textarea) return;
+            activeEditorId = 'doc-editor-textarea';
+            // [r40] 드롭 이미지도 공용 드라이브(Storage)에 저장 → public URL. 실패 시 base64(img://) 폴백.
+            (async function(){
+                var url = null;
+                try { url = await uploadImageToStorage(file, activeDocId); } catch(e) { url = null; }
+                if (url) { insertToActiveEditor(textarea, '\n![' + file.name + '](' + url + ')\n'); showToast("🖼 '" + file.name + "' 드라이브에 저장·첨부됨", 'success'); return; }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    var dataUrl = e.target.result;
+                    if(!currentData.images) currentData.images = {};
+                    var imgId = 'img_' + Date.now();
+                    currentData.images[imgId] = dataUrl;
+                    insertToActiveEditor(textarea, '\n![' + file.name + '](img://' + imgId + ')\n');
+                    saveData();
+                    showToast("이미지 '" + file.name + "' 첨부(임시 내부저장) — 드라이브 설정 시 공용 저장", 'info');
+                };
+                reader.readAsDataURL(file);
+            })();
         }
 
         // ==========================================
