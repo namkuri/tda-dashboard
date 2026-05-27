@@ -118,6 +118,11 @@ fn main() {
                     let urls: Vec<String> = event.urls().iter().map(|u| u.to_string()).collect();
                     forward_auth_urls(&handle, urls);
                 });
+                // [r61 debug] OAuth 404 진단: release에서도 콘솔 확인 가능하도록 devtools 자동 오픈.
+                //   (Cargo.toml의 tauri "devtools" feature 필요) — 원인 파악 후 제거 예정.
+                if let Some(win) = app.get_webview_window("main") {
+                    win.open_devtools();
+                }
             }
             Ok(())
         })
