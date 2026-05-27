@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r44 (r43 + 프로젝트 변경 시 현재 페이지뷰(스프린트·그래프·Git·리뷰·드라이브·상태) 즉시 갱신 - 새로고침 불필요) -->
+<!-- BUILD: 2026-05-27 r45 (r44 + 이미지 드롭 "처리 실패" 오탐 수정(이미지는 임포터 아닌 이미지핸들러로)·첨부 이미지 자동 폴더정리(시스템명/날짜/소유자)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -5078,6 +5078,33 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var driveState = { files: [], loaded: false, loading: false, q: '', bucketOk: null, tableOk: null, cwd: '' };
         function _driveIsFolder(m) { return m && m.mime === '__folder__'; }
         function _driveFullPath(m) { return (m.folder ? m.folder + '/' : '') + m.name; }
+        // [r45] 첨부 출처(현재 뷰) → 시스템명
+        function _driveSysName() {
+            var map = { kanban: '칸반', docs: '문서', canon: '게임위키', personal: '개인문서', sprint: '스프린트', graph: '그래프', git: 'Git', review: '리뷰', drive: '드라이브', status: '서버상태' };
+            return map[(typeof currentView !== 'undefined' && currentView) || 'docs'] || '문서';
+        }
+        function _driveSeg(s) { return String(s || '').replace(/[\/\\]/g, '_').trim() || '기타'; }
+        // 자동 정리 경로: 시스템명/날짜(YYYY-MM-DD)/소유자
+        function _driveAutoFolderPath() {
+            var d = new Date(); var ymd = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+            return _driveSeg(_driveSysName()) + '/' + ymd + '/' + _driveSeg(myNickname || '익명');
+        }
+        // 경로의 각 폴더가 없으면 생성(중복 방지: 로드 후 검사). 반환: path
+        async function _driveEnsureFolderPath(path) {
+            if (!path) return '';
+            if (!driveState.loaded) { var r = await dbLoadDriveFiles(); if (!r.error) { driveState.files = r.files; driveState.loaded = true; } }
+            var segs = path.split('/').filter(Boolean), parent = '';
+            for (var i = 0; i < segs.length; i++) {
+                var seg = segs[i], full = parent ? parent + '/' + seg : seg;
+                var exists = driveState.files.some(function (f) { return _driveIsFolder(f) && _driveFullPath(f) === full; });
+                if (!exists) {
+                    var fm = { id: _driveUid(), name: seg, path: '', url: '', mime: '__folder__', size: 0, projectId: activeProjectId, uploadedBy: currentUser ? currentUser.id : '', uploadedByName: myNickname || '', createdAt: Date.now(), updatedAt: Date.now(), history: [{ action: 'create', userId: currentUser && currentUser.id, userName: myNickname || '', at: Date.now() }], linkedDocIds: [], deleted: false, folder: parent };
+                    driveState.files.unshift(fm); await dbUpsertDriveFile(fm);
+                }
+                parent = full;
+            }
+            return path;
+        }
         function _driveUid() { return 'df_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
         function _driveEsc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
         function _driveFmt(n) { n = n || 0; if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB'; return (n / 1073741824).toFixed(2) + ' GB'; }
@@ -5116,13 +5143,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             driveState.bucketOk = true;
             var url = '';
             try { url = supabaseClient.storage.from(DRIVE_BUCKET).getPublicUrl(path).data.publicUrl; } catch (e) {}
-            var m = { id: id, name: file.name || 'file', path: path, url: url, mime: file.type || '', size: file.size || 0, projectId: activeProjectId, uploadedBy: currentUser.id, uploadedByName: myNickname || '', createdAt: Date.now(), updatedAt: Date.now(), history: [{ action: 'upload', userId: currentUser.id, userName: myNickname || '', at: Date.now() }], linkedDocIds: opts.docId ? [opts.docId] : [], deleted: false, folder: (opts.folder != null ? opts.folder : (driveState.cwd || '')) };
+            // [r45] 폴더 결정: autoFolder(첨부=시스템명/날짜/소유자) > 지정 folder > 현재 폴더(cwd)
+            var folder;
+            if (opts.autoFolder) { try { folder = await _driveEnsureFolderPath(_driveAutoFolderPath()); } catch (e) { folder = ''; } }
+            else if (opts.folder != null) folder = opts.folder;
+            else folder = driveState.cwd || '';
+            var m = { id: id, name: file.name || 'file', path: path, url: url, mime: file.type || '', size: file.size || 0, projectId: activeProjectId, uploadedBy: currentUser.id, uploadedByName: myNickname || '', createdAt: Date.now(), updatedAt: Date.now(), history: [{ action: 'upload', userId: currentUser.id, userName: myNickname || '', at: Date.now() }], linkedDocIds: opts.docId ? [opts.docId] : [], deleted: false, folder: folder };
             await dbUpsertDriveFile(m);
             driveState.files.unshift(m);
             return m;
         }
-        // 이미지 → Storage 업로드 후 public URL 반환 (실패 시 null → 호출부가 base64 폴백)
-        async function uploadImageToStorage(file, docId) { var m = await driveUploadFile(file, { docId: docId, silent: true }); return m ? m.url : null; }
+        // 이미지 → Storage 업로드 후 public URL 반환 (실패 시 null → 호출부가 base64 폴백). 첨부는 자동 폴더 정리.
+        async function uploadImageToStorage(file, docId) { var m = await driveUploadFile(file, { docId: docId, silent: true, autoFolder: true }); return m ? m.url : null; }
         // 문서 툴바 🖼 이미지 버튼 — 파일 선택 → Storage 업로드 → 본문 삽입
         function docAttachImage(docId) {
             var inp = document.getElementById('_docImgInput');
@@ -12337,6 +12369,7 @@ ${intrLog}
                     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
 
                     if (externalUrl) {
+                        e.stopPropagation(); // [r45] 이미지로 처리했으니 pane(문서 임포터)로 버블 차단 → "지원하지 않는 형식" 오류 방지
                         const textarea = document.getElementById('doc-editor-textarea');
                         if (textarea) {
                             activeEditorId = 'doc-editor-textarea';
@@ -12345,8 +12378,9 @@ ${intrLog}
                         }
                         return;
                     }
-                    // 외부 URL이 없으면 기존대로 파일 처리 (스크린샷 등)
+                    // 외부 URL이 없으면 기존대로 파일 처리 (스크린샷 등). 이미지가 아니면 버블 허용 → pane이 docx/md 등 임포트.
                     if(files.length === 0) return;
+                    e.stopPropagation(); // [r45] 이미지 파일 처리 → pane 임포터로 버블 차단
                     files.forEach(processDroppedImage);
                 });
             });
@@ -13487,7 +13521,8 @@ ${intrLog}
                 if(overlay) overlay.classList.remove('show');
                 var files = Array.from(e.dataTransfer.files);
                 if(!files.length) return;
-                files.forEach(processEditorFile);
+                // [r45] 이미지는 문서 임포터(processEditorFile)가 아니라 이미지 핸들러로 — "지원하지 않는 형식" 오류 방지
+                files.forEach(function(f){ if(f.type && f.type.startsWith('image/')) processDroppedImage(f); else processEditorFile(f); });
             });
         }
 
