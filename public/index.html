@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r54 (r53 + 코멘트 N번째 occurrence 정확앵커·체크리스트 항목 개별삭제·산출물/첨부 공용 리치피커(폴더/시점/작성자/버전/스프린트 힌트+검색+즉석 새 문서/흐름 생성)) -->
+<!-- BUILD: 2026-05-27 r55 (r54 + 좌측내비 대분류 그룹화(운영/자료/저장소/도구)·헤더 얇은폰트 클릭 접기펴기(로컬)·그룹내 드래그 순서변경(로컬)·게임위키→프로젝트 위키[Official] 리네임) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1900,6 +1900,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .cs-nav.active { background: var(--c-accent-soft); color: var(--c-accent); }
         .cs-nav .cs-ico { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
         .cs-section { font-size: 10.5px; font-weight: 700; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 10px 3px; }
+        /* [r55] 사이드바 대분류 그룹 (얇은 폰트 헤더 · 클릭 접기/펴기 · 내부 드래그 순서변경) */
+        .cs-group { display: flex; flex-direction: column; }
+        .cs-grp-head { display: flex; align-items: center; gap: 6px; width: 100%; border: none; background: none; cursor: pointer; padding: 9px 10px 3px; font-size: 10.5px; font-weight: 300; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.08em; text-align: left; }
+        .cs-grp-head:hover { color: var(--c-text2); }
+        .cs-grp-caret { font-size: 8px; transition: transform .15s; opacity: .6; display: inline-block; }
+        .cs-group.collapsed .cs-grp-caret { transform: rotate(-90deg); }
+        .cs-group.collapsed .cs-grp-items { display: none; }
+        .cs-grp-items { display: flex; flex-direction: column; gap: 1px; }
+        .cs-grp-items .cs-nav.sortable-ghost { opacity: .4; }
+        .cs-grp-items .cs-nav.sortable-chosen { background: var(--c-accent-soft); }
+        .cs-official { margin-left: 4px; font-size: 8.5px; font-weight: 800; color: #2563eb; background: rgba(37,99,235,.12); border: 1px solid rgba(37,99,235,.3); border-radius: 5px; padding: 1px 4px; letter-spacing: .02em; }
+        body.dark .cs-official { color: #93b4ff; background: rgba(120,150,255,.14); border-color: rgba(120,150,255,.3); }
+        /* 사이드바 아이콘 축소 모드: 그룹 헤더 숨기고 항목 항상 표시 */
+        html.is-desktop body.sidebar-collapsed .cs-grp-head { display: none; }
+        html.is-desktop body.sidebar-collapsed .cs-group.collapsed .cs-grp-items { display: flex; }
+        html.is-desktop body.sidebar-collapsed .cs-official { display: none; }
         .cs-spacer { flex: 1 1 auto; min-height: 12px; }
         .cs-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; background: var(--c-accent); color: #fff; border-radius: 9px; font-size: 10px; font-weight: 800; display: none; align-items: center; justify-content: center; }
         .cs-foot { border-top: 1px solid var(--c-border); padding-top: 8px; margin-top: 4px; }
@@ -2730,7 +2746,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         </button>
         <button onclick="switchView('canon')" id="mob-tab-canon" class="mob-tab">
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
-            <span class="mob-lbl">게임위키</span>
+            <span class="mob-lbl">프로젝트위키</span>
         </button>
         <button onclick="switchView('review')" id="mob-tab-review" class="mob-tab">
             <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -2862,21 +2878,40 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <span class="cs-label cs-brand-text" id="cs-project-name">프로젝트</span>
                 <span class="cs-label" style="margin-left:auto;font-size:10px;opacity:.55;">▾</span>
             </button>
-            <button class="cs-nav" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
-            <button class="cs-nav active" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
-            <button class="cs-nav" id="cs-nav-docs" onclick="switchView('docs')" title="문서"><span class="cs-ico">📚</span><span class="cs-label">문서</span></button>
-            <button class="cs-nav" id="cs-nav-canon" onclick="switchView('canon')" title="게임 위키"><span class="cs-ico">🎮</span><span class="cs-label">게임 위키</span></button>
-            <button class="cs-nav" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
-            <button class="cs-nav" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
-            <button class="cs-nav" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
-            <button class="cs-nav" id="cs-nav-git" onclick="switchView('git')" title="Git"><span class="cs-ico">📦</span><span class="cs-label">Git</span></button>
-            <button class="cs-nav" id="cs-nav-drive" onclick="switchView('drive')" title="공용 드라이브"><span class="cs-ico">🗂️</span><span class="cs-label">공용 드라이브</span></button>
-            <button class="cs-nav" id="cs-nav-history" onclick="switchView('history')" title="히스토리 (활동 기록)"><span class="cs-ico">🗓️</span><span class="cs-label">히스토리</span></button>
-            <div class="cs-section cs-label">도구</div>
-            <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
-            <button class="cs-nav" onclick="openChangeLog()" title="변경 로그"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그</span></button>
-            <button class="cs-nav" onclick="toggleJsonSidebar()" title="DB 도구"><span class="cs-ico">🗄️</span><span class="cs-label">DB 도구</span></button>
-            <button class="cs-nav" id="cs-nav-status" onclick="switchView('status')" title="서버 상태"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
+            <div class="cs-group" data-grp="ops">
+                <button class="cs-grp-head" onclick="toggleNavGroup('ops')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">운영</span></button>
+                <div class="cs-grp-items" data-grp="ops">
+                    <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
+                    <button class="cs-nav active" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
+                    <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
+                    <button class="cs-nav" data-nav="review" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
+                    <button class="cs-nav" data-nav="comment" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
+                </div>
+            </div>
+            <div class="cs-group" data-grp="data">
+                <button class="cs-grp-head" onclick="toggleNavGroup('data')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">자료</span></button>
+                <div class="cs-grp-items" data-grp="data">
+                    <button class="cs-nav" data-nav="docs" id="cs-nav-docs" onclick="switchView('docs')" title="문서"><span class="cs-ico">📚</span><span class="cs-label">문서</span></button>
+                    <button class="cs-nav" data-nav="personal" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
+                    <button class="cs-nav" data-nav="graph" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
+                </div>
+            </div>
+            <div class="cs-group" data-grp="store">
+                <button class="cs-grp-head" onclick="toggleNavGroup('store')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">저장소</span></button>
+                <div class="cs-grp-items" data-grp="store">
+                    <button class="cs-nav" data-nav="drive" id="cs-nav-drive" onclick="switchView('drive')" title="공용 드라이브"><span class="cs-ico">🗂️</span><span class="cs-label">공용 드라이브</span></button>
+                    <button class="cs-nav" data-nav="history" id="cs-nav-history" onclick="switchView('history')" title="히스토리 (활동 기록)"><span class="cs-ico">🗓️</span><span class="cs-label">히스토리</span></button>
+                    <button class="cs-nav" data-nav="git" id="cs-nav-git" onclick="switchView('git')" title="Git"><span class="cs-ico">📦</span><span class="cs-label">Git</span></button>
+                </div>
+            </div>
+            <div class="cs-group" data-grp="tools">
+                <button class="cs-grp-head" onclick="toggleNavGroup('tools')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">도구</span></button>
+                <div class="cs-grp-items" data-grp="tools">
+                    <button class="cs-nav" data-nav="dbtool" onclick="toggleJsonSidebar()" title="DB 도구"><span class="cs-ico">🗄️</span><span class="cs-label">DB 도구</span></button>
+                    <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
+                    <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
+                </div>
+            </div>
             <div class="cs-spacer"></div>
             <div class="cs-foot">
                 <div class="cs-status"><span style="width:7px;height:7px;border-radius:50%;background:var(--ios-green);display:inline-block;flex-shrink:0;"></span> <span class="cs-label">접속 <span id="cs-online">1</span>명</span></div>
@@ -3181,7 +3216,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="canon-wrap">
                 <div class="canon-list-pane">
                     <div class="canon-list-head">
-                        <span>🎮 게임 위키</span>
+                        <span>📘 프로젝트 위키 <span class="cs-official" style="vertical-align:middle;">Official</span></span>
                         <button onclick="createCanonDoc()" class="canon-add">+ 새 문서</button>
                     </div>
                     <input type="text" id="canon-search" oninput="renderCanonView()" placeholder="제목 검색..." class="canon-search">
@@ -3190,7 +3225,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="canon-editor-pane">
                     <div id="canon-empty" class="canon-empty">
                         <div style="font-size:40px;">🎮</div>
-                        <p>왼쪽에서 게임 위키 문서를 선택하거나 <b>새로 만드세요</b>.</p>
+                        <p>왼쪽에서 프로젝트 위키 문서를 선택하거나 <b>새로 만드세요</b>.</p>
                         <p style="font-size:12px;opacity:.7;">실제 게임과 일치하는 조합/게임루프 등을 버전관리·승인과 함께 보관합니다. (프로젝트별)</p>
                     </div>
                     <div id="canon-editor" class="canon-editor" style="display:none;">
@@ -5182,7 +5217,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function _driveFullPath(m) { return (m.folder ? m.folder + '/' : '') + m.name; }
         // [r45] 첨부 출처(현재 뷰) → 시스템명
         function _driveSysName() {
-            var map = { kanban: '칸반', docs: '문서', canon: '게임위키', personal: '개인문서', sprint: '스프린트', graph: '그래프', git: 'Git', review: '리뷰', drive: '드라이브', status: '서버상태' };
+            var map = { kanban: '칸반', docs: '문서', canon: '프로젝트위키', personal: '개인문서', sprint: '스프린트', graph: '그래프', git: 'Git', review: '리뷰', drive: '드라이브', status: '서버상태' };
             return map[(typeof currentView !== 'undefined' && currentView) || 'docs'] || '문서';
         }
         function _driveSeg(s) { return String(s || '').replace(/[\/\\]/g, '_').trim() || '기타'; }
@@ -5599,7 +5634,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function activitySetupSql() {
             return 'create table if not exists activity_log (\n  id text primary key,\n  project_id text,\n  actor_id text,\n  actor_name text,\n  category text,\n  action text,\n  target_id text,\n  target_label text,\n  detail text,\n  created_at timestamptz default now()\n);\nalter table activity_log enable row level security;\ncreate policy "activity_read" on activity_log for select using (true);\ncreate policy "activity_write" on activity_log for insert with check (auth.role() = \'authenticated\');\ncreate index if not exists activity_proj_idx on activity_log (project_id, created_at desc);';
         }
-        var HIST_CATS = { project: { i: '🗂️', n: '프로젝트' }, sprint: { i: '🏃', n: '스프린트' }, kanban: { i: '📋', n: '칸반' }, card: { i: '🃏', n: '카드' }, flow: { i: '🔀', n: '흐름' }, doc: { i: '📄', n: '문서' }, wiki: { i: '🎮', n: '게임위키' }, review: { i: '🗳', n: '리뷰' }, decision: { i: '⚖️', n: '결정' }, git: { i: '📦', n: 'Git' } };
+        var HIST_CATS = { project: { i: '🗂️', n: '프로젝트' }, sprint: { i: '🏃', n: '스프린트' }, kanban: { i: '📋', n: '칸반' }, card: { i: '🃏', n: '카드' }, flow: { i: '🔀', n: '흐름' }, doc: { i: '📄', n: '문서' }, wiki: { i: '📘', n: '프로젝트위키' }, review: { i: '🗳', n: '리뷰' }, decision: { i: '⚖️', n: '결정' }, git: { i: '📦', n: 'Git' } };
         var HIST_FILTERS = [['all', '전체'], ['sprint', '스프린트'], ['board', '칸반·카드'], ['flow', '흐름'], ['doc', '문서·위키'], ['review', '리뷰·결정'], ['git', 'Git']];
         function _histCatGroup(cat) { if (cat === 'kanban' || cat === 'card') return 'board'; if (cat === 'doc' || cat === 'wiki') return 'doc'; if (cat === 'review' || cat === 'decision') return 'review'; if (cat === 'sprint' || cat === 'flow' || cat === 'git') return cat; return 'other'; }
         function _histName(id, fallback) { if (!id) return fallback || '익명'; if (typeof getMemberName === 'function') { var n = getMemberName(id); if (n) return n; } return fallback || id; }
@@ -9028,7 +9063,7 @@ addEventListener("resize",sendPos);
             var _newEmoji = isFolder ? '📁' : (currentDocKind === 'canon' ? '📜' : (currentDocKind === 'personal' ? '🔒' : '📄'));
             const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), emoji: _newEmoji, isCollapsed: false, content: isFolder ? '' : ('# ' + title + '\n\n여기에 내용을 작성하세요...'), createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta };
             currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc);
-            if (typeof logActivity === 'function') { var _dc = currentDocKind === 'canon' ? 'wiki' : 'doc'; logActivity(_dc, 'create', { targetId: newDoc.id, targetLabel: newDoc.title, detail: (isFolder ? '폴더' : (currentDocKind === 'canon' ? '게임위키' : (currentDocKind === 'personal' ? '개인문서' : '문서'))) + ' 생성' }); }
+            if (typeof logActivity === 'function') { var _dc = currentDocKind === 'canon' ? 'wiki' : 'doc'; logActivity(_dc, 'create', { targetId: newDoc.id, targetLabel: newDoc.title, detail: (isFolder ? '폴더' : (currentDocKind === 'canon' ? '프로젝트위키' : (currentDocKind === 'personal' ? '개인문서' : '문서'))) + ' 생성' }); }
             if (isFolder) {
                 if (parentId) { var _pp = currentData.docs.find(function (d) { return d.id === parentId; }); if (_pp) { _pp.isCollapsed = false; } }
                 renderDocTree(); showToast('📁 폴더 "' + title.trim() + '" 생성됨', 'success');
@@ -9511,6 +9546,36 @@ addEventListener("resize",sendPos);
             const ico = document.getElementById('cs-collapse-ico');
             if (ico) ico.textContent = collapsed ? '▶' : '◀';
         }
+        // [r55] 사이드바 대분류: 접기/펴기 상태 + 그룹 내부 항목 순서(로컬 저장)
+        function _saveNavOrder() {
+            var order = {};
+            document.querySelectorAll('#claude-sidebar .cs-group').forEach(function (grp) {
+                var g = grp.getAttribute('data-grp'); var box = grp.querySelector('.cs-grp-items'); if (!box) return;
+                order[g] = Array.prototype.slice.call(box.querySelectorAll('.cs-nav[data-nav]')).map(function (el) { return el.getAttribute('data-nav'); });
+            });
+            try { localStorage.setItem('tda_nav_order', JSON.stringify(order)); } catch (e) {}
+        }
+        function toggleNavGroup(g) {
+            var grp = document.querySelector('#claude-sidebar .cs-group[data-grp="' + g + '"]'); if (!grp) return;
+            grp.classList.toggle('collapsed');
+            var st = {}; try { st = JSON.parse(localStorage.getItem('tda_nav_collapsed') || '{}'); } catch (e) {}
+            st[g] = grp.classList.contains('collapsed');
+            try { localStorage.setItem('tda_nav_collapsed', JSON.stringify(st)); } catch (e) {}
+        }
+        function initNavGroups() {
+            var collapsed = {}, order = {};
+            try { collapsed = JSON.parse(localStorage.getItem('tda_nav_collapsed') || '{}'); } catch (e) {}
+            try { order = JSON.parse(localStorage.getItem('tda_nav_order') || '{}'); } catch (e) {}
+            document.querySelectorAll('#claude-sidebar .cs-group').forEach(function (grp) {
+                var g = grp.getAttribute('data-grp'); var box = grp.querySelector('.cs-grp-items'); if (!box) return;
+                if (collapsed[g]) grp.classList.add('collapsed');
+                if (Array.isArray(order[g])) order[g].forEach(function (nv) { var el = box.querySelector('.cs-nav[data-nav="' + nv + '"]'); if (el) box.appendChild(el); });
+                if (typeof Sortable !== 'undefined' && !box._navSortable) {
+                    box._navSortable = new Sortable(box, { group: 'nav-' + g, animation: 150, draggable: '.cs-nav', ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', onEnd: _saveNavOrder });
+                }
+            });
+            if (typeof Sortable === 'undefined') setTimeout(initNavGroups, 400); // Sortable CDN 로드 대기 후 드래그 바인딩
+        }
         window.addEventListener('DOMContentLoaded', function () {
             try {
                 if (localStorage.getItem('pb3_sidebar_collapsed') === '1') {
@@ -9519,6 +9584,7 @@ addEventListener("resize",sendPos);
                     if (ico) ico.textContent = '▶';
                 }
             } catch (e) {}
+            if (typeof initNavGroups === 'function') initNavGroups();
         });
 
         function renderSprintBand() {
@@ -10010,9 +10076,9 @@ addEventListener("resize",sendPos);
             var createBtns = '';
             if (opts.allowCreate) {
                 var btns = [];
-                if (opts.type === 'docall') { btns = [['wiki', '새 문서'], ['canon', '새 게임위키'], ['diagram', '새 흐름']]; }
+                if (opts.type === 'docall') { btns = [['wiki', '새 문서'], ['canon', '새 프로젝트위키'], ['diagram', '새 흐름']]; }
                 else if (opts.type === 'graph') btns = [['diagram', '새 흐름']];
-                else if (opts.type === 'wiki') btns = [['canon', '새 게임위키']];
+                else if (opts.type === 'wiki') btns = [['canon', '새 프로젝트위키']];
                 else if (opts.type === 'doc') btns = [['wiki', '새 문서']];
                 createBtns = btns.map(function (b) { return '<button class="rp-create-btn" onclick="_spvRefCreate(\'' + b[0] + '\')">➕ ' + b[1] + '</button>'; }).join('');
             }
@@ -10022,7 +10088,7 @@ addEventListener("resize",sendPos);
         function _spvRefFilter(q) { q = (q || '').toLowerCase(); var box = document.getElementById('rp-list'); if (!box) return; box.querySelectorAll('.rp-item').forEach(function (el) { el.style.display = (!q || (el.getAttribute('data-l') || '').indexOf(q) >= 0) ? '' : 'none'; }); }
         function _spvRefPicked(id) { var cb = _spvRefOnPick; _closeSimpleModal(); if (cb) cb(id); }
         async function _spvRefCreate(kind) {
-            var label = kind === 'diagram' ? '흐름/그래프' : (kind === 'canon' ? '게임위키' : '문서');
+            var label = kind === 'diagram' ? '흐름/그래프' : (kind === 'canon' ? '프로젝트위키' : '문서');
             var title = await uiPrompt({ title: '새 ' + label, label: label + ' 제목', value: '새 ' + label }); if (title === null) return;
             var meta = kind === 'diagram' ? { scope: 'project', diagram: { mode: 'linear', orientation: 'horizontal', points: [], nodes: [], edges: [], memos: [] }, history: [{ action: 'create', by: (currentUser ? currentUser.id : null), byName: myNickname, at: new Date().toISOString() }] } : (kind === 'canon' ? { version: 1, status: 'draft', versionHistory: [] } : {});
             var d = { id: (kind === 'diagram' && typeof gphUid === 'function' ? gphUid('doc') : 'doc_' + Date.now()), projectId: activeProjectId, parentId: null, title: (title.trim() || ('새 ' + label)), emoji: (kind === 'diagram' ? '📈' : (kind === 'canon' ? '📜' : '📄')), kind: kind, content: '', meta: meta, createdAt: Date.now(), updatedAt: Date.now() };
@@ -10089,7 +10155,7 @@ addEventListener("resize",sendPos);
         }
         function _checklistItemDone(it) { return !!(it && it.done); }
         function _delivIcon(t) { return t === 'task' ? '🗂' : (t === 'graph' ? '📈' : (t === 'wiki' ? '🎮' : (t === 'git' ? '📦' : '📄'))); }
-        function _delivTypeLabel(t) { return t === 'task' ? '태스크 완료' : (t === 'graph' ? '흐름/그래프' : (t === 'wiki' ? '게임위키' : (t === 'git' ? 'Git 상태' : '문서'))); }
+        function _delivTypeLabel(t) { return t === 'task' ? '태스크 완료' : (t === 'graph' ? '흐름/그래프' : (t === 'wiki' ? '프로젝트위키' : (t === 'git' ? 'Git 상태' : '문서'))); }
         function _delivTaskDone(refId) { var t = (currentData.tasks || []).find(function (x) { return x.id === refId; }); return t && t.status === 'completed'; }
         function _sprintChecklistCard(s, cl) {
             var items = Array.isArray(cl.items) ? cl.items : [];
@@ -10153,7 +10219,7 @@ addEventListener("resize",sendPos);
             return ds.map(function (d) { return '<div class="cl-deliv-row">' + _delivIcon(d.type) + ' <span style="flex:1;">' + _sprintEsc(d.label || _delivTypeLabel(d.type)) + '</span><span style="font-size:10px;color:var(--c-text3);">' + _sprintEsc(_delivTypeLabel(d.type)) + '</span><button class="spv-att-x" onclick="_clRemoveDeliv(\'' + d.id + '\')">✕</button></div>'; }).join('');
         }
         function _clAddDeliv(e) {
-            var html = [['doc', '📄 문서'], ['wiki', '🎮 게임위키'], ['graph', '📈 흐름/그래프'], ['task', '🗂 태스크 카드'], ['git', '📦 Git 상태']].map(function (t) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_clPickDeliv(\'' + t[0] + '\')">' + t[1] + '</div>'; }).join('');
+            var html = [['doc', '📄 문서'], ['wiki', '📘 프로젝트위키'], ['graph', '📈 흐름/그래프'], ['task', '🗂 태스크 카드'], ['git', '📦 Git 상태']].map(function (t) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_clPickDeliv(\'' + t[0] + '\')">' + t[1] + '</div>'; }).join('');
             _openCardMenu({ clientX: e ? e.clientX : 300, clientY: e ? e.clientY : 300, stopPropagation: function () {} }, html);
         }
         async function _clPickDeliv(type) {
@@ -10694,7 +10760,7 @@ addEventListener("resize",sendPos);
             if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
             var doc = _activeCanonDoc(); if (!doc) return; var meta = doc.meta || (doc.meta = {});
             if (meta.status !== 'approved') return;
-            if (!(await uiConfirm({ title: '승인 해제', message: '이 게임 위키 문서의 승인을 해제하고 초안으로 되돌릴까요?', confirmText: '승인 해제' }))) return;
+            if (!(await uiConfirm({ title: '승인 해제', message: '이 프로젝트 위키 문서의 승인을 해제하고 초안으로 되돌릴까요?', confirmText: '승인 해제' }))) return;
             meta.status = 'draft'; meta.approvedBy = null; meta.approvedByName = ''; meta.approvedAt = null; meta.approvedVersion = null;
             _safeLocalCache(currentData); dbUpsertDoc(doc); renderCanonMetaBar();
             if (typeof renderDocTree === 'function') renderDocTree();
@@ -10875,7 +10941,7 @@ addEventListener("resize",sendPos);
                 return;
             }
             // [정렬] 문서 연결 — 종류별 그룹(문서/게임위키/흐름·그래프/개인문서), 폴더·코드참조 제외
-            var KIND_GROUPS = [['wiki', '📄 문서'], ['canon', '🎮 게임 위키'], ['diagram', '📈 흐름·그래프'], ['personal', '🔒 개인 문서']];
+            var KIND_GROUPS = [['wiki', '📄 문서'], ['canon', '📘 프로젝트 위키'], ['diagram', '📈 흐름·그래프'], ['personal', '🔒 개인 문서']];
             var pool = currentData.docs.filter(function (d) {
                 if (d.id === sourceId || linked.has(d.id)) return false;
                 if ((d.projectId || 'default') !== activeProjectId) return false;
@@ -11016,7 +11082,7 @@ addEventListener("resize",sendPos);
             document.getElementById('review-expiry').value = '24';
             let ctx = '일반 결정 (standalone)';
             if (targetTaskId) ctx = '🗂 ' + getTaskLabel(targetTaskId);
-            else if (type === 'canon_approval' && targetDocId) ctx = '✅ 게임 위키 승인 요청 · ' + getDocLabel(targetDocId);
+            else if (type === 'canon_approval' && targetDocId) ctx = '✅ 프로젝트 위키 승인 요청 · ' + getDocLabel(targetDocId);
             else if (targetDocId) ctx = getDocLabel(targetDocId);
             document.getElementById('review-context').textContent = ctx;
             renderReviewRuleOptions();
@@ -11250,7 +11316,7 @@ addEventListener("resize",sendPos);
         }
         // [#2] 리뷰 유형 라벨 (변경요청=잠금해제 vs 결정 vs 게임위키 승인 구분)
         function _reviewTypeLabel(type) {
-            return ({ decision: '🗳 결정', intrusion: '⚡ 끼어들기', standard_change: '🔓 변경요청', canon_approval: '📜 게임위키 승인' })[type] || '🗳 결정';
+            return ({ decision: '🗳 결정', intrusion: '⚡ 끼어들기', standard_change: '🔓 변경요청', canon_approval: '📜 프로젝트위키 승인' })[type] || '🗳 결정';
         }
         // [#3] 최종 상태 노드 라벨 (기안 / 결재중(x/N) / 승인(x/N) / 거부 / 종결 / 만료 / 강제)
         function _approvalFinalState(review, N, approvals) {
@@ -11593,7 +11659,7 @@ addEventListener("resize",sendPos);
             try {
                 if (typeof addDecisionLogEntry !== 'function') return;
                 var statusMap = { approved: '✅ 승인', rejected: '❌ 거부', forced: '⚡ 강제 통과', expired: '⏰ 만료(미결)', pending: '🔔 리뷰 중' };
-                var typeMap = { decision: '결정', intrusion: '끼어들기', standard_change: '변경 요청', canon_approval: '게임위키 승인' };
+                var typeMap = { decision: '결정', intrusion: '끼어들기', standard_change: '변경 요청', canon_approval: '프로젝트위키 승인' };
                 var tag = review.decisionTag || {};
                 var target = (typeof _reviewTargetLabel === 'function') ? _reviewTargetLabel(review) : '';
                 var nm = function (arr) { return (arr || []).map(function (x) { return x.name || x.id; }).filter(Boolean).join('·'); };
@@ -11712,7 +11778,7 @@ ${targetLines || '- (대상 없음 / standalone 결정)\n'}`;
                     if (typeof renderDocTree === 'function') renderDocTree();
                     if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar();
                     if (cdoc.kind === 'diagram' && typeof gphRender === 'function' && currentView === 'graph') gphRender(); // [그래프] 승인 시 그래프 뷰 갱신
-                    showToast((cdoc.kind === 'diagram' ? '✅ 그래프 승인됨' : ('✅ 게임 위키 문서 승인됨 (v' + (cdoc.meta.version || 1) + ')')), 'success');
+                    showToast((cdoc.kind === 'diagram' ? '✅ 그래프 승인됨' : ('✅ 프로젝트 위키 문서 승인됨 (v' + (cdoc.meta.version || 1) + ')')), 'success');
                 }
             }
             // [변경] ADR 문서 자동 생성은 기본 OFF (ADR_AUTODOC=true로 재활성화 가능).
