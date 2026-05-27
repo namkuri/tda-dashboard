@@ -1,8 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "TDA Dashboard 기본 권한 — invoke(코어) + 자동 업데이트/재시작",
+  "description": "TDA Dashboard 기본 권한 — invoke(코어) + 자동 업데이트/재시작. [r66] 원격(github.io) 로드 시 IPC 허용.",
   "windows": ["main"],
+  "remote": {
+    "urls": ["https://namkuri.github.io"]
+  },
   "permissions": [
     "core:default",
     "updater:default",

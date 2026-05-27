@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r65 (그래프 뷰 옵시디언급 고도화: degree 기반 노드 크기·초기배치(허브 중심/고립 바깥), 충돌 방지로 자연 클러스터, 호버 시 대상+이웃 하이라이트·나머지 반투명(부드러운 alpha 전환), 줌·중요도 기반 라벨 페이드, 배경 분리링·글로우. 0.44.0) -->
+<!-- BUILD: 2026-05-28 r66 (기본 테마=다크 웜(state1) + 그래프 뷰 단색 노드(옵시디언풍)·라벨은 줌인시에만·텍스트 테마색(다크=밝게, gvCssVar body 수정)·글로우 미세화. IS_TAURI에 __TAURI__ 추가(원격 URL 로드 대비). 데스크톱은 github.io 원격 로드로 전환 예정) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4024,7 +4024,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
 
         // [v40 Day3 청크4] Tauri(.msi) 데스크톱 환경 감지 — webview는 tauri.localhost / tauri: 로 로드됨
-        const IS_TAURI = (location.protocol === 'tauri:') || /(^|\.)tauri\.localhost$/.test(location.hostname) || location.hostname === 'tauri';
+        const IS_TAURI = !!(window.__TAURI__) || (location.protocol === 'tauri:') || /(^|\.)tauri\.localhost$/.test(location.hostname) || location.hostname === 'tauri';
 
         async function signInWithProvider(provider) {
             const client = await ensureSupabaseClient();
@@ -5912,7 +5912,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         };
         var GV_TYPE_ORDER = ['project','sprint','category','card','doc','canon','diagram','review','comment','git'];
         function gvCanvas() { return document.getElementById('gv-canvas'); }
-        function gvCssVar(n) { try { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); } catch(e){ return ''; } }
+        function gvCssVar(n) { try { var v = getComputedStyle(document.body).getPropertyValue(n).trim(); if (!v) v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v; } catch(e){ return ''; } }
         function gvEsc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
         function gvActiveDocs(kind) {
             return (currentData.docs || []).filter(function(d){ return (d.projectId||'default')===activeProjectId && (d.kind||'wiki')===kind; });
@@ -6067,9 +6067,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var s = gvState.scale, tx = gvState.tx, ty = gvState.ty;
             ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,cw,ch);
             function SX(x){ return cw/2 + tx + x*s; } function SY(y){ return ch/2 + ty + y*s; }
-            var edgeColor = gvCssVar('--c-text3') || '#9b968a';
-            var textColor = gvCssVar('--c-text') || '#2f2d28';
-            var paper = gvCssVar('--c-paper') || '#fbfaf7';
+            var edgeColor = gvCssVar('--c-text3') || '#7d756a';
+            var textColor = gvCssVar('--c-text') || '#e9e4d9';
+            var paper = gvCssVar('--c-paper') || '#262624';
+            var nodeColor = gvCssVar('--c-text2') || '#9a9081';   // [r66] 옵시디언식 단색 노드(테마 연동)
+            var accent = gvCssVar('--c-accent') || '#c96442';      // 호버/검색 강조(웜 액센트)
             var hov = gvState.hover, hovId = hov ? hov.id : null, hset = gvState.hoverSet;
             var search = (gvState.search||'').toLowerCase().trim();
 
@@ -6087,20 +6089,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
             gvState.animating = anim;
 
-            // 2) 엣지 — 얇고 은은하게, 호버 엣지는 노드색으로 강조
+            // 2) 엣지 — 얇고 은은하게, 호버 엣지는 웜 액센트로 강조
             for (var k=0;k<gvState.edges.length;k++){
                 var e=gvState.edges[k], A=gvState.byId[e.a], B=gvState.byId[e.b]; if(!A||!B)continue;
                 if (gvState.hidden[A.type] || gvState.hidden[B.type]) continue;
                 var hl = hovId && (e.a===hovId || e.b===hovId);
-                ctx.globalAlpha = e.alpha * (hl ? 0.75 : 0.16);
-                ctx.lineWidth = hl ? 1.4 : 0.9;
-                ctx.strokeStyle = hl ? (A.id===hovId ? B.color : A.color) : edgeColor;
+                ctx.globalAlpha = e.alpha * (hl ? 0.7 : 0.14);
+                ctx.lineWidth = hl ? 1.3 : 0.8;
+                ctx.strokeStyle = hl ? accent : edgeColor;
                 ctx.beginPath(); ctx.moveTo(SX(A.x),SY(A.y)); ctx.lineTo(SX(B.x),SY(B.y)); ctx.stroke();
             }
             ctx.globalAlpha = 1;
 
-            // 3) 노드 — degree 크기, 배경색 분리링, 호버/검색 글로우, 줌·중요도 기반 라벨
-            var labelZoom = Math.max(0, Math.min(1, (s - 0.42) / 0.5));
+            // 3) 노드 — 단색(옵시디언풍), degree 크기, 배경색 분리링, 줌인 시에만 라벨
+            var labelZoom = Math.max(0, Math.min(1, (s - 0.95) / 0.4)); // [r66] 줌인(s≈1↑)에서만 라벨 표시
             ctx.textAlign = 'center'; ctx.textBaseline = 'top';
             for (var i=0;i<gvState.nodes.length;i++){
                 var nd=gvState.nodes[i]; if (gvState.hidden[nd.type]) continue;
@@ -6108,26 +6110,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var match = search && nd.label.toLowerCase().indexOf(search)>=0;
                 var searchDim = search && !match;
                 var isHover = (nd.id===hovId);
-                var isNbr = hset && hset[nd.id] && !isHover;
-                var a = nd.alpha * (searchDim ? 0.16 : 1);
-                if (isHover || match) { ctx.shadowColor = nd.color; ctx.shadowBlur = 16; } else { ctx.shadowBlur = 0; }
+                var hot = isHover || match;
+                var a = nd.alpha * (searchDim ? 0.14 : 1);
+                if (hot) { ctx.shadowColor = accent; ctx.shadowBlur = 5; } else { ctx.shadowBlur = 0; } // [r66] 글로우 아주 미세하게
                 ctx.globalAlpha = a;
-                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = nd.color; ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = hot ? accent : nodeColor; ctx.fill();
                 ctx.shadowBlur = 0;
                 // 배경색 분리링(겹쳐도 구분)
-                ctx.globalAlpha = a; ctx.lineWidth = 1.5; ctx.strokeStyle = paper; ctx.stroke();
-                if (isHover || match) { ctx.lineWidth = 2; ctx.strokeStyle = textColor; ctx.globalAlpha = a; ctx.stroke(); }
-                // 라벨: 호버/이웃/검색매치는 항상, 그 외엔 줌인할수록(큰 노드 먼저) 서서히
-                var labelAlpha;
-                if (isHover) labelAlpha = 1;
-                else if (isNbr) labelAlpha = 0.92;
-                else if (match) labelAlpha = 1;
-                else labelAlpha = Math.max(0, Math.min(1, labelZoom * (0.55 + Math.min(0.75, r/16))));
-                labelAlpha *= nd.alpha;
-                if (labelAlpha > 0.04 && !searchDim) {
+                ctx.globalAlpha = a; ctx.lineWidth = 1.4; ctx.strokeStyle = paper; ctx.stroke();
+                // 라벨: 줌인 시에만(검색 매치는 항상). 텍스트는 테마색(다크에선 밝은색)
+                var labelAlpha = match ? nd.alpha : (labelZoom * nd.alpha);
+                if (labelAlpha > 0.05 && !searchDim) {
                     ctx.globalAlpha = labelAlpha; ctx.fillStyle = textColor;
-                    var fs = isHover ? 12.5 : 11;
-                    ctx.font = '600 ' + fs + 'px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+                    ctx.font = '600 ' + (isHover?12:11) + 'px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
                     var lbl = nd.label.length>26 ? nd.label.slice(0,25)+'…' : nd.label;
                     ctx.shadowColor = paper; ctx.shadowBlur = 4;
                     ctx.fillText(lbl, x, y + r + 3);
@@ -12873,9 +12868,9 @@ ${intrLog}
         // ==========================================
         // 💡 DARK MODE
         // ==========================================
-        let isDarkMode = localStorage.getItem('pb3_dark_mode') === 'true';
+        let isDarkMode = (parseInt(localStorage.getItem('pb3_dark_state') || '1', 10)) >= 1; // [r66] 기본=다크 웜
         // Dark mode cycle: light → dark → pure-dark → light
-        var darkModeState = 0; // 0=light, 1=dark, 2=pure-dark
+        var darkModeState = 1; // [r66] 기본=다크 웜(1). 0=light, 1=dark(웜), 2=pure-dark
 
         function cycleDarkMode() {
             darkModeState = (darkModeState + 1) % 3;
@@ -17327,7 +17322,7 @@ ${intrLog}
             // renderer override 불필요
 
             // Restore dark mode cycle state
-            var savedDarkState = parseInt(localStorage.getItem('pb3_dark_state') || '0');
+            var savedDarkState = parseInt(localStorage.getItem('pb3_dark_state') || '1'); // [r66] 기본=다크 웜
             darkModeState = savedDarkState;
             applyDarkModeState();
             applySettingsToDOM();
