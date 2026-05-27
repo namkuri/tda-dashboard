@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r64 (정리: r61 디버그 보조 제거(로그인 진단줄·devtools 자동오픈). 버전 0.44.0. SW-kill·그래프 뷰 유지. 데스크톱 인앱 업데이트 안내 테스트용 릴리스 준비) -->
+<!-- BUILD: 2026-05-28 r65 (그래프 뷰 옵시디언급 고도화: degree 기반 노드 크기·초기배치(허브 중심/고립 바깥), 충돌 방지로 자연 클러스터, 호버 시 대상+이웃 하이라이트·나머지 반투명(부드러운 alpha 전환), 줌·중요도 기반 라벨 페이드, 배경 분리링·글로우. 0.44.0) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -5895,7 +5895,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             raf: null, alpha: 0,
             hover: null, drag: null, panning: false, panStart: null,
             pointer: { x: 0, y: 0 }, downAt: null, moved: 0,
-            search: '', hidden: {}, inited: false, lastCount: -1
+            search: '', hidden: {}, inited: false, lastCount: -1,
+            hoverSet: null, adj: null, animating: false
         };
         var GV_TYPES = {
             project:  { color:'#c9982f', label:'프로젝트',      r:17 },
@@ -6002,40 +6003,59 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (r.targetTaskId && byId['cd:'+r.targetTaskId]) { link('cd:'+r.targetTaskId, id, true); linked = true; }
                 if (!linked) link(rootId, id);
             });
-            return { nodes:nodes, edges:edges, byId:byId };
+            // [r65] 연결도(degree) + 인접목록 + degree 기반 노드 크기(옵시디언식: 허브일수록 큼)
+            var adj = {}; nodes.forEach(function(nd){ adj[nd.id] = {}; });
+            edges.forEach(function(e){ if (adj[e.a] && adj[e.b]) { adj[e.a][e.b] = 1; adj[e.b][e.a] = 1; } });
+            nodes.forEach(function(nd){
+                var d = 0; for (var kk in adj[nd.id]) d++;
+                nd.deg = d;
+                var base = (nd.type === 'project') ? 6 : (nd.type === 'comment' ? 3 : 4);
+                nd.r = Math.min(30, base + 2.6 * Math.sqrt(d));
+                nd.alpha = 1; nd.tAlpha = 1;
+            });
+            edges.forEach(function(e){ e.alpha = 1; });
+            return { nodes:nodes, edges:edges, byId:byId, adj:adj };
         }
         function gvInitPositions() {
-            gvState.nodes.forEach(function(n, i){
-                if (n.type === 'project') { n.x = 0; n.y = 0; }
-                else { var ang = i * 2.399963; var rad = 70 + (i % 60) * 8; n.x = Math.cos(ang)*rad; n.y = Math.sin(ang)*rad; }
-                n.fx = 0; n.fy = 0;
+            var ns = gvState.nodes, maxDeg = 1;
+            ns.forEach(function(n){ if (n.deg > maxDeg) maxDeg = n.deg; });
+            ns.forEach(function(n, i){
+                if (n.type === 'project') { n.x = 0; n.y = 0; n.fx = 0; n.fy = 0; return; }
+                var ang = i * 2.399963; // 황금각으로 고르게 분산
+                // 연결 많을수록 중심 가까이, 적을수록(고립) 바깥으로 초기 배치
+                var rad = 90 + (1 - Math.min(1, n.deg / maxDeg)) * 340 + (i % 10) * 7;
+                n.x = Math.cos(ang) * rad; n.y = Math.sin(ang) * rad; n.fx = 0; n.fy = 0;
             });
         }
         function gvTick() {
             var nodes = gvState.nodes, edges = gvState.edges, byId = gvState.byId, n = nodes.length;
             if (!n) return;
-            var REP = 2400, SPRING = 0.045, CENTER = 0.018, a2 = gvState.alpha;
+            // [r65] 반발 + 충돌(겹침방지) + 스프링 + 약한 중심인력 → 자연스러운 클러스터, 고립노드는 바깥
+            var REP = 1900, SPRING = 0.05, CENTER = 0.010, a2 = gvState.alpha, GAP = 9;
             for (var i=0;i<n;i++){ nodes[i].fx=0; nodes[i].fy=0; }
             for (var i=0;i<n;i++){
                 var A=nodes[i];
                 for (var j=i+1;j<n;j++){
                     var B=nodes[j]; var dx=A.x-B.x, dy=A.y-B.y, d2=dx*dx+dy*dy;
                     if (d2<1){ dx=Math.random()-0.5; dy=Math.random()-0.5; d2=1; }
-                    var d=Math.sqrt(d2), f=REP/d2, ux=dx/d, uy=dy/d;
+                    var d=Math.sqrt(d2), ux=dx/d, uy=dy/d, f=REP/d2;
+                    // 충돌: 반지름 합 + 여백보다 가까우면 강하게 밀어 깔끔한 간격 유지
+                    var minD = A.r + B.r + GAP;
+                    if (d < minD) f += (minD - d) * 0.85;
                     A.fx+=ux*f; A.fy+=uy*f; B.fx-=ux*f; B.fy-=uy*f;
                 }
             }
             for (var k=0;k<edges.length;k++){
                 var e=edges[k], A=byId[e.a], B=byId[e.b]; if(!A||!B)continue;
                 var dx=B.x-A.x, dy=B.y-A.y, d=Math.sqrt(dx*dx+dy*dy)||1;
-                var len=e.strong?62:108, f=(d-len)*SPRING, ux=dx/d, uy=dy/d;
+                var len=(A.r + B.r) + (e.strong?24:60), f=(d-len)*SPRING, ux=dx/d, uy=dy/d;
                 A.fx+=ux*f; A.fy+=uy*f; B.fx-=ux*f; B.fy-=uy*f;
             }
             for (var i=0;i<n;i++){
                 var p=nodes[i]; if (p===gvState.drag) continue;
-                var cf = (p.type==='project') ? CENTER*3 : CENTER;
+                var cf = (p.type==='project') ? CENTER*2.5 : CENTER;
                 p.fx += -p.x*cf; p.fy += -p.y*cf;
-                var dx=p.fx*a2, dy=p.fy*a2, mag=Math.sqrt(dx*dx+dy*dy), MAX=20;
+                var dx=p.fx*a2, dy=p.fy*a2, mag=Math.sqrt(dx*dx+dy*dy), MAX=22;
                 if (mag>MAX){ dx=dx/mag*MAX; dy=dy/mag*MAX; }
                 p.x+=dx; p.y+=dy;
             }
@@ -6049,39 +6069,72 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             function SX(x){ return cw/2 + tx + x*s; } function SY(y){ return ch/2 + ty + y*s; }
             var edgeColor = gvCssVar('--c-text3') || '#9b968a';
             var textColor = gvCssVar('--c-text') || '#2f2d28';
-            var hovId = gvState.hover ? gvState.hover.id : null;
-            var search = (gvState.search||'').toLowerCase();
-            // 엣지
-            ctx.lineWidth = 1; ctx.strokeStyle = edgeColor;
+            var paper = gvCssVar('--c-paper') || '#fbfaf7';
+            var hov = gvState.hover, hovId = hov ? hov.id : null, hset = gvState.hoverSet;
+            var search = (gvState.search||'').toLowerCase().trim();
+
+            // 1) 호버 포커스: 대상+이웃은 alpha 1, 나머지는 반투명 — 매 프레임 부드럽게 보간
+            var anim = false;
+            for (var i=0;i<gvState.nodes.length;i++){
+                var nd = gvState.nodes[i];
+                var t = !hov ? 1 : (hset && hset[nd.id] ? 1 : 0.10);
+                if (Math.abs(nd.alpha - t) > 0.004) { nd.alpha += (t - nd.alpha) * 0.22; anim = true; } else nd.alpha = t;
+            }
+            for (var k=0;k<gvState.edges.length;k++){
+                var e2 = gvState.edges[k];
+                var te = !hov ? 1 : ((e2.a===hovId || e2.b===hovId) ? 1 : 0.05);
+                if (Math.abs(e2.alpha - te) > 0.004) { e2.alpha += (te - e2.alpha) * 0.22; anim = true; } else e2.alpha = te;
+            }
+            gvState.animating = anim;
+
+            // 2) 엣지 — 얇고 은은하게, 호버 엣지는 노드색으로 강조
             for (var k=0;k<gvState.edges.length;k++){
                 var e=gvState.edges[k], A=gvState.byId[e.a], B=gvState.byId[e.b]; if(!A||!B)continue;
                 if (gvState.hidden[A.type] || gvState.hidden[B.type]) continue;
                 var hl = hovId && (e.a===hovId || e.b===hovId);
-                ctx.globalAlpha = hl ? 0.8 : 0.2;
+                ctx.globalAlpha = e.alpha * (hl ? 0.75 : 0.16);
+                ctx.lineWidth = hl ? 1.4 : 0.9;
+                ctx.strokeStyle = hl ? (A.id===hovId ? B.color : A.color) : edgeColor;
                 ctx.beginPath(); ctx.moveTo(SX(A.x),SY(A.y)); ctx.lineTo(SX(B.x),SY(B.y)); ctx.stroke();
             }
             ctx.globalAlpha = 1;
-            // 노드
-            var showLabels = s > 0.55;
+
+            // 3) 노드 — degree 크기, 배경색 분리링, 호버/검색 글로우, 줌·중요도 기반 라벨
+            var labelZoom = Math.max(0, Math.min(1, (s - 0.42) / 0.5));
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
             for (var i=0;i<gvState.nodes.length;i++){
                 var nd=gvState.nodes[i]; if (gvState.hidden[nd.type]) continue;
-                var x=SX(nd.x), y=SY(nd.y), r=Math.max(2, nd.r*s);
+                var x=SX(nd.x), y=SY(nd.y), r=Math.max(2.2, nd.r*s);
                 var match = search && nd.label.toLowerCase().indexOf(search)>=0;
-                var dim = search && !match;
+                var searchDim = search && !match;
                 var isHover = (nd.id===hovId);
-                ctx.globalAlpha = dim ? 0.16 : 1;
+                var isNbr = hset && hset[nd.id] && !isHover;
+                var a = nd.alpha * (searchDim ? 0.16 : 1);
+                if (isHover || match) { ctx.shadowColor = nd.color; ctx.shadowBlur = 16; } else { ctx.shadowBlur = 0; }
+                ctx.globalAlpha = a;
                 ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = nd.color; ctx.fill();
-                if (isHover || match) { ctx.lineWidth = 2; ctx.strokeStyle = textColor; ctx.stroke(); }
-                if (!dim && (showLabels || isHover || match)) {
-                    ctx.globalAlpha = isHover ? 1 : 0.82;
-                    ctx.fillStyle = textColor;
-                    ctx.font = '600 11px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
-                    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-                    var lbl = nd.label.length>22 ? nd.label.slice(0,21)+'…' : nd.label;
-                    ctx.fillText(lbl, x, y + r + 2);
+                ctx.shadowBlur = 0;
+                // 배경색 분리링(겹쳐도 구분)
+                ctx.globalAlpha = a; ctx.lineWidth = 1.5; ctx.strokeStyle = paper; ctx.stroke();
+                if (isHover || match) { ctx.lineWidth = 2; ctx.strokeStyle = textColor; ctx.globalAlpha = a; ctx.stroke(); }
+                // 라벨: 호버/이웃/검색매치는 항상, 그 외엔 줌인할수록(큰 노드 먼저) 서서히
+                var labelAlpha;
+                if (isHover) labelAlpha = 1;
+                else if (isNbr) labelAlpha = 0.92;
+                else if (match) labelAlpha = 1;
+                else labelAlpha = Math.max(0, Math.min(1, labelZoom * (0.55 + Math.min(0.75, r/16))));
+                labelAlpha *= nd.alpha;
+                if (labelAlpha > 0.04 && !searchDim) {
+                    ctx.globalAlpha = labelAlpha; ctx.fillStyle = textColor;
+                    var fs = isHover ? 12.5 : 11;
+                    ctx.font = '600 ' + fs + 'px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+                    var lbl = nd.label.length>26 ? nd.label.slice(0,25)+'…' : nd.label;
+                    ctx.shadowColor = paper; ctx.shadowBlur = 4;
+                    ctx.fillText(lbl, x, y + r + 3);
+                    ctx.shadowBlur = 0;
                 }
             }
-            ctx.globalAlpha = 1;
+            ctx.globalAlpha = 1; ctx.shadowBlur = 0;
         }
         function gvResize() {
             var cv = gvCanvas(), wrap = document.getElementById('gv-canvas-wrap'); if (!cv || !wrap) return;
@@ -6094,10 +6147,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             gvState.raf = null;
             if (currentView !== 'gview') return;
             if (gvState.alpha > 0.005 || gvState.drag) gvTick();
-            gvRender();
-            if (gvState.alpha > 0.005 || gvState.drag || gvState.panning) gvState.raf = requestAnimationFrame(gvLoop);
+            gvRender(); // alpha 전환 진행 여부(gvState.animating) 갱신
+            if (gvState.alpha > 0.005 || gvState.animating || gvState.drag || gvState.panning) gvState.raf = requestAnimationFrame(gvLoop);
         }
-        function gvKick(a) { gvState.alpha = Math.max(gvState.alpha, a||0.4); if (!gvState.raf) gvState.raf = requestAnimationFrame(gvLoop); }
+        function gvStartLoop() { if (!gvState.raf) gvState.raf = requestAnimationFrame(gvLoop); }
+        function gvKick(a) { gvState.alpha = Math.max(gvState.alpha, a||0.4); gvStartLoop(); }
         function gvFit() {
             var ns = gvState.nodes.filter(function(n){ return !gvState.hidden[n.type]; });
             if (!ns.length) { gvState.scale=1; gvState.tx=0; gvState.ty=0; gvRender(); return; }
@@ -6161,8 +6215,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } else {
                 var inside = mx>=0 && my>=0 && mx<=rect.width && my<=rect.height;
                 var node = inside ? gvPick(mx, my) : null;
-                if (node !== gvState.hover) { gvState.hover = node; gvRender(); }
-                if (node) gvShowTip(node); else gvHideTip();
+                if (node !== gvState.hover) {
+                    gvState.hover = node;
+                    if (node) { var hs = {}; hs[node.id] = 1; var ad = (gvState.adj && gvState.adj[node.id]) || {}; for (var nk in ad) hs[nk] = 1; gvState.hoverSet = hs; }
+                    else gvState.hoverSet = null;
+                    gvStartLoop(); // 부드러운 하이라이트/페이드 애니메이션 시작
+                }
+                if (node) { gvCanvas().style.cursor = 'pointer'; gvShowTip(node); }
+                else { gvCanvas().style.cursor = ''; gvHideTip(); }
             }
         }
         function gvOnUpWin(ev) {
@@ -6242,14 +6302,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             cv.addEventListener('mousedown', gvOnDown);
             window.addEventListener('mousemove', gvOnMoveWin);
             window.addEventListener('mouseup', gvOnUpWin);
-            cv.addEventListener('mouseleave', function(){ if (!gvState.drag && !gvState.panning) { gvState.hover=null; gvHideTip(); gvRender(); } });
+            cv.addEventListener('mouseleave', function(){ if (!gvState.drag && !gvState.panning) { gvState.hover=null; gvState.hoverSet=null; gvHideTip(); gvStartLoop(); } });
             if (!gvState._winResize) { gvState._winResize = true; window.addEventListener('resize', function(){ if (currentView==='gview') gvResize(); }); }
         }
         function gvOpen() {
             var g = gvBuild();
             var prev = gvState.byId || {};
             var sameCount = (g.nodes.length === gvState.lastCount);
-            gvState.nodes = g.nodes; gvState.edges = g.edges; gvState.byId = g.byId;
+            gvState.nodes = g.nodes; gvState.edges = g.edges; gvState.byId = g.byId; gvState.adj = g.adj;
+            gvState.hover = null; gvState.hoverSet = null;
             gvInitPositions();
             // 기존 노드 위치 보존(뷰 전환 시 흔들림 방지)
             g.nodes.forEach(function(n){ if (prev[n.id]) { n.x = prev[n.id].x; n.y = prev[n.id].y; } });
