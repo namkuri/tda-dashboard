@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r30 (r29 + 리뷰코멘트 크로스계정 동기화: dbUpsertReview granular 폴백(log 보존)+log 단조 read-merge+DB도구 스키마점검/마이그레이션SQL) -->
+<!-- BUILD: 2026-05-27 r31 (r30 + 문서검색 다크테마 변수화 + 문서검색·태스크링크피커 현재 프로젝트만 필터) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1486,24 +1486,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* tab active state */
         #doc-main-pane .tab-active { background:#c96442 !important; color:white !important; }
         #doc-main-pane .tab-inactive { background:transparent !important; color:#6f6b5d !important; }
-        /* wiki search */
+        /* wiki search — 테마 변수 사용(라이트/다크 자동) */
         #wiki-search-results .ws-item {
             display:flex; align-items:flex-start; gap:10px;
-            padding:10px 14px; cursor:pointer; border-bottom:1px solid #f1ece2;
+            padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--c-border);
             transition:background 0.1s;
         }
-        #wiki-search-results .ws-item:hover { background:#f6efe8; }
+        #wiki-search-results .ws-item:hover { background:var(--c-bg); }
         #wiki-search-results .ws-item:last-child { border-bottom:none; }
-        .ws-item-title { font-size:13px; font-weight:700; color:#2f2e2b; }
-        .ws-item-snippet { font-size:11px; color:#6f6b5d; margin-top:2px; line-height:1.4; }
-        .ws-item-path { font-size:10px; color:#b4afa3; margin-top:2px; }
-        mark.ws-hl { background:#fef08a; padding:0 1px; border-radius:2px; }
-        /* Dark mode search */
-        body.dark #wiki-search-input { color:#e7e3d8 !important; }
-        body.dark #wiki-search-results { background:#2f2e2b; border-color:#3b3934; }
-        body.dark #wiki-search-results .ws-item:hover { background:#36332f; }
-        body.dark .ws-item-title { color:#e7e3d8; }
-        body.dark .ws-item-snippet { color:#b4afa3; }
+        .ws-item-title { font-size:13px; font-weight:700; color:var(--c-text); }
+        .ws-item-snippet { font-size:11px; color:var(--c-text2); margin-top:2px; line-height:1.4; }
+        .ws-item-path { font-size:10px; color:var(--c-text3); margin-top:2px; }
+        mark.ws-hl { background:#fef08a; color:#2f2e2b; padding:0 1px; border-radius:2px; }
         /* fix: doc-editor-pane references (legacy) redirect to main-pane */
         html.is-desktop #doc-main-pane { min-height:0; overflow:hidden; }
         html.is-desktop #editor-content-wrap { flex:1; min-height:0; }
@@ -3255,19 +3249,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </div>
                     <!-- [v35] 사이드바 검색바 — 토글로 펼침/접힘 -->
                     <div id="sidebar-search-bar" style="display:none;padding:8px 10px;background:#faf9f5;border-bottom:1px solid #e7e3d8;position:relative;">
-                        <div style="display:flex;align-items:center;background:white;border:1.5px solid #cdc8ba;border-radius:8px;padding:4px 8px;gap:6px;transition:border-color 0.15s;">
-                            <span style="font-size:13px;color:#b4afa3;flex-shrink:0;">🔍</span>
+                        <div style="display:flex;align-items:center;background:var(--c-paper);border:1.5px solid var(--c-border);border-radius:8px;padding:4px 8px;gap:6px;transition:border-color 0.15s;">
+                            <span style="font-size:13px;color:var(--c-text3);flex-shrink:0;">🔍</span>
                             <input id="wiki-search-input" type="text" placeholder="문서 검색 (Ctrl+F)" autocomplete="off"
-                                style="background:none;border:none;outline:none;font-size:12px;color:#44423c;width:100%;min-width:0;flex:1;"
+                                style="background:none;border:none;outline:none;font-size:12px;color:var(--c-text);width:100%;min-width:0;flex:1;"
                                 oninput="handleWikiSearch(this.value)"
                                 onkeydown="handleWikiSearchKey(event)"
                                 onfocus="if(this.value) showWikiResults(this.value)"
                             />
                             <button onclick="cycleWikiSearchSort()" id="wiki-search-sort" title="정렬: 연관도"
-                                style="background:none;border:none;cursor:pointer;color:#6f6b5d;font-size:13px;padding:0 4px;flex-shrink:0;line-height:1;" >🎯</button>
-                            <button onclick="clearWikiSearch()" id="wiki-search-clear" style="display:none;background:none;border:none;cursor:pointer;color:#b4afa3;font-size:11px;padding:0;flex-shrink:0;">✕</button>
+                                style="background:none;border:none;cursor:pointer;color:var(--c-text2);font-size:13px;padding:0 4px;flex-shrink:0;line-height:1;" >🎯</button>
+                            <button onclick="clearWikiSearch()" id="wiki-search-clear" style="display:none;background:none;border:none;cursor:pointer;color:var(--c-text3);font-size:11px;padding:0;flex-shrink:0;">✕</button>
                         </div>
-                        <div id="wiki-search-results" style="display:none;position:absolute;top:calc(100% - 1px);left:8px;right:8px;background:white;border:1px solid #e7e3d8;border-radius:0 0 12px 12px;box-shadow:0 8px 32px rgba(0,0,0,0.14);z-index:3000;max-height:420px;overflow-y:auto;">
+                        <div id="wiki-search-results" style="display:none;position:absolute;top:calc(100% - 1px);left:8px;right:8px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:0 0 12px 12px;box-shadow:0 8px 32px rgba(0,0,0,0.28);z-index:3000;max-height:420px;overflow-y:auto;">
                             <div id="wiki-search-list"></div>
                         </div>
                     </div>
@@ -9370,7 +9364,7 @@ return data;
             var _emptyHtml = '<div class="linked-empty" style="padding:14px;text-align:center;">결과 없음</div>';
             if (targetType === 'task') {
                 var items = currentData.tasks
-                    .filter(t => !linked.has(t.id) && (!q || (t.title || '').toLowerCase().includes(q)))
+                    .filter(t => (t.projectId || 'default') === activeProjectId && !linked.has(t.id) && (!q || (t.title || '').toLowerCase().includes(q)))
                     .slice(0, 40).map(t => {
                         const c = currentData.categories.find(x => x.id === t.catId);
                         return { id: t.id, label: (t.title || '(제목 없음)'), sub: c ? c.title : '' };
@@ -13073,6 +13067,8 @@ ${intrLog}
             var results = [];
 
             currentData.docs.forEach(function(doc) {
+                // [r31] 현재 선택 프로젝트의 문서만 검색 (다른 프로젝트 문서 노출 방지)
+                if ((doc.projectId || 'default') !== activeProjectId) return;
                 var titleLow = (doc.title || '').toLowerCase();
                 var content  = (doc.content || '').toLowerCase();
                 var titleScore = titleLow.includes(lower) ? 2 : (fuzzyMatch(titleLow, lower) ? 1 : 0);
@@ -13154,7 +13150,7 @@ ${intrLog}
             _lastWikiSearchResults = results;
 
             if(results.length === 0) {
-                list.innerHTML = '<div style="padding:16px;text-align:center;color:#b4afa3;font-size:13px;">검색 결과가 없습니다.</div>';
+                list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--c-text3);font-size:13px;">검색 결과가 없습니다.</div>';
             } else {
                 list.innerHTML = results.map(function(r) {
                     var hl = function(text) {
