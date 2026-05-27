@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r31 (r30 + 문서검색 다크테마 변수화 + 문서검색·태스크링크피커 현재 프로젝트만 필터) -->
+<!-- BUILD: 2026-05-27 r32 (r31 + 검색바 컨테이너 테마화(흰배경 잔존 수정)·되돌리기/폴더 아이콘만·토스트 z-index 모달위로) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -398,6 +398,8 @@
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
         .toast-enter { animation: slideInUp 0.3s ease-out forwards; }
         .toast-exit { animation: fadeOut 0.5s ease-in forwards; }
+        /* [r32] 토스트는 모달(z 600~690)·다이얼로그(900) 위에. Tailwind z-[…] arbitrary가 이 빌드에선 생성 안 돼 명시 규칙으로 강제. 정보성이라 클릭 통과(pointer-events:none). */
+        #toast-container { z-index: 100001 !important; pointer-events: none; }
 
         /* --- 계층형 Wiki Docs Editor CSS --- */
         .tree-node { padding-left: 18px; list-style-type: none; border-left: 1px dashed #cdc8ba; margin-left: 6px; }
@@ -1492,7 +1494,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--c-border);
             transition:background 0.1s;
         }
-        #wiki-search-results .ws-item:hover { background:var(--c-bg); }
+        #wiki-search-results .ws-item:hover { background:var(--c-card); }
         #wiki-search-results .ws-item:last-child { border-bottom:none; }
         .ws-item-title { font-size:13px; font-weight:700; color:var(--c-text); }
         .ws-item-snippet { font-size:11px; color:var(--c-text2); margin-top:2px; line-height:1.4; }
@@ -2677,7 +2679,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     <div id="rt-notification-stack" style="position:fixed;bottom:80px;right:20px;z-index:3500;display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
 
     <!-- 우측 하단 시스템 알림 토스트 -->
-    <div id="toast-container" class="fixed bottom-6 right-6 z-[300] flex flex-col gap-2"></div>
+    <div id="toast-container" class="fixed bottom-6 right-6 z-[100001] flex flex-col gap-2 pointer-events-none"></div>
 
     <!-- 앱 래퍼 -->
     <div id="app-wrapper" onclick="unfocusCategory()">
@@ -3241,15 +3243,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <button id="tree-undo-btn" onclick="undoTreeChange()" disabled
                                 class="text-xs px-2 py-1 rounded shadow-sm transition-all"
                                 style="background:#e7e3d8;color:#9b968a;cursor:not-allowed;"
-                                title="문서 위치 변경 되돌리기 (Ctrl+Z)">↶ 되돌리기</button>
-                            <button onclick="createNewFolder(null)" class="text-xs px-2 py-1 rounded shadow-sm" style="background:var(--c-accent-soft,#efe7dd);color:var(--c-accent,#c96442);font-weight:700;" title="최상위 폴더 생성">📁 폴더</button>
+                                title="문서 위치 변경 되돌리기 (Ctrl+Z)">↶</button>
+                            <button onclick="createNewFolder(null)" class="text-xs px-2 py-1 rounded shadow-sm" style="background:var(--c-accent-soft,#efe7dd);color:var(--c-accent,#c96442);font-weight:700;" title="최상위 폴더 생성">📁</button>
                             <button onclick="createNewDoc(null)" class="bg-blue-600 text-white text-xs px-2 py-1 rounded hover:bg-blue-700 shadow-sm" title="최상위 문서 생성">+ New</button>
                             <button onclick="toggleDocSidebar()" class="text-gray-400 hover:text-gray-700 px-1 font-bold ml-1 text-lg" title="사이드바 축소">◀</button>
                         </div>
                     </div>
                     <!-- [v35] 사이드바 검색바 — 토글로 펼침/접힘 -->
-                    <div id="sidebar-search-bar" style="display:none;padding:8px 10px;background:#faf9f5;border-bottom:1px solid #e7e3d8;position:relative;">
-                        <div style="display:flex;align-items:center;background:var(--c-paper);border:1.5px solid var(--c-border);border-radius:8px;padding:4px 8px;gap:6px;transition:border-color 0.15s;">
+                    <div id="sidebar-search-bar" style="display:none;padding:8px 10px;background:var(--c-paper);border-bottom:1px solid var(--c-border);position:relative;">
+                        <div style="display:flex;align-items:center;background:var(--c-card);border:1.5px solid var(--c-border);border-radius:8px;padding:4px 8px;gap:6px;transition:border-color 0.15s;">
                             <span style="font-size:13px;color:var(--c-text3);flex-shrink:0;">🔍</span>
                             <input id="wiki-search-input" type="text" placeholder="문서 검색 (Ctrl+F)" autocomplete="off"
                                 style="background:none;border:none;outline:none;font-size:12px;color:var(--c-text);width:100%;min-width:0;flex:1;"
