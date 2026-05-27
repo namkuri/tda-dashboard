@@ -1,6 +1,6 @@
 [package]
 name = "tda-dashboard"
-version = "0.40.0"
+version = "0.41.0"
 description = "TDA Dashboard - Team Dev Archive"
 authors = ["TDA Team"]
 edition = "2021"
