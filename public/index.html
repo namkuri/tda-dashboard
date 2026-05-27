@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r50 (r49 + 카드→흐름 드롭 onEnd감지 수정·문서코멘트 reopen 하이라이트 재적용(영속)·칸반 카테고리 순서드래그(로컬)·스프린트 섹션 순서드래그(서버공유)·드래그 미리보기 툴팁/고스트) -->
+<!-- BUILD: 2026-05-27 r51 (r50 + 드래그툴팁 테마화·고스트 선분 스냅·스프린트 미리보기 포인트 위치 드래그·목표 클릭→즉시 md편집+바깥클릭 자동저장) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2207,8 +2207,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-part-d * { pointer-events: none; }
         /* [r50] 드래그 미리보기: 안내 툴팁 · 신규 위치 고스트 · 기존 포인트 강조 */
         .spv-prev-host { position: relative; }
-        #spv-drop-hint { position: fixed; z-index: 100002; background: var(--c-text); color: var(--c-paper); font-size: 12px; line-height: 1.45; padding: 7px 10px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.28); pointer-events: none; max-width: 240px; display: none; }
-        #spv-drop-hint b { color: #ffd9a8; }
+        #spv-drop-hint { position: fixed; z-index: 100002; background: var(--c-card); color: var(--c-text); border: 1px solid var(--c-border); font-size: 12px; line-height: 1.45; padding: 7px 10px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.32); pointer-events: none; max-width: 250px; display: none; }
+        #spv-drop-hint b { color: #c96442; }
         .spv-drop-ghost { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 2px dashed #c96442; background: rgba(201,100,66,.18); color: #c96442; font-weight: 800; display: none; align-items: center; justify-content: center; pointer-events: none; z-index: 5; }
         .spv-prev-node.spv-prev-hit { filter: drop-shadow(0 0 4px #c96442) drop-shadow(0 0 2px #c96442); }
         /* [r50 #4] 스프린트 섹션 순서 드래그 */
@@ -2216,6 +2216,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-sec-grip { position: absolute; left: -1px; top: 8px; width: 14px; text-align: center; cursor: grab; color: var(--c-text3); opacity: 0; font-size: 12px; user-select: none; z-index: 3; }
         .spv-sec:hover .spv-sec-grip { opacity: .8; }
         .spv-sec-grip:active { cursor: grabbing; }
+        /* [r51 #4] 목표 클릭 편집 */
+        .spv-goal-hint { font-size: 11px; color: var(--c-text3); font-weight: 400; }
+        .spv-goal-view { cursor: text; border-radius: 8px; transition: background .12s; min-height: 24px; }
+        .spv-goal-view:hover { background: var(--c-paper); }
         #sprint-view.hidden { display: none; }
         .spv-wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
         .spv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -5638,7 +5642,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } else {
                 tip.innerHTML = '➕ 여기에 <b>새 ' + unit + '</b> 생성<br>+ ' + who + ' ' + verb;
                 if (!ghost) { ghost = document.createElement('div'); ghost.className = 'spv-drop-ghost'; ghost.textContent = '＋'; host.appendChild(ghost); }
-                var hr = host.getBoundingClientRect(); ghost.style.display = 'flex'; ghost.style.left = (ev.clientX - hr.left - 11) + 'px'; ghost.style.top = (ev.clientY - hr.top - 11) + 'px';
+                var hr = host.getBoundingClientRect(); ghost.style.display = 'flex';
+                var gx = ev.clientX - hr.left - 11, gy = ev.clientY - hr.top - 11;
+                // [r51 #2] 선형 흐름은 고스트를 타임라인 선분 위에 스냅 (커서 x, 선분 y)
+                var svg = host.querySelector('svg');
+                if (svg && p.mode !== 'graph') {
+                    try {
+                        var m = svg.getScreenCTM();
+                        if (m) {
+                            var toS = function (vx, vy) { var pt = svg.createSVGPoint(); pt.x = vx; pt.y = vy; return pt.matrixTransform(m); };
+                            var lineY = toS(500, 100).y, x1s = toS(60, 100).x, x2s = toS(940, 100).x;
+                            gx = Math.max(x1s, Math.min(ev.clientX, x2s)) - hr.left - 11;
+                            gy = lineY - hr.top - 11;
+                        }
+                    } catch (e) {}
+                }
+                ghost.style.left = gx + 'px'; ghost.style.top = gy + 'px';
             }
             tip.style.display = 'block';
             var x = ev.clientX + 16, y = ev.clientY + 16; var r = tip.getBoundingClientRect();
@@ -9644,12 +9663,13 @@ addEventListener("resize",sendPos);
         }
         function _sprintGoalArea(s) {
             if (_sprintGoalEditing[s.id]) {
-                return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 편집 (마크다운)</div>'
-                    + '<textarea id="spv-goal-ta-' + s.id + '" class="spv-goal-ta" placeholder="## 목표&#10;- 세부 ...">' + _sprintEsc(s.goal || '') + '</textarea>'
-                    + '<div class="spv-goal-actions"><button class="spv-goal-save" onclick="saveSprintGoalInline(\'' + s.id + '\')">저장</button><button class="spv-goal-cancel" onclick="cancelSprintGoalEdit(\'' + s.id + '\')">취소</button></div></div>';
+                // [r51 #4] 바깥 클릭(blur) 시 자동 저장 → 미리보기 렌더로 전환
+                return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 편집 (마크다운) <span class="spv-goal-hint">— 바깥을 클릭하면 자동 저장</span></div>'
+                    + '<textarea id="spv-goal-ta-' + s.id + '" class="spv-goal-ta" onblur="saveSprintGoalInline(\'' + s.id + '\')" placeholder="## 목표&#10;- 세부 ...">' + _sprintEsc(s.goal || '') + '</textarea></div>';
             }
-            var goalHtml = s.goal ? DOMPurify.sanitize(parseMarkdownWithTables(s.goal), domPurifyConfig) : '<span style="color:var(--c-text3);">목표 없음 — ✏️ 편집으로 작성</span>';
-            return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 <button onclick="startSprintGoalEdit(\'' + s.id + '\')">✏️ 편집</button></div><div class="markdown-body">' + goalHtml + '</div></div>';
+            var goalHtml = s.goal ? DOMPurify.sanitize(parseMarkdownWithTables(s.goal), domPurifyConfig) : '<span style="color:var(--c-text3);">목표 없음 — 클릭하여 작성</span>';
+            // [r51 #4] 클릭 한 번에 곧바로 편집 모드 진입 (링크/칩 클릭은 제외)
+            return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 <span class="spv-goal-hint">— 클릭하여 편집</span></div><div class="markdown-body spv-goal-view" onclick="if(!event.target.closest(\'a,button,.wikilink-chip,.md-code-embed\'))startSprintGoalEdit(\'' + s.id + '\')" title="클릭하여 마크다운 편집">' + goalHtml + '</div></div>';
         }
         function startSprintGoalEdit(sid) { _sprintGoalEditing[sid] = true; renderSprintView(); setTimeout(function () { var ta = document.getElementById('spv-goal-ta-' + sid); if (ta) ta.focus(); }, 30); }
         function cancelSprintGoalEdit(sid) { delete _sprintGoalEditing[sid]; renderSprintView(); }
@@ -16863,16 +16883,55 @@ ${intrLog}
     }
     function _wireSprintFlowPreviews(wrap) {
         if (!wrap) return;
-        wrap.querySelectorAll('.spv-prev-host').forEach(function (host) {
-            var fid = host.dataset.flowId;
-            host.querySelectorAll('.spv-prev-node').forEach(function (g) {
-                g.style.cursor = 'pointer';
-                g.addEventListener('mouseenter', function (e) { _spvFlowTip(fid, g.getAttribute('data-prev-id'), e); });
-                g.addEventListener('mousemove', _spvFlowTipPos);
-                g.addEventListener('mouseleave', _spvFlowTipHide);
-                g.addEventListener('click', function (e) { e.stopPropagation(); _spvFlowTipHide(); _spvFlowNodeEdit(fid, g.getAttribute('data-prev-id'), e); });
-            });
+        wrap.querySelectorAll('.spv-prev-host').forEach(function (host) { _spvWirePreviewHost(host, host.dataset.flowId); });
+    }
+    function _spvWirePreviewHost(host, fid) {
+        host.querySelectorAll('.spv-prev-node').forEach(function (g) {
+            g.style.cursor = 'grab';
+            g.addEventListener('mouseenter', function (e) { if (!host._spvDragging) _spvFlowTip(fid, g.getAttribute('data-prev-id'), e); });
+            g.addEventListener('mousemove', function (e) { if (!host._spvDragging) _spvFlowTipPos(e); });
+            g.addEventListener('mouseleave', _spvFlowTipHide);
+            g.addEventListener('click', function (e) { e.stopPropagation(); if (host._spvDragging) return; _spvFlowTipHide(); _spvFlowNodeEdit(fid, g.getAttribute('data-prev-id'), e); });
+            g.addEventListener('mousedown', function (e) { if (e.button !== 0) return; _spvStartPointDrag(e, host, fid, g.getAttribute('data-prev-id')); });
         });
+    }
+    // [r51 #3] 스프린트 미리보기에서 포인트/노드 위치 드래그 — 선형=position(0~1), 그래프=x/y. 페이지 이탈 없이 즉시 저장.
+    function _spvStartPointDrag(e, host, fid, pid) {
+        var doc = (currentData.docs || []).find(function (x) { return x.id === fid; }); if (!doc || !doc.meta || !doc.meta.diagram) return;
+        var p = doc.meta.diagram, isGraph = p.mode === 'graph';
+        var item = isGraph ? (p.nodes || []).find(function (x) { return x.id === pid; }) : (p.points || []).find(function (x) { return x.id === pid; });
+        if (!item) return;
+        var svg = host.querySelector('svg'); if (!svg) return;
+        var startX = e.clientX, startY = e.clientY, moved = false, raf = null;
+        function toVB(cx, cy) { try { var m = svg.getScreenCTM(); if (!m) return null; var pt = svg.createSVGPoint(); pt.x = cx; pt.y = cy; return pt.matrixTransform(m.inverse()); } catch (er) { return null; } }
+        function mv(ev2) {
+            var dx = ev2.clientX - startX, dy = ev2.clientY - startY;
+            if (!moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+            moved = true; host._spvDragging = true; _spvFlowTipHide();
+            var vb = toVB(ev2.clientX, ev2.clientY); if (!vb) return;
+            if (isGraph) { item.x = Math.round(vb.x - (item.w || 200) / 2); item.y = Math.round(vb.y - (item.h || 80) / 2); }
+            else { item.position = Math.max(0.02, Math.min(0.98, (vb.x - 60) / 880)); }
+            if (raf) return;
+            raf = requestAnimationFrame(function () { raf = null; host.innerHTML = gphFlowPreviewSVG(doc); svg = host.querySelector('svg'); });
+        }
+        function up() {
+            document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+            if (moved) {
+                // 드래그 직후의 click이 호스트 onclick(그래프 편집 열기)·포인트 편집을 트리거하지 않도록 1회 캡처 차단
+                var suppress = function (ev) { ev.stopPropagation(); ev.preventDefault(); host.removeEventListener('click', suppress, true); };
+                host.addEventListener('click', suppress, true);
+                setTimeout(function () { try { host.removeEventListener('click', suppress, true); } catch (er) {} }, 80);
+                doc.updatedAt = Date.now();
+                if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+                if (typeof dbUpsertDoc === 'function') dbUpsertDoc(doc);
+                host.innerHTML = gphFlowPreviewSVG(doc);
+                _spvWirePreviewHost(host, fid);
+                if (typeof showToast === 'function') showToast(isGraph ? '노드 위치 변경됨' : '포인트 위치 변경됨', 'success');
+            }
+            setTimeout(function () { host._spvDragging = false; }, 60);
+        }
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+        e.preventDefault();
     }
     function _spvFlowTipEl() { var t = document.getElementById('spv-flow-tip'); if (!t) { t = document.createElement('div'); t.id = 'spv-flow-tip'; document.body.appendChild(t); } return t; }
     function _spvFlowTip(fid, pid, e) {
