@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r63 (그래프 뷰 신설: 히스토리 옆 '그래프 뷰' — 현 프로젝트의 스프린트/카테고리/카드/문서/위키/흐름/Git/코멘트/리뷰를 canvas force-directed 그래프로. 타입별 색상·범례 토글·호버 툴팁·클릭 네비·노드드래그·휠줌·빈공간 팬. r62 SW수정/디버그보조 유지) -->
+<!-- BUILD: 2026-05-27 r64 (정리: r61 디버그 보조 제거(로그인 진단줄·devtools 자동오픈). 버전 0.44.0. SW-kill·그래프 뷰 유지. 데스크톱 인앱 업데이트 안내 테스트용 릴리스 준비) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3909,7 +3909,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 GitHub로 로그인
             </button>
             <p id="auth-error" style="display:none;margin-top:16px;padding:10px;background:#fee;color:#c00;border-radius:6px;font-size:12px;"></p>
-            <p id="auth-env-diag" style="display:none;margin-top:14px;padding:8px;background:var(--ios-card2,#f3f0e7);color:var(--ios-label2,#6f6b5d);border:1px dashed var(--ios-sep,#d8d3c7);border-radius:6px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;text-align:left;word-break:break-all;line-height:1.6;"></p>
             <p style="margin-top:24px;font-size:11px;color:var(--ios-label3,#9b968a);">팀원만 데이터에 접근 가능합니다 (RLS 적용)</p>
         </div>
     </div>
@@ -4026,23 +4025,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         // [v40 Day3 청크4] Tauri(.msi) 데스크톱 환경 감지 — webview는 tauri.localhost / tauri: 로 로드됨
         const IS_TAURI = (location.protocol === 'tauri:') || /(^|\.)tauri\.localhost$/.test(location.hostname) || location.hostname === 'tauri';
-
-        // [r61 debug] 데스크톱(Tauri)에서만 환경 진단 줄 표시 — 웹에는 안 보임. OAuth 404 원인 파악용.
-        (function(){
-            try {
-                if (!window.__TAURI__) return; // 웹에서는 노출 안 함
-                var run = function(){
-                    var el = document.getElementById('auth-env-diag');
-                    if (!el) return;
-                    var hasInvoke = !!(window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function');
-                    el.style.display = 'block';
-                    el.textContent = '🖥 desktop · IS_TAURI=' + IS_TAURI + ' · invoke=' + hasInvoke
-                        + ' · host=' + location.hostname + ' · proto=' + location.protocol;
-                };
-                if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-                else run();
-            } catch (e) {}
-        })();
 
         async function signInWithProvider(provider) {
             const client = await ensureSupabaseClient();
