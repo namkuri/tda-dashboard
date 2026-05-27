@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r47 (r46 + 코멘트하이라이트 클릭시 패널 펼치고 스크롤·이미지/SVG 우클릭 코멘트·HTML임베드 내부선택 우클릭 코멘트(postMessage)) -->
+<!-- BUILD: 2026-05-27 r48 (r47 + 코멘트패널 열면 임베드 축소·임베드 내부텍스트 하이라이트(srcdoc주입)·하이라이트 클릭 열기/닫기 토글·임베드 코멘트 카드 위치정렬+동시스크롤) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -8315,8 +8315,19 @@ return data;
         }
         function _tdaEmbedCommentScript(embedId) {
             var eid = String(embedId == null ? '' : embedId).replace(/[\\'"<>]/g, '');
-            // [r47] 임베드 내부에서 텍스트 선택 후 우클릭 → 부모로 선택 텍스트 전달(코멘트). sandbox(allow-scripts)에서도 postMessage 동작.
-            return '<scr' + 'ipt>(function(){var EID="' + eid + '";document.addEventListener("contextmenu",function(e){var t="";try{t=(window.getSelection&&window.getSelection().toString().trim())||""}catch(_){}if(t){e.preventDefault();try{parent.postMessage({type:"tda-embed-comment",text:t,embedId:EID,x:e.clientX,y:e.clientY},"*")}catch(_){}}});})()</scr' + 'ipt>';
+            // [r48] 임베드 내부: (1)선택 후 우클릭→코멘트 생성, (2)코멘트 단 텍스트 하이라이트, (3)위치 보고(동시 스크롤·정렬용), (4)하이라이트 클릭→코멘트 토글. sandbox(allow-scripts)에서도 postMessage 동작.
+            var body = `(function(){
+var EID="${eid}";
+function post(m){try{parent.postMessage(m,"*")}catch(e){}}
+document.addEventListener("contextmenu",function(e){var t="";try{t=(window.getSelection&&window.getSelection().toString().trim())||""}catch(_){}if(t){e.preventDefault();post({type:"tda-embed-comment",text:t,embedId:EID,x:e.clientX,y:e.clientY})}});
+function sendPos(){try{var ms=document.querySelectorAll("[data-tdaann]");var p={};for(var i=0;i<ms.length;i++){var r=ms[i].getBoundingClientRect();p[ms[i].getAttribute("data-tdaann")]=r.top+(window.pageYOffset||0)}post({type:"tda-embed-ann-pos",embedId:EID,pos:p})}catch(_){}}
+function hl(anns){if(!anns||!anns.length){sendPos();return}anns.forEach(function(a){if(!a.quote)return;if(document.querySelector('[data-tdaann="'+a.id+'"]'))return;var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);var n,nodes=[];while((n=w.nextNode()))nodes.push(n);for(var i=0;i<nodes.length;i++){var nd=nodes[i];if(nd.parentNode&&nd.parentNode.closest&&nd.parentNode.closest("[data-tdaann]"))continue;var s=nd.textContent.indexOf(a.quote);if(s<0)continue;var bf=nd.textContent.slice(0,s),af=nd.textContent.slice(s+a.quote.length);var mk=document.createElement("mark");mk.setAttribute("data-tdaann",a.id);mk.style.background=a.color||"#fde68a";mk.style.cursor="pointer";mk.style.borderRadius="2px";mk.style.padding="0 1px";mk.title="클릭: 코멘트 열기/닫기";mk.textContent=a.quote;mk.addEventListener("click",function(ev){ev.stopPropagation();post({type:"tda-embed-ann-click",embedId:EID,annId:this.getAttribute("data-tdaann")})});var fr=document.createDocumentFragment();if(bf)fr.appendChild(document.createTextNode(bf));fr.appendChild(mk);if(af)fr.appendChild(document.createTextNode(af));nd.parentNode.replaceChild(fr,nd);break}});sendPos()}
+window.addEventListener("message",function(e){if(!e.data||e.data.type!=="tda-embed-anns")return;if(e.data.embedId&&e.data.embedId!==EID)return;hl(e.data.anns)});
+function ready(){post({type:"tda-embed-ready",embedId:EID})}
+ready();addEventListener("load",ready);setTimeout(ready,300);setTimeout(ready,1000);
+addEventListener("resize",sendPos);
+})()`;
+            return '<scr' + 'ipt>' + body + '</scr' + 'ipt>';
         }
         function _tdaEmbedSrcdoc(html, embedId) {
             html = String(html || '');
@@ -8331,6 +8342,17 @@ return data;
             m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
             if (m) { var t = m[1].replace(/<[^>]+>/g, '').trim(); if (t) return t.slice(0, 60); }
             return '';
+        }
+        // [r48] 모든 임베드 iframe 폭을 컨테이너에 맞춰 재조정 (코멘트 패널 열고 닫을 때 미리보기가 좁아/넓어지면 임베드도 따라감)
+        function _tdaReflowEmbeds(reload) {
+            var fr = document.querySelectorAll('.tda-embed-body iframe');
+            for (var i = 0; i < fr.length; i++) { if (typeof fr[i]._tdaResize === 'function') { try { fr[i]._tdaResize(reload); } catch (e) {} } }
+        }
+        // [r48] 코멘트 패널 폭이 바뀔 때만 임베드 reflow (즉시 폭 맞춤 + 300ms 후 콘텐츠 재계산). 같은 폭 반복 렌더 시 reload 안 함.
+        function _annReflowOnPanelChange(newW) {
+            if (window._annLastPanelW === newW) return;
+            window._annLastPanelW = newW;
+            requestAnimationFrame(function () { _tdaReflowEmbeds(false); setTimeout(function () { _tdaReflowEmbeds(true); }, 300); });
         }
         // 미리보기에서 [data-tdahtml] 마운트를 찾아 iframe(접기/펼치기 첨부 블록)으로 교체
         function _buildHtmlEmbeds(previewEl) {
@@ -8347,17 +8369,34 @@ return data;
                     for (var i = 0; i < fr.length; i++) { if (fr[i].contentWindow === e.source) { fr[i].style.height = Math.max(120, e.data.h + 24) + 'px'; break; } }
                 });
             }
-            // [r47] 임베드 내부 선택→우클릭 코멘트: 자식 iframe의 postMessage 수신 → 부모 좌표로 변환 후 코멘트 메뉴 표시
+            // [r47/r48] 임베드 iframe → 부모 메시지: 코멘트 생성(우클릭 좌표)·준비완료(하이라이트 전송)·위치보고(카드 정렬)·하이라이트 클릭(코멘트 토글)
             if (!window._tdaEmbedCommentBound) {
                 window._tdaEmbedCommentBound = true;
+                window._embedAnnPos = window._embedAnnPos || {};
                 window.addEventListener('message', function (e) {
-                    if (!e.data || e.data.type !== 'tda-embed-comment') return;
-                    var txt = (e.data.text || '').toString().trim(); if (!txt) return;
-                    var fr = document.querySelectorAll('.tda-embed-body iframe'); var rect = null;
-                    for (var i = 0; i < fr.length; i++) { if (fr[i].contentWindow === e.source) { rect = fr[i].getBoundingClientRect(); break; } }
-                    var x = rect ? rect.left + Math.min(e.data.x || 20, Math.max(20, rect.width - 20)) : 120;
-                    var y = rect ? rect.top + Math.min(e.data.y || 20, Math.max(20, rect.height - 20)) : 120;
-                    showAnnotationContextMenu(x, y, txt, { type: 'embed', embedId: e.data.embedId });
+                    var d = e.data; if (!d || typeof d.type !== 'string') return;
+                    if (d.type === 'tda-embed-comment') {
+                        var txt = (d.text || '').toString().trim(); if (!txt) return;
+                        var fr = document.querySelectorAll('.tda-embed-body iframe'); var rect = null;
+                        for (var i = 0; i < fr.length; i++) { if (fr[i].contentWindow === e.source) { rect = fr[i].getBoundingClientRect(); break; } }
+                        var x = rect ? rect.left + Math.min(d.x || 20, Math.max(20, rect.width - 20)) : 120;
+                        var y = rect ? rect.top + Math.min(d.y || 20, Math.max(20, rect.height - 20)) : 120;
+                        showAnnotationContextMenu(x, y, txt, { type: 'embed', embedId: d.embedId });
+                    } else if (d.type === 'tda-embed-ready') {
+                        // 이 임베드의 코멘트 목록(텍스트·색)을 iframe에 전달 → 내부에서 하이라이트
+                        try {
+                            var anns = ((activeDocId && wikiAnnotations[activeDocId]) || [])
+                                .filter(function (a) { return a.anchorType === 'embed' && a.embedId === d.embedId; })
+                                .map(function (a) { return { id: a.id, quote: a.quote, color: a.color }; });
+                            if (e.source) e.source.postMessage({ type: 'tda-embed-anns', embedId: d.embedId, anns: anns }, '*');
+                        } catch (err) {}
+                    } else if (d.type === 'tda-embed-ann-pos') {
+                        var pos = d.pos || {};
+                        Object.keys(pos).forEach(function (id) { window._embedAnnPos[id] = { embedId: d.embedId, top: pos[id] }; });
+                        if (typeof _layoutAnnCards === 'function') _layoutAnnCards();
+                    } else if (d.type === 'tda-embed-ann-click') {
+                        if (d.annId && typeof toggleAnnotationCard === 'function') toggleAnnotationCard(d.annId);
+                    }
                 });
             }
             Array.prototype.forEach.call(mounts, function (mount) {
@@ -8391,6 +8430,7 @@ return data;
                     if (allowReload && Math.abs(w - (iframe._tdaLoadedW || 0)) > 24) { iframe._tdaLoadedW = w; iframe.srcdoc = _tdaEmbedSrcdoc(em.html, id); }
                 }
                 iframe._tdaLoadedW = body.clientWidth || 0;
+                iframe._tdaResize = _tdaSizeEmbed; // [r48] 패널 토글 시 외부에서 reflow 호출용
                 _tdaSizeEmbed(false);
                 requestAnimationFrame(function () { _tdaSizeEmbed(true); }); // 레이아웃 확정 후 정확한 폭 적용
                 if (window.ResizeObserver) {
@@ -12275,7 +12315,7 @@ ${intrLog}
                 mark.dataset.annotation = annId;
                 mark.textContent = text;
                 mark.title = '클릭하여 코멘트 보기';
-                mark.addEventListener('click', (e) => { e.stopPropagation(); scrollToAnnotation(annId); });
+                mark.addEventListener('click', (e) => { e.stopPropagation(); toggleAnnotationCard(annId); });
                 const frag = document.createDocumentFragment();
                 if(before) frag.appendChild(document.createTextNode(before));
                 frag.appendChild(mark);
@@ -12298,15 +12338,18 @@ ${intrLog}
             }
             if(!el) return;
             el.setAttribute('data-annotation', ann.id);
-            el.style.outline = '3px solid ' + (ann.color || '#fbbf24');
-            el.style.outlineOffset = '1px';
             el.style.cursor = 'pointer';
-            el.title = '클릭하여 코멘트 보기';
             if(ann.anchorType === 'embed') {
-                // 임베드는 외곽 테두리(래퍼 직접 클릭)만 코멘트 열기 — 헤더 토글/iframe과 충돌 방지
-                el.addEventListener('click', function(ev){ if(ev.target===el){ ev.stopPropagation(); scrollToAnnotation(ann.id); } });
+                // [r48] 임베드는 내부 텍스트 하이라이트가 주 표시 → 래퍼엔 옅은 외곽선(코멘트 있음 표시)만. 테두리 직접 클릭=토글
+                el.style.outline = '2px solid ' + (ann.color || '#fbbf24');
+                el.style.outlineOffset = '1px';
+                el.title = '이 임베드에 코멘트 있음 (내부 하이라이트 또는 테두리 클릭)';
+                el.addEventListener('click', function(ev){ if(ev.target===el){ ev.stopPropagation(); toggleAnnotationCard(ann.id); } });
             } else {
-                el.addEventListener('click', function(ev){ ev.stopPropagation(); ev.preventDefault(); scrollToAnnotation(ann.id); });
+                el.style.outline = '3px solid ' + (ann.color || '#fbbf24');
+                el.style.outlineOffset = '1px';
+                el.title = '클릭하여 코멘트 열기/닫기';
+                el.addEventListener('click', function(ev){ ev.stopPropagation(); ev.preventDefault(); toggleAnnotationCard(ann.id); });
             }
         }
 
@@ -12417,17 +12460,26 @@ ${intrLog}
             renderAnnotationsPanelPositioned();
         }
 
+        var _lastAnnOpened = null;
+        function _annScrollFlash(annId) {
+            const card = document.getElementById('ann-card-' + annId);
+            if(card) { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); card.style.boxShadow = '0 0 0 2px #c96442'; setTimeout(function(){ card.style.boxShadow = ''; }, 1500); }
+        }
+        function _annOpenPanel() {
+            if(_annPanelCollapsed) { _annPanelCollapsed = false; try { localStorage.setItem('tda_ann_collapsed', '0'); } catch(e){} renderAnnotationsPanelPositioned(); return true; }
+            return false;
+        }
         function scrollToAnnotation(annId) {
-            // [r47] 하이라이트(텍스트/이미지/임베드) 클릭 → 접혀 있으면 코멘트 패널 펼치고, 해당 카드로 스크롤·강조
-            if(_annPanelCollapsed) {
-                _annPanelCollapsed = false;
-                try { localStorage.setItem('tda_ann_collapsed', '0'); } catch(e){}
-                renderAnnotationsPanelPositioned();
-            }
-            setTimeout(function() {
-                const card = document.getElementById('ann-card-' + annId);
-                if(card) { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); card.style.boxShadow = '0 0 0 2px #c96442'; setTimeout(function(){ card.style.boxShadow = ''; }, 1500); }
-            }, 40);
+            // [r47] 접혀 있으면 패널 펼치고 카드로 스크롤·강조 (프로그램에서 '열고 보여주기'용)
+            _annOpenPanel();
+            _lastAnnOpened = annId;
+            setTimeout(function(){ _annScrollFlash(annId); }, 40);
+        }
+        function toggleAnnotationCard(annId) {
+            // [r48] 하이라이트(텍스트/이미지/임베드) 클릭 = 코멘트 열기/닫기 토글. 같은 하이라이트 재클릭=닫기, 다른 하이라이트=그쪽으로 전환(유지)
+            if(_annPanelCollapsed) { _annOpenPanel(); _lastAnnOpened = annId; setTimeout(function(){ _annScrollFlash(annId); }, 40); return; }
+            if(annId === _lastAnnOpened) { _annPanelCollapsed = true; try { localStorage.setItem('tda_ann_collapsed', '1'); } catch(e){} _lastAnnOpened = null; renderAnnotationsPanelPositioned(); }
+            else { _lastAnnOpened = annId; _annScrollFlash(annId); }
         }
 
         // ==========================================
@@ -13217,6 +13269,22 @@ ${intrLog}
                 '<button class="ann-link-btn ann-reply-toggle" onclick="toggleAnnReplyInput(\''+c.id+'\')">↩ 답글</button>'+
             '</div>';
         }
+        // [r48] 주석 앵커의 현재 뷰포트 top/bottom 계산. 임베드는 iframe이 보고한 내부 위치 + iframe 실시간 rect를 합산 → 미리보기 스크롤 시 카드가 함께 이동(동시 스크롤)
+        function _annAnchorRectTop(previewEl, ann) {
+            if(ann && ann.anchorType === 'embed') {
+                var emb = previewEl.querySelector('.tda-embed[data-embedid="'+ann.embedId+'"]');
+                var info = window._embedAnnPos && window._embedAnnPos[ann.id];
+                if(emb && info) {
+                    var ifr = emb.querySelector('.tda-embed-body iframe');
+                    if(ifr) { var ir = ifr.getBoundingClientRect(); var t = ir.top + (info.top || 0); return { top:t, bottom:t+18 }; }
+                }
+                if(emb) { var er = emb.getBoundingClientRect(); return { top:er.top, bottom:er.bottom }; } // 폴백: 래퍼 상단
+                return null;
+            }
+            var el = previewEl.querySelector('[data-annotation="'+ann.id+'"]');
+            if(el) { var r = el.getBoundingClientRect(); return { top:r.top, bottom:r.bottom }; }
+            return null;
+        }
         function renderAnnotationsPanelPositioned() {
             var panel = document.getElementById('wiki-annotations-panel');
             var list = document.getElementById('annotations-list');
@@ -13232,14 +13300,15 @@ ${intrLog}
                 if (_annPanelCollapsed) { _atb.textContent = '💬 ' + annotations.length; _atb.style.right = '8px'; }
                 else { _atb.textContent = '✕ 코멘트'; _atb.style.right = '300px'; }
             }
-            if(!_hasAnn || _annPanelCollapsed){ if(panel) panel.style.width='0'; return; }
+            if(!_hasAnn || _annPanelCollapsed){ if(panel) panel.style.width='0'; _annReflowOnPanelChange('0'); return; }
             if(panel) panel.style.width='300px';
+            _annReflowOnPanelChange('300px'); // [r48] 패널 열리면 임베드도 좁아진 미리보기에 맞게 축소
             var pRect = previewEl.getBoundingClientRect();
-            // 1패스: 마크의 뷰포트 상대 위치(=텍스트 옆). scrollTop을 더하지 않음 — 더하면 스크롤 시 코멘트가 어긋남(기존 버그)
+            // 1패스: 앵커(마크/이미지/임베드 내부 텍스트)의 뷰포트 상대 위치. scrollTop 미가산(스크롤 시 어긋남 방지)
             var entries = annotations.map(function(ann){
-                var markEl = previewEl.querySelector('[data-annotation="'+ann.id+'"]');
+                var a = _annAnchorRectTop(previewEl, ann);
                 var desired=null, off=false;
-                if(markEl){ var mRect=markEl.getBoundingClientRect(); desired=(mRect.top - pRect.top) - 2; off=(mRect.bottom < pRect.top - 24)||(mRect.top > pRect.bottom + 24); }
+                if(a){ desired=(a.top - pRect.top) - 2; off=(a.bottom < pRect.top - 24)||(a.top > pRect.bottom + 24); }
                 return { ann:ann, desired:desired, off:off };
             });
             // [r36] 화면 밖 마크 카드도 생성하되 숨김 → 스크롤 시 _layoutAnnCards가 위치/표시만 갱신(재생성 X, 입력 포커스 유지)
@@ -13267,11 +13336,12 @@ ${intrLog}
             var previewEl = document.getElementById('doc-preview-container');
             if(!list || !previewEl) return;
             var pRect = previewEl.getBoundingClientRect();
+            var anns = (activeDocId && wikiAnnotations[activeDocId]) || [];
             var items = Array.prototype.slice.call(list.querySelectorAll('.ann-positioned-card')).map(function(card){
                 var id = card.id.replace('ann-card-','');
-                var mark = previewEl.querySelector('[data-annotation="'+id+'"]');
+                var ann=null; for(var k=0;k<anns.length;k++){ if(anns[k].id===id){ ann=anns[k]; break; } }
                 var desired=null, off=false;
-                if(mark){ var m=mark.getBoundingClientRect(); desired=(m.top-pRect.top)-2; off=(m.bottom<pRect.top-24)||(m.top>pRect.bottom+24); }
+                if(ann){ var a=_annAnchorRectTop(previewEl, ann); if(a){ desired=(a.top-pRect.top)-2; off=(a.bottom<pRect.top-24)||(a.top>pRect.bottom+24); } }
                 return { card:card, desired:desired, off:off };
             });
             items.sort(function(a,b){ var av=(a.desired==null?1e9:a.desired), bv=(b.desired==null?1e9:b.desired); return av-bv; });
