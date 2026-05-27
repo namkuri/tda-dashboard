@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r52 (r51 + 목표md 멘션(사용자/포인트/카드/첨부 드래그삽입+칩렌더)·스프린트 첨부(문서/위키/흐름/파일)·체크리스트(제목·설명md·항목[제목·내용·담당·산출물])) -->
+<!-- BUILD: 2026-05-27 r53 (r52 + 산출물/첨부 피커 클릭 무반응 수정: JSON.stringify 라벨이 이중따옴표 onclick 속성 깨뜨리던 문제 → id만 전달+핸들러 조회) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -9977,14 +9977,15 @@ addEventListener("resize",sendPos);
             var docs = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder) && ['wiki', 'canon', 'diagram'].indexOf(d.kind || 'wiki') >= 0; });
             if (!docs.length) { showToast('첨부할 문서가 없습니다.', 'info'); return; }
             var grp = [['wiki', '📄 문서'], ['canon', '🎮 게임위키'], ['diagram', '📈 흐름·그래프']];
-            var html = grp.map(function (g) { var list = docs.filter(function (d) { return (d.kind || 'wiki') === g[0]; }); if (!list.length) return ''; return '<div class="ctx-menu-sep"></div><div style="padding:3px 12px;font-size:10px;color:var(--c-text3);">' + g[1] + '</div>' + list.map(function (d) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_sprintAddAttachment(\'' + sid + '\',{kind:\'doc\',refId:\'' + d.id + '\',docKind:\'' + (d.kind || 'wiki') + '\',label:' + JSON.stringify(d.title || '문서') + '})">' + _sprintEsc((d.emoji || '📄') + ' ' + (d.title || '제목없음')) + '</div>'; }).join(''); }).join('');
+            var html = grp.map(function (g) { var list = docs.filter(function (d) { return (d.kind || 'wiki') === g[0]; }); if (!list.length) return ''; return '<div class="ctx-menu-sep"></div><div style="padding:3px 12px;font-size:10px;color:var(--c-text3);">' + g[1] + '</div>' + list.map(function (d) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_sprintAddAttachmentDoc(\'' + sid + '\',\'' + d.id + '\')">' + _sprintEsc((d.emoji || '📄') + ' ' + (d.title || '제목없음')) + '</div>'; }).join(''); }).join('');
             _openCardMenu({ clientX: e ? e.clientX : 200, clientY: e ? e.clientY : 200, stopPropagation: function () {} }, html);
         }
         async function _sprintAttachFile(sid) {
             if (typeof dbLoadDriveFiles === 'function' && (!driveState || !driveState.files || !driveState.files.length)) { var r = await dbLoadDriveFiles(); if (r && !r.error && window.driveState) driveState.files = r.files; }
             var files = (window.driveState && driveState.files) ? driveState.files.filter(function (f) { return f.mime !== '__folder__' && !f.deleted; }) : [];
             if (!files.length) { showToast('드라이브에 파일이 없습니다. 공용 드라이브 탭에서 업로드 후 첨부하세요.', 'info'); return; }
-            _openSimpleModal('📎 파일 첨부', '<div class="gip-files" style="max-height:48vh;">' + files.map(function (f) { return '<div class="gip-file" onclick="_sprintAddAttachment(\'' + sid + '\',{kind:\'file\',url:' + JSON.stringify(f.url || '') + ',label:' + JSON.stringify(f.name || '파일') + ',mime:' + JSON.stringify(f.mime || '') + '});_closeSimpleModal()">' + _sprintEsc((f.name || '파일')) + '</div>'; }).join('') + '</div>');
+            window._spvFilePickPool = files; // [r53] 핸들러에서 id로 조회 (onclick에 객체/따옴표 삽입 회피)
+            _openSimpleModal('📎 파일 첨부', '<input class="gip-in" placeholder="검색" oninput="_clDelivFilter(this.value)"><div id="cl-deliv-pick" class="gip-files" style="max-height:46vh;margin-top:8px;">' + files.map(function (f) { return '<div class="gip-file" data-l="' + _sprintEsc((f.name || '').toLowerCase()) + '" onclick="_sprintAddAttachmentFile(\'' + sid + '\',\'' + (f.id || '') + '\')">' + _sprintEsc((f.name || '파일')) + '</div>'; }).join('') + '</div>');
         }
         function _sprintAddAttachment(sid, att) {
             var s = _spvSprint(sid); if (!s) return; if (!Array.isArray(s.attachments)) s.attachments = [];
@@ -9993,6 +9994,9 @@ addEventListener("resize",sendPos);
             if (typeof logActivity === 'function') logActivity('sprint', 'update', { targetId: sid, targetLabel: (s.weekLabel || sid), detail: '첨부 추가: ' + (att.label || '') });
             _spvSaveSprint(s); showToast('📎 첨부 추가됨', 'success');
         }
+        // [r53] 피커 onclick에는 id만 전달 → 핸들러에서 객체 구성 (라벨 따옴표가 onclick 속성을 깨뜨리던 문제 수정)
+        function _sprintAddAttachmentDoc(sid, docId) { var d = (currentData.docs || []).find(function (x) { return x.id === docId; }); if (!d) { showToast('문서를 찾을 수 없습니다.', 'alert'); return; } _sprintAddAttachment(sid, { kind: 'doc', refId: docId, docKind: (d.kind || 'wiki'), label: (d.title || '문서') }); }
+        function _sprintAddAttachmentFile(sid, fileId) { var f = ((window.driveState && driveState.files) || _spvFilePickPool || []).find(function (x) { return x.id === fileId; }); if (!f) { showToast('파일을 찾을 수 없습니다.', 'alert'); return; } _sprintAddAttachment(sid, { kind: 'file', url: (f.url || ''), label: (f.name || '파일'), mime: (f.mime || '') }); if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); }
         function _sprintOpenAttach(sid, attId) {
             var s = _spvSprint(sid); if (!s) return; var att = (s.attachments || []).find(function (a) { return a.id === attId; }); if (!att) return;
             if (att.kind === 'file') { if (att.url) window.open(att.url, '_blank'); return; }
@@ -10089,11 +10093,11 @@ addEventListener("resize",sendPos);
             if (type === 'task') pool = (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).map(function (t) { return { id: t.id, label: t.title || '카드' }; });
             else { var kindMap = { doc: 'wiki', wiki: 'canon', graph: 'diagram' }; pool = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder) && (d.kind || 'wiki') === kindMap[type]; }).map(function (d) { return { id: d.id, label: d.title || '문서' }; }); }
             if (!pool.length) { showToast('선택할 ' + _delivTypeLabel(type) + ' 항목이 없습니다.', 'info'); return; }
-            _openSimpleModal('산출물 선택 — ' + _delivTypeLabel(type), '<input class="gip-in" placeholder="검색" oninput="_clDelivFilter(this.value)"><div id="cl-deliv-pick" class="gip-files" style="max-height:42vh;margin-top:8px;">' + pool.map(function (p) { return '<div class="gip-file" data-l="' + _sprintEsc((p.label || '').toLowerCase()) + '" onclick="_clDelivChosen(\'' + p.id + '\',' + JSON.stringify(p.label) + ')">' + _sprintEsc(p.label) + '</div>'; }).join('') + '</div>');
-            window._clPendingDeliv = { type: type, add: add };
+            window._clPendingDeliv = { type: type, add: add, pool: pool }; // [r53] pool 보관 → onclick엔 id만
+            _openSimpleModal('산출물 선택 — ' + _delivTypeLabel(type), '<input class="gip-in" placeholder="검색" oninput="_clDelivFilter(this.value)"><div id="cl-deliv-pick" class="gip-files" style="max-height:42vh;margin-top:8px;">' + pool.map(function (p) { return '<div class="gip-file" data-l="' + _sprintEsc((p.label || '').toLowerCase()) + '" onclick="_clDelivChosen(\'' + p.id + '\')">' + _sprintEsc(p.label) + '</div>'; }).join('') + '</div>');
         }
         function _clDelivFilter(q) { q = (q || '').toLowerCase(); var box = document.getElementById('cl-deliv-pick'); if (!box) return; box.querySelectorAll('.gip-file').forEach(function (el) { el.style.display = (!q || (el.getAttribute('data-l') || '').indexOf(q) >= 0) ? 'block' : 'none'; }); }
-        function _clDelivChosen(refId, label) { var pd = window._clPendingDeliv; _closeSimpleModal(); if (pd && pd.add) pd.add(refId, label); window._clPendingDeliv = null; if (_clCtx) _sprintEditChecklistItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); }
+        function _clDelivChosen(refId) { var pd = window._clPendingDeliv; var item = pd && pd.pool && pd.pool.find(function (p) { return p.id === refId; }); var label = item ? item.label : ''; _closeSimpleModal(); if (pd && pd.add) pd.add(refId, label); window._clPendingDeliv = null; if (_clCtx) _sprintEditChecklistItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); }
         function _clRemoveDeliv(dlid) { if (!_clCtx) return; var it = _sprintFindItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); if (!it) return; it.deliverables = (it.deliverables || []).filter(function (d) { return d.id !== dlid; }); var box = document.getElementById('cl-it-delivs'); if (box) box.innerHTML = _clRenderDelivs(it); }
         function _sprintSaveChecklistItem() {
             if (!_clCtx) return; var it = _sprintFindItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); if (!it) { _closeSimpleModal(); return; }
