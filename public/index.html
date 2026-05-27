@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r49 (r48 + 스프린트 카드→흐름 드래그 매핑·참여자→포인트/카드 담당자 드래그배정·히스토리 탭(프로젝트별 활동 타임라인: logActivity+기존로그 통합)) -->
+<!-- BUILD: 2026-05-27 r50 (r49 + 카드→흐름 드롭 onEnd감지 수정·문서코멘트 reopen 하이라이트 재적용(영속)·칸반 카테고리 순서드래그(로컬)·스프린트 섹션 순서드래그(서버공유)·드래그 미리보기 툴팁/고스트) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -370,6 +370,9 @@
         .ch-add:hover { background: var(--c-accent-soft); color: var(--c-accent); }
         .ch-more { width: 28px; height: 28px; border-radius: 8px; background: none; border: none; color: var(--c-text3); cursor: pointer; opacity: 0; transition: opacity .12s; font-size: 15px; line-height: 1; }
         .col-header:hover .ch-more { opacity: 1; }
+        .ch-drag { cursor: grab; color: var(--c-text3); font-size: 13px; opacity: 0; margin-right: 3px; user-select: none; }
+        .col-header:hover .ch-drag { opacity: .75; }
+        .ch-drag:active { cursor: grabbing; }
         .ch-more:hover { background: var(--ios-fill); color: var(--c-text); }
         .ch-left .zone-counts { font-size: 11px; color: var(--c-text3); font-weight: 600; }
         .drag-handle:active { cursor: grabbing; }
@@ -2202,6 +2205,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-card.spv-drop-on { outline: 2px dashed #c96442; outline-offset: 1px; }
         .spv-part-d { display: inline-block; cursor: grab; }
         .spv-part-d * { pointer-events: none; }
+        /* [r50] 드래그 미리보기: 안내 툴팁 · 신규 위치 고스트 · 기존 포인트 강조 */
+        .spv-prev-host { position: relative; }
+        #spv-drop-hint { position: fixed; z-index: 100002; background: var(--c-text); color: var(--c-paper); font-size: 12px; line-height: 1.45; padding: 7px 10px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.28); pointer-events: none; max-width: 240px; display: none; }
+        #spv-drop-hint b { color: #ffd9a8; }
+        .spv-drop-ghost { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 2px dashed #c96442; background: rgba(201,100,66,.18); color: #c96442; font-weight: 800; display: none; align-items: center; justify-content: center; pointer-events: none; z-index: 5; }
+        .spv-prev-node.spv-prev-hit { filter: drop-shadow(0 0 4px #c96442) drop-shadow(0 0 2px #c96442); }
+        /* [r50 #4] 스프린트 섹션 순서 드래그 */
+        .spv-sec { position: relative; padding-left: 16px; }
+        .spv-sec-grip { position: absolute; left: -1px; top: 8px; width: 14px; text-align: center; cursor: grab; color: var(--c-text3); opacity: 0; font-size: 12px; user-select: none; z-index: 3; }
+        .spv-sec:hover .spv-sec-grip { opacity: .8; }
+        .spv-sec-grip:active { cursor: grabbing; }
         #sprint-view.hidden { display: none; }
         .spv-wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
         .spv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -5589,9 +5603,49 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r49] 스프린트 드래그: 카드→흐름 매핑, 참여자→포인트/카드 담당자 배정
         // ============================================================
         function _spvDragStart(ev, kind, id) { window._spvDragData = { kind: kind, id: id }; try { ev.dataTransfer.setData('text/plain', kind + ':' + id); ev.dataTransfer.effectAllowed = 'copy'; } catch (e) {} }
-        function _spvDragEnd() { window._spvDragData = null; document.querySelectorAll('.spv-drop-on').forEach(function (el) { el.classList.remove('spv-drop-on'); }); }
+        function _spvDragEnd() { window._spvDragData = null; document.querySelectorAll('.spv-drop-on').forEach(function (el) { el.classList.remove('spv-drop-on'); }); _spvHideDropHint(); }
         function _spvParseDT(ev) { try { var s = ev.dataTransfer.getData('text/plain') || ''; var i = s.indexOf(':'); if (i > 0) return { kind: s.slice(0, i), id: s.slice(i + 1) }; } catch (e) {} return null; }
-        function _spvFlowAllow(ev) { var dd = window._spvDragData; if (dd && (dd.kind === 'task' || dd.kind === 'member')) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'copy'; } catch (e) {} ev.currentTarget.classList.add('spv-drop-on'); } }
+        function _spvFlowAllow(ev) {
+            var dd = window._spvDragData; if (!dd || (dd.kind !== 'task' && dd.kind !== 'member')) return;
+            ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'copy'; } catch (e) {}
+            var host = ev.currentTarget; host.classList.add('spv-drop-on');
+            window._spvLastDragXY = { x: ev.clientX, y: ev.clientY }; // [r50] onEnd 폴백용
+            _spvShowDropHint(ev, host, dd); // [r50 #5] 미리보기 안내
+        }
+        function _spvFlowLeave(ev) { var host = ev.currentTarget; if (ev.relatedTarget && host.contains(ev.relatedTarget)) return; host.classList.remove('spv-drop-on'); _spvHideDropHint(); }
+        function _spvDragLabel(dd) {
+            if (!dd) return '';
+            if (dd.kind === 'task') { var t = (currentData.tasks || []).find(function (x) { return x.id === dd.id; }); return (t && t.title) || '카드'; }
+            return (typeof getMemberName === 'function' ? getMemberName(dd.id) : '') || '참여자';
+        }
+        // [r50 #5] 드래그 중 어느 포인트에 어떻게 등록될지 미리보기 (툴팁 + 기존 포인트 강조 / 신규 위치 고스트)
+        function _spvShowDropHint(ev, host, dd) {
+            var fid = host.getAttribute('data-flow-id');
+            var doc = (currentData.docs || []).find(function (x) { return x.id === fid; });
+            var p = (doc && doc.meta && doc.meta.diagram) || {};
+            var unit = (p.mode === 'graph') ? '노드' : '포인트';
+            var hitId = _spvFlowHitId(ev);
+            var who = (dd.kind === 'task' ? '카드 "' : '담당자 "') + _sprintEsc(_spvDragLabel(dd)) + '"';
+            var verb = dd.kind === 'task' ? '연결' : '배정';
+            var tip = document.getElementById('spv-drop-hint'); if (!tip) { tip = document.createElement('div'); tip.id = 'spv-drop-hint'; document.body.appendChild(tip); }
+            host.querySelectorAll('.spv-prev-hit').forEach(function (e) { e.classList.remove('spv-prev-hit'); });
+            var ghost = host.querySelector('.spv-drop-ghost');
+            if (hitId) {
+                var item = ((p.points || []).concat(p.nodes || [])).find(function (x) { return x.id === hitId; });
+                tip.innerHTML = '🎯 기존 ' + unit + ' <b>"' + _sprintEsc((item && item.title) || '') + '"</b>에<br>' + who + ' ' + verb;
+                var grp = host.querySelector('.spv-prev-node[data-prev-id="' + hitId + '"]'); if (grp) grp.classList.add('spv-prev-hit');
+                if (ghost) ghost.style.display = 'none';
+            } else {
+                tip.innerHTML = '➕ 여기에 <b>새 ' + unit + '</b> 생성<br>+ ' + who + ' ' + verb;
+                if (!ghost) { ghost = document.createElement('div'); ghost.className = 'spv-drop-ghost'; ghost.textContent = '＋'; host.appendChild(ghost); }
+                var hr = host.getBoundingClientRect(); ghost.style.display = 'flex'; ghost.style.left = (ev.clientX - hr.left - 11) + 'px'; ghost.style.top = (ev.clientY - hr.top - 11) + 'px';
+            }
+            tip.style.display = 'block';
+            var x = ev.clientX + 16, y = ev.clientY + 16; var r = tip.getBoundingClientRect();
+            if (x + r.width > window.innerWidth - 8) x = ev.clientX - r.width - 12; if (y + r.height > window.innerHeight - 8) y = ev.clientY - r.height - 12;
+            tip.style.left = Math.max(6, x) + 'px'; tip.style.top = Math.max(6, y) + 'px';
+        }
+        function _spvHideDropHint() { var t = document.getElementById('spv-drop-hint'); if (t) t.style.display = 'none'; document.querySelectorAll('.spv-prev-hit').forEach(function (e) { e.classList.remove('spv-prev-hit'); }); document.querySelectorAll('.spv-drop-ghost').forEach(function (e) { e.style.display = 'none'; }); }
         function _spvSvgPoint(svg, ev) { try { var pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; var m = svg.getScreenCTM(); if (!m) return null; var loc = pt.matrixTransform(m.inverse()); return { x: loc.x, y: loc.y }; } catch (e) { return null; } }
         function _mapTaskStatusToFlow(st) { st = (st || '').toLowerCase(); if (st.indexOf('done') >= 0 || st === 'complete' || st === 'completed') return 'done'; if (st.indexOf('progress') >= 0 || st === 'doing' || st === 'inprogress') return 'progress'; return 'pending'; }
         function _spvFlowHitId(ev) {
@@ -5635,7 +5689,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 } else if (dd.kind === 'task') { tgtP.linkedCardId = dd.id; if (!tgtP.title || tgtP.title === '새 포인트') tgtP.title = (task && task.title) || tgtP.title; msg = '🔗 카드를 포인트에 연결'; logActivity('flow', 'map', { targetId: fid, targetLabel: doc.title || '', detail: '카드 "' + ((task && task.title) || '') + '" → 포인트' }); }
                 else { tgtP.assigneeId = dd.id; if (!tgtP.status || tgtP.status === 'pending') tgtP.status = 'progress'; msg = '👤 담당자를 포인트에 배정'; logActivity('flow', 'assign', { targetId: fid, targetLabel: doc.title || '', detail: _histName(dd.id) + ' → 포인트' }); }
             }
-            window._spvDragData = null;
+            window._spvDragData = null; _spvHideDropHint();
             doc.updatedAt = Date.now();
             if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
             if (typeof dbUpsertDoc === 'function') dbUpsertDoc(doc);
@@ -6507,14 +6561,19 @@ return data;
                 end_date: sprint.endDate || null,
                 closed_at: sprint.closedAt || null,
                 history: sprint.history || [],
-                participants: sprint.participants || []
+                participants: sprint.participants || [],
+                section_order: (sprint.sectionOrder && sprint.sectionOrder.length) ? sprint.sectionOrder : null // [r50 #4] 스프린트 섹션 순서(공유)
             };
             let { error } = await supabaseClient.from('sprints').upsert(payload);
-            // [라운드8] participants 컬럼 미생성 환경 보호: 참여자만 빼고 재시도(기존 저장 보존)
-            if (error && /participants/.test(error.message || '')) {
-                delete payload.participants;
+            // [라운드8/r50] 선택 컬럼(participants·section_order) 미생성 환경 보호: 지목된 컬럼만 빼고 재시도(기존 저장 보존)
+            var _spOpt = ['participants', 'section_order'], _spTries = 0;
+            while (error && _spTries < 4) {
+                var _drop = null;
+                for (var _ci = 0; _ci < _spOpt.length; _ci++) { if (typeof payload[_spOpt[_ci]] !== 'undefined' && new RegExp(_spOpt[_ci]).test(error.message || '')) { _drop = _spOpt[_ci]; break; } }
+                if (!_drop) break;
+                delete payload[_drop]; _spTries++;
                 ({ error } = await supabaseClient.from('sprints').upsert(payload));
-                if (!error) console.warn('[dbUpsertSprint] participants 컬럼 없음 — 참여자 제외 저장. SQL: alter table sprints add column if not exists participants jsonb default \'[]\'::jsonb;');
+                if (!error) console.warn('[dbUpsertSprint] ' + _drop + ' 컬럼 없음 — 제외 저장. (DB 도구 SQL로 보강 가능)');
             }
             if (error) {
                 console.error('[dbUpsertSprint]', error);
@@ -6602,6 +6661,7 @@ return data;
             ['review_requests', 'submitted_version', 'int'],
             ['tasks', 'due_date', 'date'],
             ['sprints', 'participants', "jsonb default '[]'::jsonb"],
+            ['sprints', 'section_order', "jsonb default '[]'::jsonb"],
             ['kanban_categories', 'sprint_id', 'text'],
             ['wiki_docs', 'kind', "text default 'wiki'"],
             ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"]
@@ -6669,7 +6729,8 @@ return data;
                 startDate: s.start_date || null, endDate: s.end_date || null,
                 createdAt: s.created_at || null, closedAt: s.closed_at || null,
                 history: s.history || [],
-                participants: s.participants || []
+                participants: s.participants || [],
+                sectionOrder: s.section_order || [] // [r50 #4] 섹션 순서
             };
         }
         // [v40 Day3 청크2] review_requests row(snake) → app 객체(camel) 매핑
@@ -7986,7 +8047,7 @@ return data;
                     updateDocEditorUI();
                     if (_initDoc.userHighlights) userHighlights[docId] = _initDoc.userHighlights;
                     setTimeout(function() {
-                        renderAnnotationsPanelPositioned();
+                        if (typeof applyAnnotationHighlights === 'function') applyAnnotationHighlights(); else renderAnnotationsPanelPositioned(); // [r50] 코멘트 하이라이트 재적용(reopen 시 사라지던 문제)
                         applyAllHighlights();
                     }, 80);
                 }).catch(function(err) {
@@ -8015,7 +8076,7 @@ return data;
                 renderDocTree();
             }
             setTimeout(function() {
-                renderAnnotationsPanelPositioned();
+                if (typeof applyAnnotationHighlights === 'function') applyAnnotationHighlights(); else renderAnnotationsPanelPositioned(); // [r50] 코멘트 하이라이트 재적용
                 applyAllHighlights();
             }, 80);
         }
@@ -8218,6 +8279,8 @@ return data;
                 doc.meta.status = 'draft'; doc.meta.approvedBy = null; doc.meta.approvedByName = ''; doc.meta.approvedAt = null;
                 _canonReverted = true;
             }
+            // [r50] 콘텐츠 저장이 코멘트(주석)를 덮어쓰지 않도록 — 저장 직전 현재 주석을 meta에 동기화
+            if (typeof wikiAnnotations !== 'undefined' && wikiAnnotations[activeDocId]) { if (!doc.meta) doc.meta = {}; doc.meta.annotations = wikiAnnotations[activeDocId]; }
             // localStorage 즉시
             _safeLocalCache(currentData);
             if (typeof renderCanonMetaBar === 'function') renderCanonMetaBar();
@@ -9695,7 +9758,7 @@ addEventListener("resize",sendPos);
                     + '<button class="spv-flow-mini" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="그래프 탭에서 편집">✏️ 편집</button>'
                     + '<button class="spv-flow-mini danger" onclick="event.stopPropagation();sprintUnlinkFlow(\'' + f.id + '\',\'' + sid + '\')" title="흐름 링크 삭제">✕</button>'
                     + '</div>';
-                var body = open ? ('<div class="spv-prev-host" data-flow-id="' + f.id + '" ondragover="_spvFlowAllow(event)" ondragenter="_spvFlowAllow(event)" ondragleave="this.classList.remove(\'spv-drop-on\')" ondrop="_spvFlowDrop(event,\'' + f.id + '\')" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="클릭=편집 · 카드를 끌어다 놓으면 포인트 연결 · 참여자를 놓으면 담당자 배정">' + gphFlowPreviewSVG(f) + '</div>') : '';
+                var body = open ? ('<div class="spv-prev-host" data-flow-id="' + f.id + '" ondragover="_spvFlowAllow(event)" ondragenter="_spvFlowAllow(event)" ondragleave="_spvFlowLeave(event)" ondrop="_spvFlowDrop(event,\'' + f.id + '\')" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="클릭=편집 · 카드를 끌어다 놓으면 포인트 연결 · 참여자를 놓으면 담당자 배정">' + gphFlowPreviewSVG(f) + '</div>') : '';
                 return '<div class="spv-flow-item2">' + head + body + '</div>';
             }).join('') : '<div class="spv-empty" style="padding:6px;">연결된 흐름 없음 — "+ 새 흐름"으로 시작</div>';
             return '<div class="spv-flows"><div class="spv-flows-h">🔀 흐름 (그래프) <button class="spv-flow-btn" onclick="event.stopPropagation();sprintNewFlow(\'' + sid + '\')">+ 새 흐름</button><button class="spv-flow-btn" onclick="event.stopPropagation();sprintImportFlow(event,\'' + sid + '\')">가져오기</button></div>' + items + '</div>';
@@ -9771,21 +9834,44 @@ addEventListener("resize",sendPos);
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();openSprintEditModal(\'' + s.id + '\')" title="제목·날짜 수정">✏️</button>'
                     + '<button class="spv-row-btn" onclick="event.stopPropagation();deleteSprint(\'' + s.id + '\')" title="스프린트 삭제">🗑</button>'
                     + '<span class="spv-caret">' + (exp ? '▾' : '▸') + '</span></div>';
-                if (exp) html += '<div class="spv-body">' + _sprintGoalArea(s) + _sprintFlowsSection(s.id) + '<div>' + _sprintCatSections(s.id) + '</div></div>';
+                if (exp) {
+                    var _secs = _sprintSectionOrder(s); // [r50 #4] 사용자 지정 섹션 순서(공유)
+                    var _secHtml = _secs.map(function (sec) {
+                        var inner = sec === 'goal' ? _sprintGoalArea(s) : (sec === 'flow' ? _sprintFlowsSection(s.id) : ('<div>' + _sprintCatSections(s.id) + '</div>'));
+                        return '<div class="spv-sec" data-sec="' + sec + '"><span class="spv-sec-grip" title="드래그하여 섹션 순서 변경 (서버 저장·공유)">⠿</span>' + inner + '</div>';
+                    }).join('');
+                    html += '<div class="spv-body" data-sprintid="' + s.id + '">' + _secHtml + '</div>';
+                }
                 html += '</div>';
             });
             html += '<div class="spv-sprint"><div class="spv-row" onclick="toggleSprintExpand(\'__none__\')"><span class="spv-badge" style="background:var(--ios-fill);color:var(--c-text3);">📥 미지정</span><b>스프린트 미지정</b><span class="spv-count">' + countOf(null) + ' 카드</span><span class="spv-caret">' + (_sprintExpanded['__none__'] ? '▾' : '▸') + '</span></div>';
             if (_sprintExpanded['__none__']) html += '<div class="spv-body"><div class="spv-cards-label">미지정 카드 (스프린트로 드래그)</div><div>' + _sprintCatSections(null) + '</div></div>';
             html += '</div></div>';
             wrap.innerHTML = html;
+            // [r50] 드래그 중 마지막 포인터 좌표 추적(흐름 드롭 onEnd 폴백용) — 1회 바인딩
+            if (!window._spvDragTrackerBound) { window._spvDragTrackerBound = true; document.addEventListener('dragover', function (e) { window._spvLastDragXY = { x: e.clientX, y: e.clientY }; }, true); }
             if (typeof Sortable !== 'undefined') {
                 wrap.querySelectorAll('.spv-cards').forEach(function (list) {
                     new Sortable(list, {
                         group: 'sprint-cards', animation: 200, handle: '.spv-drag', ghostClass: 'sortable-ghost', filter: '.spv-empty',
                         onStart: function (evt) { window._spvDragData = { kind: 'task', id: evt.item.getAttribute('data-id') }; }, // [r49] 카드→흐름 드롭용
-                        onUnchoose: function () { setTimeout(function () { window._spvDragData = null; document.querySelectorAll('.spv-drop-on').forEach(function (el) { el.classList.remove('spv-drop-on'); }); }, 80); },
+                        onUnchoose: function () { setTimeout(function () { window._spvDragData = null; document.querySelectorAll('.spv-drop-on').forEach(function (el) { el.classList.remove('spv-drop-on'); }); _spvHideDropHint(); }, 120); },
                         onEnd: function (evt) {
                             var taskId = evt.item.getAttribute('data-id'); if (!taskId) return;
+                            // [r50 #1] 카드를 흐름 미리보기 위에 드롭 → 포인트/노드 매핑 (Sortable은 리스트 밖 드롭이라 원위치 복귀)
+                            if (window._spvDragData && window._spvDragData.kind === 'task') {
+                                var oe = evt.originalEvent || {};
+                                var px = (oe.clientX || oe.clientY) ? oe.clientX : (window._spvLastDragXY ? window._spvLastDragXY.x : 0);
+                                var py = (oe.clientX || oe.clientY) ? oe.clientY : (window._spvLastDragXY ? window._spvLastDragXY.y : 0);
+                                var hostEl = (px || py) ? document.elementFromPoint(px, py) : null;
+                                var flowHost = (hostEl && hostEl.closest) ? hostEl.closest('.spv-prev-host') : null;
+                                if (flowHost) {
+                                    _spvFlowDrop({ preventDefault: function () {}, stopPropagation: function () {}, currentTarget: flowHost, target: hostEl, clientX: px, clientY: py, dataTransfer: { getData: function () { return ''; } } }, flowHost.getAttribute('data-flow-id'));
+                                    renderSprintView();
+                                    return;
+                                }
+                            }
+                            window._spvDragData = null; _spvHideDropHint();
                             var toSid = evt.to.getAttribute('data-sprintid') || null;
                             var toCat = evt.to.getAttribute('data-catid') || null;
                             var t = (currentData.tasks || []).find(function (x) { return x.id === taskId; }); if (!t) return;
@@ -9799,7 +9885,30 @@ addEventListener("resize",sendPos);
                     });
                 });
             }
+            // [r50 #4] 스프린트 내부 섹션(목표/흐름/칸반) 순서 드래그 — 서버 저장·공유. 스프린트별 그룹으로 교차 이동 차단
+            if (typeof Sortable !== 'undefined') {
+                wrap.querySelectorAll('.spv-body[data-sprintid]').forEach(function (body) {
+                    var sid = body.getAttribute('data-sprintid');
+                    new Sortable(body, {
+                        group: 'spvsec-' + sid, handle: '.spv-sec-grip', draggable: '.spv-sec', animation: 180, ghostClass: 'sortable-ghost',
+                        onEnd: function () {
+                            var order = []; body.querySelectorAll('.spv-sec[data-sec]').forEach(function (el) { order.push(el.getAttribute('data-sec')); });
+                            var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!s) return;
+                            s.sectionOrder = order;
+                            if (typeof saveData === 'function') saveData();
+                            if (typeof dbUpsertSprint === 'function') dbUpsertSprint(s);
+                            if (typeof showToast === 'function') showToast('📐 섹션 순서 저장됨 (공유)', 'success');
+                        }
+                    });
+                });
+            }
             if (typeof _wireSprintFlowPreviews === 'function') _wireSprintFlowPreviews(wrap);
+        }
+        function _sprintSectionOrder(s) {
+            var def = ['goal', 'flow', 'kanban'];
+            var o = (s && Array.isArray(s.sectionOrder)) ? s.sectionOrder.filter(function (x) { return def.indexOf(x) >= 0; }) : [];
+            def.forEach(function (x) { if (o.indexOf(x) < 0) o.push(x); });
+            return o;
         }
         // [#4] 스프린트 생성/편집 모달
         var _sprintEditId = null;
@@ -11624,10 +11733,14 @@ ${intrLog}
             // [#1] 스프린트별 카테고리: 선택 스프린트가 유효하면 그 스프린트 카테고리만, 아니면(스프린트 없음 등) 전부
             const _spValid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId);
             const projCats = currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId && (!_spValid || (_pc.sprintId || null) === selectedBoardSprintId));
+            // [r50 #3] 사용자가 지정한 카테고리 순서(로컬 저장) 적용
+            var _catOrder = _loadCatOrder();
+            if (_catOrder.length) projCats.sort(function (a, b) { var ia = _catOrder.indexOf(a.id), ib = _catOrder.indexOf(b.id); return (ia < 0 ? 9999 : ia) - (ib < 0 ? 9999 : ib); });
             projCats.forEach(cat => {
                 const isFocused = focusedCategoryId === cat.id; const isMinimized = focusedCategoryId !== null && !isFocused;
                 const colClass = isFocused ? 'kanban-col-focused' : (isMinimized ? 'kanban-col-minimized' : 'kanban-col-normal');
                 const col = document.createElement('div'); col.className = `kanban-col-wrapper ${colClass}`;
+                col.setAttribute('data-catid', cat.id); // [r50 #3] 카테고리 순서 드래그
                 col.onclick = function(e) { if(isMinimized && !e.target.closest('.cat-controls') && !e.target.closest('.task-card')) toggleCategoryFocus(cat.id); };
 
                 // [v40 Day2 청크 3] 카테고리 헤더 Zone 카운트
@@ -11640,6 +11753,7 @@ ${intrLog}
                 col.innerHTML = `
                     <div class="col-header flex justify-between items-center cursor-pointer" onclick="toggleCategoryFocus('${cat.id}')" title="클릭하여 포커스 모드 전환">
                         <div class="ch-left cat-controls" onclick="event.stopPropagation()">
+                            <span class="ch-drag" title="드래그하여 컬럼 순서 변경 (이 브라우저에만 저장)" onclick="event.stopPropagation()">⠿</span>
                             <h2 class="ch-title" onclick="toggleCategoryFocus('${cat.id}')">${cat.title}</h2>
                             <span class="ch-count">${catTotal}</span>${zcHtml}
                         </div>
@@ -11712,11 +11826,25 @@ ${intrLog}
             if (projCats.length === 0) {
                 board.innerHTML = '<div class="board-empty"><div class="be-emoji">🗂️</div><div class="be-title">아직 카테고리가 없어요</div><div class="be-sub">칸반 보드는 카테고리(컬럼)로 작업을 묶어 관리합니다. 첫 카테고리를 만들어 시작해보세요.</div><button class="be-cta" onclick="addNewCategory()">+ 새 카테고리 만들기</button></div>';
             }
+            // [r50 #3] 카테고리(컬럼) 순서 드래그 — 로컬 저장만 (서버 미반영). #board 컨테이너에 1회 바인딩(자식은 매 렌더 교체돼도 인스턴스 유지)
+            if (typeof Sortable !== 'undefined' && board && !board._catSortable) {
+                board._catSortable = new Sortable(board, {
+                    group: 'kanban-cols', animation: 180, handle: '.ch-drag', draggable: '.kanban-col-wrapper', ghostClass: 'sortable-ghost',
+                    onEnd: function () {
+                        var ids = []; board.querySelectorAll('.kanban-col-wrapper[data-catid]').forEach(function (el) { ids.push(el.getAttribute('data-catid')); });
+                        _saveCatOrder(ids);
+                        if (typeof showToast === 'function') showToast('🗂️ 카테고리 순서 저장됨 (이 브라우저)', 'info');
+                    }
+                });
+            }
             attachFavoriteButtonsToMedia(document.getElementById('board'));
             if (typeof renderSprintBand === 'function') renderSprintBand(); // [v40 Day2 청크 4]
             if (typeof renderReviewBadge === 'function') renderReviewBadge(); // [v40 Day3 청크 2]
         }
 
+        // [r50 #3] 카테고리 순서(로컬 전용) — 프로젝트별 localStorage
+        function _loadCatOrder() { try { return JSON.parse(localStorage.getItem('tda_cat_order_' + (activeProjectId || 'default')) || '[]'); } catch (e) { return []; } }
+        function _saveCatOrder(ids) { try { localStorage.setItem('tda_cat_order_' + (activeProjectId || 'default'), JSON.stringify(ids)); } catch (e) {} }
         function renderProgress() {
             const container = document.getElementById('progress-container'); container.innerHTML = '';
             // [변경] 카테고리별 진척률도 칸반 보드처럼 "현재 보는 스프린트"의 카테고리만 표시
