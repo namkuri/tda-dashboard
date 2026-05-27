@@ -39,7 +39,7 @@
       "endpoints": [
         "https://github.com/namkuri/tda-dashboard/releases/latest/download/latest.json"
       ],
-      "pubkey": "PASTE_YOUR_TAURI_PUBLIC_KEY_HERE"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4RDcxNUE3N0E2QTE4RTMKUldUakdHcDZweFhYT0tBaXBqc0dDVUU2OXlqRzFZZWpJaVBEb25JVEpaYys5ZlZXUzl5YjU3N2UK"
     }
   },
   "bundle": {
