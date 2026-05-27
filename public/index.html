@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r51 (r50 + 드래그툴팁 테마화·고스트 선분 스냅·스프린트 미리보기 포인트 위치 드래그·목표 클릭→즉시 md편집+바깥클릭 자동저장) -->
+<!-- BUILD: 2026-05-27 r52 (r51 + 목표md 멘션(사용자/포인트/카드/첨부 드래그삽입+칩렌더)·스프린트 첨부(문서/위키/흐름/파일)·체크리스트(제목·설명md·항목[제목·내용·담당·산출물])) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2220,6 +2220,41 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-goal-hint { font-size: 11px; color: var(--c-text3); font-weight: 400; }
         .spv-goal-view { cursor: text; border-radius: 8px; transition: background .12s; min-height: 24px; }
         .spv-goal-view:hover { background: var(--c-paper); }
+        /* [r52 #5] 멘션 칩 · 목표 드롭 */
+        .spv-mchip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; margin: 0 1px; border-radius: 10px; background: var(--c-accent-soft); color: #c96442; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--c-border); }
+        .spv-goal-dropping { outline: 2px dashed #c96442; outline-offset: -2px; background: var(--c-accent-soft); }
+        /* [r52 #6] 첨부 */
+        .spv-atts { margin: 4px 0 2px; }
+        .spv-atts-h { font-size: 13px; font-weight: 700; color: var(--c-text2); display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .spv-att-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        .spv-att-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 9px; border-radius: 13px; background: var(--c-card); border: 1px solid var(--c-border); font-size: 12px; color: var(--c-text); cursor: grab; }
+        .spv-att-open { cursor: pointer; }
+        .spv-att-x { border: none; background: none; color: var(--c-text3); cursor: pointer; font-size: 11px; padding: 0 2px; }
+        .spv-att-x:hover { color: var(--st-danger); }
+        /* [r52 #7] 체크리스트 */
+        .spv-cls { margin: 4px 0; }
+        .spv-cls-h { font-size: 13px; font-weight: 700; color: var(--c-text2); display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .spv-cl { border: 1px solid var(--c-border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--c-card); }
+        .spv-cl-head { display: flex; align-items: center; gap: 8px; }
+        .spv-cl-title { font-weight: 700; font-size: 13px; color: var(--c-text); cursor: pointer; flex: 1; }
+        .spv-cl-title:hover { color: #c96442; }
+        .spv-cl-prog { font-size: 11px; color: var(--c-text3); font-family: 'JetBrains Mono', monospace; }
+        .spv-cl-del { border: none; background: none; color: var(--c-text3); cursor: pointer; font-size: 12px; }
+        .spv-cl-desc { font-size: 12px; color: var(--c-text2); margin: 4px 0 6px; }
+        .spv-cl-items { display: flex; flex-direction: column; gap: 2px; }
+        .spv-cli { display: flex; align-items: flex-start; gap: 7px; padding: 4px 2px; border-radius: 6px; }
+        .spv-cli:hover { background: var(--c-paper); }
+        .spv-cli-cb { margin-top: 3px; flex-shrink: 0; }
+        .spv-cli-main { flex: 1; min-width: 0; }
+        .spv-cli-title { font-size: 13px; color: var(--c-text); cursor: pointer; }
+        .spv-cli-title.done { text-decoration: line-through; color: var(--c-text3); }
+        .spv-cli-asg { font-size: 11px; color: var(--c-text2); }
+        .spv-cli-delivs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+        .spv-deliv { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: var(--c-accent-soft); color: var(--c-text2); cursor: pointer; border: 1px solid var(--c-border); }
+        .spv-cli-edit { border: none; background: none; color: var(--c-text3); cursor: pointer; font-size: 12px; flex-shrink: 0; }
+        .spv-cl-additem { font-size: 12px; color: #c96442; background: none; border: 1px dashed var(--c-border); border-radius: 7px; padding: 4px 8px; margin-top: 6px; cursor: pointer; width: 100%; }
+        .gip-l { display: block; font-size: 12px; font-weight: 600; color: var(--c-text2); margin-bottom: 3px; }
+        .cl-deliv-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 13px; color: var(--c-text); border-bottom: 1px solid var(--c-border); }
         #sprint-view.hidden { display: none; }
         .spv-wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
         .spv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -6566,6 +6601,7 @@ return data;
         }
 
         // [v40 Day2 청크 4] 스프린트 upsert / delete
+        var _sprintDroppedCols = {}; // [r52] 세션 중 없다고 확인된 sprints 선택 컬럼 캐시
         async function dbUpsertSprint(sprint) {
             if (!supabaseClient) return { error: null };
             const payload = {
@@ -6581,16 +6617,19 @@ return data;
                 closed_at: sprint.closedAt || null,
                 history: sprint.history || [],
                 participants: sprint.participants || [],
-                section_order: (sprint.sectionOrder && sprint.sectionOrder.length) ? sprint.sectionOrder : null // [r50 #4] 스프린트 섹션 순서(공유)
+                section_order: (sprint.sectionOrder && sprint.sectionOrder.length) ? sprint.sectionOrder : null, // [r50 #4] 스프린트 섹션 순서(공유)
+                attachments: sprint.attachments || [], // [r52 #6] 첨부(문서·위키·흐름·파일)
+                checklists: sprint.checklists || []    // [r52 #7] 체크리스트
             };
+            Object.keys(_sprintDroppedCols).forEach(function (c) { delete payload[c]; }); // 세션 중 없다고 확인된 컬럼은 미리 제외
             let { error } = await supabaseClient.from('sprints').upsert(payload);
-            // [라운드8/r50] 선택 컬럼(participants·section_order) 미생성 환경 보호: 지목된 컬럼만 빼고 재시도(기존 저장 보존)
-            var _spOpt = ['participants', 'section_order'], _spTries = 0;
+            // [라운드8/r50/r52] 선택 컬럼 미생성 환경 보호: 지목된 컬럼만 빼고 재시도(기존 저장 보존)
+            var _spOpt = ['participants', 'section_order', 'attachments', 'checklists'], _spTries = 0;
             while (error && _spTries < 4) {
                 var _drop = null;
                 for (var _ci = 0; _ci < _spOpt.length; _ci++) { if (typeof payload[_spOpt[_ci]] !== 'undefined' && new RegExp(_spOpt[_ci]).test(error.message || '')) { _drop = _spOpt[_ci]; break; } }
                 if (!_drop) break;
-                delete payload[_drop]; _spTries++;
+                delete payload[_drop]; _sprintDroppedCols[_drop] = true; _spTries++;
                 ({ error } = await supabaseClient.from('sprints').upsert(payload));
                 if (!error) console.warn('[dbUpsertSprint] ' + _drop + ' 컬럼 없음 — 제외 저장. (DB 도구 SQL로 보강 가능)');
             }
@@ -6681,6 +6720,8 @@ return data;
             ['tasks', 'due_date', 'date'],
             ['sprints', 'participants', "jsonb default '[]'::jsonb"],
             ['sprints', 'section_order', "jsonb default '[]'::jsonb"],
+            ['sprints', 'attachments', "jsonb default '[]'::jsonb"],
+            ['sprints', 'checklists', "jsonb default '[]'::jsonb"],
             ['kanban_categories', 'sprint_id', 'text'],
             ['wiki_docs', 'kind', "text default 'wiki'"],
             ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"]
@@ -6749,7 +6790,9 @@ return data;
                 createdAt: s.created_at || null, closedAt: s.closed_at || null,
                 history: s.history || [],
                 participants: s.participants || [],
-                sectionOrder: s.section_order || [] // [r50 #4] 섹션 순서
+                sectionOrder: s.section_order || [], // [r50 #4] 섹션 순서
+                attachments: s.attachments || [],    // [r52 #6]
+                checklists: s.checklists || []       // [r52 #7]
             };
         }
         // [v40 Day3 청크2] review_requests row(snake) → app 객체(camel) 매핑
@@ -9663,13 +9706,13 @@ addEventListener("resize",sendPos);
         }
         function _sprintGoalArea(s) {
             if (_sprintGoalEditing[s.id]) {
-                // [r51 #4] 바깥 클릭(blur) 시 자동 저장 → 미리보기 렌더로 전환
-                return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 편집 (마크다운) <span class="spv-goal-hint">— 바깥을 클릭하면 자동 저장</span></div>'
-                    + '<textarea id="spv-goal-ta-' + s.id + '" class="spv-goal-ta" onblur="saveSprintGoalInline(\'' + s.id + '\')" placeholder="## 목표&#10;- 세부 ...">' + _sprintEsc(s.goal || '') + '</textarea></div>';
+                // [r51 #4] 바깥 클릭(blur) 시 자동 저장 · [r52 #5] 드래그→| 위치 멘션 삽입
+                return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 편집 (마크다운) <span class="spv-goal-hint">— 바깥 클릭 자동저장 · 사용자/포인트/카드/첨부를 끌어다 놓아 멘션</span></div>'
+                    + '<textarea id="spv-goal-ta-' + s.id + '" class="spv-goal-ta" onblur="saveSprintGoalInline(\'' + s.id + '\')" ondragover="_spvGoalDragOver(event,\'' + s.id + '\')" ondrop="_spvGoalDrop(event,\'' + s.id + '\')" placeholder="## 목표&#10;- 세부 ...">' + _sprintEsc(s.goal || '') + '</textarea></div>';
             }
-            var goalHtml = s.goal ? DOMPurify.sanitize(parseMarkdownWithTables(s.goal), domPurifyConfig) : '<span style="color:var(--c-text3);">목표 없음 — 클릭하여 작성</span>';
-            // [r51 #4] 클릭 한 번에 곧바로 편집 모드 진입 (링크/칩 클릭은 제외)
-            return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 <span class="spv-goal-hint">— 클릭하여 편집</span></div><div class="markdown-body spv-goal-view" onclick="if(!event.target.closest(\'a,button,.wikilink-chip,.md-code-embed\'))startSprintGoalEdit(\'' + s.id + '\')" title="클릭하여 마크다운 편집">' + goalHtml + '</div></div>';
+            var goalHtml = s.goal ? _sprintGoalHtml(s.goal) : '<span style="color:var(--c-text3);">목표 없음 — 클릭하여 작성 (사용자/포인트/카드/첨부를 끌어다 놓아 멘션)</span>';
+            // [r51 #4] 클릭 한 번에 편집 진입(링크/칩 제외) · [r52 #5] 미리보기에 드롭=끝에 멘션 추가
+            return '<div class="spv-goal"><div class="spv-goal-head">🎯 목표 <span class="spv-goal-hint">— 클릭하여 편집</span></div><div class="markdown-body spv-goal-view" ondragover="_spvGoalDragOver(event,\'' + s.id + '\')" ondragleave="this.classList.remove(\'spv-goal-dropping\')" ondrop="_spvGoalDrop(event,\'' + s.id + '\')" onclick="if(!event.target.closest(\'a,button,.wikilink-chip,.md-code-embed,.spv-mchip\'))startSprintGoalEdit(\'' + s.id + '\')" title="클릭하여 마크다운 편집">' + goalHtml + '</div></div>';
         }
         function startSprintGoalEdit(sid) { _sprintGoalEditing[sid] = true; renderSprintView(); setTimeout(function () { var ta = document.getElementById('spv-goal-ta-' + sid); if (ta) ta.focus(); }, 30); }
         function cancelSprintGoalEdit(sid) { delete _sprintGoalEditing[sid]; renderSprintView(); }
@@ -9836,6 +9879,228 @@ addEventListener("resize",sendPos);
         }
         function sprintAttachFlow(gid, sid) { var d = (currentData.docs || []).find(function (x) { return x.id === gid; }); if (!d) return; if (!d.meta) d.meta = {}; d.meta.sprintId = sid; d.meta.scope = 'project'; if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d); if (currentView === 'sprint') renderSprintView(); showToast('🔀 흐름 연결됨', 'success'); }
         function gphOpenFromSprint(id) { var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return; if (typeof _spvFlowTipHide === 'function') _spvFlowTipHide(); gphState.scope = (d.meta && d.meta.scope === 'personal') ? 'personal' : 'project'; gphState.currentId = id; gphState.selected = null; gphState.connecting = null; switchView('graph'); document.querySelectorAll('.gph-scope-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.scope === gphState.scope); }); gphRender(); }
+
+        // ============================================================
+        // [r52] 스프린트 공통: 저장 헬퍼 · uid · 찾기
+        // ============================================================
+        function _spvUid(p) { return (p || 'x') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+        function _spvSaveSprint(s) { if (!s) return; if (typeof saveData === 'function') saveData(); if (typeof dbUpsertSprint === 'function') dbUpsertSprint(s); if (currentView === 'sprint') renderSprintView(); }
+        function _spvSprint(sid) { return (currentData.sprints || []).find(function (x) { return x.id === sid; }); }
+
+        // ============================================================
+        // [r52 #5] 목표 md 멘션 — 드래그(사용자/포인트/카드/첨부)→| 위치 삽입, 칩 렌더
+        // ============================================================
+        function _sprintGoalHtml(md) {
+            md = String(md || '');
+            var toks = [];
+            md = md.replace(/\[\[(user|point):([^\]]+)\]\]/g, function (m, type, val) { var i = toks.length; toks.push({ type: type, val: val }); return '⁦TDAMEN' + i + '⁩'; });
+            var html = DOMPurify.sanitize(parseMarkdownWithTables(md), domPurifyConfig);
+            html = html.replace(/⁦TDAMEN(\d+)⁩/g, function (m, i) { var t = toks[+i]; return t ? _mentionChipHtml(t.type, t.val) : ''; });
+            return html;
+        }
+        function _mentionChipHtml(type, val) {
+            if (type === 'user') { var nm = (typeof getMemberName === 'function') ? getMemberName(val) : val; return '<span class="spv-mchip" title="멤버">👤 ' + _sprintEsc(nm || val) + '</span>'; }
+            if (type === 'point') {
+                var parts = String(val).split('#'); var fid = parts[0], pid = parts[1];
+                var doc = (currentData.docs || []).find(function (x) { return x.id === fid; });
+                var dg = (doc && doc.meta && doc.meta.diagram) || {}; var item = ((dg.points || []).concat(dg.nodes || [])).find(function (x) { return x.id === pid; });
+                var t = (item && item.title) || '포인트';
+                return '<span class="spv-mchip" title="흐름 포인트 — 클릭 시 그래프 열기" onclick="gphOpenFromSprint(\'' + fid + '\')">🔘 ' + _sprintEsc(t) + '</span>';
+            }
+            return '';
+        }
+        function _spvMentionToken(dd) {
+            if (!dd) return '';
+            if (dd.kind === 'member') return '[[user:' + dd.id + ']]';
+            if (dd.kind === 'task') return '[[task:' + dd.id + ']]';
+            if (dd.kind === 'point') return '[[point:' + dd.id + ']]'; // dd.id = fid#pid
+            if (dd.kind === 'att') {
+                var s = _spvSprint(window._spvGoalSid); var att = s && (s.attachments || []).find(function (a) { return a.id === dd.id; });
+                if (!att) return '';
+                if (att.kind === 'file') return '[' + (att.label || '파일') + '](' + (att.url || '#') + ')';
+                return '[[doc:' + att.refId + ']]';
+            }
+            return '';
+        }
+        function _taCaretFromPoint(ta, x, y) {
+            try {
+                if (document.caretPositionFromPoint) { var p = document.caretPositionFromPoint(x, y); if (p && (p.offsetNode === ta || (ta.contains && ta.contains(p.offsetNode)))) return p.offset; }
+                if (document.caretRangeFromPoint) { var r = document.caretRangeFromPoint(x, y); if (r) return r.startOffset; }
+            } catch (e) {}
+            return ta.selectionStart || 0;
+        }
+        function _spvGoalDragOver(ev, sid) {
+            var dd = window._spvDragData; if (!dd || (dd.kind !== 'member' && dd.kind !== 'task' && dd.kind !== 'att' && dd.kind !== 'point')) return;
+            ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'copy'; } catch (e) {}
+            window._spvGoalSid = sid;
+            var ta = (ev.currentTarget && ev.currentTarget.tagName === 'TEXTAREA') ? ev.currentTarget : null;
+            if (ta) { var idx = _taCaretFromPoint(ta, ev.clientX, ev.clientY); try { ta.focus(); ta.setSelectionRange(idx, idx); } catch (e) {} } // 네이티브 캐럿 = | 위치 표시
+            else { ev.currentTarget.classList.add('spv-goal-dropping'); }
+        }
+        function _spvGoalDrop(ev, sid) {
+            var dd = window._spvDragData || _spvParseDT(ev); if (!dd) return;
+            ev.preventDefault(); ev.stopPropagation();
+            window._spvGoalSid = sid;
+            var token = _spvMentionToken(dd); window._spvDragData = null; _spvHideDropHint();
+            if (!token) return;
+            var s = _spvSprint(sid); if (!s) return;
+            var ta = (ev.currentTarget && ev.currentTarget.tagName === 'TEXTAREA') ? ev.currentTarget : null;
+            if (ta) {
+                var idx = _taCaretFromPoint(ta, ev.clientX, ev.clientY);
+                var v = ta.value; var ins = (idx > 0 && v[idx - 1] && v[idx - 1] !== ' ' && v[idx - 1] !== '\n' ? ' ' : '') + token + ' ';
+                ta.value = v.slice(0, idx) + ins + v.slice(idx);
+                s.goal = ta.value; try { ta.setSelectionRange(idx + ins.length, idx + ins.length); ta.focus(); } catch (e) {}
+                _spvSaveSprintNoRender(s);
+            } else {
+                ev.currentTarget.classList.remove('spv-goal-dropping');
+                s.goal = (s.goal || '') + (s.goal && !/\n$/.test(s.goal) ? '\n' : '') + token; // 미리보기 모드: 끝에 추가
+                _spvSaveSprint(s);
+            }
+            if (typeof showToast === 'function') showToast('🔗 목표에 멘션 추가됨', 'success');
+        }
+        function _spvSaveSprintNoRender(s) { if (typeof saveData === 'function') saveData(); if (typeof dbUpsertSprint === 'function') dbUpsertSprint(s); }
+
+        // ============================================================
+        // [r52 #6] 스프린트 첨부 (문서·위키·흐름·드라이브 파일)
+        // ============================================================
+        function _sprintAttachSection(s) {
+            var atts = Array.isArray(s.attachments) ? s.attachments : [];
+            var chips = atts.length ? atts.map(function (a) {
+                var ic = a.kind === 'file' ? '📎' : (a.docKind === 'canon' ? '🎮' : (a.docKind === 'diagram' ? '📈' : '📄'));
+                return '<span class="spv-att-chip" draggable="true" ondragstart="event.stopPropagation();_spvDragStart(event,\'att\',\'' + a.id + '\')" ondragend="_spvDragEnd()" title="클릭=열기 · 드래그=목표에 멘션">'
+                    + '<span class="spv-att-open" onclick="_sprintOpenAttach(\'' + s.id + '\',\'' + a.id + '\')">' + ic + ' ' + _sprintEsc(a.label || '첨부') + '</span>'
+                    + '<button class="spv-att-x" onclick="event.stopPropagation();_sprintRemoveAttach(\'' + s.id + '\',\'' + a.id + '\')" title="첨부 제거">✕</button></span>';
+            }).join('') : '<span class="spv-empty" style="padding:2px 4px;">첨부 없음 — 문서/파일을 추가하세요</span>';
+            return '<div class="spv-atts"><div class="spv-atts-h">📎 첨부 <button class="spv-flow-btn" onclick="event.stopPropagation();_sprintAttachDoc(event,\'' + s.id + '\')">+ 문서·위키·흐름</button><button class="spv-flow-btn" onclick="event.stopPropagation();_sprintAttachFile(\'' + s.id + '\')">+ 파일</button></div><div class="spv-att-list">' + chips + '</div></div>';
+        }
+        function _sprintAttachDoc(e, sid) {
+            var docs = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder) && ['wiki', 'canon', 'diagram'].indexOf(d.kind || 'wiki') >= 0; });
+            if (!docs.length) { showToast('첨부할 문서가 없습니다.', 'info'); return; }
+            var grp = [['wiki', '📄 문서'], ['canon', '🎮 게임위키'], ['diagram', '📈 흐름·그래프']];
+            var html = grp.map(function (g) { var list = docs.filter(function (d) { return (d.kind || 'wiki') === g[0]; }); if (!list.length) return ''; return '<div class="ctx-menu-sep"></div><div style="padding:3px 12px;font-size:10px;color:var(--c-text3);">' + g[1] + '</div>' + list.map(function (d) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_sprintAddAttachment(\'' + sid + '\',{kind:\'doc\',refId:\'' + d.id + '\',docKind:\'' + (d.kind || 'wiki') + '\',label:' + JSON.stringify(d.title || '문서') + '})">' + _sprintEsc((d.emoji || '📄') + ' ' + (d.title || '제목없음')) + '</div>'; }).join(''); }).join('');
+            _openCardMenu({ clientX: e ? e.clientX : 200, clientY: e ? e.clientY : 200, stopPropagation: function () {} }, html);
+        }
+        async function _sprintAttachFile(sid) {
+            if (typeof dbLoadDriveFiles === 'function' && (!driveState || !driveState.files || !driveState.files.length)) { var r = await dbLoadDriveFiles(); if (r && !r.error && window.driveState) driveState.files = r.files; }
+            var files = (window.driveState && driveState.files) ? driveState.files.filter(function (f) { return f.mime !== '__folder__' && !f.deleted; }) : [];
+            if (!files.length) { showToast('드라이브에 파일이 없습니다. 공용 드라이브 탭에서 업로드 후 첨부하세요.', 'info'); return; }
+            _openSimpleModal('📎 파일 첨부', '<div class="gip-files" style="max-height:48vh;">' + files.map(function (f) { return '<div class="gip-file" onclick="_sprintAddAttachment(\'' + sid + '\',{kind:\'file\',url:' + JSON.stringify(f.url || '') + ',label:' + JSON.stringify(f.name || '파일') + ',mime:' + JSON.stringify(f.mime || '') + '});_closeSimpleModal()">' + _sprintEsc((f.name || '파일')) + '</div>'; }).join('') + '</div>');
+        }
+        function _sprintAddAttachment(sid, att) {
+            var s = _spvSprint(sid); if (!s) return; if (!Array.isArray(s.attachments)) s.attachments = [];
+            att.id = _spvUid('att'); att.addedBy = (currentUser ? currentUser.id : null); att.addedByName = myNickname; att.at = new Date().toISOString();
+            s.attachments.push(att);
+            if (typeof logActivity === 'function') logActivity('sprint', 'update', { targetId: sid, targetLabel: (s.weekLabel || sid), detail: '첨부 추가: ' + (att.label || '') });
+            _spvSaveSprint(s); showToast('📎 첨부 추가됨', 'success');
+        }
+        function _sprintOpenAttach(sid, attId) {
+            var s = _spvSprint(sid); if (!s) return; var att = (s.attachments || []).find(function (a) { return a.id === attId; }); if (!att) return;
+            if (att.kind === 'file') { if (att.url) window.open(att.url, '_blank'); return; }
+            if (typeof navToDoc === 'function') navToDoc(att.refId); else if (typeof openDoc === 'function') { switchView('docs'); openDoc(att.refId); }
+        }
+        async function _sprintRemoveAttach(sid, attId) {
+            var s = _spvSprint(sid); if (!s) return;
+            if (!(await uiConfirm({ title: '첨부 제거', message: '이 첨부를 제거할까요? (원본 파일/문서는 삭제되지 않습니다)', confirmText: '제거' }))) return;
+            s.attachments = (s.attachments || []).filter(function (a) { return a.id !== attId; });
+            _spvSaveSprint(s);
+        }
+
+        // ============================================================
+        // [r52 #7] 스프린트 체크리스트 (제목·설명md·항목[제목·내용·담당·산출물])
+        // ============================================================
+        function _sprintChecklistSection(s) {
+            var cls = Array.isArray(s.checklists) ? s.checklists : [];
+            var body = cls.length ? cls.map(function (cl) { return _sprintChecklistCard(s, cl); }).join('') : '<div class="spv-empty" style="padding:4px;">체크리스트 없음</div>';
+            return '<div class="spv-cls"><div class="spv-cls-h">✅ 체크리스트 <button class="spv-flow-btn" onclick="event.stopPropagation();_sprintAddChecklist(\'' + s.id + '\')">+ 체크리스트 추가</button></div>' + body + '</div>';
+        }
+        function _checklistItemDone(it) { return !!(it && it.done); }
+        function _delivIcon(t) { return t === 'task' ? '🗂' : (t === 'graph' ? '📈' : (t === 'wiki' ? '🎮' : (t === 'git' ? '📦' : '📄'))); }
+        function _delivTypeLabel(t) { return t === 'task' ? '태스크 완료' : (t === 'graph' ? '흐름/그래프' : (t === 'wiki' ? '게임위키' : (t === 'git' ? 'Git 상태' : '문서'))); }
+        function _delivTaskDone(refId) { var t = (currentData.tasks || []).find(function (x) { return x.id === refId; }); return t && t.status === 'completed'; }
+        function _sprintChecklistCard(s, cl) {
+            var items = Array.isArray(cl.items) ? cl.items : [];
+            var doneN = items.filter(_checklistItemDone).length;
+            var descHtml = cl.descMd ? DOMPurify.sanitize(parseMarkdownWithTables(cl.descMd), domPurifyConfig) : '';
+            return '<div class="spv-cl" data-clid="' + cl.id + '">'
+                + '<div class="spv-cl-head"><span class="spv-cl-title" onclick="event.stopPropagation();_sprintEditChecklistMeta(\'' + s.id + '\',\'' + cl.id + '\')" title="제목·설명 편집">' + _sprintEsc(cl.title || '체크리스트') + '</span>'
+                + '<span class="spv-cl-prog">' + doneN + '/' + items.length + '</span>'
+                + '<button class="spv-cl-del" onclick="event.stopPropagation();_sprintDeleteChecklist(\'' + s.id + '\',\'' + cl.id + '\')" title="체크리스트 삭제">🗑</button></div>'
+                + (descHtml ? '<div class="spv-cl-desc markdown-body">' + descHtml + '</div>' : '')
+                + '<div class="spv-cl-items">' + items.map(function (it) { return _sprintChecklistItemRow(s, cl, it); }).join('') + '</div>'
+                + '<button class="spv-cl-additem" onclick="event.stopPropagation();_sprintAddChecklistItem(\'' + s.id + '\',\'' + cl.id + '\')">+ 항목 추가</button></div>';
+        }
+        function _sprintChecklistItemRow(s, cl, it) {
+            var done = _checklistItemDone(it);
+            var asg = it.assigneeId ? ((typeof getMemberName === 'function') ? getMemberName(it.assigneeId) : it.assigneeId) : '';
+            var delivs = (it.deliverables || []).map(function (d) {
+                var extra = d.type === 'task' ? (' ' + (_delivTaskDone(d.refId) ? '✅' : '⬜')) : '';
+                return '<span class="spv-deliv" title="' + _sprintEsc(_delivTypeLabel(d.type)) + '" onclick="event.stopPropagation();_sprintOpenDeliv(\'' + (d.refId || '') + '\',\'' + d.type + '\')">' + _delivIcon(d.type) + ' ' + _sprintEsc(d.label || _delivTypeLabel(d.type)) + extra + '</span>';
+            }).join('');
+            return '<div class="spv-cli" data-itid="' + it.id + '">'
+                + '<input type="checkbox" class="spv-cli-cb"' + (done ? ' checked' : '') + ' onclick="event.stopPropagation()" onchange="_sprintToggleChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\',this.checked)">'
+                + '<div class="spv-cli-main"><div class="spv-cli-title' + (done ? ' done' : '') + '" onclick="event.stopPropagation();_sprintEditChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\')">' + _sprintEsc(it.title || '(제목 없음)') + (asg ? (' <span class="spv-cli-asg">👤' + _sprintEsc(asg) + '</span>') : '') + '</div>'
+                + (delivs ? ('<div class="spv-cli-delivs">' + delivs + '</div>') : '') + '</div>'
+                + '<button class="spv-cli-edit" onclick="event.stopPropagation();_sprintEditChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\')" title="항목 편집">✏️</button></div>';
+        }
+        function _sprintFindCl(sid, clid) { var s = _spvSprint(sid); if (!s || !Array.isArray(s.checklists)) return null; return s.checklists.find(function (c) { return c.id === clid; }); }
+        function _sprintFindItem(sid, clid, itid) { var cl = _sprintFindCl(sid, clid); if (!cl) return null; return (cl.items || []).find(function (i) { return i.id === itid; }); }
+        async function _sprintAddChecklist(sid) {
+            var s = _spvSprint(sid); if (!s) return; var title = await uiPrompt({ title: '새 체크리스트', label: '체크리스트 제목', value: '체크리스트' }); if (title === null) return;
+            if (!Array.isArray(s.checklists)) s.checklists = [];
+            s.checklists.push({ id: _spvUid('cl'), title: (title.trim() || '체크리스트'), descMd: '', items: [], createdAt: new Date().toISOString() });
+            if (typeof logActivity === 'function') logActivity('sprint', 'update', { targetId: sid, targetLabel: (s.weekLabel || sid), detail: '체크리스트 추가: ' + (title || '') });
+            _spvSaveSprint(s);
+        }
+        async function _sprintDeleteChecklist(sid, clid) { var s = _spvSprint(sid); if (!s) return; var cl = _sprintFindCl(sid, clid); if (!(await uiConfirm({ title: '체크리스트 삭제', message: '"' + ((cl && cl.title) || '체크리스트') + '"를 삭제할까요?', confirmText: '삭제', danger: true }))) return; s.checklists = (s.checklists || []).filter(function (c) { return c.id !== clid; }); _spvSaveSprint(s); }
+        function _sprintEditChecklistMeta(sid, clid) {
+            var cl = _sprintFindCl(sid, clid); if (!cl) return;
+            _openSimpleModal('✅ 체크리스트 편집', '<label class="gip-l">제목</label><input id="cl-meta-title" class="gip-in" value="' + _sprintEsc(cl.title || '') + '"><label class="gip-l" style="margin-top:8px;">설명 (마크다운)</label><textarea id="cl-meta-desc" class="gip-in" style="min-height:120px;resize:vertical;">' + _sprintEsc(cl.descMd || '') + '</textarea><div style="margin-top:10px;text-align:right;"><button class="drv-btn" onclick="_sprintSaveChecklistMeta(\'' + sid + '\',\'' + clid + '\')">저장</button></div>');
+        }
+        function _sprintSaveChecklistMeta(sid, clid) { var cl = _sprintFindCl(sid, clid); if (!cl) return; var t = document.getElementById('cl-meta-title'), d = document.getElementById('cl-meta-desc'); if (t) cl.title = t.value.trim() || '체크리스트'; if (d) cl.descMd = d.value; _closeSimpleModal(); _spvSaveSprint(_spvSprint(sid)); }
+        function _sprintAddChecklistItem(sid, clid) { var cl = _sprintFindCl(sid, clid); if (!cl) return; if (!Array.isArray(cl.items)) cl.items = []; var it = { id: _spvUid('it'), title: '새 항목', contentMd: '', assigneeId: null, done: false, deliverables: [] }; cl.items.push(it); _spvSaveSprint(_spvSprint(sid)); setTimeout(function () { _sprintEditChecklistItem(sid, clid, it.id); }, 60); }
+        function _sprintToggleChecklistItem(sid, clid, itid, checked) { var it = _sprintFindItem(sid, clid, itid); if (!it) return; it.done = !!checked; _spvSaveSprint(_spvSprint(sid)); }
+        async function _sprintDeleteChecklistItem(sid, clid, itid) { var cl = _sprintFindCl(sid, clid); if (!cl) return; cl.items = (cl.items || []).filter(function (i) { return i.id !== itid; }); _spvSaveSprint(_spvSprint(sid)); }
+        function _sprintOpenDeliv(refId, type) { if (!refId) return; if (type === 'git') { if (typeof switchView === 'function') switchView('git'); return; } if (type === 'task') { if (typeof navToDoc === 'function' && false) {} showToast('🗂 연결된 태스크', 'info'); return; } if (typeof navToDoc === 'function') navToDoc(refId); }
+        // 항목 편집 모달 (제목·내용md·담당자·산출물)
+        var _clCtx = null;
+        function _sprintEditChecklistItem(sid, clid, itid) {
+            var it = _sprintFindItem(sid, clid, itid); if (!it) return; _clCtx = { sid: sid, clid: clid, itid: itid };
+            var memSel = (typeof gphMemberSel === 'function') ? gphMemberSel('cl-it-asg', it.assigneeId || '') : '<select id="cl-it-asg"><option value="">(담당자 없음)</option></select>';
+            _openSimpleModal('✅ 항목 편집', '<label class="gip-l">제목</label><input id="cl-it-title" class="gip-in" value="' + _sprintEsc(it.title || '') + '">'
+                + '<label class="gip-l" style="margin-top:8px;">내용 (마크다운)</label><textarea id="cl-it-content" class="gip-in" style="min-height:90px;resize:vertical;">' + _sprintEsc(it.contentMd || '') + '</textarea>'
+                + '<label class="gip-l" style="margin-top:8px;">담당자</label><span class="spv-fe-mem">' + memSel + '</span>'
+                + '<label class="gip-l" style="margin-top:8px;">산출물 <button class="spv-flow-btn" onclick="_clAddDeliv(event)">+ 추가</button></label><div id="cl-it-delivs">' + _clRenderDelivs(it) + '</div>'
+                + '<div style="margin-top:12px;text-align:right;"><button class="drv-btn" onclick="_sprintSaveChecklistItem()">저장</button></div>');
+        }
+        function _clRenderDelivs(it) {
+            var ds = (it.deliverables || []);
+            if (!ds.length) return '<div style="font-size:12px;color:var(--c-text3);padding:4px 0;">산출물 없음 (문서·흐름·태스크 완료·Git 상태 등)</div>';
+            return ds.map(function (d) { return '<div class="cl-deliv-row">' + _delivIcon(d.type) + ' <span style="flex:1;">' + _sprintEsc(d.label || _delivTypeLabel(d.type)) + '</span><span style="font-size:10px;color:var(--c-text3);">' + _sprintEsc(_delivTypeLabel(d.type)) + '</span><button class="spv-att-x" onclick="_clRemoveDeliv(\'' + d.id + '\')">✕</button></div>'; }).join('');
+        }
+        function _clAddDeliv(e) {
+            var html = [['doc', '📄 문서'], ['wiki', '🎮 게임위키'], ['graph', '📈 흐름/그래프'], ['task', '🗂 태스크 카드'], ['git', '📦 Git 상태']].map(function (t) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_clPickDeliv(\'' + t[0] + '\')">' + t[1] + '</div>'; }).join('');
+            _openCardMenu({ clientX: e ? e.clientX : 300, clientY: e ? e.clientY : 300, stopPropagation: function () {} }, html);
+        }
+        async function _clPickDeliv(type) {
+            if (!_clCtx) return; var it = _sprintFindItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); if (!it) return; if (!Array.isArray(it.deliverables)) it.deliverables = [];
+            var add = function (refId, label) { it.deliverables.push({ id: _spvUid('dl'), type: type, refId: refId || null, label: label || _delivTypeLabel(type) }); var box = document.getElementById('cl-it-delivs'); if (box) box.innerHTML = _clRenderDelivs(it); };
+            if (type === 'git') { var lbl = await uiPrompt({ title: 'Git 산출물', label: '상태/내용 (예: PR #12 머지, main 빌드 통과)' }); if (lbl === null) return; add(null, lbl.trim() || 'Git'); return; }
+            var pool;
+            if (type === 'task') pool = (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).map(function (t) { return { id: t.id, label: t.title || '카드' }; });
+            else { var kindMap = { doc: 'wiki', wiki: 'canon', graph: 'diagram' }; pool = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder) && (d.kind || 'wiki') === kindMap[type]; }).map(function (d) { return { id: d.id, label: d.title || '문서' }; }); }
+            if (!pool.length) { showToast('선택할 ' + _delivTypeLabel(type) + ' 항목이 없습니다.', 'info'); return; }
+            _openSimpleModal('산출물 선택 — ' + _delivTypeLabel(type), '<input class="gip-in" placeholder="검색" oninput="_clDelivFilter(this.value)"><div id="cl-deliv-pick" class="gip-files" style="max-height:42vh;margin-top:8px;">' + pool.map(function (p) { return '<div class="gip-file" data-l="' + _sprintEsc((p.label || '').toLowerCase()) + '" onclick="_clDelivChosen(\'' + p.id + '\',' + JSON.stringify(p.label) + ')">' + _sprintEsc(p.label) + '</div>'; }).join('') + '</div>');
+            window._clPendingDeliv = { type: type, add: add };
+        }
+        function _clDelivFilter(q) { q = (q || '').toLowerCase(); var box = document.getElementById('cl-deliv-pick'); if (!box) return; box.querySelectorAll('.gip-file').forEach(function (el) { el.style.display = (!q || (el.getAttribute('data-l') || '').indexOf(q) >= 0) ? 'block' : 'none'; }); }
+        function _clDelivChosen(refId, label) { var pd = window._clPendingDeliv; _closeSimpleModal(); if (pd && pd.add) pd.add(refId, label); window._clPendingDeliv = null; if (_clCtx) _sprintEditChecklistItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); }
+        function _clRemoveDeliv(dlid) { if (!_clCtx) return; var it = _sprintFindItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); if (!it) return; it.deliverables = (it.deliverables || []).filter(function (d) { return d.id !== dlid; }); var box = document.getElementById('cl-it-delivs'); if (box) box.innerHTML = _clRenderDelivs(it); }
+        function _sprintSaveChecklistItem() {
+            if (!_clCtx) return; var it = _sprintFindItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); if (!it) { _closeSimpleModal(); return; }
+            var t = document.getElementById('cl-it-title'), c = document.getElementById('cl-it-content'), a = document.getElementById('cl-it-asg');
+            if (t) it.title = t.value.trim() || '(제목 없음)'; if (c) it.contentMd = c.value; if (a) it.assigneeId = a.value || null;
+            _closeSimpleModal(); _spvSaveSprint(_spvSprint(_clCtx.sid));
+        }
         function renderSprintView() {
             var wrap = document.getElementById('sprint-view'); if (!wrap) return;
             var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; })
@@ -9857,7 +10122,11 @@ addEventListener("resize",sendPos);
                 if (exp) {
                     var _secs = _sprintSectionOrder(s); // [r50 #4] 사용자 지정 섹션 순서(공유)
                     var _secHtml = _secs.map(function (sec) {
-                        var inner = sec === 'goal' ? _sprintGoalArea(s) : (sec === 'flow' ? _sprintFlowsSection(s.id) : ('<div>' + _sprintCatSections(s.id) + '</div>'));
+                        var inner = sec === 'goal' ? _sprintGoalArea(s)
+                            : sec === 'flow' ? _sprintFlowsSection(s.id)
+                            : sec === 'attach' ? _sprintAttachSection(s)
+                            : sec === 'checklist' ? _sprintChecklistSection(s)
+                            : ('<div>' + _sprintCatSections(s.id) + '</div>');
                         return '<div class="spv-sec" data-sec="' + sec + '"><span class="spv-sec-grip" title="드래그하여 섹션 순서 변경 (서버 저장·공유)">⠿</span>' + inner + '</div>';
                     }).join('');
                     html += '<div class="spv-body" data-sprintid="' + s.id + '">' + _secHtml + '</div>';
@@ -9925,7 +10194,7 @@ addEventListener("resize",sendPos);
             if (typeof _wireSprintFlowPreviews === 'function') _wireSprintFlowPreviews(wrap);
         }
         function _sprintSectionOrder(s) {
-            var def = ['goal', 'flow', 'kanban'];
+            var def = ['goal', 'flow', 'attach', 'checklist', 'kanban'];
             var o = (s && Array.isArray(s.sectionOrder)) ? s.sectionOrder.filter(function (x) { return def.indexOf(x) >= 0; }) : [];
             def.forEach(function (x) { if (o.indexOf(x) < 0) o.push(x); });
             return o;
@@ -16902,9 +17171,11 @@ ${intrLog}
         var item = isGraph ? (p.nodes || []).find(function (x) { return x.id === pid; }) : (p.points || []).find(function (x) { return x.id === pid; });
         if (!item) return;
         var svg = host.querySelector('svg'); if (!svg) return;
-        var startX = e.clientX, startY = e.clientY, moved = false, raf = null;
+        var orig = isGraph ? { x: item.x, y: item.y } : { position: item.position }; // [r52 #5] 목표 멘션 시 위치 되돌림용
+        var startX = e.clientX, startY = e.clientY, moved = false, raf = null, lastMouse = { x: startX, y: startY };
         function toVB(cx, cy) { try { var m = svg.getScreenCTM(); if (!m) return null; var pt = svg.createSVGPoint(); pt.x = cx; pt.y = cy; return pt.matrixTransform(m.inverse()); } catch (er) { return null; } }
         function mv(ev2) {
+            lastMouse = { x: ev2.clientX, y: ev2.clientY };
             var dx = ev2.clientX - startX, dy = ev2.clientY - startY;
             if (!moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
             moved = true; host._spvDragging = true; _spvFlowTipHide();
@@ -16921,6 +17192,19 @@ ${intrLog}
                 var suppress = function (ev) { ev.stopPropagation(); ev.preventDefault(); host.removeEventListener('click', suppress, true); };
                 host.addEventListener('click', suppress, true);
                 setTimeout(function () { try { host.removeEventListener('click', suppress, true); } catch (er) {} }, 80);
+                // [r52 #5] 포인트를 목표 영역에 드롭 → 위치 되돌리고 목표에 포인트 멘션 추가
+                var overEl = document.elementFromPoint(lastMouse.x, lastMouse.y);
+                var goalEl = (overEl && overEl.closest) ? overEl.closest('.spv-goal') : null;
+                var bodyEl = host.closest ? host.closest('.spv-body[data-sprintid]') : null;
+                var sid = bodyEl ? bodyEl.getAttribute('data-sprintid') : null;
+                if (goalEl && sid) {
+                    if (isGraph) { item.x = orig.x; item.y = orig.y; } else { item.position = orig.position; }
+                    var s2 = _spvSprint(sid);
+                    if (s2) { s2.goal = (s2.goal || '') + (s2.goal && !/\n$/.test(s2.goal) ? '\n' : '') + '[[point:' + fid + '#' + pid + ']]'; _spvSaveSprint(s2); }
+                    if (typeof showToast === 'function') showToast('🔗 목표에 포인트 멘션 추가됨', 'success');
+                    setTimeout(function () { host._spvDragging = false; }, 60);
+                    return;
+                }
                 doc.updatedAt = Date.now();
                 if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
                 if (typeof dbUpsertDoc === 'function') dbUpsertDoc(doc);
