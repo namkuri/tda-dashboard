@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r48 (r47 + 코멘트패널 열면 임베드 축소·임베드 내부텍스트 하이라이트(srcdoc주입)·하이라이트 클릭 열기/닫기 토글·임베드 코멘트 카드 위치정렬+동시스크롤) -->
+<!-- BUILD: 2026-05-27 r49 (r48 + 스프린트 카드→흐름 드래그 매핑·참여자→포인트/카드 담당자 드래그배정·히스토리 탭(프로젝트별 활동 타임라인: logActivity+기존로그 통합)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1488,6 +1488,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* [스크롤 수정] 전체 페이지형 뷰(스프린트·리뷰·Git·그래프)는 100vh app-wrapper(overflow:hidden) 안에서 내부 스크롤 */
         html.is-desktop #sprint-view:not(.hidden),
         html.is-desktop #review-view:not(.hidden),
+        html.is-desktop #history-view:not(.hidden),
         html.is-desktop #git-view:not(.hidden) { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
         html.is-desktop #pc-header {
             flex-shrink: 0;
@@ -2173,6 +2174,34 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
            ============================================================ */
         html.is-desktop #sprint-view { padding: 8px 16px 48px; }
         html.is-mobile #sprint-view { padding: 8px 16px 90px; }
+        /* [r49] 히스토리(활동 기록) 페이지 */
+        html.is-desktop #history-view { padding: 8px 16px 48px; }
+        html.is-mobile #history-view { padding: 8px 16px 90px; }
+        .hist-wrap { max-width: 860px; margin: 0 auto; }
+        .hist-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 2px; }
+        .hist-title { font-size: 20px; font-weight: 800; color: var(--c-text); }
+        .hist-sub { font-size: 12.5px; color: var(--c-text2); margin-top: 3px; }
+        .hist-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 2px 12px; }
+        .hist-chip, .hist-per { font-size: 12px; padding: 5px 10px; border-radius: 14px; border: 1px solid var(--c-border); background: var(--c-card); color: var(--c-text2); cursor: pointer; }
+        .hist-chip.on { background: var(--c-accent-soft); color: #c96442; border-color: #c96442; font-weight: 700; }
+        .hist-per.on { background: var(--c-text); color: var(--c-paper); font-weight: 700; border-color: var(--c-text); }
+        .hist-sep { width: 1px; height: 18px; background: var(--c-border); margin: 0 4px; }
+        .hist-empty { text-align: center; color: var(--c-text3); padding: 40px 12px; font-size: 13px; line-height: 1.7; }
+        .hist-date { font-size: 12px; font-weight: 800; color: var(--c-text3); margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--c-border); }
+        .hist-item { display: flex; gap: 10px; align-items: flex-start; padding: 7px 6px; border-radius: 8px; }
+        .hist-item:hover { background: var(--c-paper); }
+        .hist-ico { font-size: 15px; width: 24px; text-align: center; flex-shrink: 0; line-height: 1.3; }
+        .hist-main { flex: 1; min-width: 0; }
+        .hist-line { font-size: 13px; color: var(--c-text); }
+        .hist-act { color: var(--c-text2); }
+        .hist-lbl { color: #c96442; font-weight: 600; }
+        .hist-detail { font-size: 12px; color: var(--c-text2); margin-top: 2px; word-break: break-word; }
+        .hist-time { font-size: 11px; color: var(--c-text3); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+        /* [r49] 스프린트 드래그 드롭 표시 */
+        .spv-prev-host.spv-drop-on { outline: 2px dashed #c96442; outline-offset: -2px; background: var(--c-accent-soft); }
+        .spv-card.spv-drop-on { outline: 2px dashed #c96442; outline-offset: 1px; }
+        .spv-part-d { display: inline-block; cursor: grab; }
+        .spv-part-d * { pointer-events: none; }
         #sprint-view.hidden { display: none; }
         .spv-wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
         .spv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -2777,6 +2806,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <button class="cs-nav" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
             <button class="cs-nav" id="cs-nav-git" onclick="switchView('git')" title="Git"><span class="cs-ico">📦</span><span class="cs-label">Git</span></button>
             <button class="cs-nav" id="cs-nav-drive" onclick="switchView('drive')" title="공용 드라이브"><span class="cs-ico">🗂️</span><span class="cs-label">공용 드라이브</span></button>
+            <button class="cs-nav" id="cs-nav-history" onclick="switchView('history')" title="히스토리 (활동 기록)"><span class="cs-ico">🗓️</span><span class="cs-label">히스토리</span></button>
             <div class="cs-section cs-label">도구</div>
             <button class="cs-nav" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
             <button class="cs-nav" onclick="openChangeLog()" title="변경 로그"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그</span></button>
@@ -2893,6 +2923,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <!-- ========================================== -->
         <!-- [스프린트] 스프린트 페이지 -->
         <div id="sprint-view" class="hidden" onclick="event.stopPropagation()"></div>
+
+        <!-- [r49] 히스토리(활동 기록) 페이지 -->
+        <div id="history-view" class="hidden" onclick="event.stopPropagation()"></div>
 
         <!-- [그래프] 다이어그램 페이지 (wiki_docs kind='diagram') -->
         <style>
@@ -5455,6 +5488,168 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             body.innerHTML = html;
         }
 
+        // ============================================================
+        // [r49] 활동 히스토리 — logActivity 기록 + 기존 로그 통합 타임라인
+        // ============================================================
+        var _activityDroppedDb = false;
+        function logActivity(category, action, opts) {
+            opts = opts || {};
+            var entry = {
+                id: 'act_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                project_id: opts.projectId || activeProjectId || 'default',
+                actor_id: (currentUser ? currentUser.id : null),
+                actor_name: opts.actorName || myNickname || '익명',
+                category: category, action: action,
+                target_id: opts.targetId || null, target_label: opts.targetLabel || '', detail: opts.detail || '',
+                at: opts.at || new Date().toISOString()
+            };
+            if (!Array.isArray(currentData.activity)) currentData.activity = [];
+            currentData.activity.push(entry);
+            try { var k = 'tda_activity_' + entry.project_id; var arr = JSON.parse(localStorage.getItem(k) || '[]'); arr.push(entry); if (arr.length > 800) arr = arr.slice(-800); localStorage.setItem(k, JSON.stringify(arr)); } catch (e) {}
+            dbInsertActivity(entry);
+            if (currentView === 'history') renderHistoryView();
+            return entry;
+        }
+        function dbInsertActivity(entry) {
+            if (!supabaseClient || _activityDroppedDb) return;
+            try {
+                supabaseClient.from('activity_log').insert({ id: entry.id, project_id: entry.project_id, actor_id: entry.actor_id, actor_name: entry.actor_name, category: entry.category, action: entry.action, target_id: entry.target_id, target_label: entry.target_label, detail: entry.detail, created_at: entry.at })
+                    .then(function (r) { if (r && r.error) _activityDroppedDb = true; }, function () { _activityDroppedDb = true; });
+            } catch (e) { _activityDroppedDb = true; }
+        }
+        async function dbLoadActivity() {
+            if (!supabaseClient) return;
+            try {
+                var r = await supabaseClient.from('activity_log').select('*').eq('project_id', activeProjectId || 'default').order('created_at', { ascending: false }).limit(500);
+                if (r && !r.error && Array.isArray(r.data)) {
+                    if (!Array.isArray(currentData.activity)) currentData.activity = [];
+                    var seen = {}; currentData.activity.forEach(function (a) { seen[a.id] = 1; });
+                    r.data.forEach(function (row) { if (!seen[row.id]) currentData.activity.push({ id: row.id, project_id: row.project_id, actor_id: row.actor_id, actor_name: row.actor_name, category: row.category, action: row.action, target_id: row.target_id, target_label: row.target_label, detail: row.detail, at: row.created_at }); });
+                }
+            } catch (e) {}
+        }
+        function _activityLoadLocal() {
+            try { var k = 'tda_activity_' + (activeProjectId || 'default'); var arr = JSON.parse(localStorage.getItem(k) || '[]'); if (!Array.isArray(currentData.activity)) currentData.activity = []; var seen = {}; currentData.activity.forEach(function (a) { seen[a.id] = 1; }); arr.forEach(function (e) { if (!seen[e.id]) currentData.activity.push(e); }); } catch (e) {}
+        }
+        function activitySetupSql() {
+            return 'create table if not exists activity_log (\n  id text primary key,\n  project_id text,\n  actor_id text,\n  actor_name text,\n  category text,\n  action text,\n  target_id text,\n  target_label text,\n  detail text,\n  created_at timestamptz default now()\n);\nalter table activity_log enable row level security;\ncreate policy "activity_read" on activity_log for select using (true);\ncreate policy "activity_write" on activity_log for insert with check (auth.role() = \'authenticated\');\ncreate index if not exists activity_proj_idx on activity_log (project_id, created_at desc);';
+        }
+        var HIST_CATS = { project: { i: '🗂️', n: '프로젝트' }, sprint: { i: '🏃', n: '스프린트' }, kanban: { i: '📋', n: '칸반' }, card: { i: '🃏', n: '카드' }, flow: { i: '🔀', n: '흐름' }, doc: { i: '📄', n: '문서' }, wiki: { i: '🎮', n: '게임위키' }, review: { i: '🗳', n: '리뷰' }, decision: { i: '⚖️', n: '결정' }, git: { i: '📦', n: 'Git' } };
+        var HIST_FILTERS = [['all', '전체'], ['sprint', '스프린트'], ['board', '칸반·카드'], ['flow', '흐름'], ['doc', '문서·위키'], ['review', '리뷰·결정'], ['git', 'Git']];
+        function _histCatGroup(cat) { if (cat === 'kanban' || cat === 'card') return 'board'; if (cat === 'doc' || cat === 'wiki') return 'doc'; if (cat === 'review' || cat === 'decision') return 'review'; if (cat === 'sprint' || cat === 'flow' || cat === 'git') return cat; return 'other'; }
+        function _histName(id, fallback) { if (!id) return fallback || '익명'; if (typeof getMemberName === 'function') { var n = getMemberName(id); if (n) return n; } return fallback || id; }
+        function _activityAggregate() {
+            var pid = activeProjectId || 'default';
+            var ev = [];
+            var push = function (at, actorName, cat, action, label, detail, actorId) { var ms = typeof at === 'number' ? at : Date.parse(at); if (isNaN(ms)) ms = 0; ev.push({ ms: ms, actorName: actorName || '익명', actorId: actorId || null, cat: cat, action: action, label: label || '', detail: detail || '' }); };
+            (currentData.activity || []).forEach(function (a) { if ((a.project_id || 'default') !== pid) return; push(a.at, a.actor_name, a.category, a.action, a.target_label, a.detail, a.actor_id); });
+            (currentData.sprints || []).forEach(function (s) { if ((s.projectId || 'default') !== pid) return; (s.history || []).forEach(function (h) { push(h.at, h.byName, 'sprint', h.action, (s.weekLabel || s.id), h.detail, h.by); }); });
+            (currentData.reviews || []).forEach(function (rv) { if ((rv.projectId || 'default') !== pid) return; var tl = rv.title || (typeof _reviewTypeLabel === 'function' ? _reviewTypeLabel(rv.type) : '리뷰'); push(rv.createdAt, rv.proposerName, 'review', 'create', tl, '리뷰 등록', rv.proposerId); (rv.log || []).forEach(function (l) { var act = l.action === 'vote' ? ('vote-' + (l.decision || '')) : (l.action || 'comment'); push(l.at, l.userName, 'review', act, tl, l.comment || '', l.userId); }); });
+            (currentData.changeLog || []).forEach(function (c) { var dpid = pid; if (c.docId) { var d = (currentData.docs || []).find(function (x) { return x.id === c.docId; }); if (d) dpid = (d.projectId || 'default'); } if (dpid !== pid) return; push(c.ts, _histName(c.who), (c.action === 'decision' ? 'decision' : 'doc'), c.action || 'change', c.what || '', '', c.who); });
+            (currentData.docs || []).forEach(function (d) { if ((d.projectId || 'default') !== pid) return; var cat = d.kind === 'canon' ? 'wiki' : (d.kind === 'diagram' ? 'flow' : 'doc'); var meta = d.meta || {}; (meta.versionHistory || []).forEach(function (v) { push(v.at, v.byName, cat, 'version', (d.title || ''), 'v' + (v.version || '') + (v.note ? (' · ' + v.note) : ''), v.by); }); (meta.history || []).forEach(function (h) { push(h.at, h.byName, cat, h.action || 'create', (d.title || ''), '', h.by); }); });
+            ev.sort(function (a, b) { return b.ms - a.ms; });
+            return ev;
+        }
+        var _histFilter = 'all', _histPeriod = 'all';
+        function setHistFilter(f) { _histFilter = f; renderHistoryView(); }
+        function setHistPeriod(p) { _histPeriod = p; renderHistoryView(); }
+        function _histActionLabel(action) { var m = { create: '생성', delete: '삭제', update: '수정', edit: '수정', start: '시작', end: '종료', status: '상태 변경', 'card-add': '카드 추가', 'card-del': '카드 삭제', 'category-add': '카테고리 추가', 'category-del': '카테고리 삭제', participants: '참여자 변경', assign: '담당자 배정', map: '카드 연결', 'point-add': '포인트 추가', 'node-add': '노드 추가', version: '새 버전', decision: '결정 기록', change: '변경', comment: '코멘트', close: '종결', approve: '승인', reject: '거부', 'vote-approve': '승인', 'vote-reject': '거부', 'vote-': '투표' }; return m[action] || action; }
+        function _histDateLabel(key) { if (key === '날짜미상') return key; var f = function (d) { return d.getFullYear() + '-' + _pad2(d.getMonth() + 1) + '-' + _pad2(d.getDate()); }; var td = f(new Date()); var yd = f(new Date(Date.now() - 864e5)); if (key === td) return '오늘 · ' + key; if (key === yd) return '어제 · ' + key; return key; }
+        function renderHistoryView() {
+            var wrap = document.getElementById('history-view'); if (!wrap) return;
+            if (!wrap._actLoaded) { wrap._actLoaded = true; _activityLoadLocal(); dbLoadActivity().then(function () { if (currentView === 'history') renderHistoryView(); }); }
+            var ev = _activityAggregate();
+            var cut = 0, now = Date.now();
+            if (_histPeriod === 'today') { var d0 = new Date(); d0.setHours(0, 0, 0, 0); cut = d0.getTime(); } else if (_histPeriod === '7') cut = now - 7 * 864e5; else if (_histPeriod === '30') cut = now - 30 * 864e5;
+            var filtered = ev.filter(function (e) { if (cut && e.ms < cut) return false; if (_histFilter !== 'all' && _histCatGroup(e.cat) !== _histFilter) return false; return true; });
+            var proj = (currentData.projects || []).find(function (p) { return p.id === activeProjectId; });
+            var chips = HIST_FILTERS.map(function (f) { return '<button class="hist-chip' + (_histFilter === f[0] ? ' on' : '') + '" onclick="setHistFilter(\'' + f[0] + '\')">' + f[1] + '</button>'; }).join('');
+            var periods = [['all', '전체'], ['today', '오늘'], ['7', '7일'], ['30', '30일']].map(function (p) { return '<button class="hist-per' + (_histPeriod === p[0] ? ' on' : '') + '" onclick="setHistPeriod(\'' + p[0] + '\')">' + p[1] + '</button>'; }).join('');
+            var html = '<div class="hist-wrap"><div class="hist-head"><div><div class="hist-title">🗓️ 히스토리</div><div class="hist-sub">' + _sprintEsc(proj ? proj.name : '프로젝트') + ' — 누가 언제 무엇을 했는지 시간순 기록 (' + filtered.length + '건)</div></div></div>';
+            html += '<div class="hist-bar">' + chips + '<span class="hist-sep"></span>' + periods + '</div>';
+            if (!filtered.length) { html += '<div class="hist-empty">기록이 없습니다. 활동(스프린트·카드·문서·리뷰·흐름 등)이 생기면 여기에 시간순으로 쌓입니다.<br><span style="font-size:11px;opacity:.7">계정 간 공유하려면 DB 도구의 activity_log 테이블을 만드세요.</span></div></div>'; wrap.innerHTML = html; return; }
+            var groups = [], lastKey = null;
+            filtered.forEach(function (e) { var key = e.ms ? (function () { var d = new Date(e.ms); return d.getFullYear() + '-' + _pad2(d.getMonth() + 1) + '-' + _pad2(d.getDate()); })() : '날짜미상'; if (key !== lastKey) { groups.push({ key: key, items: [] }); lastKey = key; } groups[groups.length - 1].items.push(e); });
+            html += '<div class="hist-tl">';
+            groups.forEach(function (g) {
+                html += '<div class="hist-date">' + _histDateLabel(g.key) + '</div>';
+                g.items.forEach(function (e) {
+                    var cm = HIST_CATS[e.cat] || { i: '•', n: e.cat };
+                    var t = e.ms ? (function () { var d = new Date(e.ms); return _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()); })() : '';
+                    html += '<div class="hist-item"><div class="hist-ico" title="' + cm.n + '">' + cm.i + '</div>'
+                        + '<div class="hist-main"><div class="hist-line"><b>' + _sprintEsc(e.actorName) + '</b> <span class="hist-act">' + _sprintEsc(_histActionLabel(e.action)) + '</span>' + (e.label ? (' <span class="hist-lbl">' + _sprintEsc(e.label) + '</span>') : '') + '</div>'
+                        + (e.detail ? ('<div class="hist-detail">' + _sprintEsc(e.detail) + '</div>') : '') + '</div>'
+                        + '<div class="hist-time">' + t + '</div></div>';
+                });
+            });
+            html += '</div></div>';
+            wrap.innerHTML = html;
+        }
+        // ============================================================
+        // [r49] 스프린트 드래그: 카드→흐름 매핑, 참여자→포인트/카드 담당자 배정
+        // ============================================================
+        function _spvDragStart(ev, kind, id) { window._spvDragData = { kind: kind, id: id }; try { ev.dataTransfer.setData('text/plain', kind + ':' + id); ev.dataTransfer.effectAllowed = 'copy'; } catch (e) {} }
+        function _spvDragEnd() { window._spvDragData = null; document.querySelectorAll('.spv-drop-on').forEach(function (el) { el.classList.remove('spv-drop-on'); }); }
+        function _spvParseDT(ev) { try { var s = ev.dataTransfer.getData('text/plain') || ''; var i = s.indexOf(':'); if (i > 0) return { kind: s.slice(0, i), id: s.slice(i + 1) }; } catch (e) {} return null; }
+        function _spvFlowAllow(ev) { var dd = window._spvDragData; if (dd && (dd.kind === 'task' || dd.kind === 'member')) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'copy'; } catch (e) {} ev.currentTarget.classList.add('spv-drop-on'); } }
+        function _spvSvgPoint(svg, ev) { try { var pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; var m = svg.getScreenCTM(); if (!m) return null; var loc = pt.matrixTransform(m.inverse()); return { x: loc.x, y: loc.y }; } catch (e) { return null; } }
+        function _mapTaskStatusToFlow(st) { st = (st || '').toLowerCase(); if (st.indexOf('done') >= 0 || st === 'complete' || st === 'completed') return 'done'; if (st.indexOf('progress') >= 0 || st === 'doing' || st === 'inprogress') return 'progress'; return 'pending'; }
+        function _spvFlowHitId(ev) {
+            // 드롭 지점이 기존 포인트/노드(.spv-prev-node) 위인지 — 맞으면 그 id 반환(정확 매핑), 빈 곳이면 null(신규 생성)
+            var el = (ev && ev.target && ev.target.closest) ? ev.target.closest('.spv-prev-node') : null;
+            if (!el) { try { var pe = document.elementFromPoint(ev.clientX, ev.clientY); if (pe && pe.closest) el = pe.closest('.spv-prev-node'); } catch (e) {} }
+            return el ? el.getAttribute('data-prev-id') : null;
+        }
+        function _spvFlowDrop(ev, fid) {
+            ev.preventDefault(); ev.stopPropagation();
+            var host = ev.currentTarget; if (host && host.classList) host.classList.remove('spv-drop-on');
+            var dd = window._spvDragData || _spvParseDT(ev); if (!dd) return;
+            var doc = (currentData.docs || []).find(function (x) { return x.id === fid; }); if (!doc) return;
+            if (!doc.meta) doc.meta = {}; if (!doc.meta.diagram) doc.meta.diagram = { mode: 'linear', orientation: 'horizontal', points: [], nodes: [], edges: [], memos: [] };
+            var p = doc.meta.diagram;
+            var svg = host ? host.querySelector('svg') : null;
+            var loc = svg ? _spvSvgPoint(svg, ev) : null;
+            var hitId = _spvFlowHitId(ev);
+            var task = dd.kind === 'task' ? (currentData.tasks || []).find(function (x) { return x.id === dd.id; }) : null;
+            var msg = '';
+            if (p.mode === 'graph') {
+                if (!Array.isArray(p.nodes)) p.nodes = [];
+                var tgtN = hitId ? p.nodes.find(function (n) { return n.id === hitId; }) : null;
+                if (!tgtN) {
+                    var nx = (loc && isFinite(loc.x)) ? (loc.x - 100) : (40 + p.nodes.length * 24), ny = (loc && isFinite(loc.y)) ? (loc.y - 40) : (40 + p.nodes.length * 12);
+                    tgtN = { id: gphUid('n'), x: nx, y: ny, w: 200, h: 80, part: 'shared', title: (dd.kind === 'task' && task ? task.title : '새 노드') || '새 노드', meta: '', body: '', highlighted: false };
+                    p.nodes.push(tgtN);
+                    if (dd.kind === 'task') { tgtN.linkedCardId = dd.id; tgtN.status = task ? _mapTaskStatusToFlow(task.status) : 'pending'; msg = '🔗 카드를 새 노드로 추가'; logActivity('flow', 'node-add', { targetId: fid, targetLabel: doc.title || '', detail: '카드 "' + ((task && task.title) || '') + '" → 노드' }); }
+                    else { tgtN.assigneeId = dd.id; tgtN.status = 'progress'; msg = '👤 담당자로 새 노드 추가'; logActivity('flow', 'assign', { targetId: fid, targetLabel: doc.title || '', detail: _histName(dd.id) + ' → 노드' }); }
+                } else if (dd.kind === 'task') { tgtN.linkedCardId = dd.id; if (!tgtN.title || tgtN.title === '새 노드') tgtN.title = (task && task.title) || tgtN.title; msg = '🔗 카드를 노드에 연결'; logActivity('flow', 'map', { targetId: fid, targetLabel: doc.title || '', detail: '카드 "' + ((task && task.title) || '') + '" → 노드' }); }
+                else { tgtN.assigneeId = dd.id; if (!tgtN.status || tgtN.status === 'pending') tgtN.status = 'progress'; msg = '👤 담당자를 노드에 배정'; logActivity('flow', 'assign', { targetId: fid, targetLabel: doc.title || '', detail: _histName(dd.id) + ' → 노드' }); }
+            } else {
+                if (!Array.isArray(p.points)) p.points = [];
+                var tgtP = hitId ? p.points.find(function (pt) { return pt.id === hitId; }) : null;
+                if (!tgtP) {
+                    var pos = (loc && isFinite(loc.x)) ? Math.max(0.02, Math.min(0.98, (loc.x - 60) / 880)) : (p.points.length ? Math.min(0.98, Math.max.apply(null, p.points.map(function (x) { return x.position; })) + 0.12) : 0.5);
+                    tgtP = { id: gphUid('p'), position: pos, part: 'shared', title: (dd.kind === 'task' && task ? task.title : '새 포인트') || '새 포인트', description: '', highlighted: false };
+                    p.points.push(tgtP);
+                    if (dd.kind === 'task') { tgtP.linkedCardId = dd.id; tgtP.status = task ? _mapTaskStatusToFlow(task.status) : 'pending'; msg = '🔗 카드를 새 포인트로 추가'; logActivity('flow', 'point-add', { targetId: fid, targetLabel: doc.title || '', detail: '카드 "' + ((task && task.title) || '') + '" → 포인트' }); }
+                    else { tgtP.assigneeId = dd.id; tgtP.status = 'progress'; msg = '👤 담당자로 새 포인트 추가'; logActivity('flow', 'assign', { targetId: fid, targetLabel: doc.title || '', detail: _histName(dd.id) + ' → 포인트' }); }
+                } else if (dd.kind === 'task') { tgtP.linkedCardId = dd.id; if (!tgtP.title || tgtP.title === '새 포인트') tgtP.title = (task && task.title) || tgtP.title; msg = '🔗 카드를 포인트에 연결'; logActivity('flow', 'map', { targetId: fid, targetLabel: doc.title || '', detail: '카드 "' + ((task && task.title) || '') + '" → 포인트' }); }
+                else { tgtP.assigneeId = dd.id; if (!tgtP.status || tgtP.status === 'pending') tgtP.status = 'progress'; msg = '👤 담당자를 포인트에 배정'; logActivity('flow', 'assign', { targetId: fid, targetLabel: doc.title || '', detail: _histName(dd.id) + ' → 포인트' }); }
+            }
+            window._spvDragData = null;
+            doc.updatedAt = Date.now();
+            if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+            if (typeof dbUpsertDoc === 'function') dbUpsertDoc(doc);
+            if (currentView === 'sprint') renderSprintView();
+            if (typeof showToast === 'function') showToast(msg, 'success');
+        }
+        function _spvCardAllow(ev) { var dd = window._spvDragData; if (dd && dd.kind === 'member') { ev.preventDefault(); ev.currentTarget.classList.add('spv-drop-on'); } }
+        function _spvCardDrop(ev, taskId) {
+            var dd = window._spvDragData || _spvParseDT(ev); if (!dd || dd.kind !== 'member') return;
+            ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.classList.remove('spv-drop-on');
+            window._spvDragData = null;
+            if (typeof setTaskAssignee === 'function') setTaskAssignee(taskId, dd.id, 'sprint');
+        }
+
         function switchView(viewName) {
             currentView = viewName;
             updateMobNav(viewName);
@@ -5483,6 +5678,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var _drvvw = document.getElementById('drive-view'); if (_drvvw) { _drvvw.classList.toggle('hidden', viewName !== 'drive'); _drvvw.classList.toggle('block', viewName === 'drive'); }
             var _csSt = document.getElementById('cs-nav-status'); if (_csSt) _csSt.classList.toggle('active', viewName === 'status');
             var _stvw = document.getElementById('status-view'); if (_stvw) { _stvw.classList.toggle('hidden', viewName !== 'status'); _stvw.classList.toggle('block', viewName === 'status'); }
+            // [r49] 히스토리 토글
+            var _csHis = document.getElementById('cs-nav-history'); if (_csHis) _csHis.classList.toggle('active', viewName === 'history');
+            var _hisvw = document.getElementById('history-view'); if (_hisvw) { _hisvw.classList.toggle('hidden', viewName !== 'history'); _hisvw.classList.toggle('block', viewName === 'history'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -5591,6 +5789,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gpst = document.getElementById('gif-picker'); if (_gpst) _gpst.style.display = 'none';
                 if (typeof renderStatusView === 'function') renderStatusView();
+            } else if (viewName === 'history') {
+                // [r49] 활동 히스토리
+                var _kvh = document.getElementById('kanban-view'); if (_kvh) { _kvh.classList.add('hidden'); _kvh.classList.remove('block'); }
+                var _dvh = document.getElementById('docs-view'); if (_dvh) { _dvh.classList.add('hidden'); _dvh.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gph2 = document.getElementById('gif-picker'); if (_gph2) _gph2.style.display = 'none';
+                if (typeof renderHistoryView === 'function') renderHistoryView();
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
@@ -7098,6 +7303,7 @@ return data;
             currentData.projects.push(newProj);
             saveData();
             dbUpsertProject(newProj);
+            if (typeof logActivity === 'function') logActivity('project', 'create', { projectId: newProj.id, targetId: newProj.id, targetLabel: name, detail: '프로젝트 생성' });
             switchProject(newProj.id);
         }
 
@@ -8684,6 +8890,7 @@ addEventListener("resize",sendPos);
             var _newEmoji = isFolder ? '📁' : (currentDocKind === 'canon' ? '📜' : (currentDocKind === 'personal' ? '🔒' : '📄'));
             const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), emoji: _newEmoji, isCollapsed: false, content: isFolder ? '' : ('# ' + title + '\n\n여기에 내용을 작성하세요...'), createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta };
             currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc);
+            if (typeof logActivity === 'function') { var _dc = currentDocKind === 'canon' ? 'wiki' : 'doc'; logActivity(_dc, 'create', { targetId: newDoc.id, targetLabel: newDoc.title, detail: (isFolder ? '폴더' : (currentDocKind === 'canon' ? '게임위키' : (currentDocKind === 'personal' ? '개인문서' : '문서'))) + ' 생성' }); }
             if (isFolder) {
                 if (parentId) { var _pp = currentData.docs.find(function (d) { return d.id === parentId; }); if (_pp) { _pp.isCollapsed = false; } }
                 renderDocTree(); showToast('📁 폴더 "' + title.trim() + '" 생성됨', 'success');
@@ -8796,6 +9003,8 @@ addEventListener("resize",sendPos);
             // [v26 FIX-1] 컨텍스트 메뉴를 즉시 닫음
             if (typeof hideTreeContextMenu === 'function') hideTreeContextMenu();
             if(!(await uiConfirm({ title: '문서 삭제', message: '이 문서와 하위 문서가 모두 삭제됩니다. 계속할까요?', confirmText: '삭제', danger: true }))) return;
+            var _delDoc = currentData.docs.find(function(d){ return d.id === docId; });
+            if (_delDoc && typeof logActivity === 'function') logActivity(_delDoc.kind === 'canon' ? 'wiki' : (_delDoc.kind === 'diagram' ? 'flow' : 'doc'), 'delete', { targetId: docId, targetLabel: _delDoc.title || '', detail: (_delDoc.meta && _delDoc.meta.isFolder ? '폴더' : '문서') + ' 삭제 (하위 포함)' });
             const getIdsToDelete = (id) => { let ids = [id]; const children = currentData.docs.filter(d => d.parentId === id); children.forEach(child => { ids = ids.concat(getIdsToDelete(child.id)); }); return ids; };
             const idsToDelete = getIdsToDelete(docId);
             currentData.docs = currentData.docs.filter(d => !idsToDelete.includes(d.id));
@@ -9347,7 +9556,7 @@ addEventListener("resize",sendPos);
                     + '<div class="spv-cmt-input"><input type="text" placeholder="코멘트 남기기..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();sprintAddComment(\'' + t.id + '\',this);}"><button onclick="sprintAddComment(\'' + t.id + '\',this)">등록</button></div>'
                     + '</div>';
             }
-            return '<div class="spv-card" data-id="' + t.id + '">' + head + detail + '</div>';
+            return '<div class="spv-card" data-id="' + t.id + '" ondragover="_spvCardAllow(event)" ondragleave="this.classList.remove(\'spv-drop-on\')" ondrop="_spvCardDrop(event,\'' + t.id + '\')">' + head + detail + '</div>';
         }
         function sprintAddComment(taskId, el) { if (typeof submitComment === 'function') submitComment(taskId, el); if (currentView === 'sprint') renderSprintView(); }
         function toggleSprintExpand(id) { _sprintExpanded[id] = !_sprintExpanded[id]; renderSprintView(); }
@@ -9439,7 +9648,7 @@ addEventListener("resize",sendPos);
             var ids = Array.isArray(s.participants) ? s.participants : [];
             if (!ids.length) return '';
             var members = getMembers();
-            var shown = ids.slice(0, 5).map(function (id) { var m = members.find(function (x) { return x.id === id; }); return m ? _avatarHtml(m, 18) : _avatarHtml({ displayName: '?' }, 18); }).join('');
+            var shown = ids.slice(0, 5).map(function (id) { var m = members.find(function (x) { return x.id === id; }); var av = m ? _avatarHtml(m, 18) : _avatarHtml({ displayName: '?' }, 18); var nm = m ? (m.displayName || m.email) : getMemberName(id); return '<span class="spv-part-d" draggable="true" ondragstart="event.stopPropagation();_spvDragStart(event,\'member\',\'' + id + '\')" ondragend="_spvDragEnd()" title="' + _sprintEsc(nm) + ' — 포인트/카드로 드래그해 담당자 배정">' + av + '</span>'; }).join('');
             var more = ids.length > 5 ? ('<span class="spv-part-more">+' + (ids.length - 5) + '</span>') : '';
             // [#6] 호버 시 프로필 사진 + 이름 툴팁(fixed 위치 — 스프린트 카드 overflow:hidden 회피)
             return '<span class="spv-parts" onmouseenter="showSprintPartsTip(event,\'' + s.id + '\')" onmouseleave="hideSprintPartsTip()">' + shown + more + '</span>';
@@ -9486,7 +9695,7 @@ addEventListener("resize",sendPos);
                     + '<button class="spv-flow-mini" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="그래프 탭에서 편집">✏️ 편집</button>'
                     + '<button class="spv-flow-mini danger" onclick="event.stopPropagation();sprintUnlinkFlow(\'' + f.id + '\',\'' + sid + '\')" title="흐름 링크 삭제">✕</button>'
                     + '</div>';
-                var body = open ? ('<div class="spv-prev-host" data-flow-id="' + f.id + '" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="클릭하면 그래프 탭에서 편집">' + gphFlowPreviewSVG(f) + '</div>') : '';
+                var body = open ? ('<div class="spv-prev-host" data-flow-id="' + f.id + '" ondragover="_spvFlowAllow(event)" ondragenter="_spvFlowAllow(event)" ondragleave="this.classList.remove(\'spv-drop-on\')" ondrop="_spvFlowDrop(event,\'' + f.id + '\')" onclick="event.stopPropagation();gphOpenFromSprint(\'' + f.id + '\')" title="클릭=편집 · 카드를 끌어다 놓으면 포인트 연결 · 참여자를 놓으면 담당자 배정">' + gphFlowPreviewSVG(f) + '</div>') : '';
                 return '<div class="spv-flow-item2">' + head + body + '</div>';
             }).join('') : '<div class="spv-empty" style="padding:6px;">연결된 흐름 없음 — "+ 새 흐름"으로 시작</div>';
             return '<div class="spv-flows"><div class="spv-flows-h">🔀 흐름 (그래프) <button class="spv-flow-btn" onclick="event.stopPropagation();sprintNewFlow(\'' + sid + '\')">+ 새 흐름</button><button class="spv-flow-btn" onclick="event.stopPropagation();sprintImportFlow(event,\'' + sid + '\')">가져오기</button></div>' + items + '</div>';
@@ -9573,6 +9782,8 @@ addEventListener("resize",sendPos);
                 wrap.querySelectorAll('.spv-cards').forEach(function (list) {
                     new Sortable(list, {
                         group: 'sprint-cards', animation: 200, handle: '.spv-drag', ghostClass: 'sortable-ghost', filter: '.spv-empty',
+                        onStart: function (evt) { window._spvDragData = { kind: 'task', id: evt.item.getAttribute('data-id') }; }, // [r49] 카드→흐름 드롭용
+                        onUnchoose: function () { setTimeout(function () { window._spvDragData = null; document.querySelectorAll('.spv-drop-on').forEach(function (el) { el.classList.remove('spv-drop-on'); }); }, 80); },
                         onEnd: function (evt) {
                             var taskId = evt.item.getAttribute('data-id'); if (!taskId) return;
                             var toSid = evt.to.getAttribute('data-sprintid') || null;
@@ -9647,6 +9858,7 @@ addEventListener("resize",sendPos);
             var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!s) return;
             var n = (currentData.tasks || []).filter(function (t) { return t.sprintId === sid; }).length;
             if (!(await uiConfirm({ title: '스프린트 삭제', message: '"' + (s.weekLabel || sid) + '" 스프린트를 삭제할까요?' + (n ? ('\n포함된 카드 ' + n + '개는 미지정으로 바뀝니다.') : ''), confirmText: '삭제', danger: true }))) return;
+            if (typeof logActivity === 'function') logActivity('sprint', 'delete', { targetId: sid, targetLabel: (s.weekLabel || sid), detail: '스프린트 삭제' + (n ? (' (카드 ' + n + '개 미지정 전환)') : '') });
             (currentData.tasks || []).forEach(function (t) { if (t.sprintId === sid) { t.sprintId = null; dbUpsertTask(t); } });
             currentData.sprints = (currentData.sprints || []).filter(function (x) { return x.id !== sid; });
             await dbDeleteSprint(sid);
@@ -11310,6 +11522,7 @@ ${intrLog}
             if (userId) { task.assigneeId = userId; task.assignees = [userId]; task.dev = getMemberName(userId); }
             else { task.assigneeId = null; task.assignees = []; task.dev = '미지정'; }
             saveData(); dbUpsertTask(task); _afterCardEdit(ctx);
+            if (typeof logActivity === 'function') logActivity('card', 'assign', { targetId: task.id, targetLabel: task.title, detail: '담당자 → ' + getTaskAssigneeLabel(task) });
             showToast('담당자 → ' + getTaskAssigneeLabel(task), 'info');
         }
         async function manualDevEntry(taskId, ctx) {
@@ -11382,6 +11595,7 @@ ${intrLog}
             // [v40 Day3 청크3] 마스터 §1.4: 신규 카드는 항상 Shelf. Now 이동은 cycleZone에서 intrusion 리뷰로 게이트.
             _expandedCards[newTask.id] = true; // [조용한 카드] 새 카드는 펼친 채 생성 → 바로 편집
             _commitNewTask(newTask, position);
+            if (typeof logActivity === 'function') logActivity('card', 'create', { targetId: newTask.id, targetLabel: newTask.title, detail: '칸반 카드 생성' });
         }
 
         // Kanban 코멘트
