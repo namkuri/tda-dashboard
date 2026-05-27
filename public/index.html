@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r66 (기본 테마=다크 웜(state1) + 그래프 뷰 단색 노드(옵시디언풍)·라벨은 줌인시에만·텍스트 테마색(다크=밝게, gvCssVar body 수정)·글로우 미세화. IS_TAURI에 __TAURI__ 추가(원격 URL 로드 대비). 데스크톱은 github.io 원격 로드로 전환 예정) -->
+<!-- BUILD: 2026-05-28 r67 (데스크톱 원격로드 OAuth 수정: tauri.localhost(로컬번들)에서만 시스템브라우저, github.io 원격로드는 일반 웹 OAuth로 현재 origin 복귀 → open_external ACL 차단 회피. 재빌드 불필요·앱 재실행만) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4035,8 +4035,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
             var _scopes = provider === 'github' ? 'read:user' : undefined;
             var _showErr = function (msg) { var el = document.getElementById('auth-error'); if (el) { el.style.display = 'block'; el.textContent = msg; } };
-            if (IS_TAURI) {
-                // [r60] 데스크톱: 앱 웹뷰를 OAuth로 이동시키지 않고(=Pages 404 방지), URL만 받아 시스템 브라우저로 염
+            // [r67] 시스템 브라우저(open_external+tda:// 딥링크)는 로컬 번들(tauri.localhost)에서만 필요.
+            //   데스크톱이 github.io를 원격 로드하는 경우엔 현재 origin이 Supabase 허용 리다이렉트라
+            //   일반 웹 OAuth(웹뷰 내 이동→복귀)가 그대로 동작 → IPC/ACL 불필요(open_external ACL 차단 회피).
+            var _tauriLocalHost = (location.protocol === 'tauri:') || /(^|\.)tauri\.localhost$/.test(location.hostname) || location.hostname === 'tauri';
+            if (IS_TAURI && _tauriLocalHost) {
+                // [r60] 로컬 번들: 앱 웹뷰를 OAuth로 이동시키지 않고 시스템 브라우저로 염
                 //   → 브라우저에서 로그인 → tda://auth-callback 딥링크로 앱 복귀(__tdaAuthCallback이 세션 설정)
                 const { data, error } = await client.auth.signInWithOAuth({
                     provider,
