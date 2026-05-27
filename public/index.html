@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r55 (r54 + 좌측내비 대분류 그룹화(운영/자료/저장소/도구)·헤더 얇은폰트 클릭 접기펴기(로컬)·그룹내 드래그 순서변경(로컬)·게임위키→프로젝트 위키[Official] 리네임) -->
+<!-- BUILD: 2026-05-27 r56 (r55 + 공용드라이브 자동정리 경로에 프로젝트명 최상위 폴더 추가: 프로젝트명/시스템명(문서/위키/그래프 등)/날짜/소유자 — 프로젝트별 분리) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -5221,10 +5221,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             return map[(typeof currentView !== 'undefined' && currentView) || 'docs'] || '문서';
         }
         function _driveSeg(s) { return String(s || '').replace(/[\/\\]/g, '_').trim() || '기타'; }
-        // 자동 정리 경로: 시스템명/날짜(YYYY-MM-DD)/소유자
+        // [r56] 현재 프로젝트명 (없으면 id, 그것도 없으면 'default')
+        function _driveProjectName() {
+            var p = (currentData.projects || []).find(function (x) { return x.id === activeProjectId; });
+            return (p && p.name) || activeProjectId || 'default';
+        }
+        // 자동 정리 경로: [r56] 프로젝트명/시스템명/날짜(YYYY-MM-DD)/소유자 — 프로젝트별 최상위 폴더로 분리
         function _driveAutoFolderPath() {
             var d = new Date(); var ymd = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
-            return _driveSeg(_driveSysName()) + '/' + ymd + '/' + _driveSeg(myNickname || '익명');
+            return _driveSeg(_driveProjectName()) + '/' + _driveSeg(_driveSysName()) + '/' + ymd + '/' + _driveSeg(myNickname || '익명');
         }
         // 경로의 각 폴더가 없으면 생성(중복 방지: 로드 후 검사). 반환: path
         async function _driveEnsureFolderPath(path) {
