@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r38 (r37 + 트리 좌측여백 추가축소(패딩·캐럿·아이템)·헤더 컴팩트·HTML임베드 폭 px명시(zoom/100% 오해석 회피)) -->
+<!-- BUILD: 2026-05-27 r39 (r38 + 트리 220px·투명 tab-dot 폭0(아이콘옆 빈공간 제거)·"N개" 제거·검색아이콘 박스화(되돌리기·폴더와 한 그룹)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1417,12 +1417,14 @@
         /* tab dots */
         .tab-dot {
             display: inline-block;
-            width: 7px; height: 7px;
+            width: 0; height: 7px;
             border-radius: 50%;
             flex-shrink: 0;
-            margin-right: 6px;
+            margin-right: 0;
             opacity: 0;
         }
+        /* [r39] 상태 없는(투명) 점은 폭 0 — 아이콘 좌측 빈 공간 제거. 상태 있을 때만 표시 */
+        .tab-dot.dot-unread, .tab-dot.dot-new, .tab-dot.dot-commented { width: 7px; margin-right: 5px; }
         .tab-dot.dot-unread   { background: #f59e0b; opacity: 1; }
         .tab-dot.dot-new      { background: #c96442; opacity: 1; }
         .tab-dot.dot-commented{ background: #f97316; opacity: 1; }
@@ -3297,27 +3299,25 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </button>
                 </div>
 
-                <div id="doc-sidebar" class="bg-white border-r border-gray-100 flex flex-col flex-shrink-0 transition-all" style="width:200px;min-width:130px;flex:0 0 auto;">
+                <div id="doc-sidebar" class="bg-white border-r border-gray-100 flex flex-col flex-shrink-0 transition-all" style="width:220px;min-width:140px;flex:0 0 auto;">
                     <!-- 문서 보관함 헤더 (프로젝트 변경 지원) -->
                     <div class="px-2 py-2 border-b border-gray-200 bg-gray-50 rounded-t-xl flex justify-between items-center gap-1">
-                        <div class="cursor-pointer hover:bg-gray-200 px-1 py-1 rounded flex items-center gap-1 transition-colors min-w-0" onclick="openProjectModal()" title="프로젝트 변경">
-                            <span class="font-black text-gray-800 truncate" id="current-project-name" style="max-width:80px;">📂 문서</span>
+                        <div class="cursor-pointer hover:bg-gray-200 px-1 py-1 rounded flex items-center gap-0.5 transition-colors min-w-0" onclick="openProjectModal()" title="프로젝트 변경">
+                            <span class="font-black text-gray-800 truncate" id="current-project-name" style="max-width:62px;">📂 문서</span>
                             <span class="text-[10px] text-gray-500">▼</span>
                         </div>
-                        <!-- [v35] 사이드바 검색 아이콘 — 프로젝트 변경 아이콘 옆 -->
-                        <button id="sidebar-search-toggle" onclick="toggleSidebarSearch()"
-                            class="text-gray-500 hover:text-blue-600 hover:bg-blue-50 px-1.5 py-1 rounded transition-colors"
-                            title="문서 검색 (Ctrl+F)" style="font-size:14px;">🔍</button>
-                        <span id="doc-count-badge" class="text-[10px] text-gray-400 font-mono ml-auto"></span>
-                        <div class="flex items-center gap-1">
+                        <span id="doc-count-badge" class="hidden"></span>
+                        <div class="flex items-center gap-0.5 ml-auto flex-shrink-0">
+                            <!-- [r39] 검색 아이콘도 박스 스타일로 통일(되돌리기·폴더와 한 그룹) -->
+                            <button id="sidebar-search-toggle" onclick="toggleSidebarSearch()" class="text-xs px-1.5 py-1 rounded shadow-sm" style="background:#e7e3d8;color:#6f6b5d;" title="문서 검색 (Ctrl+F)">🔍</button>
                             <!-- [v30] 하이어아키 변경 되돌리기 버튼 — 변경 이력이 있을 때만 활성화 -->
                             <button id="tree-undo-btn" onclick="undoTreeChange()" disabled
-                                class="text-xs px-2 py-1 rounded shadow-sm transition-all"
+                                class="text-xs px-1.5 py-1 rounded shadow-sm transition-all"
                                 style="background:#e7e3d8;color:#9b968a;cursor:not-allowed;"
                                 title="문서 위치 변경 되돌리기 (Ctrl+Z)">↶</button>
-                            <button onclick="createNewFolder(null)" class="text-xs px-2 py-1 rounded shadow-sm" style="background:var(--c-accent-soft,#efe7dd);color:var(--c-accent,#c96442);font-weight:700;" title="최상위 폴더 생성">📁</button>
-                            <button onclick="createNewDoc(null)" class="bg-blue-600 text-white text-xs px-2 py-1 rounded hover:bg-blue-700 shadow-sm" title="최상위 문서 생성">+ New</button>
-                            <button onclick="toggleDocSidebar()" class="text-gray-400 hover:text-gray-700 px-1 font-bold ml-1 text-lg" title="사이드바 축소">◀</button>
+                            <button onclick="createNewFolder(null)" class="text-xs px-1.5 py-1 rounded shadow-sm" style="background:var(--c-accent-soft,#efe7dd);color:var(--c-accent,#c96442);font-weight:700;" title="최상위 폴더 생성">📁</button>
+                            <button onclick="createNewDoc(null)" class="bg-blue-600 text-white text-xs px-1.5 py-1 rounded hover:bg-blue-700 shadow-sm" title="최상위 문서 생성">+New</button>
+                            <button onclick="toggleDocSidebar()" class="text-gray-400 hover:text-gray-700 px-0.5 font-bold text-lg" title="사이드바 축소">◀</button>
                         </div>
                     </div>
                     <!-- [v35] 사이드바 검색바 — 토글로 펼침/접힘 -->
@@ -7175,7 +7175,7 @@ return data;
                 const isActive = activeDocId === doc.id ? 'active' : '';
                 const hasChildren = cache.hasChildrenSet.has(doc.id); // O(1) lookup
                 const isFolder = !!(doc.meta && doc.meta.isFolder);
-                const caretHtml = (hasChildren || isFolder) ? `<span class="inline-block w-3 text-center cursor-pointer text-gray-400 hover:text-gray-700 transition-transform ${doc.isCollapsed ? '' : 'rotate-90'}" onclick="toggleDocCollapse('${doc.id}', event)">▶</span>` : `<span class="inline-block w-3"></span>`;
+                const caretHtml = (hasChildren || isFolder) ? `<span class="inline-block w-3 text-center cursor-pointer text-gray-400 hover:text-gray-700 transition-transform ${doc.isCollapsed ? '' : 'rotate-90'}" onclick="toggleDocCollapse('${doc.id}', event)">▶</span>` : `<span class="inline-block w-2"></span>`;
                 const iconHtml = isFolder
                     ? `<span class="flex-shrink-0" title="폴더" style="${doc.deprecated ? 'opacity:0.45;filter:grayscale(1);' : ''}">${(!doc.isCollapsed && hasChildren) ? '📂' : '📁'}</span>`
                     : `<span class="cursor-pointer hover:bg-gray-200 rounded px-0.5 flex-shrink-0" onclick="changeDocEmoji('${doc.id}', event)" title="이모티콘 변경" style="${doc.deprecated ? 'opacity:0.45;filter:grayscale(1);' : ''}">${doc.emoji || '📄'}</span>`;
