@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r56 (r55 + 공용드라이브 자동정리 경로에 프로젝트명 최상위 폴더 추가: 프로젝트명/시스템명(문서/위키/그래프 등)/날짜/소유자 — 프로젝트별 분리) -->
+<!-- BUILD: 2026-05-27 r57 (r56 + 이미지 드롭 후 미리보기 즉시 갱신(1초 debounce 우회)+저장·드롭 점선테두리 잔류 제거(전역 drop/dragend 정리) — 새로고침 없이 첨부 확인) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -13286,14 +13286,21 @@ ${intrLog}
         // ==========================================
         // 💡 IMAGE DRAG & DROP (Base64)
         // ==========================================
+        // [r57] 드롭 후에도 남는 점선 테두리(.drop-active) 방지 — 문서 전역 drop/dragend에서 확실히 제거(이미지 핸들러의 stopPropagation으로 일부 정리 핸들러가 누락되던 문제)
+        function _dropActiveClearSoon() { setTimeout(function () { document.querySelectorAll('.drop-active').forEach(function (el) { el.classList.remove('drop-active'); }); }, 0); }
         function initImageDrop() {
+            if (!window._dropActiveGlobalBound) {
+                window._dropActiveGlobalBound = true;
+                document.addEventListener('drop', _dropActiveClearSoon, true);
+                document.addEventListener('dragend', _dropActiveClearSoon, true);
+            }
             ['doc-editor-textarea', 'doc-preview-container'].forEach(id => {
                 const el = document.getElementById(id);
                 if(!el) return;
                 el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop-active'); });
                 el.addEventListener('dragleave', (e) => { if(!el.contains(e.relatedTarget)) el.classList.remove('drop-active'); });
                 el.addEventListener('drop', (e) => {
-                    e.preventDefault(); el.classList.remove('drop-active');
+                    e.preventDefault(); el.classList.remove('drop-active'); _dropActiveClearSoon();
                     // [v29 FIX-IMG-1] 드롭에도 외부 URL 우선 — 다른 사이트에서 이미지를 드래그하면
                     // files는 비어있고 dataTransfer에 HTML/URL만 들어옴. 그것을 외부 링크로 삽입.
                     const dragHtml = e.dataTransfer.getData('text/html');
@@ -13307,6 +13314,7 @@ ${intrLog}
                         if (textarea) {
                             activeEditorId = 'doc-editor-textarea';
                             insertToActiveEditor(textarea, '\n![이미지](' + externalUrl + ')\n');
+                            _docForceRefreshAfterInsert(textarea);
                             showToast(files.length ? '🌐 외부 링크로 삽입했습니다 (base64 저장 회피).' : '🌐 이미지 링크를 삽입했습니다.', 'success');
                         }
                         return;
@@ -13343,7 +13351,7 @@ ${intrLog}
             (async function(){
                 var url = null;
                 try { url = await uploadImageToStorage(file, activeDocId); } catch(e) { url = null; }
-                if (url) { insertToActiveEditor(textarea, '\n![' + file.name + '](' + url + ')\n'); showToast("🖼 '" + file.name + "' 드라이브에 저장·첨부됨", 'success'); return; }
+                if (url) { insertToActiveEditor(textarea, '\n![' + file.name + '](' + url + ')\n'); _docForceRefreshAfterInsert(textarea); showToast("🖼 '" + file.name + "' 드라이브에 저장·첨부됨", 'success'); return; }
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     var dataUrl = e.target.result;
@@ -13352,10 +13360,22 @@ ${intrLog}
                     currentData.images[imgId] = dataUrl;
                     insertToActiveEditor(textarea, '\n![' + file.name + '](img://' + imgId + ')\n');
                     saveData();
+                    _docForceRefreshAfterInsert(textarea);
                     showToast("이미지 '" + file.name + "' 첨부(임시 내부저장) — 드라이브 설정 시 공용 저장", 'info');
                 };
                 reader.readAsDataURL(file);
             })();
+        }
+        // [r57] 이미지/파일 비동기 삽입 후 미리보기를 1초 debounce 기다리지 않고 즉시 갱신 + 저장 (드롭 후 새로고침해야 보이던 문제 수정)
+        function _docForceRefreshAfterInsert(textarea) {
+            try {
+                document.querySelectorAll('.drop-active').forEach(function (el) { el.classList.remove('drop-active'); });
+                if (!activeDocId || !textarea) return;
+                if (typeof _docPreviewTimer !== 'undefined') clearTimeout(_docPreviewTimer);
+                if (typeof updateDocPreview === 'function' && currentEditorMode !== 'source') updateDocPreview(textarea.value);
+                if (typeof _docSaveTimer !== 'undefined') clearTimeout(_docSaveTimer);
+                if (typeof flushDocSave === 'function') flushDocSave();
+            } catch (e) {}
         }
 
         // ==========================================
