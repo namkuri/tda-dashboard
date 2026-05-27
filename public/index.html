@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r61 (데스크톱 OAuth 404 진단: 로그인 화면에 IS_TAURI/invoke/host 진단줄(데스크톱 전용·웹 비노출) + Tauri release devtools 활성화·자동오픈. 진단 후 제거 예정. 웹 동작 변화 없음) -->
+<!-- BUILD: 2026-05-27 r62 (데스크톱 OAuth 404 진짜 원인=잔류 PWA 서비스워커: WebView2 프로필에 남은 옛 SW가 github.io 교차출처 fetch+스테일 캐시로 404 유발. → Tauri에서는 SW 등록 금지+기존 SW/캐시 제거. r61 devtools/진단줄 유지) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -16806,7 +16806,26 @@ ${intrLog}
         window.onload = () => {
             // [v22 PWA] Service Worker 등록 — sw.js가 같은 디렉토리에 있을 때만 작동
             // file:// 프로토콜에서는 자동으로 비활성화 (https 또는 localhost 필요)
-            if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+            // [r62] Tauri 데스크톱에서는 SW가 유해함:
+            //   - WebView2 프로필에 SW 등록이 영구 잔류(재빌드해도 남음) → 옛 index.html 캐시 서빙(업데이트 무효화)
+            //   - 옛 SW가 github.io 절대경로를 교차출처 fetch → 404 + OAuth 흐름 방해
+            //   → 등록하지 않고, 기존 SW/캐시를 적극 제거.
+            if (IS_TAURI) {
+                try {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(function(regs){
+                            regs.forEach(function(r){ try { r.unregister(); } catch(e){} });
+                            if (regs.length) console.log('[PWA] 데스크톱: 기존 Service Worker', regs.length, '개 해제');
+                        }).catch(function(){});
+                    }
+                    if (window.caches && caches.keys) {
+                        caches.keys().then(function(keys){
+                            keys.forEach(function(k){ try { caches.delete(k); } catch(e){} });
+                            if (keys.length) console.log('[PWA] 데스크톱: 캐시', keys.length, '개 삭제');
+                        }).catch(function(){});
+                    }
+                } catch (e) {}
+            } else if ('serviceWorker' in navigator && location.protocol !== 'file:') {
                 navigator.serviceWorker.register('./sw.js').then(function(reg) {
                     console.log('[PWA] Service Worker 등록됨:', reg.scope);
                 }).catch(function(err) {
