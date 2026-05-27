@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r36 (r35 + 트리너비 고정버그(flex:1) 수정·제목 페이드 잘릴때만·코멘트 스크롤동기화(미연결 수정)·HTML임베드 전체화면 버튼) -->
+<!-- BUILD: 2026-05-27 r37 (r36 + 트리너비 200px·ul 좌측패딩(40px) 제거(빈공간)·HTML임베드 폭변경시 재로드(좁게굳는 문제)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -402,7 +402,9 @@
         #toast-container { z-index: 100001 !important; pointer-events: none; }
 
         /* --- 계층형 Wiki Docs Editor CSS --- */
-        .tree-node { padding-left: 18px; list-style-type: none; border-left: 1px dashed #cdc8ba; margin-left: 6px; }
+        /* [r37] ul 기본 좌측 패딩(~40px) 제거 — 문서명 좌측 빈 공간 원인 */
+        .doc-tree-list { list-style: none; padding-left: 0; margin: 0; }
+        .tree-node { padding-left: 14px; list-style-type: none; border-left: 1px dashed #cdc8ba; margin-left: 6px; }
         .tree-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; color: #3b3934; margin-bottom: 2px; border: 1px solid transparent; }
         .tree-item:hover { background-color: #f4f1e9; }
         .tree-item.active { background-color: #f3e6df; color: #9a6a4b; font-weight: bold; border-color: #e0c4b3; }
@@ -3295,7 +3297,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </button>
                 </div>
 
-                <div id="doc-sidebar" class="bg-white border-r border-gray-100 flex flex-col flex-shrink-0 transition-all" style="width:158px;min-width:108px;flex:0 0 auto;">
+                <div id="doc-sidebar" class="bg-white border-r border-gray-100 flex flex-col flex-shrink-0 transition-all" style="width:200px;min-width:130px;flex:0 0 auto;">
                     <!-- 문서 보관함 헤더 (프로젝트 변경 지원) -->
                     <div class="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl flex justify-between items-center">
                         <div class="cursor-pointer hover:bg-gray-200 px-2 py-1 -ml-2 rounded flex items-center gap-1 transition-colors" onclick="openProjectModal()" title="프로젝트 변경">
@@ -7842,6 +7844,18 @@ return data;
                 body.appendChild(iframe);
                 wrap.appendChild(head); wrap.appendChild(body);
                 mount.parentNode.replaceChild(wrap, mount);
+                // [r37] 좁은 폭(소스모드/숨김 상태)에서 로드되면 콘텐츠가 모바일 레이아웃으로 굳음 → 폭이 바뀌면 재로드해 데스크톱 폭으로 재계산
+                if (window.ResizeObserver) {
+                    iframe._tdaLoadedW = body.clientWidth || 0;
+                    var _ro = new ResizeObserver(function () {
+                        clearTimeout(iframe._tdaRoT);
+                        iframe._tdaRoT = setTimeout(function () {
+                            var w = body.clientWidth;
+                            if (w > 0 && Math.abs(w - (iframe._tdaLoadedW || 0)) > 40) { iframe._tdaLoadedW = w; iframe.srcdoc = _tdaEmbedSrcdoc(em.html); }
+                        }, 280);
+                    });
+                    try { _ro.observe(body); } catch (e) {}
+                }
             });
         }
         // [r36] HTML 임베드 전체화면 보기 — 전체 창 너비 iframe(임베드가 좁게/모바일로 렌더되는 문제 회피)
