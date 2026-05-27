@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r53 (r52 + 산출물/첨부 피커 클릭 무반응 수정: JSON.stringify 라벨이 이중따옴표 onclick 속성 깨뜨리던 문제 → id만 전달+핸들러 조회) -->
+<!-- BUILD: 2026-05-27 r54 (r53 + 코멘트 N번째 occurrence 정확앵커·체크리스트 항목 개별삭제·산출물/첨부 공용 리치피커(폴더/시점/작성자/버전/스프린트 힌트+검색+즉석 새 문서/흐름 생성)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2255,6 +2255,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .spv-cl-additem { font-size: 12px; color: #c96442; background: none; border: 1px dashed var(--c-border); border-radius: 7px; padding: 4px 8px; margin-top: 6px; cursor: pointer; width: 100%; }
         .gip-l { display: block; font-size: 12px; font-weight: 600; color: var(--c-text2); margin-bottom: 3px; }
         .cl-deliv-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 13px; color: var(--c-text); border-bottom: 1px solid var(--c-border); }
+        .spv-cli-del { border: none; background: none; color: var(--c-text3); cursor: pointer; font-size: 12px; flex-shrink: 0; }
+        .spv-cli-del:hover { color: var(--st-danger); }
+        /* [r54 #2/#4] 공용 참조 선택기 */
+        .rp-create { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+        .rp-create-btn { font-size: 12px; padding: 5px 10px; border-radius: 7px; border: 1px dashed #c96442; background: var(--c-accent-soft); color: #c96442; cursor: pointer; font-weight: 600; }
+        .rp-list { max-height: 52vh; overflow-y: auto; margin-top: 8px; border: 1px solid var(--c-border); border-radius: 8px; }
+        .rp-item { padding: 8px 10px; border-bottom: 1px solid var(--c-border); cursor: pointer; }
+        .rp-item:last-child { border-bottom: none; }
+        .rp-item:hover { background: var(--c-accent-soft); }
+        .rp-title { font-size: 13px; font-weight: 600; color: var(--c-text); }
+        .rp-sub { font-size: 11px; color: var(--c-text3); margin-top: 2px; word-break: break-word; }
+        .rp-empty { padding: 16px 12px; font-size: 12px; color: var(--c-text3); text-align: center; }
         #sprint-view.hidden { display: none; }
         .spv-wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
         .spv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -8994,7 +9006,8 @@ addEventListener("resize",sendPos);
             // 어노테이션
             if(activeDocId && wikiAnnotations[activeDocId] && wikiAnnotations[activeDocId].length > 0) {
                 wikiAnnotations[activeDocId].forEach(function(ann) {
-                    highlightTextInContainer(preview, ann.quote, ann.color, ann.id);
+                    if (ann.anchorType && ann.anchorType !== 'text') { if (typeof _applyMediaAnchor === 'function') _applyMediaAnchor(preview, ann); }
+                    else highlightTextInContainer(preview, ann.quote, ann.color, ann.id, ann.occ || 0); // [r54] occurrence 앵커
                 });
             }
             applyAllHighlights();
@@ -9961,6 +9974,67 @@ addEventListener("resize",sendPos);
         function _spvSaveSprintNoRender(s) { if (typeof saveData === 'function') saveData(); if (typeof dbUpsertSprint === 'function') dbUpsertSprint(s); }
 
         // ============================================================
+        // [r54 #2/#4] 공용 참조 선택기 — 메타(폴더/시점/작성자/버전/스프린트/담당) 힌트 + 검색 + 새로 만들기
+        // ============================================================
+        function _docFolderPath(d) {
+            var parts = [], cur = d, guard = 0;
+            while (cur && cur.parentId && guard++ < 20) { var par = (currentData.docs || []).find(function (x) { return x.id === cur.parentId; }); if (!par) break; parts.unshift(par.title || '폴더'); cur = par; }
+            return parts.length ? parts.join(' / ') : '루트';
+        }
+        function _docAuthor(d) { var m = d.meta || {}; if (Array.isArray(m.history) && m.history[0] && m.history[0].byName) return m.history[0].byName; if (m.owner && typeof getMemberName === 'function') return getMemberName(m.owner); return '—'; }
+        function _fmtShortDate(ts) { if (!ts) return '—'; var dt = new Date(typeof ts === 'number' ? ts : Date.parse(ts)); if (isNaN(dt.getTime())) return '—'; return (dt.getFullYear() % 100) + '.' + (dt.getMonth() + 1) + '.' + dt.getDate(); }
+        function _docRefSub(d) {
+            var kindLbl = d.kind === 'canon' ? '🎮위키' : (d.kind === 'diagram' ? '📈흐름' : '📄문서');
+            var ver = (d.meta && d.meta.version) ? (' · v' + d.meta.version) : '';
+            var spr = (d.meta && d.meta.sprintId) ? (' · 🏃' + (((currentData.sprints || []).find(function (s) { return s.id === d.meta.sprintId; }) || {}).weekLabel || '스프린트')) : '';
+            return kindLbl + ' · 📁' + _sprintEsc(_docFolderPath(d)) + ' · 📅' + _fmtShortDate(d.updatedAt || d.createdAt) + ' · 👤' + _sprintEsc(_docAuthor(d)) + ver + spr;
+        }
+        function _taskRefSub(t) {
+            var spr = t.sprintId ? ('🏃' + (((currentData.sprints || []).find(function (s) { return s.id === t.sprintId; }) || {}).weekLabel || '스프린트')) : '🏃미지정';
+            var cat = (((currentData.categories || []).find(function (c) { return c.id === t.catId; }) || {}).title) || '—';
+            var asg = (typeof getTaskAssigneeLabel === 'function') ? getTaskAssigneeLabel(t) : (t.dev || '미지정');
+            var st = (typeof getStatusInfo === 'function') ? (getStatusInfo(t.status).text || t.status || '') : (t.status || '');
+            return spr + ' · 🗂' + _sprintEsc(cat) + ' · 👤' + _sprintEsc(asg) + ' · ' + _sprintEsc(st);
+        }
+        function _fileRefSub(f) { var sz = f.size ? ((f.size < 1048576) ? (Math.round(f.size / 1024) + 'KB') : ((f.size / 1048576).toFixed(1) + 'MB')) : ''; return '📁' + _sprintEsc(f.folder || '루트') + ' · 📅' + _fmtShortDate(f.created_at || f.createdAt) + ' · 👤' + _sprintEsc(f.uploaded_by_name || f.uploadedByName || '—') + (sz ? (' · ' + sz) : ''); }
+        function _spvRefPool(type) {
+            if (type === 'task') return (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).map(function (t) { return { id: t.id, label: (t.title || '카드'), sub: _taskRefSub(t) }; });
+            if (type === 'file') { var fs = (window.driveState && driveState.files) ? driveState.files.filter(function (f) { return f.mime !== '__folder__' && !f.deleted; }) : []; return fs.map(function (f) { return { id: f.id, label: (f.name || '파일'), sub: _fileRefSub(f) }; }); }
+            var kinds = type === 'docall' ? ['wiki', 'canon', 'diagram'] : [type === 'graph' ? 'diagram' : (type === 'wiki' ? 'canon' : 'wiki')];
+            return (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder) && kinds.indexOf(d.kind || 'wiki') >= 0; }).map(function (d) { return { id: d.id, label: ((d.emoji || '📄') + ' ' + (d.title || '제목없음')), sub: _docRefSub(d) }; });
+        }
+        var _spvRefOnPick = null;
+        function _spvRefPicker(opts) {
+            var pool = _spvRefPool(opts.type);
+            _spvRefOnPick = opts.onPick;
+            var createBtns = '';
+            if (opts.allowCreate) {
+                var btns = [];
+                if (opts.type === 'docall') { btns = [['wiki', '새 문서'], ['canon', '새 게임위키'], ['diagram', '새 흐름']]; }
+                else if (opts.type === 'graph') btns = [['diagram', '새 흐름']];
+                else if (opts.type === 'wiki') btns = [['canon', '새 게임위키']];
+                else if (opts.type === 'doc') btns = [['wiki', '새 문서']];
+                createBtns = btns.map(function (b) { return '<button class="rp-create-btn" onclick="_spvRefCreate(\'' + b[0] + '\')">➕ ' + b[1] + '</button>'; }).join('');
+            }
+            var list = pool.map(function (p) { return '<div class="rp-item" data-l="' + _sprintEsc((p.label + ' ' + p.sub).toLowerCase()) + '" onclick="_spvRefPicked(\'' + p.id + '\')"><div class="rp-title">' + _sprintEsc(p.label) + '</div><div class="rp-sub">' + p.sub + '</div></div>'; }).join('');
+            _openSimpleModal(opts.title || '선택', '<input class="gip-in" placeholder="검색 (제목·폴더·담당자·날짜…)" oninput="_spvRefFilter(this.value)">' + (createBtns ? ('<div class="rp-create">' + createBtns + '</div>') : '') + '<div id="rp-list" class="rp-list">' + (list || '<div class="rp-empty">항목이 없습니다.' + (opts.allowCreate ? ' 위에서 새로 만들 수 있습니다.' : '') + '</div>') + '</div>');
+        }
+        function _spvRefFilter(q) { q = (q || '').toLowerCase(); var box = document.getElementById('rp-list'); if (!box) return; box.querySelectorAll('.rp-item').forEach(function (el) { el.style.display = (!q || (el.getAttribute('data-l') || '').indexOf(q) >= 0) ? '' : 'none'; }); }
+        function _spvRefPicked(id) { var cb = _spvRefOnPick; _closeSimpleModal(); if (cb) cb(id); }
+        async function _spvRefCreate(kind) {
+            var label = kind === 'diagram' ? '흐름/그래프' : (kind === 'canon' ? '게임위키' : '문서');
+            var title = await uiPrompt({ title: '새 ' + label, label: label + ' 제목', value: '새 ' + label }); if (title === null) return;
+            var meta = kind === 'diagram' ? { scope: 'project', diagram: { mode: 'linear', orientation: 'horizontal', points: [], nodes: [], edges: [], memos: [] }, history: [{ action: 'create', by: (currentUser ? currentUser.id : null), byName: myNickname, at: new Date().toISOString() }] } : (kind === 'canon' ? { version: 1, status: 'draft', versionHistory: [] } : {});
+            var d = { id: (kind === 'diagram' && typeof gphUid === 'function' ? gphUid('doc') : 'doc_' + Date.now()), projectId: activeProjectId, parentId: null, title: (title.trim() || ('새 ' + label)), emoji: (kind === 'diagram' ? '📈' : (kind === 'canon' ? '📜' : '📄')), kind: kind, content: '', meta: meta, createdAt: Date.now(), updatedAt: Date.now() };
+            if (!Array.isArray(currentData.docs)) currentData.docs = [];
+            currentData.docs.push(d);
+            if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+            if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d);
+            if (typeof logActivity === 'function') logActivity(kind === 'diagram' ? 'flow' : (kind === 'canon' ? 'wiki' : 'doc'), 'create', { targetId: d.id, targetLabel: d.title, detail: '산출물/첨부용 즉석 생성' });
+            var cb = _spvRefOnPick; _closeSimpleModal(); if (cb) cb(d.id);
+            if (typeof showToast === 'function') showToast('✅ "' + d.title + '" 생성됨', 'success');
+        }
+        // ============================================================
         // [r52 #6] 스프린트 첨부 (문서·위키·흐름·드라이브 파일)
         // ============================================================
         function _sprintAttachSection(s) {
@@ -9974,18 +10048,14 @@ addEventListener("resize",sendPos);
             return '<div class="spv-atts"><div class="spv-atts-h">📎 첨부 <button class="spv-flow-btn" onclick="event.stopPropagation();_sprintAttachDoc(event,\'' + s.id + '\')">+ 문서·위키·흐름</button><button class="spv-flow-btn" onclick="event.stopPropagation();_sprintAttachFile(\'' + s.id + '\')">+ 파일</button></div><div class="spv-att-list">' + chips + '</div></div>';
         }
         function _sprintAttachDoc(e, sid) {
-            var docs = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder) && ['wiki', 'canon', 'diagram'].indexOf(d.kind || 'wiki') >= 0; });
-            if (!docs.length) { showToast('첨부할 문서가 없습니다.', 'info'); return; }
-            var grp = [['wiki', '📄 문서'], ['canon', '🎮 게임위키'], ['diagram', '📈 흐름·그래프']];
-            var html = grp.map(function (g) { var list = docs.filter(function (d) { return (d.kind || 'wiki') === g[0]; }); if (!list.length) return ''; return '<div class="ctx-menu-sep"></div><div style="padding:3px 12px;font-size:10px;color:var(--c-text3);">' + g[1] + '</div>' + list.map(function (d) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_sprintAddAttachmentDoc(\'' + sid + '\',\'' + d.id + '\')">' + _sprintEsc((d.emoji || '📄') + ' ' + (d.title || '제목없음')) + '</div>'; }).join(''); }).join('');
-            _openCardMenu({ clientX: e ? e.clientX : 200, clientY: e ? e.clientY : 200, stopPropagation: function () {} }, html);
+            // [r54] 메타 힌트 + 검색 + 즉석 생성 가능한 공용 피커
+            _spvRefPicker({ title: '문서·위키·흐름 첨부', type: 'docall', allowCreate: true, onPick: function (id) { _sprintAddAttachmentDoc(sid, id); } });
         }
         async function _sprintAttachFile(sid) {
-            if (typeof dbLoadDriveFiles === 'function' && (!driveState || !driveState.files || !driveState.files.length)) { var r = await dbLoadDriveFiles(); if (r && !r.error && window.driveState) driveState.files = r.files; }
+            if (typeof dbLoadDriveFiles === 'function' && (!window.driveState || !driveState.files || !driveState.files.length)) { var r = await dbLoadDriveFiles(); if (r && !r.error && window.driveState) driveState.files = r.files; }
             var files = (window.driveState && driveState.files) ? driveState.files.filter(function (f) { return f.mime !== '__folder__' && !f.deleted; }) : [];
             if (!files.length) { showToast('드라이브에 파일이 없습니다. 공용 드라이브 탭에서 업로드 후 첨부하세요.', 'info'); return; }
-            window._spvFilePickPool = files; // [r53] 핸들러에서 id로 조회 (onclick에 객체/따옴표 삽입 회피)
-            _openSimpleModal('📎 파일 첨부', '<input class="gip-in" placeholder="검색" oninput="_clDelivFilter(this.value)"><div id="cl-deliv-pick" class="gip-files" style="max-height:46vh;margin-top:8px;">' + files.map(function (f) { return '<div class="gip-file" data-l="' + _sprintEsc((f.name || '').toLowerCase()) + '" onclick="_sprintAddAttachmentFile(\'' + sid + '\',\'' + (f.id || '') + '\')">' + _sprintEsc((f.name || '파일')) + '</div>'; }).join('') + '</div>');
+            _spvRefPicker({ title: '파일 첨부', type: 'file', onPick: function (id) { _sprintAddAttachmentFile(sid, id); } });
         }
         function _sprintAddAttachment(sid, att) {
             var s = _spvSprint(sid); if (!s) return; if (!Array.isArray(s.attachments)) s.attachments = [];
@@ -10044,7 +10114,8 @@ addEventListener("resize",sendPos);
                 + '<input type="checkbox" class="spv-cli-cb"' + (done ? ' checked' : '') + ' onclick="event.stopPropagation()" onchange="_sprintToggleChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\',this.checked)">'
                 + '<div class="spv-cli-main"><div class="spv-cli-title' + (done ? ' done' : '') + '" onclick="event.stopPropagation();_sprintEditChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\')">' + _sprintEsc(it.title || '(제목 없음)') + (asg ? (' <span class="spv-cli-asg">👤' + _sprintEsc(asg) + '</span>') : '') + '</div>'
                 + (delivs ? ('<div class="spv-cli-delivs">' + delivs + '</div>') : '') + '</div>'
-                + '<button class="spv-cli-edit" onclick="event.stopPropagation();_sprintEditChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\')" title="항목 편집">✏️</button></div>';
+                + '<button class="spv-cli-edit" onclick="event.stopPropagation();_sprintEditChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\')" title="항목 편집">✏️</button>'
+                + '<button class="spv-cli-del" onclick="event.stopPropagation();_sprintDeleteChecklistItem(\'' + s.id + '\',\'' + cl.id + '\',\'' + it.id + '\')" title="항목 삭제">🗑</button></div>';
         }
         function _sprintFindCl(sid, clid) { var s = _spvSprint(sid); if (!s || !Array.isArray(s.checklists)) return null; return s.checklists.find(function (c) { return c.id === clid; }); }
         function _sprintFindItem(sid, clid, itid) { var cl = _sprintFindCl(sid, clid); if (!cl) return null; return (cl.items || []).find(function (i) { return i.id === itid; }); }
@@ -10063,7 +10134,7 @@ addEventListener("resize",sendPos);
         function _sprintSaveChecklistMeta(sid, clid) { var cl = _sprintFindCl(sid, clid); if (!cl) return; var t = document.getElementById('cl-meta-title'), d = document.getElementById('cl-meta-desc'); if (t) cl.title = t.value.trim() || '체크리스트'; if (d) cl.descMd = d.value; _closeSimpleModal(); _spvSaveSprint(_spvSprint(sid)); }
         function _sprintAddChecklistItem(sid, clid) { var cl = _sprintFindCl(sid, clid); if (!cl) return; if (!Array.isArray(cl.items)) cl.items = []; var it = { id: _spvUid('it'), title: '새 항목', contentMd: '', assigneeId: null, done: false, deliverables: [] }; cl.items.push(it); _spvSaveSprint(_spvSprint(sid)); setTimeout(function () { _sprintEditChecklistItem(sid, clid, it.id); }, 60); }
         function _sprintToggleChecklistItem(sid, clid, itid, checked) { var it = _sprintFindItem(sid, clid, itid); if (!it) return; it.done = !!checked; _spvSaveSprint(_spvSprint(sid)); }
-        async function _sprintDeleteChecklistItem(sid, clid, itid) { var cl = _sprintFindCl(sid, clid); if (!cl) return; cl.items = (cl.items || []).filter(function (i) { return i.id !== itid; }); _spvSaveSprint(_spvSprint(sid)); }
+        async function _sprintDeleteChecklistItem(sid, clid, itid) { var cl = _sprintFindCl(sid, clid); if (!cl) return; var it = (cl.items || []).find(function (i) { return i.id === itid; }); if (!(await uiConfirm({ title: '항목 삭제', message: '"' + ((it && it.title) || '항목') + '"을(를) 삭제할까요?', confirmText: '삭제', danger: true }))) return; cl.items = (cl.items || []).filter(function (i) { return i.id !== itid; }); _spvSaveSprint(_spvSprint(sid)); }
         function _sprintOpenDeliv(refId, type) { if (!refId) return; if (type === 'git') { if (typeof switchView === 'function') switchView('git'); return; } if (type === 'task') { if (typeof navToDoc === 'function' && false) {} showToast('🗂 연결된 태스크', 'info'); return; } if (typeof navToDoc === 'function') navToDoc(refId); }
         // 항목 편집 모달 (제목·내용md·담당자·산출물)
         var _clCtx = null;
@@ -10086,15 +10157,21 @@ addEventListener("resize",sendPos);
             _openCardMenu({ clientX: e ? e.clientX : 300, clientY: e ? e.clientY : 300, stopPropagation: function () {} }, html);
         }
         async function _clPickDeliv(type) {
-            if (!_clCtx) return; var it = _sprintFindItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); if (!it) return; if (!Array.isArray(it.deliverables)) it.deliverables = [];
-            var add = function (refId, label) { it.deliverables.push({ id: _spvUid('dl'), type: type, refId: refId || null, label: label || _delivTypeLabel(type) }); var box = document.getElementById('cl-it-delivs'); if (box) box.innerHTML = _clRenderDelivs(it); };
-            if (type === 'git') { var lbl = await uiPrompt({ title: 'Git 산출물', label: '상태/내용 (예: PR #12 머지, main 빌드 통과)' }); if (lbl === null) return; add(null, lbl.trim() || 'Git'); return; }
-            var pool;
-            if (type === 'task') pool = (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).map(function (t) { return { id: t.id, label: t.title || '카드' }; });
-            else { var kindMap = { doc: 'wiki', wiki: 'canon', graph: 'diagram' }; pool = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder) && (d.kind || 'wiki') === kindMap[type]; }).map(function (d) { return { id: d.id, label: d.title || '문서' }; }); }
-            if (!pool.length) { showToast('선택할 ' + _delivTypeLabel(type) + ' 항목이 없습니다.', 'info'); return; }
-            window._clPendingDeliv = { type: type, add: add, pool: pool }; // [r53] pool 보관 → onclick엔 id만
-            _openSimpleModal('산출물 선택 — ' + _delivTypeLabel(type), '<input class="gip-in" placeholder="검색" oninput="_clDelivFilter(this.value)"><div id="cl-deliv-pick" class="gip-files" style="max-height:42vh;margin-top:8px;">' + pool.map(function (p) { return '<div class="gip-file" data-l="' + _sprintEsc((p.label || '').toLowerCase()) + '" onclick="_clDelivChosen(\'' + p.id + '\')">' + _sprintEsc(p.label) + '</div>'; }).join('') + '</div>');
+            if (!_clCtx) return;
+            var ctx = { sid: _clCtx.sid, clid: _clCtx.clid, itid: _clCtx.itid };
+            var add = function (refId, label) {
+                var it = _sprintFindItem(ctx.sid, ctx.clid, ctx.itid); if (!it) return;
+                if (!Array.isArray(it.deliverables)) it.deliverables = [];
+                it.deliverables.push({ id: _spvUid('dl'), type: type, refId: refId || null, label: label || _delivTypeLabel(type) });
+                _spvSaveSprintNoRender(_spvSprint(ctx.sid));
+                _sprintEditChecklistItem(ctx.sid, ctx.clid, ctx.itid); // 항목 편집 모달 재오픈(산출물 반영)
+            };
+            if (type === 'git') { var lbl = await uiPrompt({ title: 'Git 산출물', label: '상태/내용 (예: PR #12 머지, main 빌드 통과)' }); if (lbl === null) { _sprintEditChecklistItem(ctx.sid, ctx.clid, ctx.itid); return; } add(null, lbl.trim() || 'Git'); return; }
+            // [r54] 메타 힌트·검색·즉석 생성 가능한 공용 피커 (doc/wiki/graph=새로 만들기 허용)
+            _spvRefPicker({ title: '산출물 선택 — ' + _delivTypeLabel(type), type: type, allowCreate: (type !== 'task'), onPick: function (id) {
+                var label = (type === 'task') ? ((((currentData.tasks || []).find(function (t) { return t.id === id; }) || {}).title) || '카드') : ((((currentData.docs || []).find(function (d) { return d.id === id; }) || {}).title) || '문서');
+                add(id, label);
+            } });
         }
         function _clDelivFilter(q) { q = (q || '').toLowerCase(); var box = document.getElementById('cl-deliv-pick'); if (!box) return; box.querySelectorAll('.gip-file').forEach(function (el) { el.style.display = (!q || (el.getAttribute('data-l') || '').indexOf(q) >= 0) ? 'block' : 'none'; }); }
         function _clDelivChosen(refId) { var pd = window._clPendingDeliv; var item = pd && pd.pool && pd.pool.find(function (p) { return p.id === refId; }); var label = item ? item.label : ''; _closeSimpleModal(); if (pd && pd.add) pd.add(refId, label); window._clPendingDeliv = null; if (_clCtx) _sprintEditChecklistItem(_clCtx.sid, _clCtx.clid, _clCtx.itid); }
@@ -12824,6 +12901,17 @@ ${intrLog}
             showToast('코멘트를 추가했습니다. 미리보기에서 확인하세요.', 'info');
         }
 
+        // [r54] 선택한 텍스트가 컨테이너 내 몇 번째(0-based) occurrence인지 — 선택 시작 앞쪽의 동일 텍스트 개수
+        function _annSelectionOccurrence(container, sel, txt) {
+            try {
+                var rng = sel.getRangeAt(0);
+                var pre = document.createRange();
+                pre.selectNodeContents(container);
+                pre.setEnd(rng.startContainer, rng.startOffset);
+                var prefix = pre.toString();
+                return prefix.split(txt).length - 1;
+            } catch (e) { return 0; }
+        }
         function initWikiComments() {
             const preview = document.getElementById('doc-preview-container');
             if(!preview) return;
@@ -12843,7 +12931,7 @@ ${intrLog}
                 const txt = sel ? sel.toString().trim() : '';
                 if(txt.length > 0) {
                     e.preventDefault();
-                    showAnnotationContextMenu(e.clientX, e.clientY, txt);
+                    showAnnotationContextMenu(e.clientX, e.clientY, txt, { type: 'text', occ: _annSelectionOccurrence(preview, sel, txt) });
                 }
             });
             // Mobile: long-press (500ms) to trigger comment
@@ -12854,7 +12942,7 @@ ${intrLog}
                     const txt = sel ? sel.toString().trim() : '';
                     if(txt.length > 0) {
                         const t = e.touches[0];
-                        showAnnotationContextMenu(t.clientX, t.clientY, txt);
+                        showAnnotationContextMenu(t.clientX, t.clientY, txt, { type: 'text', occ: _annSelectionOccurrence(preview, sel, txt) });
                     }
                 }, 500);
             }, { passive: true });
@@ -12895,7 +12983,7 @@ ${intrLog}
                 annObj.anchorType = anchor.type;
                 if (anchor.type === 'embed') { annObj.embedId = anchor.embedId || ''; }
                 else { annObj.anchorSrc = anchor.src || ''; annObj.anchorIndex = (typeof anchor.index === 'number' ? anchor.index : -1); }
-            }
+            } else if (anchor && typeof anchor.occ === 'number') { annObj.occ = anchor.occ; } // [r54] 텍스트 N번째 occurrence 앵커
             wikiAnnotations[activeDocId].push(annObj);
             _annPersist(activeDocId); // doc.meta.annotations에 저장 → 동기화
             applyAnnotationHighlights();
@@ -12921,7 +13009,7 @@ ${intrLog}
                     const annotations = wikiAnnotations[activeDocId] || [];
                     annotations.forEach(ann => {
                         if (ann.anchorType && ann.anchorType !== 'text') { _applyMediaAnchor(preview, ann); }
-                        else { highlightTextInContainer(preview, ann.quote, ann.color, ann.id); }
+                        else { highlightTextInContainer(preview, ann.quote, ann.color, ann.id, ann.occ || 0); }
                     });
                     // [r34] 마크가 적용된 뒤 카드 위치 재계산 (안 그러면 첫 렌더에 상단에 몰림)
                     renderAnnotationsPanelPositioned();
@@ -12929,35 +13017,42 @@ ${intrLog}
             });
         }
 
-        function highlightTextInContainer(container, text, color, annId) {
+        function highlightTextInContainer(container, text, color, annId, occ) {
             if(!text || text.length === 0) return;
+            occ = occ || 0; // [r54] 동일 텍스트가 여러 번 있을 때 선택한 N번째(0-based) occurrence에 정확히 앵커
             const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
             const nodes = [];
             let node;
             while((node = walker.nextNode())) nodes.push(node);
-            
+            var seen = 0;
             for(let i = 0; i < nodes.length; i++) {
                 const n = nodes[i];
-                const idx = n.textContent.indexOf(text);
-                if(idx === -1) continue;
-                const before = n.textContent.substring(0, idx);
-                const after = n.textContent.substring(idx + text.length);
-                const mark = document.createElement('mark');
-                mark.style.background = color;
-                mark.style.padding = '1px 0';
-                mark.style.borderRadius = '2px';
-                mark.style.cursor = 'pointer';
-                mark.dataset.annotation = annId;
-                mark.textContent = text;
-                mark.title = '클릭하여 코멘트 보기';
-                mark.addEventListener('click', (e) => { e.stopPropagation(); toggleAnnotationCard(annId); });
-                const frag = document.createDocumentFragment();
-                if(before) frag.appendChild(document.createTextNode(before));
-                frag.appendChild(mark);
-                if(after) frag.appendChild(document.createTextNode(after));
-                n.parentNode.replaceChild(frag, n);
-                break; // Only highlight first occurrence
+                var hay = n.textContent, from = 0, idx;
+                while((idx = hay.indexOf(text, from)) !== -1) {
+                    if(seen === occ) {
+                        const before = hay.substring(0, idx);
+                        const after = hay.substring(idx + text.length);
+                        const mark = document.createElement('mark');
+                        mark.style.background = color;
+                        mark.style.padding = '1px 0';
+                        mark.style.borderRadius = '2px';
+                        mark.style.cursor = 'pointer';
+                        mark.dataset.annotation = annId;
+                        mark.textContent = text;
+                        mark.title = '클릭하여 코멘트 보기';
+                        mark.addEventListener('click', (e) => { e.stopPropagation(); toggleAnnotationCard(annId); });
+                        const frag = document.createDocumentFragment();
+                        if(before) frag.appendChild(document.createTextNode(before));
+                        frag.appendChild(mark);
+                        if(after) frag.appendChild(document.createTextNode(after));
+                        n.parentNode.replaceChild(frag, n);
+                        return;
+                    }
+                    seen++; from = idx + text.length;
+                }
             }
+            // occ번째를 못 찾으면(내용 변경 등) 첫 occurrence로 폴백
+            if(occ > 0) highlightTextInContainer(container, text, color, annId, 0);
         }
 
         // [r47] 이미지/SVG/임베드 등 비텍스트 요소에 코멘트 앵커 부착 (data-annotation + 외곽선 + 클릭→코멘트 열기)
