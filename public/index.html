@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r42 (r41 + 버킷 인식 listBuckets 기반(getBucket 권한문제 회피)+설정SQL에 buckets_read 정책 추가 → 서버상태 버킷 정확표시) -->
+<!-- BUILD: 2026-05-27 r43 (r42 + 드라이브 폴더체계(생성·탐색·이동·브레드크럼)+우클릭 컨텍스트메뉴+상세보기(소유자·업로드일시·기록)+임시뷰어(이미지·PDF·텍스트·영상·음성·HTML)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3262,6 +3262,38 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .drv-btn { background:var(--c-card); border:1px solid var(--c-border); color:var(--c-text2); border-radius:7px; padding:4px 9px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
         .drv-btn:hover { background:var(--c-accent); color:#fff; border-color:var(--c-accent); }
         .drv-empty { text-align:center; color:var(--c-text3); padding:40px 12px; font-size:13px; line-height:1.7; }
+        /* [r43] 드라이브 폴더/브레드크럼/컨텍스트/상세/뷰어 */
+        .drv-breadcrumb { display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:12.5px; min-height:18px; }
+        .drv-crumb { color:var(--c-accent); font-weight:700; cursor:pointer; padding:1px 4px; border-radius:5px; }
+        .drv-crumb:hover { background:var(--c-accent-soft); }
+        .drv-crumb-sep { color:var(--c-text3); }
+        .drv-row.drv-folder { cursor:pointer; background:var(--c-card); }
+        .drv-row.drv-folder:hover { background:var(--c-accent-soft); }
+        .drv-ctx { position:fixed; z-index:100070; background:var(--c-card); border:1px solid var(--c-border); border-radius:10px; box-shadow:0 10px 36px rgba(0,0,0,0.3); padding:5px; min-width:184px; }
+        .drv-ctx-item { padding:8px 12px; font-size:13px; color:var(--c-text); border-radius:7px; cursor:pointer; white-space:nowrap; }
+        .drv-ctx-item:hover { background:var(--c-accent-soft); color:var(--c-accent); }
+        .drv-modal-ov { position:fixed; inset:0; z-index:100065; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); padding:20px; }
+        .drv-modal { width:460px; max-width:100%; max-height:84vh; overflow-y:auto; background:var(--c-card); border:1px solid var(--c-border); border-radius:14px; box-shadow:0 16px 48px rgba(0,0,0,0.32); }
+        .drv-modal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 16px; border-bottom:1px solid var(--c-border); font-size:14px; font-weight:800; color:var(--c-text); position:sticky; top:0; background:var(--c-card); }
+        .drv-modal-x { border:none; background:none; color:var(--c-text3); font-size:17px; cursor:pointer; line-height:1; }
+        .drv-modal-x:hover { color:#d9534f; }
+        .drv-modal-body { padding:14px 16px; }
+        .drv-modal-foot { padding:10px 16px 14px; display:flex; justify-content:flex-end; }
+        .drv-d-rows { display:flex; flex-direction:column; gap:5px; }
+        .drv-d-row { display:flex; gap:10px; font-size:12.5px; }
+        .drv-d-k { color:var(--c-text3); min-width:72px; flex-shrink:0; }
+        .drv-d-v { color:var(--c-text); }
+        .drv-d-sec { font-size:12px; font-weight:800; color:var(--c-text2); margin:12px 0 5px; }
+        .drv-d-hist { font-size:11.5px; color:var(--c-text2); padding:2px 0; }
+        .drv-d-link { display:inline-block; font-size:11px; background:var(--c-accent-soft); color:var(--c-accent); border-radius:6px; padding:2px 7px; margin:2px 3px 2px 0; }
+        .drv-viewer { position:fixed; inset:0; z-index:100066; display:flex; flex-direction:column; background:rgba(15,14,13,0.92); }
+        .drv-viewer-bar { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:9px 16px; background:var(--c-paper); border-bottom:1px solid var(--c-border); }
+        .drv-viewer-name { font-size:13px; font-weight:700; color:var(--c-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .drv-viewer-close { padding:5px 12px; border:1px solid var(--c-border); border-radius:8px; background:var(--c-card); color:var(--c-text); font-size:12px; font-weight:700; cursor:pointer; }
+        .drv-viewer-close:hover { background:var(--c-accent-soft); color:var(--c-accent); }
+        .drv-viewer-body { flex:1 1 auto; min-height:0; overflow:auto; padding:16px; display:flex; }
+        .drv-viewer-body > * { margin:auto; }
+        .drv-viewer-text { width:100%; max-width:900px; margin:0 auto; white-space:pre-wrap; word-break:break-word; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; line-height:1.55; color:var(--c-text); background:var(--c-paper); border:1px solid var(--c-border); border-radius:10px; padding:16px; }
         .status-body { display:flex; flex-direction:column; gap:12px; overflow-y:auto; min-height:0; flex:1; }
         .st-card { border:1px solid var(--c-border); border-radius:12px; background:var(--c-paper); padding:14px 16px; }
         .st-card h3 { font-size:13px; font-weight:800; color:var(--c-text); margin:0 0 9px; display:flex; align-items:center; gap:7px; }
@@ -3280,12 +3312,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <div class="drv-sub">팀 공용 파일 저장소(Supabase Storage). 업로드한 파일은 소유자·업로드 기록과 함께 보관되고, 문서 작성 중 <b>삽입</b>하거나 이미 올린 파일을 <b>재사용</b>할 수 있어요.</div>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                        <button class="drv-upload" style="background:var(--c-card);color:var(--c-text);border:1px solid var(--c-border);" onclick="driveMkFolder()">📁 새 폴더</button>
                         <input type="file" id="drv-file-input" multiple style="display:none;" onchange="driveOnPick(event)">
                         <button class="drv-upload" onclick="document.getElementById('drv-file-input').click()">⬆ 업로드</button>
                     </div>
                 </div>
+                <div id="drv-breadcrumb" class="drv-breadcrumb"></div>
                 <div class="drv-toolbar">
-                    <input id="drv-search" class="drv-search" placeholder="🔍 파일 검색" oninput="driveState.q=this.value; renderDriveList();">
+                    <input id="drv-search" class="drv-search" placeholder="🔍 파일 검색(전체 폴더)" oninput="driveState.q=this.value; renderDriveList();">
                     <span id="drv-usage" class="drv-usage"></span>
                 </div>
                 <div id="drv-list" class="drv-list"></div>
@@ -5041,7 +5075,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // ============================================================
         var DRIVE_BUCKET = 'drive';
         var DRIVE_QUOTA_BYTES = 5 * 1024 * 1024 * 1024; // 5GB 무료 티어
-        var driveState = { files: [], loaded: false, loading: false, q: '', bucketOk: null, tableOk: null };
+        var driveState = { files: [], loaded: false, loading: false, q: '', bucketOk: null, tableOk: null, cwd: '' };
+        function _driveIsFolder(m) { return m && m.mime === '__folder__'; }
+        function _driveFullPath(m) { return (m.folder ? m.folder + '/' : '') + m.name; }
         function _driveUid() { return 'df_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
         function _driveEsc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
         function _driveFmt(n) { n = n || 0; if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB'; return (n / 1073741824).toFixed(2) + ' GB'; }
@@ -5049,11 +5085,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function _driveIsImage(mime, name) { return /^image\//.test(mime || '') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(name || ''); }
         function _driveIcon(m) { var n = (m.name || '').toLowerCase(), mi = m.mime || ''; if (_driveIsImage(mi, n)) return '🖼️'; if (/pdf/.test(mi) || /\.pdf$/.test(n)) return '📕'; if (/\.(zip|rar|7z|tar|gz)$/.test(n)) return '🗜️'; if (/\.(html?|js|ts|css|json|py|java|c|cpp)$/.test(n)) return '📄'; if (/\.(mp4|webm|mov|avi)$/.test(n)) return '🎬'; if (/\.(mp3|wav|ogg|flac)$/.test(n)) return '🎵'; if (/\.(docx?|hwp)$/.test(n)) return '📝'; if (/\.(xlsx?|csv)$/.test(n)) return '📊'; return '📎'; }
 
-        function _mapDriveRow(d) { return { id: d.id, name: d.name, path: d.path, url: d.url, mime: d.mime || '', size: d.size || 0, projectId: d.project_id, uploadedBy: d.uploaded_by, uploadedByName: d.uploaded_by_name || '', createdAt: d.created_at ? new Date(d.created_at).getTime() : 0, updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : 0, history: d.history || [], linkedDocIds: d.linked_doc_ids || [], deleted: !!d.deleted }; }
+        function _mapDriveRow(d) { return { id: d.id, name: d.name, path: d.path, url: d.url, mime: d.mime || '', size: d.size || 0, projectId: d.project_id, uploadedBy: d.uploaded_by, uploadedByName: d.uploaded_by_name || '', createdAt: d.created_at ? new Date(d.created_at).getTime() : 0, updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : 0, history: d.history || [], linkedDocIds: d.linked_doc_ids || [], deleted: !!d.deleted, folder: d.folder || '' }; }
         async function dbUpsertDriveFile(m) {
             if (!supabaseClient) return { error: null };
-            var payload = { id: m.id, name: m.name, path: m.path, url: m.url, mime: m.mime, size: m.size, project_id: m.projectId, uploaded_by: m.uploadedBy, uploaded_by_name: m.uploadedByName, created_at: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(), updated_at: new Date().toISOString(), history: m.history || [], linked_doc_ids: m.linkedDocIds || [], deleted: !!m.deleted };
+            var payload = { id: m.id, name: m.name, path: m.path, url: m.url, mime: m.mime, size: m.size, project_id: m.projectId, uploaded_by: m.uploadedBy, uploaded_by_name: m.uploadedByName, created_at: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(), updated_at: new Date().toISOString(), history: m.history || [], linked_doc_ids: m.linkedDocIds || [], deleted: !!m.deleted, folder: m.folder || '' };
             var r = await supabaseClient.from('drive_files').upsert(payload);
+            // [r43] folder 컬럼 미생성 환경 보호: 그 필드만 빼고 재시도
+            if (r.error && /\bfolder\b/.test(r.error.message || '')) { delete payload.folder; r = await supabaseClient.from('drive_files').upsert(payload); if (!r.error) console.warn("[dbUpsertDriveFile] folder 컬럼 없음 — 폴더 제외 저장. SQL: alter table drive_files add column if not exists folder text default '';"); }
             if (r.error) { console.warn('[dbUpsertDriveFile]', r.error.message); }
             return { error: r.error };
         }
@@ -5078,7 +5116,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             driveState.bucketOk = true;
             var url = '';
             try { url = supabaseClient.storage.from(DRIVE_BUCKET).getPublicUrl(path).data.publicUrl; } catch (e) {}
-            var m = { id: id, name: file.name || 'file', path: path, url: url, mime: file.type || '', size: file.size || 0, projectId: activeProjectId, uploadedBy: currentUser.id, uploadedByName: myNickname || '', createdAt: Date.now(), updatedAt: Date.now(), history: [{ action: 'upload', userId: currentUser.id, userName: myNickname || '', at: Date.now() }], linkedDocIds: opts.docId ? [opts.docId] : [], deleted: false };
+            var m = { id: id, name: file.name || 'file', path: path, url: url, mime: file.type || '', size: file.size || 0, projectId: activeProjectId, uploadedBy: currentUser.id, uploadedByName: myNickname || '', createdAt: Date.now(), updatedAt: Date.now(), history: [{ action: 'upload', userId: currentUser.id, userName: myNickname || '', at: Date.now() }], linkedDocIds: opts.docId ? [opts.docId] : [], deleted: false, folder: (opts.folder != null ? opts.folder : (driveState.cwd || '')) };
             await dbUpsertDriveFile(m);
             driveState.files.unshift(m);
             return m;
@@ -5111,7 +5149,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
         async function driveDelete(id) {
             var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
-            if (m.uploadedBy && currentUser && m.uploadedBy !== currentUser.id) { showToast('본인이 올린 파일만 삭제할 수 있습니다.', 'alert'); return; }
+            if (m.uploadedBy && currentUser && m.uploadedBy !== currentUser.id) { showToast('본인이 올린 항목만 삭제할 수 있습니다.', 'alert'); return; }
+            if (_driveIsFolder(m)) {
+                var fp = _driveFullPath(m);
+                var hasChild = driveState.files.some(function (f) { return f.id !== id && (f.folder === fp || (f.folder || '').indexOf(fp + '/') === 0); });
+                if (hasChild) { showToast('폴더가 비어 있지 않습니다. 내부 항목을 먼저 옮기거나 삭제하세요.', 'alert'); return; }
+                var okF = await uiConfirm({ title: '폴더 삭제', message: "'" + m.name + "' 폴더를 삭제할까요?", confirmText: '삭제', danger: true });
+                if (!okF) return;
+                try { await supabaseClient.from('drive_files').update({ deleted: true, updated_at: new Date().toISOString() }).eq('id', id); } catch (e) {}
+                driveState.files = driveState.files.filter(function (f) { return f.id !== id; });
+                renderDriveList(); showToast('🗑 폴더 삭제', 'info'); return;
+            }
             var ok = await uiConfirm({ title: '파일 삭제', message: "'" + (m.name || '') + "' 을(를) 삭제할까요? 이 파일을 인용한 문서에서 링크가 깨질 수 있습니다.", confirmText: '삭제', danger: true });
             if (!ok) return;
             try { await supabaseClient.storage.from(DRIVE_BUCKET).remove([m.path]); } catch (e) {}
@@ -5140,30 +5188,155 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             else { driveState.tableOk = true; driveState.files = r.files; driveState.loaded = true; }
             renderDriveList();
         }
+        function _driveQ(s){ return String(s).replace(/'/g, "\\'"); }
         function renderDriveList() {
             var list = document.getElementById('drv-list'); if (!list) return;
             var usage = document.getElementById('drv-usage');
-            var used = driveState.files.reduce(function (s, f) { return s + (f.size || 0); }, 0);
-            if (usage) usage.textContent = '사용량 ' + _driveFmt(used) + ' / 5 GB · ' + driveState.files.length + '개';
-            if (driveState.loading && !driveState.files.length) { list.innerHTML = '<div class="drv-empty">불러오는 중…</div>'; return; }
-            if (driveState.tableOk === false) { list.innerHTML = '<div class="drv-empty">⚠️ drive_files 테이블이 없습니다.<br><b>서버 상태</b> 탭에서 설정 SQL을 실행하세요.</div>'; return; }
+            var bc = document.getElementById('drv-breadcrumb');
+            var allFiles = driveState.files.filter(function (f) { return !_driveIsFolder(f); });
+            var used = allFiles.reduce(function (s, f) { return s + (f.size || 0); }, 0);
+            if (usage) usage.textContent = '사용량 ' + _driveFmt(used) + ' / 5 GB · ' + allFiles.length + '개';
+            if (driveState.loading && !driveState.files.length) { list.innerHTML = '<div class="drv-empty">불러오는 중…</div>'; if (bc) bc.innerHTML = ''; return; }
+            if (driveState.tableOk === false) { list.innerHTML = '<div class="drv-empty">⚠️ drive_files 테이블이 없습니다.<br><b>서버 상태</b> 탭에서 설정 SQL을 실행하세요.</div>'; if (bc) bc.innerHTML = ''; return; }
             var q = (driveState.q || '').toLowerCase().trim();
-            var files = driveState.files.filter(function (f) { return !q || (f.name || '').toLowerCase().indexOf(q) !== -1; });
-            if (!files.length) { list.innerHTML = '<div class="drv-empty">' + (q ? '검색 결과가 없습니다.' : '아직 파일이 없습니다.<br>⬆ 업로드 버튼으로 첫 파일을 올려보세요.') + '</div>'; return; }
-            list.innerHTML = files.map(function (m) {
-                var thumb = _driveIsImage(m.mime, m.name) && m.url ? '<img class="drv-thumb" src="' + _driveEsc(m.url) + '" alt="" loading="lazy">' : '<span class="drv-ic">' + _driveIcon(m) + '</span>';
-                var when = m.createdAt ? new Date(m.createdAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) : '';
+            // 브레드크럼
+            if (bc) {
+                if (q) { bc.innerHTML = '<span class="drv-crumb">🔍 검색 결과</span>'; }
+                else {
+                    var parts = (driveState.cwd || '').split('/').filter(Boolean), acc = '';
+                    var h = '<span class="drv-crumb" onclick="driveNavTo(\'\')">🗂️ 전체</span>';
+                    parts.forEach(function (p) { acc = acc ? acc + '/' + p : p; h += '<span class="drv-crumb-sep">›</span><span class="drv-crumb" onclick="driveNavTo(\'' + _driveQ(acc) + '\')">' + _driveEsc(p) + '</span>'; });
+                    bc.innerHTML = h;
+                }
+            }
+            var rows;
+            if (q) { rows = allFiles.filter(function (f) { return (f.name || '').toLowerCase().indexOf(q) !== -1; }); }
+            else {
+                var here = driveState.files.filter(function (f) { return (f.folder || '') === (driveState.cwd || ''); });
+                var folders = here.filter(_driveIsFolder).sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
+                var fl = here.filter(function (f) { return !_driveIsFolder(f); });
+                rows = folders.concat(fl);
+            }
+            if (!rows.length) { list.innerHTML = '<div class="drv-empty">' + (q ? '검색 결과가 없습니다.' : '이 폴더가 비어 있습니다.<br>⬆ 업로드 또는 📁 새 폴더로 시작하세요.') + '</div>'; return; }
+            list.innerHTML = rows.map(function (m) {
                 var own = m.uploadedBy && currentUser && m.uploadedBy === currentUser.id;
-                return '<div class="drv-row">' + thumb +
+                if (_driveIsFolder(m)) {
+                    var fp = _driveQ(_driveFullPath(m));
+                    return '<div class="drv-row drv-folder" ondblclick="driveNavTo(\'' + fp + '\')" oncontextmenu="driveCtxMenu(event,\'' + m.id + '\')">' +
+                        '<span class="drv-ic">📁</span>' +
+                        '<div class="drv-meta"><div class="drv-name">' + _driveEsc(m.name) + '</div><div class="drv-info">폴더 · ' + _driveEsc(m.uploadedByName || '?') + '</div></div>' +
+                        '<div class="drv-acts"><button class="drv-btn" onclick="driveNavTo(\'' + fp + '\')">열기</button><button class="drv-btn" onclick="driveCtxMenu(event,\'' + m.id + '\')">⋯</button></div></div>';
+                }
+                var thumb = _driveIsImage(m.mime, m.name) && m.url ? '<img class="drv-thumb" src="' + _driveEsc(m.url) + '" alt="" loading="lazy">' : '<span class="drv-ic">' + _driveIcon(m) + '</span>';
+                var when = m.createdAt ? new Date(m.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                var inFolder = q && m.folder ? ' · 📁' + _driveEsc(m.folder) : '';
+                return '<div class="drv-row" ondblclick="driveOpenViewer(\'' + m.id + '\')" oncontextmenu="driveCtxMenu(event,\'' + m.id + '\')">' + thumb +
                     '<div class="drv-meta"><div class="drv-name" title="' + _driveEsc(m.name) + '">' + _driveEsc(m.name) + '</div>' +
-                    '<div class="drv-info">' + _driveEsc(m.uploadedByName || '?') + ' · ' + _driveFmt(m.size) + ' · ' + when + (m.linkedDocIds && m.linkedDocIds.length ? ' · 🔗' + m.linkedDocIds.length : '') + '</div></div>' +
+                    '<div class="drv-info">' + _driveEsc(m.uploadedByName || '?') + ' · ' + _driveFmt(m.size) + ' · ' + when + (m.linkedDocIds && m.linkedDocIds.length ? ' · 🔗' + m.linkedDocIds.length : '') + inFolder + '</div></div>' +
                     '<div class="drv-acts">' +
+                    '<button class="drv-btn" onclick="driveOpenViewer(\'' + m.id + '\')" title="임시 뷰어로 보기">보기</button>' +
                     '<button class="drv-btn" onclick="driveInsertToDoc(\'' + m.id + '\')" title="현재 문서에 삽입">＋문서</button>' +
-                    '<button class="drv-btn" onclick="driveDownload(\'' + m.id + '\')">열기</button>' +
-                    '<button class="drv-btn" onclick="driveCopyLink(\'' + m.id + '\')">링크</button>' +
-                    (own ? '<button class="drv-btn" onclick="driveDelete(\'' + m.id + '\')">🗑</button>' : '') +
+                    '<button class="drv-btn" onclick="driveCtxMenu(event,\'' + m.id + '\')" title="더보기">⋯</button>' +
                     '</div></div>';
             }).join('');
+        }
+        function driveNavTo(path) { driveState.cwd = path || ''; driveState.q = ''; var s = document.getElementById('drv-search'); if (s) s.value = ''; renderDriveList(); }
+        async function driveMkFolder() {
+            if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
+            var name = await uiPrompt({ title: '새 폴더', label: '폴더 이름', placeholder: '예: 기획, 에셋, 레퍼런스 …' });
+            if (name === null || !name.trim()) return;
+            name = name.trim().replace(/\//g, '_');
+            var m = { id: _driveUid(), name: name, path: '', url: '', mime: '__folder__', size: 0, projectId: activeProjectId, uploadedBy: currentUser.id, uploadedByName: myNickname || '', createdAt: Date.now(), updatedAt: Date.now(), history: [{ action: 'create', userId: currentUser.id, userName: myNickname || '', at: Date.now() }], linkedDocIds: [], deleted: false, folder: driveState.cwd || '' };
+            driveState.files.unshift(m); await dbUpsertDriveFile(m); renderDriveList(); showToast('📁 폴더 생성됨', 'success');
+        }
+        // 우클릭 컨텍스트 메뉴
+        function _driveCloseCtx() { var el = document.getElementById('drv-ctx'); if (el) el.remove(); document.removeEventListener('click', _driveCloseCtx); }
+        function driveCtxMenu(e, id) {
+            e.preventDefault(); e.stopPropagation(); _driveCloseCtx();
+            var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
+            var own = m.uploadedBy && currentUser && m.uploadedBy === currentUser.id;
+            var items = [];
+            if (_driveIsFolder(m)) {
+                items.push(['📂 열기', "driveNavTo('" + _driveQ(_driveFullPath(m)) + "')"]);
+                items.push(['ℹ️ 상세보기', "driveShowDetail('" + id + "')"]);
+                if (own) items.push(['✏️ 이름 변경', "driveRename('" + id + "')"]);
+                if (own) items.push(['🗑 삭제', "driveDelete('" + id + "')"]);
+            } else {
+                items.push(['👁 열기 (뷰어)', "driveOpenViewer('" + id + "')"]);
+                items.push(['ℹ️ 상세보기', "driveShowDetail('" + id + "')"]);
+                items.push(['↗ 새 탭에서 열기', "driveDownload('" + id + "')"]);
+                items.push(['🔗 링크 복사', "driveCopyLink('" + id + "')"]);
+                items.push(['＋ 문서에 삽입', "driveInsertToDoc('" + id + "')"]);
+                items.push(['📁 이동', "driveMove('" + id + "')"]);
+                if (own) items.push(['✏️ 이름 변경', "driveRename('" + id + "')"]);
+                if (own) items.push(['🗑 삭제', "driveDelete('" + id + "')"]);
+            }
+            var menu = document.createElement('div'); menu.id = 'drv-ctx'; menu.className = 'drv-ctx';
+            menu.innerHTML = items.map(function (it) { return '<div class="drv-ctx-item" onclick="_driveCloseCtx();' + it[1] + '">' + it[0] + '</div>'; }).join('');
+            document.body.appendChild(menu);
+            var x = Math.min(e.clientX, window.innerWidth - 210), y = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 10);
+            menu.style.left = Math.max(6, x) + 'px'; menu.style.top = Math.max(6, y) + 'px';
+            setTimeout(function () { document.addEventListener('click', _driveCloseCtx); }, 30);
+        }
+        async function driveMove(id) {
+            var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
+            var folders = driveState.files.filter(_driveIsFolder).map(function (f) { return _driveFullPath(f); }).sort();
+            var opts = [{ key: '__root__', label: '🗂️ (루트)' }].concat(folders.map(function (p) { return { key: p, label: '📁 ' + p }; }));
+            var choice = await _htmlInsertChooser('이동할 폴더 선택 — ' + m.name, opts);
+            if (choice === null) return;
+            m.folder = (choice === '__root__') ? '' : choice; m.updatedAt = Date.now();
+            (m.history = m.history || []).push({ action: 'move', userId: currentUser && currentUser.id, userName: myNickname || '', at: Date.now(), to: m.folder });
+            await dbUpsertDriveFile(m); renderDriveList(); showToast('📁 이동됨', 'info');
+        }
+        async function driveRename(id) {
+            var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
+            if (m.uploadedBy && currentUser && m.uploadedBy !== currentUser.id) { showToast('본인 항목만 이름 변경 가능', 'alert'); return; }
+            var nm = await uiPrompt({ title: '이름 변경', label: '새 이름', value: m.name });
+            if (nm === null || !nm.trim()) return;
+            m.name = nm.trim(); m.updatedAt = Date.now();
+            (m.history = m.history || []).push({ action: 'rename', userId: currentUser && currentUser.id, userName: myNickname || '', at: Date.now() });
+            await dbUpsertDriveFile(m); renderDriveList();
+        }
+        function _driveModal(titleHtml, bodyHtml, footHtml) {
+            _driveCloseModal();
+            var ov = document.createElement('div'); ov.className = 'drv-modal-ov'; ov.id = 'drv-modal-ov';
+            ov.innerHTML = '<div class="drv-modal"><div class="drv-modal-head">' + titleHtml + '<button class="drv-modal-x" onclick="_driveCloseModal()">✕</button></div><div class="drv-modal-body">' + bodyHtml + '</div>' + (footHtml ? '<div class="drv-modal-foot">' + footHtml + '</div>' : '') + '</div>';
+            ov.addEventListener('click', function (e) { if (e.target === ov) _driveCloseModal(); });
+            document.body.appendChild(ov);
+        }
+        function _driveCloseModal() { var el = document.getElementById('drv-modal-ov'); if (el) el.remove(); }
+        function driveShowDetail(id) {
+            var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
+            var isF = _driveIsFolder(m);
+            var rows = [['이름', _driveEsc(m.name)], ['종류', isF ? '폴더' : _driveEsc(m.mime || '파일')], ['소유자', _driveEsc(m.uploadedByName || '?')], ['업로드 일시', m.createdAt ? new Date(m.createdAt).toLocaleString('ko-KR') : '-'], ['수정 일시', m.updatedAt ? new Date(m.updatedAt).toLocaleString('ko-KR') : '-']];
+            if (!isF) { rows.push(['크기', _driveFmt(m.size)]); rows.push(['위치', _driveEsc(m.folder || '(루트)')]); }
+            var body = '<div class="drv-d-rows">' + rows.map(function (r) { return '<div class="drv-d-row"><span class="drv-d-k">' + r[0] + '</span><span class="drv-d-v">' + r[1] + '</span></div>'; }).join('') + '</div>';
+            if (!isF) body += '<div class="drv-d-row" style="margin-top:8px;"><span class="drv-d-k">URL</span><span class="drv-d-v" style="word-break:break-all;font-size:11px;">' + _driveEsc(m.url) + ' <button class="drv-btn" onclick="driveCopyLink(\'' + id + '\')">복사</button></span></div>';
+            var hist = (m.history || []).slice().reverse().map(function (h) { var lbl = ({ upload: '⬆ 업로드', create: '＋ 생성', move: '📁 이동', rename: '✏ 이름변경' })[h.action] || h.action; return '<div class="drv-d-hist">' + lbl + ' · ' + _driveEsc(h.userName || '?') + ' · ' + (h.at ? new Date(h.at).toLocaleString('ko-KR') : '') + '</div>'; }).join('') || '<div class="drv-d-hist" style="color:var(--c-text3);">기록 없음</div>';
+            body += '<div class="drv-d-sec">📜 기록</div>' + hist;
+            if (!isF) { var links = (m.linkedDocIds || []).map(function (did) { var d = (currentData.docs || []).find(function (x) { return x.id === did; }); return '<span class="drv-d-link">' + _driveEsc(d ? d.title : did) + '</span>'; }).join(' ') || '<span style="color:var(--c-text3);">없음</span>'; body += '<div class="drv-d-sec">🔗 연결된 문서</div><div>' + links + '</div>'; }
+            var foot = !isF ? '<button class="drv-upload" onclick="_driveCloseModal();driveOpenViewer(\'' + id + '\')">👁 뷰어로 열기</button>' : '';
+            _driveModal((isF ? '📁' : _driveIcon(m)) + ' 상세 — ' + _driveEsc(m.name), body, foot);
+        }
+        function _driveCloseViewer() { var el = document.getElementById('drv-viewer'); if (el) { if (el._k) document.removeEventListener('keydown', el._k); el.remove(); } }
+        function driveOpenViewer(id) {
+            var m = driveState.files.find(function (f) { return f.id === id; }); if (!m) return;
+            if (_driveIsFolder(m)) { driveNavTo(_driveFullPath(m)); return; }
+            if (!m.url) { showToast('URL이 없습니다.', 'alert'); return; }
+            var n = (m.name || '').toLowerCase(), mi = m.mime || '', u = _driveEsc(m.url), inner;
+            if (_driveIsImage(mi, n)) inner = '<img src="' + u + '" style="max-width:100%;max-height:100%;object-fit:contain;display:block;margin:auto;">';
+            else if (/pdf/.test(mi) || /\.pdf$/.test(n)) inner = '<iframe src="' + u + '" style="width:100%;height:100%;border:none;background:#fff;"></iframe>';
+            else if (/^video\//.test(mi) || /\.(mp4|webm|mov)$/.test(n)) inner = '<video src="' + u + '" controls autoplay style="max-width:100%;max-height:100%;display:block;margin:auto;"></video>';
+            else if (/^audio\//.test(mi) || /\.(mp3|wav|ogg|flac|m4a)$/.test(n)) inner = '<audio src="' + u + '" controls style="width:80%;margin:60px auto;display:block;"></audio>';
+            else if (/\.html?$/.test(n)) inner = '<iframe sandbox="allow-scripts allow-popups allow-forms" src="' + u + '" style="width:100%;height:100%;border:none;background:#fff;"></iframe>';
+            else if (/^text\//.test(mi) || /\.(txt|md|markdown|json|csv|tsv|log|js|ts|jsx|tsx|css|scss|py|java|c|cpp|h|go|rs|rb|php|sh|xml|yml|yaml|sql|ini|conf)$/.test(n)) inner = '<pre class="drv-viewer-text" id="drv-viewer-pre">불러오는 중…</pre>';
+            else inner = '<div class="drv-empty">이 형식은 임시 뷰어에서 미리보기를 지원하지 않습니다.<br><button class="drv-upload" style="margin-top:10px;" onclick="driveDownload(\'' + id + '\')">↗ 새 탭에서 열기</button></div>';
+            var ov = document.createElement('div'); ov.className = 'drv-viewer'; ov.id = 'drv-viewer';
+            ov.innerHTML = '<div class="drv-viewer-bar"><span class="drv-viewer-name">' + _driveIcon(m) + ' ' + _driveEsc(m.name) + '</span><span style="margin-left:auto;display:flex;gap:8px;align-items:center;"><button class="drv-btn" onclick="driveDownload(\'' + id + '\')">↗ 새 탭</button><button class="drv-viewer-close" onclick="_driveCloseViewer()">✕ 닫기</button></span></div><div class="drv-viewer-body">' + inner + '</div>';
+            function onKey(e) { if (e.key === 'Escape') _driveCloseViewer(); }
+            ov._k = onKey; document.addEventListener('keydown', onKey);
+            document.body.appendChild(ov);
+            if (document.getElementById('drv-viewer-pre')) { fetch(m.url).then(function (r) { return r.text(); }).then(function (t) { var pre = document.getElementById('drv-viewer-pre'); if (pre) pre.textContent = t.length > 300000 ? t.slice(0, 300000) + '\n\n…(이하 생략)' : t; }).catch(function () { var pre = document.getElementById('drv-viewer-pre'); if (pre) pre.textContent = '(불러오기 실패 — 새 탭에서 열기)'; }); }
         }
         function driveStorageSetupSql() {
             return [
@@ -5177,8 +5350,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 '  id text primary key, name text, path text, url text, mime text, size bigint,',
                 '  project_id text, uploaded_by text, uploaded_by_name text,',
                 '  created_at timestamptz default now(), updated_at timestamptz default now(),',
-                "  history jsonb default '[]'::jsonb, linked_doc_ids jsonb default '[]'::jsonb, deleted boolean default false",
+                "  history jsonb default '[]'::jsonb, linked_doc_ids jsonb default '[]'::jsonb, deleted boolean default false,",
+                "  folder text default ''",
                 ');',
+                "-- (이미 테이블을 만들었다면) 폴더 컬럼 추가",
+                "alter table drive_files add column if not exists folder text default '';",
                 'alter table drive_files enable row level security;',
                 'drop policy if exists "drive_files_read" on drive_files;',
                 'create policy "drive_files_read" on drive_files for select using (true);',
