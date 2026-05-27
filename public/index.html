@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r45 (r44 + 이미지 드롭 "처리 실패" 오탐 수정(이미지는 임포터 아닌 이미지핸들러로)·첨부 이미지 자동 폴더정리(시스템명/날짜/소유자)) -->
+<!-- BUILD: 2026-05-27 r46 (r45 + 코멘트카드 배경 테마화(가독성)·코멘트패널 접기/펼치기 토글·트리 컨텍스트메뉴 바깥클릭 닫기(캡처)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -850,8 +850,11 @@
             max-height: 40px; overflow: hidden; text-overflow: ellipsis;
         }
         .ann-comment-item {
-            margin-bottom: 6px; padding: 6px 8px; background: #faf9f5; border-radius: 6px;
+            margin-bottom: 6px; padding: 6px 8px; background: var(--c-paper); border-radius: 6px;
         }
+        /* [r46] 코멘트 패널 접기/펼치기 토글 */
+        .ann-toggle-btn { position:absolute; top:8px; z-index:20; background:var(--c-card); border:1px solid var(--c-border); color:var(--c-text2); border-radius:8px; padding:4px 10px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 1px 5px rgba(0,0,0,0.16); transition:right .18s; white-space:nowrap; }
+        .ann-toggle-btn:hover { background:var(--c-accent-soft); color:var(--c-accent); border-color:var(--c-accent); }
         .ann-reply-input {
             width: 100%; border: 1px solid #dcd6c8; border-radius: 6px;
             padding: 6px 8px; font-size: 12px; outline: none; margin-top: 6px;
@@ -3506,8 +3509,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <div id="split-divider" style="display:none;width:4px;background:#e7e3d8;cursor:col-resize;flex-shrink:0;"></div>
                         <!-- 미리보기 영역 -->
                         <div id="preview-area" style="flex:1;min-height:0;min-width:0;flex-direction:column;overflow:hidden;">
-                            <div id="preview-annotation-wrapper" style="flex:1;display:flex;overflow:hidden;min-height:0;">
+                            <div id="preview-annotation-wrapper" style="flex:1;display:flex;overflow:hidden;min-height:0;position:relative;">
                                 <div id="doc-preview-container" class="markdown-body bg-white" style="flex:1;overflow-y:auto;padding:20px 24px;min-width:0;"></div>
+                                <button id="ann-toggle-btn" class="ann-toggle-btn" style="display:none;" onclick="toggleAnnPanel()" title="코멘트 패널 접기/펼치기"></button>
                                 <div id="wiki-annotations-panel" style="width:0;overflow:visible;flex-shrink:0;position:relative;">
                                     <div id="annotations-list" style="position:absolute;left:0;width:268px;top:0;bottom:0;overflow-y:auto;padding:8px 0 8px 8px;"></div>
                                 </div>
@@ -11898,6 +11902,9 @@ ${intrLog}
         // ==========================================
         let wikiAnnotations = {}; // [r34] doc.meta.annotations 미러 (동기화)
         let annotationColors = ['#fef08a','#bbf7d0','#f3e6df','#fecaca','#ece0d2','#fed7aa'];
+        // [r46] 코멘트 패널 접기 상태
+        let _annPanelCollapsed = (localStorage.getItem('tda_ann_collapsed') === '1');
+        function toggleAnnPanel() { _annPanelCollapsed = !_annPanelCollapsed; try { localStorage.setItem('tda_ann_collapsed', _annPanelCollapsed ? '1' : '0'); } catch(e){} renderAnnotationsPanelPositioned(); }
         // [r34] 코멘트 동기화: 주석을 doc.meta.annotations에 저장 → dbUpsertDoc로 영속+wiki_docs 실시간 동기화 (기존엔 로컬 전용이라 다른 계정에 안 보였음)
         function rebuildWikiAnnotations() {
             var legacy = (currentData && currentData.wikiAnnotations) || {};
@@ -13144,7 +13151,15 @@ ${intrLog}
             if(!list || !previewEl) return;
             var annotations = (activeDocId && wikiAnnotations[activeDocId]) ? wikiAnnotations[activeDocId] : [];
             list.innerHTML = '';
-            if(!annotations.length){ if(panel) panel.style.width='0'; return; }
+            // [r46] 토글 버튼 + 접기 상태
+            var _atb = document.getElementById('ann-toggle-btn');
+            var _hasAnn = annotations.length > 0;
+            if (_atb) {
+                _atb.style.display = _hasAnn ? 'block' : 'none';
+                if (_annPanelCollapsed) { _atb.textContent = '💬 ' + annotations.length; _atb.style.right = '8px'; }
+                else { _atb.textContent = '✕ 코멘트'; _atb.style.right = '300px'; }
+            }
+            if(!_hasAnn || _annPanelCollapsed){ if(panel) panel.style.width='0'; return; }
             if(panel) panel.style.width='300px';
             var pRect = previewEl.getBoundingClientRect();
             // 1패스: 마크의 뷰포트 상대 위치(=텍스트 옆). scrollTop을 더하지 않음 — 더하면 스크롤 시 코멘트가 어긋남(기존 버그)
@@ -13272,7 +13287,8 @@ ${intrLog}
             // [v26 FIX-1] 외부 클릭뿐 아니라 키 입력 / 마우스 휠 / 창 크기 변경 / 포커스 잃음 시에도 메뉴 닫기
             // 모두 once: true 로 등록되어 한 번 트리거되면 자동 해제됨
             setTimeout(function(){
-                document.addEventListener('click', hideTreeContextMenu, { once: true });
+                // [r46] 캡처 단계 mousedown — 트리 아이템의 stopPropagation에도 영향받지 않고 메뉴 밖 클릭 시 확실히 닫힘
+                document.addEventListener('mousedown', _ctxOutsideClose, true);
                 document.addEventListener('keydown', hideTreeContextMenu, { once: true });
                 document.addEventListener('wheel', hideTreeContextMenu, { once: true, passive: true });
                 window.addEventListener('blur', hideTreeContextMenu, { once: true });
