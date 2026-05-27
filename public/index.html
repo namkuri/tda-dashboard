@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r43 (r42 + 드라이브 폴더체계(생성·탐색·이동·브레드크럼)+우클릭 컨텍스트메뉴+상세보기(소유자·업로드일시·기록)+임시뷰어(이미지·PDF·텍스트·영상·음성·HTML)) -->
+<!-- BUILD: 2026-05-27 r44 (r43 + 프로젝트 변경 시 현재 페이지뷰(스프린트·그래프·Git·리뷰·드라이브·상태) 즉시 갱신 - 새로고침 불필요) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -7038,6 +7038,13 @@ return data;
             if (typeof renderProgress === 'function') renderProgress();
             if (typeof renderSprintBand === 'function') renderSprintBand();
             if (typeof renderReviewBadge === 'function') renderReviewBadge();
+            // [r44] 현재 보고 있는 페이지형 뷰도 즉시 갱신 (이전엔 sprint/graph/git/review/drive 등이 새로고침 전까지 안 바뀜)
+            if (currentView === 'sprint' && typeof renderSprintView === 'function') renderSprintView();
+            else if (currentView === 'graph' && typeof gphRender === 'function') gphRender();
+            else if (currentView === 'git' && typeof gitRender === 'function') gitRender();
+            else if (currentView === 'review' && typeof renderReviewPage === 'function') renderReviewPage();
+            else if (currentView === 'drive' && typeof renderDriveView === 'function') renderDriveView();
+            else if (currentView === 'status' && typeof renderStatusView === 'function') renderStatusView();
             closeProjectModal();
             // 새 프로젝트면 위키 5종 폴더 자동 시드(기존 프로젝트는 no-op)
             if (typeof seedWikiFoldersIfEmpty === 'function') {
