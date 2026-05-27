@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r40 (r39 + 공용 드라이브 탭(Supabase Storage)·서버 상태 탭(용량/설정점검)·문서 이미지 첨부/드래그/붙여넣기→Storage(base64 폴백)·drive_files 메타+설정SQL) -->
+<!-- BUILD: 2026-05-27 r41 (r40 + 설정 SQL에 버킷 생성(insert into storage.buckets) 포함 → 대시보드 없이 한 번에 설정) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -5167,9 +5167,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
         function driveStorageSetupSql() {
             return [
-                '-- [1단계] Supabase 대시보드 → Storage → New bucket',
-                "--         이름: drive   /   Public bucket 체크 → Save",
-                '-- [2단계] 아래 SQL을 SQL Editor에 붙여넣고 실행 (메타 테이블 + 정책)',
+                '-- 아래 전체를 Supabase → SQL Editor에 붙여넣고 한 번에 실행하면 버킷까지 생성됩니다.',
+                "-- (대시보드 Storage → New bucket → 'drive' Public 으로 만들어도 됩니다)",
+                "-- [1] 공개 버킷 'drive' 생성",
+                "insert into storage.buckets (id, name, public) values ('drive','drive',true)",
+                '  on conflict (id) do update set public = true;',
+                '-- [2] 메타 테이블 + 정책',
                 'create table if not exists drive_files (',
                 '  id text primary key, name text, path text, url text, mime text, size bigint,',
                 '  project_id text, uploaded_by text, uploaded_by_name text,',
