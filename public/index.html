@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r62 (데스크톱 OAuth 404 진짜 원인=잔류 PWA 서비스워커: WebView2 프로필에 남은 옛 SW가 github.io 교차출처 fetch+스테일 캐시로 404 유발. → Tauri에서는 SW 등록 금지+기존 SW/캐시 제거. r61 devtools/진단줄 유지) -->
+<!-- BUILD: 2026-05-27 r63 (그래프 뷰 신설: 히스토리 옆 '그래프 뷰' — 현 프로젝트의 스프린트/카테고리/카드/문서/위키/흐름/Git/코멘트/리뷰를 canvas force-directed 그래프로. 타입별 색상·범례 토글·호버 툴팁·클릭 네비·노드드래그·휠줌·빈공간 팬. r62 SW수정/디버그보조 유지) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2910,6 +2910,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="cs-grp-items" data-grp="store">
                     <button class="cs-nav" data-nav="drive" id="cs-nav-drive" onclick="switchView('drive')" title="공용 드라이브"><span class="cs-ico">🗂️</span><span class="cs-label">공용 드라이브</span></button>
                     <button class="cs-nav" data-nav="history" id="cs-nav-history" onclick="switchView('history')" title="히스토리 (활동 기록)"><span class="cs-ico">🗓️</span><span class="cs-label">히스토리</span></button>
+                    <button class="cs-nav" data-nav="gview" id="cs-nav-gview" onclick="switchView('gview')" title="그래프 뷰 (전역 지식 그래프)"><span class="cs-ico">🕸️</span><span class="cs-label">그래프 뷰</span></button>
                     <button class="cs-nav" data-nav="git" id="cs-nav-git" onclick="switchView('git')" title="Git"><span class="cs-ico">📦</span><span class="cs-label">Git</span></button>
                 </div>
             </div>
@@ -3035,6 +3036,55 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         <!-- [r49] 히스토리(활동 기록) 페이지 -->
         <div id="history-view" class="hidden" onclick="event.stopPropagation()"></div>
+
+        <!-- [그래프 뷰] 옵시디언식 전역 지식 그래프 (canvas force-directed, 현 프로젝트 한정) -->
+        <style>
+        #gview-view { display:flex; flex-direction:column; height: calc(100vh - 52px); overflow:hidden; }
+        #gview-view.hidden { display:none; }
+        .gv-toolbar { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:8px 14px; border-bottom:1px solid var(--c-border); background:var(--c-card); flex-wrap:wrap; }
+        .gv-title { font-size:15px; font-weight:800; color:var(--c-text); display:flex; align-items:center; gap:6px; }
+        .gv-search { flex:0 1 220px; background:var(--ios-fill); border:1px solid var(--c-border); border-radius:8px; padding:6px 10px; font-size:12.5px; color:var(--c-text); outline:none; }
+        .gv-search:focus { box-shadow: inset 0 -2px 0 var(--c-accent); }
+        .gv-btn { background:var(--ios-fill); border:1px solid var(--c-border); color:var(--c-text2); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+        .gv-btn:hover { color:var(--c-text); border-color:var(--c-accent); }
+        .gv-zoom { display:inline-flex; align-items:center; gap:3px; }
+        .gv-zoom .gv-btn { min-width:30px; text-align:center; padding:6px 8px; }
+        .gv-stat { font-size:11.5px; color:var(--c-text3); margin-left:auto; }
+        .gv-canvas-wrap { position:relative; flex:1; min-height:0; overflow:hidden; background:var(--c-paper); }
+        #gv-canvas { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
+        #gv-canvas.gv-dragging { cursor:grabbing; }
+        .gv-legend { position:absolute; left:12px; bottom:12px; background:var(--c-card); border:1px solid var(--c-border); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:2px; box-shadow:0 4px 14px rgba(0,0,0,0.14); max-height:64%; overflow:auto; z-index:3; }
+        .gv-leg-item { display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--c-text2); cursor:pointer; padding:2px 5px; border-radius:5px; user-select:none; }
+        .gv-leg-item:hover { background:var(--ios-fill); }
+        .gv-leg-item.gv-off { opacity:0.34; }
+        .gv-leg-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+        .gv-leg-count { color:var(--c-text3); font-size:10.5px; margin-left:2px; }
+        .gv-tooltip { position:absolute; pointer-events:none; background:var(--c-text); color:var(--c-paper); padding:6px 9px; border-radius:7px; font-size:12px; font-weight:600; max-width:300px; box-shadow:0 4px 14px rgba(0,0,0,0.3); display:none; z-index:6; line-height:1.4; }
+        .gv-tooltip .gv-tt-type { display:block; opacity:0.7; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:1px; }
+        .gv-hint { position:absolute; right:12px; top:12px; background:var(--c-card); border:1px solid var(--c-border); border-radius:8px; padding:6px 10px; font-size:11px; color:var(--c-text3); pointer-events:none; opacity:0.9; z-index:3; }
+        .gv-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--c-text3); font-size:14px; gap:8px; pointer-events:none; text-align:center; line-height:1.7; }
+        @media (max-width: 820px) { #gview-view { height: calc(100vh - 100px); } .gv-hint { display:none; } }
+        </style>
+        <div id="gview-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="gv-toolbar">
+                <span class="gv-title">🕸️ 그래프 뷰</span>
+                <input id="gv-search" class="gv-search" type="text" placeholder="노드 검색 (제목)..." oninput="gvOnSearch(this.value)">
+                <span class="gv-zoom">
+                    <button class="gv-btn" onclick="gvZoomBy(0.8)" title="축소">－</button>
+                    <button class="gv-btn" onclick="gvFit()" title="전체 보기">⊡</button>
+                    <button class="gv-btn" onclick="gvZoomBy(1.25)" title="확대">＋</button>
+                </span>
+                <button class="gv-btn" onclick="gvReheat()" title="레이아웃 재정렬">↻ 재정렬</button>
+                <span class="gv-stat" id="gv-stat"></span>
+            </div>
+            <div class="gv-canvas-wrap" id="gv-canvas-wrap">
+                <canvas id="gv-canvas"></canvas>
+                <div class="gv-legend" id="gv-legend"></div>
+                <div class="gv-tooltip" id="gv-tooltip"></div>
+                <div class="gv-hint">휠: 확대/축소 · 빈공간 드래그: 이동 · 노드: 드래그/클릭(열기)</div>
+                <div class="gv-empty" id="gv-empty" style="display:none;">🕸️<br>이 프로젝트에 표시할 항목이 없습니다.</div>
+            </div>
+        </div>
 
         <!-- [그래프] 다이어그램 페이지 (wiki_docs kind='diagram') -->
         <style>
@@ -5852,6 +5902,389 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (typeof setTaskAssignee === 'function') setTaskAssignee(taskId, dd.id, 'sprint');
         }
 
+        // ==========================================
+        // [그래프 뷰] 옵시디언식 전역 지식 그래프 (canvas force-directed)
+        //   현 프로젝트의 모든 엔티티를 노드로, 하이어라키/참조를 엣지로 그림.
+        //   휠=확대/축소, 빈공간 드래그=이동(pan), 노드 드래그=이동, 노드 클릭=해당 항목으로 네비.
+        // ==========================================
+        var gvState = {
+            nodes: [], edges: [], byId: {},
+            scale: 1, tx: 0, ty: 0, cw: 800, ch: 600, dpr: 1,
+            raf: null, alpha: 0,
+            hover: null, drag: null, panning: false, panStart: null,
+            pointer: { x: 0, y: 0 }, downAt: null, moved: 0,
+            search: '', hidden: {}, inited: false, lastCount: -1
+        };
+        var GV_TYPES = {
+            project:  { color:'#c9982f', label:'프로젝트',      r:17 },
+            sprint:   { color:'#d2763a', label:'스프린트',      r:13 },
+            category: { color:'#b5896a', label:'카테고리',      r:9  },
+            card:     { color:'#9c8f6f', label:'카드',          r:7  },
+            doc:      { color:'#6f9e6a', label:'문서',          r:8  },
+            canon:    { color:'#4e8d6e', label:'프로젝트 위키', r:9  },
+            diagram:  { color:'#5e91b8', label:'흐름/그래프',   r:9  },
+            review:   { color:'#9b72bf', label:'리뷰',          r:8  },
+            comment:  { color:'#cf8aa0', label:'코멘트',        r:5  },
+            git:      { color:'#a06a4e', label:'Git',           r:9  }
+        };
+        var GV_TYPE_ORDER = ['project','sprint','category','card','doc','canon','diagram','review','comment','git'];
+        function gvCanvas() { return document.getElementById('gv-canvas'); }
+        function gvCssVar(n) { try { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); } catch(e){ return ''; } }
+        function gvEsc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        function gvActiveDocs(kind) {
+            return (currentData.docs || []).filter(function(d){ return (d.projectId||'default')===activeProjectId && (d.kind||'wiki')===kind; });
+        }
+        // 데이터 → {nodes, edges, byId}
+        function gvBuild() {
+            var nodes = [], edges = [], byId = {};
+            function add(id, type, label, ref, extra) {
+                if (byId[id]) return byId[id];
+                var t = GV_TYPES[type] || GV_TYPES.doc;
+                var n = { id:id, type:type, label:(label||'(제목 없음)'), ref:ref||null, color:t.color, r:t.r,
+                          x:0, y:0, fx:0, fy:0, extra:extra||null };
+                nodes.push(n); byId[id] = n; return n;
+            }
+            function link(a, b, strong) { if (a && b && byId[a] && byId[b] && a!==b) edges.push({ a:a, b:b, strong:!!strong }); }
+            var pid = activeProjectId;
+            var proj = (currentData.projects || []).find(function(p){ return p.id === pid; });
+            var rootId = 'gv-proj';
+            add(rootId, 'project', (proj && proj.name) || '프로젝트', { kind:'project' });
+            // 스프린트
+            (currentData.sprints || []).filter(function(s){ return (s.projectId||'default')===pid; }).forEach(function(s){
+                add('sp:'+s.id, 'sprint', s.weekLabel || s.goal || '스프린트', { kind:'sprint', id:s.id }, { status:s.status });
+                link(rootId, 'sp:'+s.id, true);
+            });
+            // 카테고리(스프린트 소속)
+            (currentData.categories || []).filter(function(c){ return (c.projectId||'default')===pid; }).forEach(function(c){
+                add('cat:'+c.id, 'category', c.title || '카테고리', { kind:'kanban', id:c.id }, { subtitle:c.subtitle });
+                if (c.sprintId && byId['sp:'+c.sprintId]) link('sp:'+c.sprintId, 'cat:'+c.id, true); else link(rootId, 'cat:'+c.id);
+            });
+            // 카드(카테고리 소속) + 카드 코멘트
+            (currentData.tasks || []).filter(function(t){ return (t.projectId||'default')===pid; }).forEach(function(t){
+                var id = 'cd:'+t.id;
+                add(id, 'card', t.title || '카드', { kind:'card', id:t.id }, { status:t.status, assignees:t.assignees });
+                if (t.catId && byId['cat:'+t.catId]) link('cat:'+t.catId, id, true);
+                else if (t.sprintId && byId['sp:'+t.sprintId]) link('sp:'+t.sprintId, id);
+                else link(rootId, id);
+                (t.comments || []).forEach(function(cm, i){
+                    if (!cm || !cm.text) return;
+                    var cid = 'cmt:cd:'+t.id+':'+i;
+                    add(cid, 'comment', String(cm.text).slice(0,48), { kind:'card', id:t.id }, { author:cm.author });
+                    link(id, cid);
+                });
+            });
+            // 문서(wiki/canon) — 폴더 하이어라키 + 주석(코멘트)
+            function addDocs(kind, nodeType) {
+                var ds = gvActiveDocs(kind);
+                ds.forEach(function(d){
+                    var isF = !!(d.meta && d.meta.isFolder);
+                    add('doc:'+d.id, nodeType, (isF?'📁 ':'')+(d.title||'문서'), { kind:kind, id:d.id }, { folder:isF });
+                });
+                ds.forEach(function(d){
+                    var id = 'doc:'+d.id;
+                    if (d.parentId && byId['doc:'+d.parentId]) link('doc:'+d.parentId, id, true); else link(rootId, id);
+                    var anns = (d.meta && d.meta.annotations) || [];
+                    anns.forEach(function(a){
+                        if (!a) return;
+                        var cid = 'cmt:doc:'+d.id+':'+(a.id||Math.random());
+                        add(cid, 'comment', String(a.text||'코멘트').slice(0,48), { kind:kind, id:d.id, annId:a.id }, { author:a.author });
+                        link(id, cid);
+                    });
+                });
+            }
+            addDocs('wiki', 'doc');
+            addDocs('canon', 'canon');
+            // 흐름/그래프(diagram) — 폴더/스프린트 하이어라키
+            var diags = gvActiveDocs('diagram');
+            diags.forEach(function(d){
+                var isF = !!(d.meta && d.meta.isFolder);
+                add('dg:'+d.id, 'diagram', (isF?'📁 ':'')+(d.title||'그래프'), { kind:'diagram', id:d.id }, { folder:isF });
+            });
+            diags.forEach(function(d){
+                var id = 'dg:'+d.id;
+                if (d.parentId && byId['dg:'+d.parentId]) link('dg:'+d.parentId, id, true);
+                else if (d.meta && d.meta.sprintFolderFor && byId['sp:'+d.meta.sprintFolderFor]) link('sp:'+d.meta.sprintFolderFor, id);
+                else link(rootId, id);
+            });
+            // Git (coderef)
+            gvActiveDocs('coderef').forEach(function(d){
+                add('git:'+d.id, 'git', d.title || 'Git', { kind:'git', id:d.id });
+                link(rootId, 'git:'+d.id);
+            });
+            // 리뷰 — 타겟 문서/카드에 연결(없으면 루트)
+            (currentData.reviews || []).filter(function(r){ return (r.projectId||'default')===pid && !r.deleted; }).forEach(function(r){
+                var id = 'rv:'+r.id;
+                add(id, 'review', r.title || '리뷰', { kind:'review', id:r.id }, { status:r.status, rtype:r.type });
+                var linked = false;
+                if (r.targetDocId && byId['doc:'+r.targetDocId]) { link('doc:'+r.targetDocId, id, true); linked = true; }
+                if (r.targetTaskId && byId['cd:'+r.targetTaskId]) { link('cd:'+r.targetTaskId, id, true); linked = true; }
+                if (!linked) link(rootId, id);
+            });
+            return { nodes:nodes, edges:edges, byId:byId };
+        }
+        function gvInitPositions() {
+            gvState.nodes.forEach(function(n, i){
+                if (n.type === 'project') { n.x = 0; n.y = 0; }
+                else { var ang = i * 2.399963; var rad = 70 + (i % 60) * 8; n.x = Math.cos(ang)*rad; n.y = Math.sin(ang)*rad; }
+                n.fx = 0; n.fy = 0;
+            });
+        }
+        function gvTick() {
+            var nodes = gvState.nodes, edges = gvState.edges, byId = gvState.byId, n = nodes.length;
+            if (!n) return;
+            var REP = 2400, SPRING = 0.045, CENTER = 0.018, a2 = gvState.alpha;
+            for (var i=0;i<n;i++){ nodes[i].fx=0; nodes[i].fy=0; }
+            for (var i=0;i<n;i++){
+                var A=nodes[i];
+                for (var j=i+1;j<n;j++){
+                    var B=nodes[j]; var dx=A.x-B.x, dy=A.y-B.y, d2=dx*dx+dy*dy;
+                    if (d2<1){ dx=Math.random()-0.5; dy=Math.random()-0.5; d2=1; }
+                    var d=Math.sqrt(d2), f=REP/d2, ux=dx/d, uy=dy/d;
+                    A.fx+=ux*f; A.fy+=uy*f; B.fx-=ux*f; B.fy-=uy*f;
+                }
+            }
+            for (var k=0;k<edges.length;k++){
+                var e=edges[k], A=byId[e.a], B=byId[e.b]; if(!A||!B)continue;
+                var dx=B.x-A.x, dy=B.y-A.y, d=Math.sqrt(dx*dx+dy*dy)||1;
+                var len=e.strong?62:108, f=(d-len)*SPRING, ux=dx/d, uy=dy/d;
+                A.fx+=ux*f; A.fy+=uy*f; B.fx-=ux*f; B.fy-=uy*f;
+            }
+            for (var i=0;i<n;i++){
+                var p=nodes[i]; if (p===gvState.drag) continue;
+                var cf = (p.type==='project') ? CENTER*3 : CENTER;
+                p.fx += -p.x*cf; p.fy += -p.y*cf;
+                var dx=p.fx*a2, dy=p.fy*a2, mag=Math.sqrt(dx*dx+dy*dy), MAX=20;
+                if (mag>MAX){ dx=dx/mag*MAX; dy=dy/mag*MAX; }
+                p.x+=dx; p.y+=dy;
+            }
+            gvState.alpha *= 0.99;
+        }
+        function gvRender() {
+            var cv = gvCanvas(); if (!cv) return;
+            var ctx = cv.getContext('2d'); var dpr = gvState.dpr||1, cw = gvState.cw, ch = gvState.ch;
+            var s = gvState.scale, tx = gvState.tx, ty = gvState.ty;
+            ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,cw,ch);
+            function SX(x){ return cw/2 + tx + x*s; } function SY(y){ return ch/2 + ty + y*s; }
+            var edgeColor = gvCssVar('--c-text3') || '#9b968a';
+            var textColor = gvCssVar('--c-text') || '#2f2d28';
+            var hovId = gvState.hover ? gvState.hover.id : null;
+            var search = (gvState.search||'').toLowerCase();
+            // 엣지
+            ctx.lineWidth = 1; ctx.strokeStyle = edgeColor;
+            for (var k=0;k<gvState.edges.length;k++){
+                var e=gvState.edges[k], A=gvState.byId[e.a], B=gvState.byId[e.b]; if(!A||!B)continue;
+                if (gvState.hidden[A.type] || gvState.hidden[B.type]) continue;
+                var hl = hovId && (e.a===hovId || e.b===hovId);
+                ctx.globalAlpha = hl ? 0.8 : 0.2;
+                ctx.beginPath(); ctx.moveTo(SX(A.x),SY(A.y)); ctx.lineTo(SX(B.x),SY(B.y)); ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            // 노드
+            var showLabels = s > 0.55;
+            for (var i=0;i<gvState.nodes.length;i++){
+                var nd=gvState.nodes[i]; if (gvState.hidden[nd.type]) continue;
+                var x=SX(nd.x), y=SY(nd.y), r=Math.max(2, nd.r*s);
+                var match = search && nd.label.toLowerCase().indexOf(search)>=0;
+                var dim = search && !match;
+                var isHover = (nd.id===hovId);
+                ctx.globalAlpha = dim ? 0.16 : 1;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = nd.color; ctx.fill();
+                if (isHover || match) { ctx.lineWidth = 2; ctx.strokeStyle = textColor; ctx.stroke(); }
+                if (!dim && (showLabels || isHover || match)) {
+                    ctx.globalAlpha = isHover ? 1 : 0.82;
+                    ctx.fillStyle = textColor;
+                    ctx.font = '600 11px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+                    var lbl = nd.label.length>22 ? nd.label.slice(0,21)+'…' : nd.label;
+                    ctx.fillText(lbl, x, y + r + 2);
+                }
+            }
+            ctx.globalAlpha = 1;
+        }
+        function gvResize() {
+            var cv = gvCanvas(), wrap = document.getElementById('gv-canvas-wrap'); if (!cv || !wrap) return;
+            var dpr = window.devicePixelRatio || 1, w = wrap.clientWidth, h = wrap.clientHeight;
+            cv.width = Math.max(1, Math.round(w*dpr)); cv.height = Math.max(1, Math.round(h*dpr));
+            cv.style.width = w+'px'; cv.style.height = h+'px';
+            gvState.dpr = dpr; gvState.cw = w; gvState.ch = h; gvRender();
+        }
+        function gvLoop() {
+            gvState.raf = null;
+            if (currentView !== 'gview') return;
+            if (gvState.alpha > 0.005 || gvState.drag) gvTick();
+            gvRender();
+            if (gvState.alpha > 0.005 || gvState.drag || gvState.panning) gvState.raf = requestAnimationFrame(gvLoop);
+        }
+        function gvKick(a) { gvState.alpha = Math.max(gvState.alpha, a||0.4); if (!gvState.raf) gvState.raf = requestAnimationFrame(gvLoop); }
+        function gvFit() {
+            var ns = gvState.nodes.filter(function(n){ return !gvState.hidden[n.type]; });
+            if (!ns.length) { gvState.scale=1; gvState.tx=0; gvState.ty=0; gvRender(); return; }
+            var minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+            ns.forEach(function(n){ minX=Math.min(minX,n.x); maxX=Math.max(maxX,n.x); minY=Math.min(minY,n.y); maxY=Math.max(maxY,n.y); });
+            var bw=(maxX-minX)||1, bh=(maxY-minY)||1, pad=80;
+            var sc = Math.min((gvState.cw-pad*2)/bw, (gvState.ch-pad*2)/bh);
+            sc = Math.max(0.12, Math.min(2.0, sc));
+            gvState.scale = sc;
+            gvState.tx = -((minX+maxX)/2)*sc; gvState.ty = -((minY+maxY)/2)*sc;
+            gvRender();
+        }
+        function gvZoomBy(f) {
+            var ns = Math.max(0.1, Math.min(4, gvState.scale*f));
+            gvState.scale = ns; gvRender();
+        }
+        function gvOnWheel(ev) {
+            ev.preventDefault();
+            var rect = gvCanvas().getBoundingClientRect();
+            var mx = ev.clientX-rect.left, my = ev.clientY-rect.top;
+            var wx = (mx-gvState.cw/2-gvState.tx)/gvState.scale, wy = (my-gvState.ch/2-gvState.ty)/gvState.scale;
+            var f = ev.deltaY<0 ? 1.12 : 0.892;
+            gvState.scale = Math.max(0.1, Math.min(4, gvState.scale*f));
+            gvState.tx = mx - gvState.cw/2 - wx*gvState.scale;
+            gvState.ty = my - gvState.ch/2 - wy*gvState.scale;
+            gvRender();
+        }
+        function gvPick(mx, my) {
+            var wx = (mx-gvState.cw/2-gvState.tx)/gvState.scale, wy = (my-gvState.ch/2-gvState.ty)/gvState.scale;
+            var best=null, bd=1e9;
+            for (var i=gvState.nodes.length-1;i>=0;i--){
+                var n=gvState.nodes[i]; if (gvState.hidden[n.type]) continue;
+                var dx=n.x-wx, dy=n.y-wy, d=Math.sqrt(dx*dx+dy*dy);
+                if (d < n.r + 5/gvState.scale && d < bd) { bd=d; best=n; }
+            }
+            return best;
+        }
+        function gvRelXY(ev) { var r = gvCanvas().getBoundingClientRect(); return { x: ev.clientX-r.left, y: ev.clientY-r.top }; }
+        function gvOnDown(ev) {
+            var p = gvRelXY(ev); gvState.downAt = { x:p.x, y:p.y }; gvState.moved = 0;
+            var node = gvPick(p.x, p.y);
+            if (node) { gvState.drag = node; }
+            else { gvState.panning = true; gvState.panStart = { x:p.x-gvState.tx, y:p.y-gvState.ty }; }
+            gvCanvas().classList.add('gv-dragging'); gvHideTip(); gvKick(0.02);
+        }
+        function gvOnMoveWin(ev) {
+            if (currentView !== 'gview') return;
+            var cv = gvCanvas(); if (!cv) return;
+            var rect = cv.getBoundingClientRect();
+            var mx = ev.clientX-rect.left, my = ev.clientY-rect.top;
+            gvState.pointer = { x:mx, y:my };
+            if (gvState.drag) {
+                gvState.drag.x = (mx-gvState.cw/2-gvState.tx)/gvState.scale;
+                gvState.drag.y = (my-gvState.ch/2-gvState.ty)/gvState.scale;
+                if (gvState.downAt) gvState.moved += Math.abs(mx-gvState.downAt.x)+Math.abs(my-gvState.downAt.y);
+                gvKick(0.25);
+            } else if (gvState.panning) {
+                gvState.tx = mx-gvState.panStart.x; gvState.ty = my-gvState.panStart.y;
+                if (gvState.downAt) gvState.moved += Math.abs(mx-gvState.downAt.x)+Math.abs(my-gvState.downAt.y);
+                gvRender();
+            } else {
+                var inside = mx>=0 && my>=0 && mx<=rect.width && my<=rect.height;
+                var node = inside ? gvPick(mx, my) : null;
+                if (node !== gvState.hover) { gvState.hover = node; gvRender(); }
+                if (node) gvShowTip(node); else gvHideTip();
+            }
+        }
+        function gvOnUpWin(ev) {
+            if (!gvState.drag && !gvState.panning) return;
+            var wasDrag = gvState.drag, moved = gvState.moved;
+            gvState.drag = null; gvState.panning = false;
+            var cv = gvCanvas(); if (cv) cv.classList.remove('gv-dragging');
+            if (wasDrag && moved < 5) gvNavigate(wasDrag);
+        }
+        function gvShowTip(n) {
+            var tip = document.getElementById('gv-tooltip'); if (!tip) return;
+            var t = GV_TYPES[n.type] || {};
+            var sub = '';
+            if (n.extra && n.extra.status) sub = ' · ' + n.extra.status;
+            else if (n.extra && n.extra.author) sub = ' · ' + n.extra.author;
+            tip.innerHTML = '<span class="gv-tt-type">'+gvEsc(t.label||n.type)+'</span>'+gvEsc(n.label)+(sub?'<span style="opacity:.65">'+gvEsc(sub)+'</span>':'');
+            tip.style.display = 'block';
+            var wrap = document.getElementById('gv-canvas-wrap'); var ww = wrap?wrap.clientWidth:800;
+            var x = gvState.pointer.x + 14, y = gvState.pointer.y + 14;
+            if (x + 300 > ww) x = Math.max(6, gvState.pointer.x - 14 - Math.min(300, tip.offsetWidth||200));
+            tip.style.left = x+'px'; tip.style.top = y+'px';
+        }
+        function gvHideTip() { var t = document.getElementById('gv-tooltip'); if (t) t.style.display = 'none'; }
+        function gvNavigate(n) {
+            var ref = n.ref || {}; gvHideTip();
+            try {
+                if (ref.kind === 'sprint') {
+                    switchView('sprint');
+                    if (ref.id && typeof _sprintExpanded !== 'undefined') { _sprintExpanded[ref.id] = true; if (typeof renderSprintView==='function') renderSprintView(); }
+                } else if (ref.kind === 'kanban' || ref.kind === 'card') {
+                    switchView('kanban');
+                } else if (ref.kind === 'wiki') {
+                    if (typeof currentDocKind !== 'undefined') currentDocKind = 'wiki';
+                    switchView('docs'); if (ref.id && typeof openDoc==='function') setTimeout(function(){ openDoc(ref.id); }, 50);
+                } else if (ref.kind === 'canon') {
+                    if (typeof currentDocKind !== 'undefined') currentDocKind = 'canon';
+                    switchView('canon'); if (ref.id && typeof openDoc==='function') setTimeout(function(){ openDoc(ref.id); }, 50);
+                } else if (ref.kind === 'diagram') {
+                    switchView('graph');
+                    if (ref.id) setTimeout(function(){ if (window.gphState) window.gphState.currentId = ref.id; if (typeof gphRender==='function') gphRender(); }, 50);
+                } else if (ref.kind === 'review') {
+                    if (typeof openReviewInbox === 'function') openReviewInbox(); else switchView('review');
+                } else if (ref.kind === 'git') {
+                    switchView('git');
+                } else if (ref.kind === 'project') {
+                    if (typeof showToast === 'function') showToast('프로젝트 루트 노드입니다', '');
+                }
+            } catch (e) { console.warn('[gv] navigate error', e); }
+        }
+        function gvRenderLegend() {
+            var el = document.getElementById('gv-legend'); if (!el) return;
+            var counts = {}; gvState.nodes.forEach(function(n){ counts[n.type] = (counts[n.type]||0)+1; });
+            var html = '';
+            GV_TYPE_ORDER.forEach(function(t){
+                if (!counts[t]) return;
+                var ty = GV_TYPES[t];
+                html += '<div class="gv-leg-item'+(gvState.hidden[t]?' gv-off':'')+'" onclick="gvToggleType(\''+t+'\')" title="클릭: 표시/숨김">'
+                     + '<span class="gv-leg-dot" style="background:'+ty.color+'"></span><span>'+ty.label+'</span>'
+                     + '<span class="gv-leg-count">'+counts[t]+'</span></div>';
+            });
+            el.innerHTML = html;
+        }
+        function gvToggleType(t) { gvState.hidden[t] = !gvState.hidden[t]; gvRenderLegend(); gvUpdateStat(); gvRender(); }
+        function gvUpdateStat() {
+            var vis = gvState.nodes.filter(function(n){ return !gvState.hidden[n.type]; }).length;
+            var el = document.getElementById('gv-stat'); if (el) el.textContent = '노드 '+vis+' · 엣지 '+gvState.edges.length;
+        }
+        function gvOnSearch(v) { gvState.search = v || ''; gvRender(); }
+        function gvReheat() {
+            gvInitPositions(); gvState.alpha = 0.8;
+            for (var w=0; w<70; w++) gvTick();
+            gvFit(); gvKick(0.4);
+        }
+        function gvBindCanvas() {
+            var cv = gvCanvas(); if (!cv || cv._gvBound) return; cv._gvBound = true;
+            cv.addEventListener('wheel', gvOnWheel, { passive:false });
+            cv.addEventListener('mousedown', gvOnDown);
+            window.addEventListener('mousemove', gvOnMoveWin);
+            window.addEventListener('mouseup', gvOnUpWin);
+            cv.addEventListener('mouseleave', function(){ if (!gvState.drag && !gvState.panning) { gvState.hover=null; gvHideTip(); gvRender(); } });
+            if (!gvState._winResize) { gvState._winResize = true; window.addEventListener('resize', function(){ if (currentView==='gview') gvResize(); }); }
+        }
+        function gvOpen() {
+            var g = gvBuild();
+            var prev = gvState.byId || {};
+            var sameCount = (g.nodes.length === gvState.lastCount);
+            gvState.nodes = g.nodes; gvState.edges = g.edges; gvState.byId = g.byId;
+            gvInitPositions();
+            // 기존 노드 위치 보존(뷰 전환 시 흔들림 방지)
+            g.nodes.forEach(function(n){ if (prev[n.id]) { n.x = prev[n.id].x; n.y = prev[n.id].y; } });
+            if (!gvState.inited || !sameCount) {
+                gvState.alpha = 0.8;
+                for (var w=0; w<70; w++) gvTick(); // 워밍업(즉시 안정적 레이아웃)
+            }
+            gvState.lastCount = g.nodes.length; gvState.inited = true;
+            gvBindCanvas(); gvRenderLegend(); gvUpdateStat();
+            var empty = document.getElementById('gv-empty'); if (empty) empty.style.display = (g.nodes.length <= 1) ? 'flex' : 'none';
+            // 즉시 1차 사이징(clientWidth 접근이 reflow 강제) + 다음 프레임 보정(레이아웃 확정/throttled RAF 대비)
+            gvResize();
+            if (!sameCount) gvFit();
+            gvKick(sameCount ? 0.08 : 0.45);
+            requestAnimationFrame(function(){ gvResize(); if (!sameCount) gvFit(); });
+        }
+
         function switchView(viewName) {
             currentView = viewName;
             updateMobNav(viewName);
@@ -5883,6 +6316,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r49] 히스토리 토글
             var _csHis = document.getElementById('cs-nav-history'); if (_csHis) _csHis.classList.toggle('active', viewName === 'history');
             var _hisvw = document.getElementById('history-view'); if (_hisvw) { _hisvw.classList.toggle('hidden', viewName !== 'history'); _hisvw.classList.toggle('block', viewName === 'history'); }
+            // [그래프 뷰] 토글 (#gview-view는 display:flex 고정 — .hidden만 토글)
+            var _csGv = document.getElementById('cs-nav-gview'); if (_csGv) _csGv.classList.toggle('active', viewName === 'gview');
+            var _gvvw = document.getElementById('gview-view'); if (_gvvw) _gvvw.classList.toggle('hidden', viewName !== 'gview');
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -5998,6 +6434,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gph2 = document.getElementById('gif-picker'); if (_gph2) _gph2.style.display = 'none';
                 if (typeof renderHistoryView === 'function') renderHistoryView();
+            } else if (viewName === 'gview') {
+                // [그래프 뷰] 전역 지식 그래프 (canvas)
+                var _kvgv = document.getElementById('kanban-view'); if (_kvgv) { _kvgv.classList.add('hidden'); _kvgv.classList.remove('block'); }
+                var _dvgv = document.getElementById('docs-view'); if (_dvgv) { _dvgv.classList.add('hidden'); _dvgv.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpgv = document.getElementById('gif-picker'); if (_gpgv) _gpgv.style.display = 'none';
+                if (typeof gvOpen === 'function') gvOpen();
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
