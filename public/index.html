@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r59 (r58 + Tauri v2 자동 업데이트(데스크톱): updater/process 플러그인·Rust check/install 커맨드·withGlobalTauri·capabilities·Claude풍 '다시 시작' 업데이트 카드·GitHub Release+latest.json 워크플로. 웹은 카드 inert(no-op)) -->
+<!-- BUILD: 2026-05-27 r60 (r59 + 데스크톱 OAuth 수정: 앱 웹뷰 대신 시스템 브라우저로 OAuth 열고 tda://auth-callback 딥링크로 복귀(Pages 404 방지). open crate + open_external 커맨드. 웹 로그인은 변경 없음) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3983,14 +3983,29 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 document.getElementById('auth-error').textContent = 'Supabase 클라이언트 초기화 실패. 콘솔(F12)을 확인하세요.';
                 return;
             }
-            // Tauri에서는 tda://auth-callback 딥링크로 콜백 (브라우저는 현재 URL)
-            const { error } = await client.auth.signInWithOAuth({
-                provider,
-                options: { redirectTo: IS_TAURI ? 'tda://auth-callback' : window.location.href, scopes: provider === 'github' ? 'read:user' : undefined }
-            });
-            if (error) {
-                document.getElementById('auth-error').style.display = 'block';
-                document.getElementById('auth-error').textContent = '로그인 실패: ' + error.message;
+            var _scopes = provider === 'github' ? 'read:user' : undefined;
+            var _showErr = function (msg) { var el = document.getElementById('auth-error'); if (el) { el.style.display = 'block'; el.textContent = msg; } };
+            if (IS_TAURI) {
+                // [r60] 데스크톱: 앱 웹뷰를 OAuth로 이동시키지 않고(=Pages 404 방지), URL만 받아 시스템 브라우저로 염
+                //   → 브라우저에서 로그인 → tda://auth-callback 딥링크로 앱 복귀(__tdaAuthCallback이 세션 설정)
+                const { data, error } = await client.auth.signInWithOAuth({
+                    provider,
+                    options: { redirectTo: 'tda://auth-callback', skipBrowserRedirect: true, scopes: _scopes }
+                });
+                if (error) { _showErr('로그인 실패: ' + error.message); return; }
+                if (data && data.url) {
+                    try {
+                        if (window.__TAURI__ && window.__TAURI__.core) await window.__TAURI__.core.invoke('open_external', { url: data.url });
+                        else window.open(data.url, '_blank');
+                        if (typeof showToast === 'function') showToast('브라우저에서 로그인을 완료한 뒤 앱으로 돌아오세요.', 'info');
+                    } catch (e) { _showErr('브라우저 열기 실패: ' + e + ' — 직접 브라우저에서 로그인해 주세요.'); }
+                }
+            } else {
+                const { error } = await client.auth.signInWithOAuth({
+                    provider,
+                    options: { redirectTo: window.location.href, scopes: _scopes }
+                });
+                if (error) { _showErr('로그인 실패: ' + error.message); }
             }
         }
 

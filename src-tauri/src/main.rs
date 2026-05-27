@@ -77,6 +77,13 @@ async fn update_check(_app: tauri::AppHandle) -> Result<Option<UpdateInfo>, Stri
 #[tauri::command]
 async fn update_install(_app: tauri::AppHandle) -> Result<(), String> { Ok(()) }
 
+// [r60] OAuth URL을 시스템 기본 브라우저로 — 앱 웹뷰를 OAuth 페이지로 보내지 않고,
+//   브라우저에서 로그인 후 tda://auth-callback 딥링크로 앱에 복귀(기존 forward_auth_urls).
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    open::that(url).map_err(|e| e.to_string())
+}
+
 fn main() {
     let mut builder = tauri::Builder::default();
 
@@ -95,7 +102,7 @@ fn main() {
 
     builder
         .plugin(tauri_plugin_deep_link::init())
-        .invoke_handler(tauri::generate_handler![update_check, update_install])
+        .invoke_handler(tauri::generate_handler![update_check, update_install, open_external])
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
