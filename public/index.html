@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r34 (r33 + 문서코멘트 개편: doc.meta 동기화·스크롤위치 정렬·대댓글·@멘션+알림·본인댓글 개별삭제·인용텍스트 숨김) -->
+<!-- BUILD: 2026-05-27 r35 (r34 + HTML 100% 임베드(sandbox iframe·접기첨부)+붙여넣기 형식 팝업(MD/HTML/텍스트/첨부)+.html 드롭 선택) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -864,6 +864,29 @@
 
         /* ========== IMAGE DROP ZONE ========== */
         .drop-active { outline: 3px dashed #c96442 !important; background: rgba(201,100,66,0.05) !important; }
+        /* [r35] HTML 임베드(첨부) 블록 */
+        .tda-embed { border:1px solid var(--c-border); border-radius:10px; margin:12px 0; overflow:hidden; background:var(--c-paper); }
+        .tda-embed-head { display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--c-text); background:var(--c-card); border-bottom:1px solid var(--c-border); user-select:none; }
+        .tda-embed-head:hover { background:var(--c-accent-soft); }
+        .tda-embed-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%; }
+        .tda-embed.collapsed .tda-embed-head { border-bottom:none; }
+        .tda-embed-caret { margin-left:auto; transition:transform .15s; color:var(--c-text3); font-size:11px; }
+        .tda-embed.collapsed .tda-embed-caret { transform:rotate(-90deg); }
+        .tda-embed-tag { font-size:10px; font-weight:700; color:var(--c-accent); background:var(--c-accent-soft); border-radius:5px; padding:1px 6px; flex-shrink:0; }
+        .tda-embed-body { background:#fff; }
+        body.dark .tda-embed-body { background:#1f1e1c; }
+        .tda-embed.collapsed .tda-embed-body { display:none; }
+        .tda-embed-body iframe { width:100%; border:none; display:block; min-height:120px; background:#fff; }
+        /* [r35] 삽입 형식 선택 팝업 */
+        .tda-chooser-ov { position:fixed; inset:0; z-index:100050; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); padding:20px; }
+        .tda-chooser { width:340px; max-width:100%; background:var(--c-card); border:1px solid var(--c-border); border-radius:14px; box-shadow:0 16px 48px rgba(0,0,0,0.32); padding:14px; display:flex; flex-direction:column; gap:7px; }
+        .tda-chooser-title { font-size:14px; font-weight:800; color:var(--c-text); padding:2px 4px 8px; }
+        .tda-chooser-btn { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; width:100%; padding:9px 12px; border:1px solid var(--c-border); border-radius:10px; background:var(--c-paper); color:var(--c-text); cursor:pointer; transition:background .12s,border-color .12s; }
+        .tda-chooser-btn:hover { background:var(--c-accent-soft); border-color:var(--c-accent); }
+        .tda-chooser-l { font-size:13px; font-weight:700; }
+        .tda-chooser-d { font-size:11px; color:var(--c-text3); }
+        .tda-chooser-cancel { margin-top:3px; padding:7px; border:none; background:none; color:var(--c-text3); font-size:12px; font-weight:600; cursor:pointer; border-radius:8px; }
+        .tda-chooser-cancel:hover { background:var(--c-paper); color:var(--c-text); }
 
         /* ========== TABLE COLUMN RESIZE ========== */
         .col-resize-handle {
@@ -4602,28 +4625,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 return;
             }
 
-            // 2) Word나 웹에서 복사한 HTML(서식)이 있다면 변환하여 삽입
-            if (pastedHtml && !/^https?:\/\/[^\s]+$/.test(pastedText)) {
+            // 2) [r35] 서식 있는 HTML(Word/웹) 또는 HTML 소스 텍스트 → 붙여넣기 형식 팝업
+            var _looksHtmlSrc = (/<[a-z!][\s\S]*>/i.test(pastedText) && (/<\/[a-z]+>/i.test(pastedText) || /\/>/.test(pastedText) || /<!doctype/i.test(pastedText)));
+            if ((pastedHtml || _looksHtmlSrc) && !/^https?:\/\/[^\s]+$/.test(pastedText)) {
                 e.preventDefault();
-                // [v21 PERF B3] Turndown이 이미 로드되었으면 즉시 동기 처리, 아니면 비동기 로드 후 삽입
-                if (typeof window.TurndownService !== 'undefined' && typeof window.turndownPluginGfm !== 'undefined') {
-                    const markdown = htmlToMarkdownWithTables(pastedHtml);
-                    insertToActiveEditor(e.target, markdown);
-                    showToast("서식 있는 텍스트(표 포함)를 삽입했습니다.", "info");
-                } else {
-                    showToast("📄 변환기 로딩 중...", "info");
-                    var _targetEditor = e.target;
-                    loadTurndown().then(function() {
-                        var markdown = htmlToMarkdownWithTables(pastedHtml);
-                        insertToActiveEditor(_targetEditor, markdown);
-                        showToast("서식 있는 텍스트(표 포함)를 삽입했습니다.", "info");
-                    }).catch(function(err) {
-                        console.error('Turndown 로드 실패:', err);
-                        // 폴백: 일반 텍스트로 삽입
-                        if (pastedText) insertToActiveEditor(_targetEditor, pastedText);
-                        showToast("⚠️ 서식 변환 실패 — 일반 텍스트로 삽입", "alert");
-                    });
-                }
+                var _tEditor = e.target;
+                var _html = pastedHtml || pastedText; // text/html 우선, 없으면 HTML 소스 텍스트
+                _htmlInsertChooser('붙여넣기 형식 선택', [
+                    { key:'md',     label:'① 마크다운으로',       desc:'서식을 마크다운으로 변환 (기본 동작)' },
+                    { key:'html',   label:'② HTML 그대로 (100%)', desc:'스타일·폰트·스크립트까지 그대로 임베드 (펼침)' },
+                    { key:'text',   label:'③ 텍스트만',           desc:'서식 없이 순수 텍스트' },
+                    { key:'attach', label:'④ 첨부로 (접기)',       desc:'HTML을 접힌 첨부 블록으로 — 클릭해 펼침' }
+                ]).then(function(choice){
+                    if(!choice) return; // 취소
+                    if(choice==='md') _pasteAsMarkdown(_tEditor, _html);
+                    else if(choice==='text') insertToActiveEditor(_tEditor, pastedText || (_html||'').replace(/<[^>]+>/g,''));
+                    else _insertHtmlEmbed(_html, _tdaGuessTitle(_html) || '붙여넣은 HTML', choice==='attach'?'attach':'embed');
+                });
+                return;
             }
             // 그 외 순수 텍스트는 브라우저 기본 붙여넣기 동작에 맡김
         }
@@ -6178,6 +6197,8 @@ return data;
                                     _annSynced = true;
                                     if (typeof _annNotifyMentions === 'function') _annNotifyMentions(u.id);
                                 }
+                                // [r35] 다른 사용자가 추가한 HTML 임베드 동기화
+                                if (u.meta && u.meta.htmlEmbeds) { if (!doc.meta) doc.meta = {}; doc.meta.htmlEmbeds = u.meta.htmlEmbeds; }
                                 if (currentView === 'docs') {
                                     renderDocTree();
                                     if (activeDocId === u.id && changed) {
@@ -7735,6 +7756,100 @@ return data;
             }, 3000);
         }
 
+        // ============================================================
+        // [r35] HTML 100% 임베드 — doc.meta.htmlEmbeds[id]에 원본 HTML 저장,
+        //   본문엔 짧은 마커 <!--TDAHTML:id-->. updateDocPreview가 sandbox iframe로 렌더.
+        //   (서식·스타일·폰트·JS 전부 보존, 부모와 격리되어 안전)
+        // ============================================================
+        function _tdaEmbedResizeScript() {
+            return '<scr'+'ipt>(function(){function h(){try{parent.postMessage({type:"tda-iframe-h",h:Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0)},"*")}catch(e){}}h();addEventListener("load",h);addEventListener("resize",h);setTimeout(h,200);setTimeout(h,900);if(window.MutationObserver){try{new MutationObserver(h).observe(document.documentElement,{childList:true,subtree:true,attributes:true})}catch(e){}}})()</scr'+'ipt>';
+        }
+        function _tdaEmbedSrcdoc(html) {
+            html = String(html || '');
+            var rs = _tdaEmbedResizeScript();
+            if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, rs + '</body>');
+            return html + rs;
+        }
+        function _tdaGuessTitle(html) {
+            html = String(html || '');
+            var m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+            if (m && m[1].trim()) return m[1].trim().slice(0, 60);
+            m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+            if (m) { var t = m[1].replace(/<[^>]+>/g, '').trim(); if (t) return t.slice(0, 60); }
+            return '';
+        }
+        // 미리보기에서 [data-tdahtml] 마운트를 찾아 iframe(접기/펼치기 첨부 블록)으로 교체
+        function _buildHtmlEmbeds(previewEl) {
+            if (!previewEl) return;
+            var mounts = previewEl.querySelectorAll('[data-tdahtml]');
+            if (!mounts.length) return;
+            var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
+            var embeds = (doc && doc.meta && doc.meta.htmlEmbeds) || {};
+            if (!window._tdaEmbedResizeBound) {
+                window._tdaEmbedResizeBound = true;
+                window.addEventListener('message', function (e) {
+                    if (!e.data || e.data.type !== 'tda-iframe-h' || !e.data.h) return;
+                    var fr = document.querySelectorAll('.tda-embed-body iframe');
+                    for (var i = 0; i < fr.length; i++) { if (fr[i].contentWindow === e.source) { fr[i].style.height = Math.max(120, e.data.h + 24) + 'px'; break; } }
+                });
+            }
+            Array.prototype.forEach.call(mounts, function (mount) {
+                var id = mount.getAttribute('data-tdahtml');
+                var em = embeds[id];
+                var wrap = document.createElement('div');
+                wrap.className = 'tda-embed' + ((em && em.mode === 'attach') ? ' collapsed' : '');
+                if (!em) {
+                    wrap.innerHTML = '<div class="tda-embed-head">📎 <span>임베드 데이터를 찾을 수 없음</span><span class="tda-embed-tag">' + _annEsc(id) + '</span></div>';
+                    mount.parentNode.replaceChild(wrap, mount); return;
+                }
+                var head = document.createElement('div'); head.className = 'tda-embed-head';
+                head.innerHTML = '📎 <span class="tda-embed-name">' + _annEsc(em.title || 'HTML') + '</span><span class="tda-embed-tag">HTML</span><span class="tda-embed-caret">▾</span>';
+                head.onclick = function () { wrap.classList.toggle('collapsed'); };
+                var body = document.createElement('div'); body.className = 'tda-embed-body';
+                var iframe = document.createElement('iframe');
+                iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox');
+                iframe.setAttribute('loading', 'lazy');
+                iframe.srcdoc = _tdaEmbedSrcdoc(em.html);
+                body.appendChild(iframe);
+                wrap.appendChild(head); wrap.appendChild(body);
+                mount.parentNode.replaceChild(wrap, mount);
+            });
+        }
+        // 활성 문서에 HTML 임베드 삽입 (mode: 'embed'=펼침 / 'attach'=접힘)
+        function _insertHtmlEmbed(html, title, mode) {
+            if (!activeDocId) { showToast('먼저 문서를 여세요.', 'alert'); return; }
+            var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
+            if (!doc) return;
+            if (!doc.meta) doc.meta = {};
+            if (!doc.meta.htmlEmbeds) doc.meta.htmlEmbeds = {};
+            var id = 'he_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+            doc.meta.htmlEmbeds[id] = { html: String(html || ''), title: String(title || 'HTML'), mode: (mode === 'attach' ? 'attach' : 'embed'), at: Date.now() };
+            insertAtCursor('<!--TDAHTML:' + id + '-->'); // handleDocInput → 저장(meta 포함)+미리보기
+            if (typeof flushDocSave === 'function') flushDocSave(); // meta 즉시 동기화
+            showToast('📎 HTML ' + (mode === 'attach' ? '첨부' : '임베드') + ' 삽입됨', 'success');
+        }
+        // 공용 선택 팝업 — options:[{key,label,desc}] → Promise<key|null>
+        function _htmlInsertChooser(title, options) {
+            return new Promise(function (resolve) {
+                var ov = document.createElement('div'); ov.className = 'tda-chooser-ov';
+                var inner = '<div class="tda-chooser"><div class="tda-chooser-title">' + _annEsc(title) + '</div>';
+                options.forEach(function (o) { inner += '<button class="tda-chooser-btn" data-k="' + o.key + '"><span class="tda-chooser-l">' + _annEsc(o.label) + '</span>' + (o.desc ? '<span class="tda-chooser-d">' + _annEsc(o.desc) + '</span>' : '') + '</button>'; });
+                inner += '<button class="tda-chooser-cancel" data-k="">취소</button></div>';
+                ov.innerHTML = inner;
+                function done(k) { if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); resolve(k || null); }
+                ov.addEventListener('click', function (e) { if (e.target === ov) return done(null); var b = e.target.closest('[data-k]'); if (b) done(b.getAttribute('data-k')); });
+                function onKey(e) { if (e.key === 'Escape') done(null); }
+                document.addEventListener('keydown', onKey);
+                document.body.appendChild(ov);
+            });
+        }
+        // 붙여넣은/드롭한 HTML을 마크다운으로 변환해 삽입 (기존 Turndown 경로 재사용)
+        function _pasteAsMarkdown(targetEditor, html) {
+            function go() { try { var md = htmlToMarkdownWithTables(html); insertToActiveEditor(targetEditor, md); showToast('마크다운으로 변환해 삽입했습니다.', 'info'); } catch (e) { insertToActiveEditor(targetEditor, html.replace(/<[^>]+>/g, '')); showToast('⚠️ 변환 실패 — 텍스트로 삽입', 'alert'); } }
+            if (typeof window.TurndownService !== 'undefined' && typeof window.turndownPluginGfm !== 'undefined') go();
+            else { showToast('📄 변환기 로딩 중...', 'info'); loadTurndown().then(go).catch(function () { insertToActiveEditor(targetEditor, html.replace(/<[^>]+>/g, '')); showToast('⚠️ 변환기 로드 실패 — 텍스트로 삽입', 'alert'); }); }
+        }
+
         // [v29 FIX-IMG-2] 이미지 로드 실패 placeholder의 "URL로 복구" 버튼 핸들러
         // 현재 활성 문서의 마크다운에서 img://{imgId} 참조를 사용자가 입력한 외부 URL로 교체
         function restoreImageFromUrl(ev, imgId) {
@@ -7806,6 +7921,9 @@ return data;
                 return '<span data-tdaref="' + key + '"></span>';
             });
 
+            // [r35] HTML 임베드 마커(<!--TDAHTML:id-->) → 마운트 placeholder (sanitize 후 iframe으로 교체)
+            mdNoImg = mdNoImg.replace(/<!--TDAHTML:([A-Za-z0-9_]+)-->/g, function(m, id){ return '\n\n<div class="tda-html-mount" data-tdahtml="' + id + '"></div>\n\n'; });
+
             // 마크다운 → HTML (이미지 없이)
             var html = parseMarkdownWithTables(mdNoImg);
 
@@ -7842,10 +7960,11 @@ return data;
 
             // DOMPurify (data-imgref 등 추가 허용 — 기본 config와 병합)
             var purifyConf = Object.assign({}, domPurifyConfig, {
-                ADD_ATTR: (domPurifyConfig.ADD_ATTR || []).concat(['data-imgref']),
+                ADD_ATTR: (domPurifyConfig.ADD_ATTR || []).concat(['data-imgref', 'data-tdahtml']),
                 ADD_TAGS: (domPurifyConfig.ADD_TAGS || []).concat([])
             });
             preview.innerHTML = DOMPurify.sanitize(html, purifyConf);
+            _buildHtmlEmbeds(preview); // [r35] HTML 임베드 마운트 → sandbox iframe
 
             // 즉시 처리 (텍스트/표)
             attachFavoriteButtonsToMedia(preview);
@@ -12881,42 +13000,60 @@ ${intrLog}
                 // .html / .htm — Turndown으로 HTML → Markdown 변환 (DOCX 파이프라인의 변환 단계 재사용)
                 reader.onload = function(ev) {
                     updateFileProgress('read', 'done', _fpFormatBytes(file.size));
-                    updateFileProgress('parser', 'active', 'turndown.js 로딩 중...');
-                    loadTurndown().then(function() {
-                        updateFileProgress('parser', 'done', '변환기 준비 완료');
-                        updateFileProgress('convert', 'active', 'HTML → 마크다운 변환 중...');
-                        var md;
-                        try {
-                            var htmlText = ev.target.result || '';
-                            var bodyHtml = htmlText;
-                            try {
-                                var parsed = new DOMParser().parseFromString(htmlText, 'text/html');
-                                if (parsed && parsed.body) {
-                                    parsed.querySelectorAll('script,style,noscript,template,link,meta,title').forEach(function(el){ el.remove(); });
-                                    bodyHtml = parsed.body.innerHTML || htmlText;
-                                }
-                            } catch(_pe) {}
-                            md = htmlToMarkdownWithTables(bodyHtml);
-                        } catch(convErr) {
-                            updateFileProgress('convert', 'error', '변환 오류: ' + (convErr.message || convErr));
-                            showToast('HTML 변환 실패: ' + (convErr.message || convErr), 'alert');
+                    var htmlText = ev.target.result || '';
+                    function _saveDone(label){ updateFileProgress('save','active','저장 중...'); clearTimeout(_docSaveTimer); flushDocSave(function(err){ if(err){ updateFileProgress('save','error',err.message||'저장 실패'); } else { updateFileProgress('save','done',supabaseClient?'DB 저장 완료':'로컬 저장 완료'); completeFileProgress('"'+file.name+'" '+label); } }); }
+                    // [r35] 가져오기 형식 선택 (HTML 원본 100% / 마크다운 / 텍스트)
+                    _htmlInsertChooser('HTML 파일 가져오기 — "' + file.name + '"', [
+                        { key:'html', label:'① HTML 그대로 (100%)', desc:'스타일·폰트·스크립트·인터랙션 전부 유지 (임베드)' },
+                        { key:'md',   label:'② 마크다운으로 변환',   desc:'서식만 마크다운으로 (스크립트/스타일 제거)' },
+                        { key:'text', label:'③ 텍스트만',            desc:'태그 제거, 순수 텍스트' }
+                    ]).then(function(choice){
+                        if(!choice){ var mod=document.getElementById('file-progress-modal'); if(mod) mod.classList.add('hidden'); return; }
+                        if(choice==='html'){
+                            updateFileProgress('convert','done','HTML 원본'); updateFileProgress('insert','active','임베드 삽입 중...');
+                            _insertHtmlEmbed(htmlText, file.name, 'embed');
+                            updateFileProgress('insert','done','삽입 완료'); _saveDone('임베드 완료');
                             return;
                         }
-                        updateFileProgress('convert', 'done', md.length.toLocaleString() + '자 변환됨');
-                        updateFileProgress('insert', 'active', '커서 위치에 삽입 중...');
-                        insertAtCursor(md);
-                        updateFileProgress('insert', 'done', '삽입 완료');
-                        updateFileProgress('save', 'active', 'Supabase에 저장 중...');
-                        clearTimeout(_docSaveTimer);
-                        flushDocSave(function(err) {
-                            if(err) { updateFileProgress('save', 'error', err.message || '저장 실패'); }
-                            else { updateFileProgress('save', 'done', supabaseClient ? 'DB 저장 완료' : '로컬 저장 완료'); completeFileProgress('"' + file.name + '" 삽입 완료'); }
+                        if(choice==='text'){
+                            var txt='';
+                            try{ var p=new DOMParser().parseFromString(htmlText,'text/html'); p.querySelectorAll('script,style,noscript,template').forEach(function(el){el.remove();}); txt=((p.body&&p.body.textContent)||'').replace(/\n{3,}/g,'\n\n').trim(); }catch(e){ txt=htmlText.replace(/<[^>]+>/g,''); }
+                            updateFileProgress('convert','done','텍스트 추출'); updateFileProgress('insert','active','삽입 중...');
+                            insertAtCursor(txt); updateFileProgress('insert','done','삽입 완료'); _saveDone('삽입 완료');
+                            return;
+                        }
+                        // 'md' — 기존 Turndown 경로
+                        updateFileProgress('parser', 'active', 'turndown.js 로딩 중...');
+                        loadTurndown().then(function() {
+                            updateFileProgress('parser', 'done', '변환기 준비 완료');
+                            updateFileProgress('convert', 'active', 'HTML → 마크다운 변환 중...');
+                            var md;
+                            try {
+                                var bodyHtml = htmlText;
+                                try {
+                                    var parsed = new DOMParser().parseFromString(htmlText, 'text/html');
+                                    if (parsed && parsed.body) {
+                                        parsed.querySelectorAll('script,style,noscript,template,link,meta,title').forEach(function(el){ el.remove(); });
+                                        bodyHtml = parsed.body.innerHTML || htmlText;
+                                    }
+                                } catch(_pe) {}
+                                md = htmlToMarkdownWithTables(bodyHtml);
+                            } catch(convErr) {
+                                updateFileProgress('convert', 'error', '변환 오류: ' + (convErr.message || convErr));
+                                showToast('HTML 변환 실패: ' + (convErr.message || convErr), 'alert');
+                                return;
+                            }
+                            updateFileProgress('convert', 'done', md.length.toLocaleString() + '자 변환됨');
+                            updateFileProgress('insert', 'active', '커서 위치에 삽입 중...');
+                            insertAtCursor(md);
+                            updateFileProgress('insert', 'done', '삽입 완료');
+                            _saveDone('삽입 완료');
+                            showToast('"' + file.name + '" 삽입 완료 (HTML→MD)', 'success');
+                        }).catch(function(err) {
+                            updateFileProgress('parser', 'error', 'turndown 로드 실패 (네트워크 확인)');
+                            showToast('HTML 처리 실패: ' + (err && err.message ? err.message : err), 'alert');
+                            console.error('[processEditorFile html]', err);
                         });
-                        showToast('"' + file.name + '" 삽입 완료 (HTML)', 'success');
-                    }).catch(function(err) {
-                        updateFileProgress('parser', 'error', 'turndown 로드 실패 (네트워크 확인)');
-                        showToast('HTML 처리 실패: ' + (err && err.message ? err.message : err), 'alert');
-                        console.error('[processEditorFile html]', err);
                     });
                 };
                 reader.readAsText(file, 'UTF-8');
