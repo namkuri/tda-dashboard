@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r67 (데스크톱 원격로드 OAuth 수정: tauri.localhost(로컬번들)에서만 시스템브라우저, github.io 원격로드는 일반 웹 OAuth로 현재 origin 복귀 → open_external ACL 차단 회피. 재빌드 불필요·앱 재실행만) -->
+<!-- BUILD: 2026-05-28 r68 (데스크톱 로그인: opener 플러그인으로 시스템 브라우저 열기(원격 ACL 통과, open_external 폴백)+딥링크 복귀. 빌드 수정(createUpdaterArtifacts off→서명키 불필요). 원격 URL 캐시버스트 ?v=0.46.0. 코멘트 새로고침 후 미표시 수정(마크 재시도). 0.46.0) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4035,24 +4035,26 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
             var _scopes = provider === 'github' ? 'read:user' : undefined;
             var _showErr = function (msg) { var el = document.getElementById('auth-error'); if (el) { el.style.display = 'block'; el.textContent = msg; } };
-            // [r67] 시스템 브라우저(open_external+tda:// 딥링크)는 로컬 번들(tauri.localhost)에서만 필요.
-            //   데스크톱이 github.io를 원격 로드하는 경우엔 현재 origin이 Supabase 허용 리다이렉트라
-            //   일반 웹 OAuth(웹뷰 내 이동→복귀)가 그대로 동작 → IPC/ACL 불필요(open_external ACL 차단 회피).
-            var _tauriLocalHost = (location.protocol === 'tauri:') || /(^|\.)tauri\.localhost$/.test(location.hostname) || location.hostname === 'tauri';
-            if (IS_TAURI && _tauriLocalHost) {
-                // [r60] 로컬 번들: 앱 웹뷰를 OAuth로 이동시키지 않고 시스템 브라우저로 염
-                //   → 브라우저에서 로그인 → tda://auth-callback 딥링크로 앱 복귀(__tdaAuthCallback이 세션 설정)
+            // [r68] 데스크톱(로컬 번들·github.io 원격 로드 모두): 시스템 브라우저로 OAuth → tda:// 딥링크 복귀.
+            //   브라우저 열기는 공식 opener 플러그인(plugin:opener|open_url)으로 — 원격 페이지에서도 ACL 허용됨.
+            //   (커스텀 open_external은 원격에서 ACL 차단되므로 폴백으로만.) Google이 임베디드 웹뷰 OAuth를
+            //   막는 문제도 시스템 브라우저라 우회됨.
+            if (IS_TAURI) {
                 const { data, error } = await client.auth.signInWithOAuth({
                     provider,
                     options: { redirectTo: 'tda://auth-callback', skipBrowserRedirect: true, scopes: _scopes }
                 });
                 if (error) { _showErr('로그인 실패: ' + error.message); return; }
                 if (data && data.url) {
-                    try {
-                        if (window.__TAURI__ && window.__TAURI__.core) await window.__TAURI__.core.invoke('open_external', { url: data.url });
-                        else window.open(data.url, '_blank');
-                        if (typeof showToast === 'function') showToast('브라우저에서 로그인을 완료한 뒤 앱으로 돌아오세요.', 'info');
-                    } catch (e) { _showErr('브라우저 열기 실패: ' + e + ' — 직접 브라우저에서 로그인해 주세요.'); }
+                    var _inv = (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) ? window.__TAURI__.core.invoke : null;
+                    var _opened = false;
+                    if (_inv) {
+                        try { await _inv('plugin:opener|open_url', { url: data.url, path: data.url }); _opened = true; }
+                        catch (e1) { try { await _inv('open_external', { url: data.url }); _opened = true; } catch (e2) { console.warn('[oauth] open 실패:', (e1 && e1.message) || e1, (e2 && e2.message) || e2); } }
+                    }
+                    if (!_opened) { try { window.open(data.url, '_blank'); _opened = true; } catch (e3) {} }
+                    if (_opened) { if (typeof showToast === 'function') showToast('브라우저에서 로그인을 완료한 뒤 앱으로 돌아오세요.', 'info'); }
+                    else { _showErr('브라우저 열기 실패 — 직접 브라우저에서 로그인해 주세요.'); }
                 }
             } else {
                 const { error } = await client.auth.signInWithOAuth({
@@ -8720,6 +8722,7 @@ return data;
                 if (typeof applyAnnotationHighlights === 'function') applyAnnotationHighlights(); else renderAnnotationsPanelPositioned(); // [r50] 코멘트 하이라이트 재적용
                 applyAllHighlights();
             }, 80);
+            if (typeof _annReapplySoon === 'function') _annReapplySoon(docId); // [r68] 마크 안 붙으면 재시도
         }
 
         // [v21 PERF B5] 단일 문서 content fetch — 트리 메타에 없는 큰 필드 lazy load
@@ -13637,6 +13640,21 @@ ${intrLog}
                     renderAnnotationsPanelPositioned();
                 }, 150);
             });
+        }
+
+        // [r68] 새로고침 후 문서 열람 시 코멘트가 안 보이던 문제:
+        //   본문(content) 지연 로드/프리뷰 렌더 타이밍 때문에 마크가 안 붙는 경우 — 마크가 생길 때까지 재시도.
+        function _annReapplySoon(docId) {
+            var tries = 0;
+            var iv = setInterval(function () {
+                tries++;
+                if (activeDocId !== docId) { clearInterval(iv); return; }
+                var anns = wikiAnnotations[activeDocId] || [];
+                var marks = document.querySelectorAll('#doc-preview-container mark[data-annotation]').length;
+                // 코멘트가 없거나, 이미 마크가 붙었거나, 편집모드거나, 최대 시도 초과면 중단
+                if (anns.length === 0 || marks > 0 || previewEditMode || tries > 8) { clearInterval(iv); return; }
+                if (typeof applyAnnotationHighlights === 'function') applyAnnotationHighlights();
+            }, 300);
         }
 
         function highlightTextInContainer(container, text, color, annId, occ) {

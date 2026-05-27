@@ -101,6 +101,7 @@ fn main() {
     }
 
     builder
+        .plugin(tauri_plugin_opener::init()) // [r68] 시스템 브라우저 열기 (원격 페이지 ACL 허용)
         .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(tauri::generate_handler![update_check, update_install, open_external])
         .setup(|app| {

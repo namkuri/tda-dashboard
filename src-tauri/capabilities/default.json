@@ -9,6 +9,8 @@
   "permissions": [
     "core:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "opener:default",
+    "opener:allow-open-url"
   ]
 }
