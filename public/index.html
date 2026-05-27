@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r37 (r36 + 트리너비 200px·ul 좌측패딩(40px) 제거(빈공간)·HTML임베드 폭변경시 재로드(좁게굳는 문제)) -->
+<!-- BUILD: 2026-05-27 r38 (r37 + 트리 좌측여백 추가축소(패딩·캐럿·아이템)·헤더 컴팩트·HTML임베드 폭 px명시(zoom/100% 오해석 회피)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1693,8 +1693,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* ── Google Docs style layout ── */
         #doc-sidebar .tree-item {
             border-radius: 6px;
-            margin: 1px 4px;
-            padding: 4px 8px;
+            margin: 1px 2px;
+            padding: 4px 5px;
             font-size: 13px;
         }
         #doc-sidebar .tree-item:hover { background: #f1f3f4; }
@@ -3299,9 +3299,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
                 <div id="doc-sidebar" class="bg-white border-r border-gray-100 flex flex-col flex-shrink-0 transition-all" style="width:200px;min-width:130px;flex:0 0 auto;">
                     <!-- 문서 보관함 헤더 (프로젝트 변경 지원) -->
-                    <div class="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl flex justify-between items-center">
-                        <div class="cursor-pointer hover:bg-gray-200 px-2 py-1 -ml-2 rounded flex items-center gap-1 transition-colors" onclick="openProjectModal()" title="프로젝트 변경">
-                            <span class="font-black text-gray-800" id="current-project-name">📂 문서</span>
+                    <div class="px-2 py-2 border-b border-gray-200 bg-gray-50 rounded-t-xl flex justify-between items-center gap-1">
+                        <div class="cursor-pointer hover:bg-gray-200 px-1 py-1 rounded flex items-center gap-1 transition-colors min-w-0" onclick="openProjectModal()" title="프로젝트 변경">
+                            <span class="font-black text-gray-800 truncate" id="current-project-name" style="max-width:80px;">📂 문서</span>
                             <span class="text-[10px] text-gray-500">▼</span>
                         </div>
                         <!-- [v35] 사이드바 검색 아이콘 — 프로젝트 변경 아이콘 옆 -->
@@ -3339,7 +3339,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         </div>
                     </div>
                     <div id="personal-picker-bar" style="display:none;padding:8px 10px;border-bottom:1px solid var(--c-border);background:var(--c-paper);"></div>
-                    <div class="flex-1 overflow-y-auto p-3 bg-white rounded-b-xl" style="position:relative;" id="doc-tree-scroll">
+                    <div class="flex-1 overflow-y-auto pl-1 pr-2 py-2 bg-white rounded-b-xl" style="position:relative;" id="doc-tree-scroll">
                         <div id="doc-drop-indicator"></div>
                         <div id="doc-tree-container"></div>
                     </div>
@@ -7175,7 +7175,7 @@ return data;
                 const isActive = activeDocId === doc.id ? 'active' : '';
                 const hasChildren = cache.hasChildrenSet.has(doc.id); // O(1) lookup
                 const isFolder = !!(doc.meta && doc.meta.isFolder);
-                const caretHtml = (hasChildren || isFolder) ? `<span class="inline-block w-4 text-center cursor-pointer text-gray-400 hover:text-gray-700 transition-transform ${doc.isCollapsed ? '' : 'rotate-90'}" onclick="toggleDocCollapse('${doc.id}', event)">▶</span>` : `<span class="inline-block w-4"></span>`;
+                const caretHtml = (hasChildren || isFolder) ? `<span class="inline-block w-3 text-center cursor-pointer text-gray-400 hover:text-gray-700 transition-transform ${doc.isCollapsed ? '' : 'rotate-90'}" onclick="toggleDocCollapse('${doc.id}', event)">▶</span>` : `<span class="inline-block w-3"></span>`;
                 const iconHtml = isFolder
                     ? `<span class="flex-shrink-0" title="폴더" style="${doc.deprecated ? 'opacity:0.45;filter:grayscale(1);' : ''}">${(!doc.isCollapsed && hasChildren) ? '📂' : '📁'}</span>`
                     : `<span class="cursor-pointer hover:bg-gray-200 rounded px-0.5 flex-shrink-0" onclick="changeDocEmoji('${doc.id}', event)" title="이모티콘 변경" style="${doc.deprecated ? 'opacity:0.45;filter:grayscale(1);' : ''}">${doc.emoji || '📄'}</span>`;
@@ -7844,15 +7844,20 @@ return data;
                 body.appendChild(iframe);
                 wrap.appendChild(head); wrap.appendChild(body);
                 mount.parentNode.replaceChild(wrap, mount);
-                // [r37] 좁은 폭(소스모드/숨김 상태)에서 로드되면 콘텐츠가 모바일 레이아웃으로 굳음 → 폭이 바뀌면 재로드해 데스크톱 폭으로 재계산
+                // [r38] iframe 폭을 % 대신 측정한 px로 명시 지정 — CSS zoom/레이아웃 환경에서 width:100%가 좁게(모바일) 해석되던 문제 회피.
+                //   폭이 바뀌면 px 갱신 + 콘텐츠 JS가 새 폭에서 재계산하도록 srcdoc 재로드.
+                function _tdaSizeEmbed(allowReload) {
+                    var w = body.clientWidth || 0; if (w <= 0) return;
+                    iframe.style.width = w + 'px';
+                    if (allowReload && Math.abs(w - (iframe._tdaLoadedW || 0)) > 24) { iframe._tdaLoadedW = w; iframe.srcdoc = _tdaEmbedSrcdoc(em.html); }
+                }
+                iframe._tdaLoadedW = body.clientWidth || 0;
+                _tdaSizeEmbed(false);
+                requestAnimationFrame(function () { _tdaSizeEmbed(true); }); // 레이아웃 확정 후 정확한 폭 적용
                 if (window.ResizeObserver) {
-                    iframe._tdaLoadedW = body.clientWidth || 0;
                     var _ro = new ResizeObserver(function () {
                         clearTimeout(iframe._tdaRoT);
-                        iframe._tdaRoT = setTimeout(function () {
-                            var w = body.clientWidth;
-                            if (w > 0 && Math.abs(w - (iframe._tdaLoadedW || 0)) > 40) { iframe._tdaLoadedW = w; iframe.srcdoc = _tdaEmbedSrcdoc(em.html); }
-                        }, 280);
+                        iframe._tdaRoT = setTimeout(function () { _tdaSizeEmbed(true); }, 250);
                     });
                     try { _ro.observe(body); } catch (e) {}
                 }
