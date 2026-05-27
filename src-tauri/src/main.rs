@@ -29,10 +29,58 @@ fn forward_auth_urls(app: &tauri::AppHandle, urls: Vec<String>) {
     }
 }
 
+// [r59] 자동 업데이트 — 프론트(단일 HTML)는 번들러가 없어 updater JS 플러그인을 못 쓰므로
+//   Rust에서 체크/설치를 처리하고 invoke 커맨드로 노출. JS는 카드 UI만 띄움.
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    current: String,
+    notes: String,
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(u)) => Ok(Some(UpdateInfo {
+            version: u.version.clone(),
+            current: u.current_version.clone(),
+            notes: u.body.clone().unwrap_or_default(),
+        })),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
+        update
+            .download_and_install(|_chunk, _total| {}, || {})
+            .await
+            .map_err(|e| e.to_string())?;
+        app.restart();
+    }
+    Ok(())
+}
+
+// 비데스크톱(모바일 등)에서도 generate_handler가 참조할 수 있게 no-op 정의
+#[cfg(not(desktop))]
+#[tauri::command]
+async fn update_check(_app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> { Ok(None) }
+#[cfg(not(desktop))]
+#[tauri::command]
+async fn update_install(_app: tauri::AppHandle) -> Result<(), String> { Ok(()) }
+
 fn main() {
     let mut builder = tauri::Builder::default();
 
-    // 데스크톱: single-instance로 2번째 실행(딥링크)을 기존 창에 라우팅
+    // 데스크톱: single-instance로 2번째 실행(딥링크)을 기존 창에 라우팅 + 자동 업데이트
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -41,10 +89,13 @@ fn main() {
                 let _ = win.set_focus();
             }
         }));
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+        builder = builder.plugin(tauri_plugin_process::init());
     }
 
     builder
         .plugin(tauri_plugin_deep_link::init())
+        .invoke_handler(tauri::generate_handler![update_check, update_install])
         .setup(|app| {
             #[cfg(debug_assertions)]
             {

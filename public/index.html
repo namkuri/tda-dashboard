@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r58 (r57 후속: 진짜 원인 = file-drop-overlay(.show)가 콘텐츠 가린 채 잔류(이미지 stopPropagation으로 pane drop 미발동). 전역 drop/dragend·삽입후에 오버레이 .show 제거+드래그카운터 리셋) -->
+<!-- BUILD: 2026-05-27 r59 (r58 + Tauri v2 자동 업데이트(데스크톱): updater/process 플러그인·Rust check/install 커맨드·withGlobalTauri·capabilities·Claude풍 '다시 시작' 업데이트 카드·GitHub Release+latest.json 워크플로. 웹은 카드 inert(no-op)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1215,6 +1215,15 @@
             pointer-events: none;
         }
         .file-drop-overlay.show { display: block; }
+        /* [r59] Tauri 데스크톱 자동 업데이트 카드 (Claude 앱 스타일) */
+        #tda-update-card { position: fixed; left: 12px; bottom: 56px; z-index: 100050; display: flex; align-items: center; gap: 12px; width: 244px; padding: 12px 14px; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.34); cursor: pointer; transition: background .12s, transform .12s; }
+        #tda-update-card:hover { background: var(--c-paper); transform: translateY(-1px); }
+        #tda-update-card .tuc-ico { font-size: 20px; flex-shrink: 0; }
+        #tda-update-card .tuc-body { flex: 1; min-width: 0; }
+        #tda-update-card .tuc-title { font-size: 13px; font-weight: 700; color: var(--c-text); line-height: 1.3; }
+        #tda-update-card .tuc-ver { font-size: 11px; color: var(--c-text3); margin-top: 1px; font-family: 'JetBrains Mono', monospace; }
+        #tda-update-card .tuc-arrow { color: var(--c-text3); font-size: 16px; flex-shrink: 0; }
+        #tda-update-card.tuc-busy { opacity: .7; pointer-events: none; }
 
         /* ===== [v23] 파일 업로드 진행 상황 모달 ===== */
         #file-progress-modal {
@@ -9590,7 +9599,31 @@ addEventListener("resize",sendPos);
                 }
             } catch (e) {}
             if (typeof initNavGroups === 'function') initNavGroups();
+            setTimeout(function () { if (typeof _tdaInitUpdater === 'function') _tdaInitUpdater(); }, 1800); // [r59] Tauri 데스크톱 자동 업데이트 체크
         });
+        // [r59] Tauri 데스크톱에서만 동작 — 웹(GitHub Pages)에선 window.__TAURI__가 없어 no-op
+        async function _tdaInitUpdater() {
+            try {
+                if (!(window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke)) return;
+                var info = await window.__TAURI__.core.invoke('update_check');
+                if (info && info.version) _tdaShowUpdateCard(info);
+            } catch (e) { /* 업데이트 서버 미설정/오프라인 — 조용히 무시 */ }
+        }
+        function _tdaShowUpdateCard(info) {
+            if (document.getElementById('tda-update-card')) return;
+            var card = document.createElement('div');
+            card.id = 'tda-update-card';
+            card.innerHTML = '<div class="tuc-ico">🍃</div><div class="tuc-body"><div class="tuc-title">업데이트하려면 다시 시작</div><div class="tuc-ver">v' + _annEsc(info.version || '') + '</div></div><div class="tuc-arrow">→</div>';
+            card.title = '클릭하면 최신 버전을 받아 자동으로 다시 시작합니다.' + (info.notes ? ('\n\n' + info.notes) : '');
+            card.onclick = async function () {
+                if (card.classList.contains('tuc-busy')) return;
+                card.classList.add('tuc-busy');
+                var t = card.querySelector('.tuc-title'); if (t) t.textContent = '업데이트 다운로드 중…';
+                try { await window.__TAURI__.core.invoke('update_install'); /* 성공 시 앱이 재시작됨 */ }
+                catch (e) { card.classList.remove('tuc-busy'); if (t) t.textContent = '업데이트 실패 — 다시 시도'; if (typeof showToast === 'function') showToast('업데이트 실패: ' + e, 'alert'); }
+            };
+            document.body.appendChild(card);
+        }
 
         function renderSprintBand() {
             const el = document.getElementById('sprint-band');

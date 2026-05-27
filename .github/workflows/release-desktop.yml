@@ -1,0 +1,51 @@
+# [r59] 데스크톱(Windows) 빌드 + 서명 + GitHub Release + latest.json 자동 생성
+# 사용법: 버전 태그를 push하면 실행됨.  예)  git tag v0.41.0 && git push origin v0.41.0
+# 또는 Actions 탭에서 수동 실행(Run workflow).
+#
+# 사전 준비(1회):
+#  1) 로컬에서  cargo tauri signer generate -w %USERPROFILE%\.tauri\tda.key
+#     → 출력된 "public key"를 src-tauri/tauri.conf.json 의 plugins.updater.pubkey 에 붙여넣기
+#  2) 레포 Settings → Secrets and variables → Actions 에 추가:
+#       TAURI_SIGNING_PRIVATE_KEY            = tda.key 파일 내용(비공개키, 절대 커밋 금지)
+#       TAURI_SIGNING_PRIVATE_KEY_PASSWORD   = 키 생성 시 입력한 비밀번호
+#  3) src-tauri/Cargo.toml 과 tauri.conf.json 의 version 을 새 버전으로 올린 뒤 태그 push.
+
+name: Release Desktop (Tauri)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build, sign & release (MSI + NSIS + updater latest.json)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: src-tauri
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', github.run_number) }}
+          releaseName: 'TDA Dashboard ${{ github.ref_name }}'
+          releaseBody: '자동 업데이트 대상 릴리스입니다. (설치 후 앱이 자동으로 새 버전을 감지합니다)'
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
