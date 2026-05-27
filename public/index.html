@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r35 (r34 + HTML 100% 임베드(sandbox iframe·접기첨부)+붙여넣기 형식 팝업(MD/HTML/텍스트/첨부)+.html 드롭 선택) -->
+<!-- BUILD: 2026-05-27 r36 (r35 + 트리너비 고정버그(flex:1) 수정·제목 페이드 잘릴때만·코멘트 스크롤동기화(미연결 수정)·HTML임베드 전체화면 버튼) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -870,13 +870,21 @@
         .tda-embed-head:hover { background:var(--c-accent-soft); }
         .tda-embed-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%; }
         .tda-embed.collapsed .tda-embed-head { border-bottom:none; }
-        .tda-embed-caret { margin-left:auto; transition:transform .15s; color:var(--c-text3); font-size:11px; }
+        .tda-embed-caret { margin-left:6px; transition:transform .15s; color:var(--c-text3); font-size:11px; flex-shrink:0; }
         .tda-embed.collapsed .tda-embed-caret { transform:rotate(-90deg); }
         .tda-embed-tag { font-size:10px; font-weight:700; color:var(--c-accent); background:var(--c-accent-soft); border-radius:5px; padding:1px 6px; flex-shrink:0; }
+        .tda-embed-full { margin-left:auto; flex-shrink:0; border:1px solid var(--c-border); background:var(--c-paper); color:var(--c-text2); border-radius:6px; padding:1px 7px; font-size:12px; cursor:pointer; line-height:1.4; }
+        .tda-embed-full:hover { background:var(--c-accent); color:#fff; border-color:var(--c-accent); }
         .tda-embed-body { background:#fff; }
         body.dark .tda-embed-body { background:#1f1e1c; }
         .tda-embed.collapsed .tda-embed-body { display:none; }
-        .tda-embed-body iframe { width:100%; border:none; display:block; min-height:120px; background:#fff; }
+        .tda-embed-body iframe { width:100%; border:none; display:block; min-height:160px; background:#fff; }
+        /* [r36] HTML 임베드 전체화면 */
+        .tda-embed-fs { position:fixed; inset:0; z-index:100060; display:flex; flex-direction:column; background:var(--c-card); }
+        .tda-embed-fs-bar { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 14px; background:var(--c-paper); border-bottom:1px solid var(--c-border); font-size:13px; font-weight:700; color:var(--c-text); }
+        .tda-embed-fs-close { padding:5px 12px; border:1px solid var(--c-border); border-radius:8px; background:var(--c-card); color:var(--c-text); font-size:12px; font-weight:700; cursor:pointer; }
+        .tda-embed-fs-close:hover { background:var(--c-accent-soft); color:var(--c-accent); }
+        .tda-embed-fs-frame { flex:1 1 auto; width:100%; border:none; background:#fff; }
         /* [r35] 삽입 형식 선택 팝업 */
         .tda-chooser-ov { position:fixed; inset:0; z-index:100050; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); padding:20px; }
         .tda-chooser { width:340px; max-width:100%; background:var(--c-card); border:1px solid var(--c-border); border-radius:14px; box-shadow:0 16px 48px rgba(0,0,0,0.32); padding:14px; display:flex; flex-direction:column; gap:7px; }
@@ -1421,8 +1429,10 @@
             overflow: hidden; min-width: 0; flex: 1;
         }
         .doc-title-text {
-            overflow: hidden; white-space: nowrap; min-width: 0;
-            /* [r33] 길어서 잘리는 이름은 '...' 대신 우측 투명 그라데이션 페이드 (Claude 데스크톱 스타일) */
+            overflow: hidden; white-space: nowrap; min-width: 0; text-overflow: clip;
+        }
+        /* [r36] 실제로 잘릴 때만(is-clipped) 우측 투명 페이드 — 짧은 이름엔 적용 안 함 */
+        .doc-title-text.is-clipped {
             -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
             mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
         }
@@ -1507,11 +1517,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             overflow: hidden;
         }
         /* Individual panes: each fills its portion */
-        html.is-desktop #doc-sidebar,
         html.is-desktop #doc-main-pane {
             min-height: 0 !important;
             overflow: hidden;
             flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        /* [r36] 문서 트리는 고정 너비(인라인 width 적용) — flex:1이면 늘어나서 인라인 너비가 무시됨 */
+        html.is-desktop #doc-sidebar {
+            min-height: 0 !important;
+            overflow: hidden;
+            flex: 0 0 auto;
             display: flex;
             flex-direction: column;
         }
@@ -3278,7 +3295,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </button>
                 </div>
 
-                <div id="doc-sidebar" class="bg-white border-r border-gray-100 flex flex-col flex-shrink-0 transition-all" style="width:166px;min-width:112px;">
+                <div id="doc-sidebar" class="bg-white border-r border-gray-100 flex flex-col flex-shrink-0 transition-all" style="width:158px;min-width:108px;flex:0 0 auto;">
                     <!-- 문서 보관함 헤더 (프로젝트 변경 지원) -->
                     <div class="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl flex justify-between items-center">
                         <div class="cursor-pointer hover:bg-gray-200 px-2 py-1 -ml-2 rounded flex items-center gap-1 transition-colors" onclick="openProjectModal()" title="프로젝트 변경">
@@ -7108,6 +7125,15 @@ return data;
             return { childrenMap, hasChildrenSet, totalInProject: projDocs.length };
         }
 
+        // [r36] 실제로 잘리는 문서 제목에만 페이드(.is-clipped) 적용 — 짧은 이름엔 미적용
+        function _updateDocTitleFades() {
+            requestAnimationFrame(function () {
+                var els = document.querySelectorAll('#doc-tree-container .doc-title-text');
+                Array.prototype.forEach.call(els, function (el) {
+                    el.classList.toggle('is-clipped', el.scrollWidth > el.clientWidth + 1);
+                });
+            });
+        }
         function renderDocTree(parentId = null) {
             const container = document.getElementById('doc-tree-container');
             const normalizedParentId = (parentId && parentId.trim()) ? parentId.trim() : null;
@@ -7191,6 +7217,7 @@ return data;
                 const badge = document.getElementById('doc-count-badge');
                 if(badge) badge.textContent = totalInProject + '개';
                 setTimeout(initDocTreeSortable, 50);
+                _updateDocTitleFades(); // [r36] 잘리는 제목에만 페이드 적용
                 // Reset annotations panel for new doc
                 const panel = document.getElementById('wiki-annotations-panel');
                 if(panel && (!activeDocId || !wikiAnnotations[activeDocId] || wikiAnnotations[activeDocId].length === 0)) {
@@ -7803,7 +7830,9 @@ return data;
                     mount.parentNode.replaceChild(wrap, mount); return;
                 }
                 var head = document.createElement('div'); head.className = 'tda-embed-head';
-                head.innerHTML = '📎 <span class="tda-embed-name">' + _annEsc(em.title || 'HTML') + '</span><span class="tda-embed-tag">HTML</span><span class="tda-embed-caret">▾</span>';
+                head.innerHTML = '📎 <span class="tda-embed-name">' + _annEsc(em.title || 'HTML') + '</span><span class="tda-embed-tag">HTML</span>'
+                    + '<button class="tda-embed-full" title="전체화면으로 보기 (넓게)" onclick="event.stopPropagation();_openHtmlEmbedFullscreen(\'' + id + '\')">⛶</button>'
+                    + '<span class="tda-embed-caret">▾</span>';
                 head.onclick = function () { wrap.classList.toggle('collapsed'); };
                 var body = document.createElement('div'); body.className = 'tda-embed-body';
                 var iframe = document.createElement('iframe');
@@ -7814,6 +7843,26 @@ return data;
                 wrap.appendChild(head); wrap.appendChild(body);
                 mount.parentNode.replaceChild(wrap, mount);
             });
+        }
+        // [r36] HTML 임베드 전체화면 보기 — 전체 창 너비 iframe(임베드가 좁게/모바일로 렌더되는 문제 회피)
+        function _openHtmlEmbedFullscreen(id) {
+            var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
+            var em = doc && doc.meta && doc.meta.htmlEmbeds && doc.meta.htmlEmbeds[id];
+            if (!em) { showToast('임베드를 찾을 수 없습니다.', 'alert'); return; }
+            var ov = document.createElement('div'); ov.className = 'tda-embed-fs';
+            var bar = document.createElement('div'); bar.className = 'tda-embed-fs-bar';
+            bar.innerHTML = '<span>📎 ' + _annEsc(em.title || 'HTML') + '</span>';
+            var close = document.createElement('button'); close.className = 'tda-embed-fs-close'; close.textContent = '✕ 닫기';
+            function done() { if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+            close.onclick = done;
+            bar.appendChild(close);
+            var ifr = document.createElement('iframe'); ifr.className = 'tda-embed-fs-frame';
+            ifr.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox');
+            ifr.srcdoc = _tdaEmbedSrcdoc(em.html);
+            ov.appendChild(bar); ov.appendChild(ifr);
+            function onKey(e) { if (e.key === 'Escape') done(); }
+            document.addEventListener('keydown', onKey);
+            document.body.appendChild(ov);
         }
         // 활성 문서에 HTML 임베드 삽입 (mode: 'embed'=펼침 / 'attach'=접힘)
         function _insertHtmlEmbed(html, title, mode) {
@@ -10983,6 +11032,7 @@ ${intrLog}
                     document.removeEventListener('mouseup', onUp);
                     document.removeEventListener('touchmove', onMove);
                     document.removeEventListener('touchend', onUp);
+                    if (leftId === 'doc-sidebar' && typeof _updateDocTitleFades === 'function') _updateDocTitleFades(); // [r36] 리사이즈 후 페이드 재평가
                 }
                 document.addEventListener('mousemove', onMove, { passive: true });
                 document.addEventListener('mouseup', onUp);
@@ -12557,8 +12607,8 @@ ${intrLog}
                 if(markEl){ var mRect=markEl.getBoundingClientRect(); desired=(mRect.top - pRect.top) - 2; off=(mRect.bottom < pRect.top - 24)||(mRect.top > pRect.bottom + 24); }
                 return { ann:ann, desired:desired, off:off };
             });
-            entries = entries.filter(function(e){ return !e.off; }); // 화면 밖 마크는 생략 → 보이는 텍스트 옆에만 표시(스크롤 시 따라옴)
-            entries.sort(function(a,b){ var av=(a.desired==null?-1:a.desired), bv=(b.desired==null?-1:b.desired); return av-bv; });
+            // [r36] 화면 밖 마크 카드도 생성하되 숨김 → 스크롤 시 _layoutAnnCards가 위치/표시만 갱신(재생성 X, 입력 포커스 유지)
+            entries.sort(function(a,b){ var av=(a.desired==null?1e9:a.desired), bv=(b.desired==null?1e9:b.desired); return av-bv; });
             entries.forEach(function(e){
                 var ann=e.ann;
                 var comments=(ann.comments||[]);
@@ -12572,23 +12622,42 @@ ${intrLog}
                     '<input type="text" class="ann-reply-input" id="ann-input-'+ann.id+'" placeholder="댓글 (@멘션)" data-annid="'+ann.id+'" oninput="_annMentionScan(this)" onkeydown="handleAnnKeydown(event,this)" style="display:'+(comments.length?'none':'block')+';">'+
                     '<div class="ann-card-foot"><button class="ann-link-btn" onclick="showAnnotationInput(\''+ann.id+'\')">💬 댓글</button></div>';
                 list.appendChild(card);
-                e.card=card;
             });
-            // 2패스: 앵커 우선 + 겹침 해소(아래로 밀기)
+            _layoutAnnCards();        // 위치/표시 계산
+            initAnnotationScrollSync(); // 스크롤 동기화 보장(멱등)
+        }
+        // [r36] 카드 위치/표시만 갱신 (재생성 없음) — 마크의 현재 뷰포트 위치에 정확히 정렬, 스크롤 시 함께 이동
+        function _layoutAnnCards() {
+            var list = document.getElementById('annotations-list');
+            var previewEl = document.getElementById('doc-preview-container');
+            if(!list || !previewEl) return;
+            var pRect = previewEl.getBoundingClientRect();
+            var items = Array.prototype.slice.call(list.querySelectorAll('.ann-positioned-card')).map(function(card){
+                var id = card.id.replace('ann-card-','');
+                var mark = previewEl.querySelector('mark[data-annotation="'+id+'"]');
+                var desired=null, off=false;
+                if(mark){ var m=mark.getBoundingClientRect(); desired=(m.top-pRect.top)-2; off=(m.bottom<pRect.top-24)||(m.top>pRect.bottom+24); }
+                return { card:card, desired:desired, off:off };
+            });
+            items.sort(function(a,b){ var av=(a.desired==null?1e9:a.desired), bv=(b.desired==null?1e9:b.desired); return av-bv; });
             var running=0;
-            entries.forEach(function(e){
+            items.forEach(function(e){
+                if(e.off){ e.card.style.display='none'; return; }
+                e.card.style.display='';
                 var d=(e.desired==null?running:e.desired);
                 var top=Math.max(d, running, 6);
                 e.card.style.top=top+'px';
                 running = top + (e.card.offsetHeight||100) + 8;
             });
         }
-
         function initAnnotationScrollSync() {
             var el = document.getElementById('doc-preview-container');
-            if(!el) return;
+            if(!el || el._annScrollBound) return;
+            el._annScrollBound = true;
             el.addEventListener('scroll', function() {
-                if(activeDocId && wikiAnnotations[activeDocId] && wikiAnnotations[activeDocId].length > 0) renderAnnotationsPanelPositioned();
+                if(!(activeDocId && wikiAnnotations[activeDocId] && wikiAnnotations[activeDocId].length)) return;
+                if(el._annScrollRaf) return;
+                el._annScrollRaf = requestAnimationFrame(function(){ el._annScrollRaf=null; _layoutAnnCards(); });
             }, { passive: true });
         }
 
