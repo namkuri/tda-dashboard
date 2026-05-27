@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r57 (r56 + 이미지 드롭 후 미리보기 즉시 갱신(1초 debounce 우회)+저장·드롭 점선테두리 잔류 제거(전역 drop/dragend 정리) — 새로고침 없이 첨부 확인) -->
+<!-- BUILD: 2026-05-27 r58 (r57 후속: 진짜 원인 = file-drop-overlay(.show)가 콘텐츠 가린 채 잔류(이미지 stopPropagation으로 pane drop 미발동). 전역 drop/dragend·삽입후에 오버레이 .show 제거+드래그카운터 리셋) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -13287,7 +13287,14 @@ ${intrLog}
         // 💡 IMAGE DRAG & DROP (Base64)
         // ==========================================
         // [r57] 드롭 후에도 남는 점선 테두리(.drop-active) 방지 — 문서 전역 drop/dragend에서 확실히 제거(이미지 핸들러의 stopPropagation으로 일부 정리 핸들러가 누락되던 문제)
-        function _dropActiveClearSoon() { setTimeout(function () { document.querySelectorAll('.drop-active').forEach(function (el) { el.classList.remove('drop-active'); }); }, 0); }
+        function _dropActiveClearSoon() {
+            setTimeout(function () {
+                document.querySelectorAll('.drop-active').forEach(function (el) { el.classList.remove('drop-active'); });
+                // [r58] 파일 드롭 오버레이(.file-drop-overlay.show)도 정리 — 이미지 핸들러 stopPropagation으로 pane drop이 안 불려 오버레이가 콘텐츠를 가린 채 남던 문제
+                document.querySelectorAll('.file-drop-overlay.show').forEach(function (el) { el.classList.remove('show'); });
+                ['doc-main-pane', 'doc-editor-pane'].forEach(function (id) { var p = document.getElementById(id); if (p) p._fileDragCtr = 0; });
+            }, 0);
+        }
         function initImageDrop() {
             if (!window._dropActiveGlobalBound) {
                 window._dropActiveGlobalBound = true;
@@ -13370,6 +13377,8 @@ ${intrLog}
         function _docForceRefreshAfterInsert(textarea) {
             try {
                 document.querySelectorAll('.drop-active').forEach(function (el) { el.classList.remove('drop-active'); });
+                document.querySelectorAll('.file-drop-overlay.show').forEach(function (el) { el.classList.remove('show'); }); // [r58] 파일 드롭 오버레이 잔류 제거
+                ['doc-main-pane', 'doc-editor-pane'].forEach(function (id) { var p = document.getElementById(id); if (p) p._fileDragCtr = 0; });
                 if (!activeDocId || !textarea) return;
                 if (typeof _docPreviewTimer !== 'undefined') clearTimeout(_docPreviewTimer);
                 if (typeof updateDocPreview === 'function' && currentEditorMode !== 'source') updateDocPreview(textarea.value);
@@ -14476,10 +14485,10 @@ ${intrLog}
             var overlay = document.getElementById('editor-file-drop-overlay2')
                        || document.getElementById('editor-file-drop-overlay');
 
-            var dragCounter = 0;
+            pane._fileDragCtr = 0; // [r58] 카운터를 pane에 보관 → 전역 정리에서 리셋 가능(스턱 방지)
             pane.addEventListener('dragenter', function(e) {
                 if(!e.dataTransfer.types.includes('Files')) return;
-                dragCounter++;
+                pane._fileDragCtr++;
                 if(overlay) overlay.classList.add('show');
             });
             pane.addEventListener('dragover', function(e) {
@@ -14489,15 +14498,15 @@ ${intrLog}
                 }
             });
             pane.addEventListener('dragleave', function(e) {
-                dragCounter--;
-                if(dragCounter <= 0) {
-                    dragCounter = 0;
+                pane._fileDragCtr--;
+                if(pane._fileDragCtr <= 0) {
+                    pane._fileDragCtr = 0;
                     if(overlay) overlay.classList.remove('show');
                 }
             });
             pane.addEventListener('drop', function(e) {
                 e.preventDefault();
-                dragCounter = 0;
+                pane._fileDragCtr = 0;
                 if(overlay) overlay.classList.remove('show');
                 var files = Array.from(e.dataTransfer.files);
                 if(!files.length) return;
