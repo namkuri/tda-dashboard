@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-27 r46 (r45 + 코멘트카드 배경 테마화(가독성)·코멘트패널 접기/펼치기 토글·트리 컨텍스트메뉴 바깥클릭 닫기(캡처)) -->
+<!-- BUILD: 2026-05-27 r47 (r46 + 코멘트하이라이트 클릭시 패널 펼치고 스크롤·이미지/SVG 우클릭 코멘트·HTML임베드 내부선택 우클릭 코멘트(postMessage)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -8313,9 +8313,14 @@ return data;
         function _tdaEmbedResizeScript() {
             return '<scr'+'ipt>(function(){function h(){try{parent.postMessage({type:"tda-iframe-h",h:Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0)},"*")}catch(e){}}h();addEventListener("load",h);addEventListener("resize",h);setTimeout(h,200);setTimeout(h,900);if(window.MutationObserver){try{new MutationObserver(h).observe(document.documentElement,{childList:true,subtree:true,attributes:true})}catch(e){}}})()</scr'+'ipt>';
         }
-        function _tdaEmbedSrcdoc(html) {
+        function _tdaEmbedCommentScript(embedId) {
+            var eid = String(embedId == null ? '' : embedId).replace(/[\\'"<>]/g, '');
+            // [r47] 임베드 내부에서 텍스트 선택 후 우클릭 → 부모로 선택 텍스트 전달(코멘트). sandbox(allow-scripts)에서도 postMessage 동작.
+            return '<scr' + 'ipt>(function(){var EID="' + eid + '";document.addEventListener("contextmenu",function(e){var t="";try{t=(window.getSelection&&window.getSelection().toString().trim())||""}catch(_){}if(t){e.preventDefault();try{parent.postMessage({type:"tda-embed-comment",text:t,embedId:EID,x:e.clientX,y:e.clientY},"*")}catch(_){}}});})()</scr' + 'ipt>';
+        }
+        function _tdaEmbedSrcdoc(html, embedId) {
             html = String(html || '');
-            var rs = _tdaEmbedResizeScript();
+            var rs = _tdaEmbedResizeScript() + (embedId ? _tdaEmbedCommentScript(embedId) : '');
             if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, rs + '</body>');
             return html + rs;
         }
@@ -8342,11 +8347,25 @@ return data;
                     for (var i = 0; i < fr.length; i++) { if (fr[i].contentWindow === e.source) { fr[i].style.height = Math.max(120, e.data.h + 24) + 'px'; break; } }
                 });
             }
+            // [r47] 임베드 내부 선택→우클릭 코멘트: 자식 iframe의 postMessage 수신 → 부모 좌표로 변환 후 코멘트 메뉴 표시
+            if (!window._tdaEmbedCommentBound) {
+                window._tdaEmbedCommentBound = true;
+                window.addEventListener('message', function (e) {
+                    if (!e.data || e.data.type !== 'tda-embed-comment') return;
+                    var txt = (e.data.text || '').toString().trim(); if (!txt) return;
+                    var fr = document.querySelectorAll('.tda-embed-body iframe'); var rect = null;
+                    for (var i = 0; i < fr.length; i++) { if (fr[i].contentWindow === e.source) { rect = fr[i].getBoundingClientRect(); break; } }
+                    var x = rect ? rect.left + Math.min(e.data.x || 20, Math.max(20, rect.width - 20)) : 120;
+                    var y = rect ? rect.top + Math.min(e.data.y || 20, Math.max(20, rect.height - 20)) : 120;
+                    showAnnotationContextMenu(x, y, txt, { type: 'embed', embedId: e.data.embedId });
+                });
+            }
             Array.prototype.forEach.call(mounts, function (mount) {
                 var id = mount.getAttribute('data-tdahtml');
                 var em = embeds[id];
                 var wrap = document.createElement('div');
                 wrap.className = 'tda-embed' + ((em && em.mode === 'attach') ? ' collapsed' : '');
+                wrap.setAttribute('data-embedid', id); // [r47] 임베드 코멘트 앵커
                 if (!em) {
                     wrap.innerHTML = '<div class="tda-embed-head">📎 <span>임베드 데이터를 찾을 수 없음</span><span class="tda-embed-tag">' + _annEsc(id) + '</span></div>';
                     mount.parentNode.replaceChild(wrap, mount); return;
@@ -8360,7 +8379,7 @@ return data;
                 var iframe = document.createElement('iframe');
                 iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox');
                 iframe.setAttribute('loading', 'lazy');
-                iframe.srcdoc = _tdaEmbedSrcdoc(em.html);
+                iframe.srcdoc = _tdaEmbedSrcdoc(em.html, id);
                 body.appendChild(iframe);
                 wrap.appendChild(head); wrap.appendChild(body);
                 mount.parentNode.replaceChild(wrap, mount);
@@ -8369,7 +8388,7 @@ return data;
                 function _tdaSizeEmbed(allowReload) {
                     var w = body.clientWidth || 0; if (w <= 0) return;
                     iframe.style.width = w + 'px';
-                    if (allowReload && Math.abs(w - (iframe._tdaLoadedW || 0)) > 24) { iframe._tdaLoadedW = w; iframe.srcdoc = _tdaEmbedSrcdoc(em.html); }
+                    if (allowReload && Math.abs(w - (iframe._tdaLoadedW || 0)) > 24) { iframe._tdaLoadedW = w; iframe.srcdoc = _tdaEmbedSrcdoc(em.html, id); }
                 }
                 iframe._tdaLoadedW = body.clientWidth || 0;
                 _tdaSizeEmbed(false);
@@ -8397,7 +8416,7 @@ return data;
             bar.appendChild(close);
             var ifr = document.createElement('iframe'); ifr.className = 'tda-embed-fs-frame';
             ifr.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox');
-            ifr.srcdoc = _tdaEmbedSrcdoc(em.html);
+            ifr.srcdoc = _tdaEmbedSrcdoc(em.html, id);
             ov.appendChild(bar); ov.appendChild(ifr);
             function onKey(e) { if (e.key === 'Escape') done(); }
             document.addEventListener('keydown', onKey);
@@ -12135,6 +12154,16 @@ ${intrLog}
             if(!preview) return;
             // Desktop: right-click context menu
             preview.addEventListener('contextmenu', function(e) {
+                // [r47] 이미지/SVG 우클릭 → 이미지에 코멘트 (텍스트 선택보다 우선)
+                var imgEl = (e.target && e.target.closest) ? e.target.closest('img, svg') : null;
+                if (imgEl && !imgEl.closest('.tda-embed')) {
+                    e.preventDefault();
+                    var media = Array.prototype.slice.call(preview.querySelectorAll('img, svg'));
+                    var idx = media.indexOf(imgEl);
+                    var isSvg = imgEl.tagName.toLowerCase() === 'svg';
+                    showAnnotationContextMenu(e.clientX, e.clientY, isSvg ? '🖼 SVG 그래픽' : '🖼 이미지', { type: isSvg ? 'svg' : 'img', src: imgEl.getAttribute('src') || '', index: idx });
+                    return;
+                }
                 const sel = window.getSelection();
                 const txt = sel ? sel.toString().trim() : '';
                 if(txt.length > 0) {
@@ -12158,29 +12187,41 @@ ${intrLog}
             preview.addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
         }
 
-        function showAnnotationContextMenu(x, y, text) {
+        function showAnnotationContextMenu(x, y, text, anchor) {
             var _ctx=document.getElementById('annotation-ctx-menu'); if(_ctx) _ctx.remove();
+            // [r47] 화면 밖으로 넘치지 않게 좌표 보정
+            x = Math.max(8, Math.min(x, (window.innerWidth || 800) - 190));
+            y = Math.max(8, Math.min(y, (window.innerHeight || 600) - 60));
             const menu = document.createElement('div');
             menu.id = 'annotation-ctx-menu';
-            menu.style.cssText = 'position:fixed;left:'+x+'px;top:'+y+'px;background:white;border:1px solid #e7e3d8;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:9999;padding:4px;min-width:160px;';
-            const escapedText = text.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"');
-            menu.innerHTML = `<button id="ann-ctx-btn" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:#44423c;">💬 코멘트 남기기</button>`;
+            menu.style.cssText = 'position:fixed;left:'+x+'px;top:'+y+'px;background:var(--c-card,#fff);border:1px solid var(--c-border,#e7e3d8);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:9999;padding:4px;min-width:178px;';
+            var _label = (anchor && anchor.type === 'embed') ? '💬 선택 영역에 코멘트'
+                       : (anchor && (anchor.type === 'img' || anchor.type === 'svg')) ? '💬 이미지에 코멘트'
+                       : '💬 코멘트 남기기';
+            menu.innerHTML = '<button id="ann-ctx-btn" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--c-text,#44423c);">' + _label + '</button>';
             document.body.appendChild(menu);
             document.getElementById('ann-ctx-btn').addEventListener('click', function() {
                 menu.remove();
-                addWikiAnnotation(text);
+                addWikiAnnotation(text, anchor);
             });
             const closeMenu = (e) => { if(!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } };
             setTimeout(() => document.addEventListener('click', closeMenu), 50);
         }
 
-        function addWikiAnnotation(quotedText) {
+        function addWikiAnnotation(quotedText, anchor) {
             if(!activeDocId) return;
             if(!wikiAnnotations[activeDocId]) wikiAnnotations[activeDocId] = [];
             const id = 'ann_' + Date.now();
             const colorIdx = wikiAnnotations[activeDocId].length % annotationColors.length;
             const color = annotationColors[colorIdx];
-            wikiAnnotations[activeDocId].push({ id, quote: quotedText, color, userId: _annMe(), comments: [], createdAt: Date.now() });
+            var annObj = { id, quote: quotedText, color, userId: _annMe(), comments: [], createdAt: Date.now() };
+            // [r47] 이미지/SVG/임베드 등 비텍스트 요소 앵커
+            if (anchor && anchor.type && anchor.type !== 'text') {
+                annObj.anchorType = anchor.type;
+                if (anchor.type === 'embed') { annObj.embedId = anchor.embedId || ''; }
+                else { annObj.anchorSrc = anchor.src || ''; annObj.anchorIndex = (typeof anchor.index === 'number' ? anchor.index : -1); }
+            }
+            wikiAnnotations[activeDocId].push(annObj);
             _annPersist(activeDocId); // doc.meta.annotations에 저장 → 동기화
             applyAnnotationHighlights();
             setTimeout(function() {
@@ -12204,7 +12245,8 @@ ${intrLog}
                 setTimeout(function() {
                     const annotations = wikiAnnotations[activeDocId] || [];
                     annotations.forEach(ann => {
-                        highlightTextInContainer(preview, ann.quote, ann.color, ann.id);
+                        if (ann.anchorType && ann.anchorType !== 'text') { _applyMediaAnchor(preview, ann); }
+                        else { highlightTextInContainer(preview, ann.quote, ann.color, ann.id); }
                     });
                     // [r34] 마크가 적용된 뒤 카드 위치 재계산 (안 그러면 첫 렌더에 상단에 몰림)
                     renderAnnotationsPanelPositioned();
@@ -12240,6 +12282,31 @@ ${intrLog}
                 if(after) frag.appendChild(document.createTextNode(after));
                 n.parentNode.replaceChild(frag, n);
                 break; // Only highlight first occurrence
+            }
+        }
+
+        // [r47] 이미지/SVG/임베드 등 비텍스트 요소에 코멘트 앵커 부착 (data-annotation + 외곽선 + 클릭→코멘트 열기)
+        function _applyMediaAnchor(container, ann) {
+            if(!container || !ann) return;
+            var el = null;
+            if(ann.anchorType === 'embed') {
+                el = container.querySelector('.tda-embed[data-embedid="' + (ann.embedId || '') + '"]');
+            } else {
+                var media = container.querySelectorAll('img, svg');
+                if(ann.anchorSrc) { for(var i=0;i<media.length;i++){ if(media[i].tagName.toLowerCase()==='img' && media[i].getAttribute('src')===ann.anchorSrc){ el=media[i]; break; } } }
+                if(!el && typeof ann.anchorIndex==='number' && ann.anchorIndex>=0 && media[ann.anchorIndex]) el = media[ann.anchorIndex];
+            }
+            if(!el) return;
+            el.setAttribute('data-annotation', ann.id);
+            el.style.outline = '3px solid ' + (ann.color || '#fbbf24');
+            el.style.outlineOffset = '1px';
+            el.style.cursor = 'pointer';
+            el.title = '클릭하여 코멘트 보기';
+            if(ann.anchorType === 'embed') {
+                // 임베드는 외곽 테두리(래퍼 직접 클릭)만 코멘트 열기 — 헤더 토글/iframe과 충돌 방지
+                el.addEventListener('click', function(ev){ if(ev.target===el){ ev.stopPropagation(); scrollToAnnotation(ann.id); } });
+            } else {
+                el.addEventListener('click', function(ev){ ev.stopPropagation(); ev.preventDefault(); scrollToAnnotation(ann.id); });
             }
         }
 
@@ -12351,10 +12418,16 @@ ${intrLog}
         }
 
         function scrollToAnnotation(annId) {
-            const card = document.getElementById('ann-card-' + annId);
-            if(card) { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); card.style.boxShadow = '0 0 0 2px #c96442'; setTimeout(() => card.style.boxShadow = '', 1500); }
-            const panel = document.getElementById('wiki-annotations-panel');
-            // panel shown via width
+            // [r47] 하이라이트(텍스트/이미지/임베드) 클릭 → 접혀 있으면 코멘트 패널 펼치고, 해당 카드로 스크롤·강조
+            if(_annPanelCollapsed) {
+                _annPanelCollapsed = false;
+                try { localStorage.setItem('tda_ann_collapsed', '0'); } catch(e){}
+                renderAnnotationsPanelPositioned();
+            }
+            setTimeout(function() {
+                const card = document.getElementById('ann-card-' + annId);
+                if(card) { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); card.style.boxShadow = '0 0 0 2px #c96442'; setTimeout(function(){ card.style.boxShadow = ''; }, 1500); }
+            }, 40);
         }
 
         // ==========================================
@@ -13164,7 +13237,7 @@ ${intrLog}
             var pRect = previewEl.getBoundingClientRect();
             // 1패스: 마크의 뷰포트 상대 위치(=텍스트 옆). scrollTop을 더하지 않음 — 더하면 스크롤 시 코멘트가 어긋남(기존 버그)
             var entries = annotations.map(function(ann){
-                var markEl = previewEl.querySelector('mark[data-annotation="'+ann.id+'"]');
+                var markEl = previewEl.querySelector('[data-annotation="'+ann.id+'"]');
                 var desired=null, off=false;
                 if(markEl){ var mRect=markEl.getBoundingClientRect(); desired=(mRect.top - pRect.top) - 2; off=(mRect.bottom < pRect.top - 24)||(mRect.top > pRect.bottom + 24); }
                 return { ann:ann, desired:desired, off:off };
@@ -13196,7 +13269,7 @@ ${intrLog}
             var pRect = previewEl.getBoundingClientRect();
             var items = Array.prototype.slice.call(list.querySelectorAll('.ann-positioned-card')).map(function(card){
                 var id = card.id.replace('ann-card-','');
-                var mark = previewEl.querySelector('mark[data-annotation="'+id+'"]');
+                var mark = previewEl.querySelector('[data-annotation="'+id+'"]');
                 var desired=null, off=false;
                 if(mark){ var m=mark.getBoundingClientRect(); desired=(m.top-pRect.top)-2; off=(m.bottom<pRect.top-24)||(m.top>pRect.bottom+24); }
                 return { card:card, desired:desired, off:off };
