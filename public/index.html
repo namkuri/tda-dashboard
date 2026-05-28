@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r78 (#1 대시보드 사이드바 최상단(운영 위) 독립 배치. #2 위젯 헤더 드래그 재배치(SortableJS, ⋮⋮ 핸들)+제목 클릭 시 해당 뷰 이동. #3·5 신규 위젯 7종: 캘린더(미니), 칸반보드 요약, 최근 열어본 문서, 최근 작성된 문서, 안읽은 코멘트, 서버 상태, 최근 커밋(Git 연동 대기). 위젯 추가 모달 12종 선택+설명. 위젯/행 숨김(per-widget localStorage). #4 스프린트 목표 [[user:xxx]] 멘션 칩 렌더링(_sprintGoalHtml). #6 프로젝트 참여자: projects.participants JSONB 컬럼, 모달에서 체크박스로 팀원 지정+카운트 표시. #7 좌하단 프로필 클릭 → 닉네임 설정 모달(users.display_name DB 동기). #8 위젯 행 title 속성 호버 툴팁. #9 위젯 행 우클릭 컨텍스트(열기/숨기기/삭제·위젯 삭제)) -->
+<!-- BUILD: 2026-05-28 r79 (#1 첫 로드/새로고침 시 대시보드 기본 진입. #2 위젯 행 우측 메타(프로젝트·스프린트·담당자·작성자). #3 위젯 모서리 드래그 리사이즈(1~4칸, mouseup에서 저장). #4 위젯 헤더 우클릭 → 프로젝트/스프린트/캘린더 필터 + 크기 선택 + 삭제. #5 메모 위젯(자동 저장). #6 대시보드 세로 스크롤. #7 서버 상태에 DB 사용량 추정 + 진행 바, 대시보드 위젯에서도 캐시 노출. #8 위젯 헤더 + 버튼으로 카테고리/스프린트/일정/카드 빠른 추가. #9 미니 캘린더 날짜 호버 팝업(일정 색·시각·제목). #10 시계 위젯(1초 인터벌 디지털 시계). #11 사진 위젯(로컬 FileReader + 공용 드라이브 png/jpg/gif 선택)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2591,7 +2591,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         /* [r77] 대시보드 — 커스터마이즈 그리드 */
         #dashboard-view.block { display: block; }
-        .db-wrap { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+        #dashboard-view { height: calc(100vh - 60px); overflow-y: auto; overflow-x: hidden; } /* [r79] 스크롤 */
+        .db-wrap { padding: 24px 28px 80px; max-width: 1400px; margin: 0 auto; }
         .db-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
         .db-title { font-size: 24px; font-weight: 800; color: var(--c-text); margin: 0; flex: 1; }
         .db-actions { display: flex; gap: 8px; }
@@ -2622,6 +2623,30 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-ctx-item:hover { background: var(--ios-fill); }
         .db-ctx-item.danger { color: #d2393d; }
         .db-ctx-sep { height: 1px; background: var(--c-border); margin: 4px 0; }
+        /* [r79] 위젯 행 우측 메타 정보 */
+        .db-r-meta { font-size: 10.5px; color: var(--c-text3); font-weight: 600; flex-shrink: 0; margin-left: auto; padding-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+        /* + 빠른 추가 버튼 */
+        .db-widget-add { background: transparent; color: var(--c-text3); border: 1px solid var(--c-border); border-radius: 50%; width: 22px; height: 22px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s; flex-shrink: 0; line-height: 1; }
+        .db-widget-add:hover { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+        /* 모서리 리사이즈 핸들 */
+        .db-widget { position: relative; }
+        .db-widget-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: se-resize; opacity: .35; transition: opacity .15s; }
+        .db-widget-resize::before { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid var(--c-text3); border-bottom: 2px solid var(--c-text3); }
+        .db-widget:hover .db-widget-resize { opacity: .8; }
+        .db-widget-resize:hover { opacity: 1 !important; }
+        /* 메모 위젯 */
+        .db-memo { width: 100%; height: 100%; min-height: 140px; background: transparent; color: var(--c-text); border: none; outline: none; resize: none; font-family: inherit; font-size: 13px; line-height: 1.55; padding: 4px; box-sizing: border-box; }
+        /* 시계 위젯 */
+        .db-clock-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px 8px; gap: 6px; }
+        .db-clock-time { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 36px; font-weight: 800; color: var(--c-accent); letter-spacing: 1px; line-height: 1; }
+        .db-clock-date { font-size: 13px; color: var(--c-text2); font-weight: 600; }
+        /* 사진 위젯 */
+        .db-photo-wrap { position: relative; height: 100%; min-height: 140px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .db-photo-img { max-width: 100%; max-height: 320px; object-fit: contain; border-radius: 8px; }
+        .db-photo-actions { position: absolute; top: 6px; right: 6px; display: none; gap: 4px; }
+        .db-widget:hover .db-photo-actions { display: flex; }
+        .db-photo-actions button { background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 5px; padding: 4px 9px; font-size: 11px; font-weight: 600; cursor: pointer; }
+        .db-photo-actions button:hover { background: rgba(0,0,0,.75); }
         .db-widget-sub { font-size: 10.5px; color: var(--c-text3); font-weight: 600; }
         .db-widget-body { flex: 1; overflow: hidden; }
         .db-widget-row { font-size: 12.5px; color: var(--c-text2); padding: 4px 0; display: flex; align-items: center; gap: 6px; line-height: 1.4; }
@@ -3079,12 +3104,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <span class="cs-label" style="margin-left:auto;font-size:10px;opacity:.55;">▾</span>
             </button>
             <!-- [r78] 대시보드를 운영 그룹 위로 독립 배치 -->
-            <button class="cs-nav cs-standalone" data-nav="dashboard" id="cs-nav-dashboard" onclick="switchView('dashboard')" title="대시보드 (커스터마이즈 가능한 카테고리 프리뷰)" style="margin-bottom:6px;"><span class="cs-ico">🏠</span><span class="cs-label" style="font-weight:700;">대시보드</span></button>
+            <button class="cs-nav cs-standalone active" data-nav="dashboard" id="cs-nav-dashboard" onclick="switchView('dashboard')" title="대시보드 (커스터마이즈 가능한 카테고리 프리뷰)" style="margin-bottom:6px;"><span class="cs-ico">🏠</span><span class="cs-label" style="font-weight:700;">대시보드</span></button>
             <div class="cs-group" data-grp="ops">
                 <button class="cs-grp-head" onclick="toggleNavGroup('ops')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">운영</span></button>
                 <div class="cs-grp-items" data-grp="ops">
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
-                    <button class="cs-nav active" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
+                    <button class="cs-nav" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
                     <button class="cs-nav" data-nav="calendar" id="cs-nav-calendar" onclick="switchView('calendar')" title="캘린더 (개인·팀·프로젝트 일정)"><span class="cs-ico">📅</span><span class="cs-label">캘린더</span></button>
                     <button class="cs-nav" data-nav="review" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
@@ -5740,7 +5765,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // ==========================================
         // 💡 0. 뷰 전환 및 전역 변수 설정
         // ==========================================
-        let currentView = 'kanban'; 
+        let currentView = 'dashboard'; // [r79] 첫 로드 = 대시보드
         let activeDocId = null;
         let currentDocKind = 'wiki'; // [통합 문서엔진] 'wiki'(문서) | 'canon'(게임 위키) | 'personal'(개인 문서)
         let activeDocIdByKind = { wiki: null, canon: null, personal: null };
@@ -6173,14 +6198,41 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 return out;
             }
             var dbStats = await _statusDbStats();
+            // [r79] DB 사용량 추정 — 테이블별 평균 행 크기 × 행 수 + 클라이언트가 알고 있는 컨텐츠 합
+            // 행 평균(설명 컬럼·jsonb 포함 추정): wiki_docs ~3KB(메타만), kanban_tasks ~1KB,
+            //   카테고리 ~0.5KB, 스프린트 ~2KB, 리뷰 ~2KB, 활동 ~0.5KB
+            var _avgPerRow = { 'wiki_docs': 3072, 'kanban_tasks': 1024, 'kanban_categories': 512, 'sprints': 2048, 'reviews': 2048, 'activity_log': 512 };
+            var DB_QUOTA = 500 * 1024 * 1024; // 500MB
+            var estTables = 0;
+            dbStats.tables.forEach(function (t) {
+                // 테이블 라벨에서 실제 테이블 키 추출
+                var key = null;
+                if (/wiki_docs/.test(t.name)) key = 'wiki_docs';
+                else if (/kanban_tasks/.test(t.name)) key = 'kanban_tasks';
+                else if (/kanban_categories/.test(t.name)) key = 'kanban_categories';
+                else if (/sprints/.test(t.name)) key = 'sprints';
+                else if (/reviews/.test(t.name)) key = 'reviews';
+                else if (/activity_log/.test(t.name)) key = 'activity_log';
+                if (key && typeof t.count === 'number') estTables += t.count * (_avgPerRow[key] || 1024);
+            });
+            // 클라이언트 측 본문/인라인 추가 (정확)
+            var estTotal = estTables + dbStats.docContent + dbStats.inlineHtml.size;
+            var dbPct = Math.min(100, estTotal / DB_QUOTA * 100);
+            var dbWarn = dbPct > 70 ? 'st-bad' : (dbPct > 40 ? 'st-warn' : 'st-ok');
             html += '<div class="st-card"><h3>🗃️ 데이터베이스 (Postgres · 무료 500MB)</h3>' +
+                '<div class="st-row"><span><b>사용 용량 (추정)</b></span><span class="' + dbWarn + '"><b>' + _driveFmt(estTotal) + '</b> / 500 MB (' + dbPct.toFixed(2) + '%)</span></div>' +
+                '<div class="st-bar"><div class="st-bar-fill ' + dbWarn + '" style="width:' + dbPct + '%;background:' + (dbPct > 70 ? '#d2393d' : (dbPct > 40 ? '#d49a1c' : 'var(--c-accent)')) + ';"></div></div>' +
+                '<div class="st-row" style="display:block;color:var(--c-text3);font-size:10.5px;line-height:1.55;">※ 행 수 × 평균 row size 추정값. <b>정확한 값은 Supabase 대시보드 → Database → 우측 상단</b>에서 확인하세요. (RLS·메타 등 클라이언트 미접근 영역 제외)</div>' +
+                '<div style="height:8px;"></div>' +
                 dbStats.tables.map(function (t) { return '<div class="st-row"><span>' + _driveEsc(t.name) + '</span><span>' + (typeof t.count === 'number' ? t.count.toLocaleString() : t.count) + ' 행</span></div>'; }).join('') +
-                '<div class="st-row"><span>현 프로젝트 문서 본문 합 (클라이언트 추정)</span><span>~ ' + _driveFmt(dbStats.docContent) + '</span></div>' +
+                '<div class="st-row"><span>현 프로젝트 문서 본문 합 (클라이언트)</span><span>~ ' + _driveFmt(dbStats.docContent) + '</span></div>' +
                 '<div class="st-row"><span>인라인 HTML 임베드(레거시)</span><span class="' + (dbStats.inlineHtml.count > 0 ? 'st-warn' : 'st-ok') + '">' + dbStats.inlineHtml.count + '개 · 약 ' + _driveFmt(dbStats.inlineHtml.size) + '</span></div>' +
                 (dbStats.inlineHtml.count > 0
                     ? '<div class="st-row" style="display:block;color:var(--c-text3);font-size:11px;line-height:1.55;">⚠️ 큰 HTML이 DB에 인라인 저장돼 있어요. <b>r74부터 새 HTML 임베드는 Storage</b>로 가서 DB가 안 늘어납니다. 기존 인라인을 옮기려면 해당 문서의 임베드를 삭제 후 다시 첨부해 주세요.</div>'
                     : '<div class="st-row" style="display:block;color:var(--c-text3);font-size:11px;">✓ HTML 임베드는 모두 Storage 사용 중(DB 영향 없음).</div>') +
                 '</div>';
+            // [r79] 전역 캐시 — 대시보드 서버상태 위젯에서 즉시 참조
+            window._dbSizeEstimate = { used: estTotal, quota: DB_QUOTA, pct: dbPct };
             if (!bucketOk || !tableOk) {
                 html += '<div class="st-card"><h3>⚙️ 설정 (1회)</h3>' +
                     '<div class="st-row" style="display:block;color:var(--c-text2);">아래 절차로 공용 드라이브를 활성화하세요. 버킷은 대시보드에서 만들고, SQL은 복사해 실행합니다.</div>' +
@@ -6270,14 +6322,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var raw = localStorage.getItem(_dbStorageKey());
                 if (raw) return JSON.parse(raw);
             } catch (e) {}
-            // [r78] 기본 위젯: 스프린트 + 캘린더 + 내 할 일 + 안읽은 코멘트 + 결재 대기 + 최근 작성
+            // [r78/r79] 기본 위젯
             return [
-                { id: 'w-' + Date.now() + '-1', type: 'sprint', size: 2 },
-                { id: 'w-' + Date.now() + '-2', type: 'calendarMini', size: 2 },
-                { id: 'w-' + Date.now() + '-3', type: 'myTasks', size: 2 },
-                { id: 'w-' + Date.now() + '-4', type: 'unreadComments', size: 2 },
-                { id: 'w-' + Date.now() + '-5', type: 'reviewQueue', size: 2 },
-                { id: 'w-' + Date.now() + '-6', type: 'recentEdited', size: 2 }
+                { id: 'w-' + Date.now() + '-c', type: 'clock', size: 1, w: 1, h: 1 },
+                { id: 'w-' + Date.now() + '-1', type: 'sprint', size: 2, w: 2, h: 1 },
+                { id: 'w-' + Date.now() + '-2', type: 'calendarMini', size: 2, w: 2, h: 1 },
+                { id: 'w-' + Date.now() + '-3', type: 'myTasks', size: 2, w: 2, h: 1 },
+                { id: 'w-' + Date.now() + '-4', type: 'unreadComments', size: 2, w: 2, h: 1 },
+                { id: 'w-' + Date.now() + '-5', type: 'reviewQueue', size: 2, w: 2, h: 1 },
+                { id: 'w-' + Date.now() + '-6', type: 'recentEdited', size: 2, w: 2, h: 1 },
+                { id: 'w-' + Date.now() + '-m', type: 'memo', size: 2, w: 2, h: 1, memo: '' }
             ];
         }
         function _dbSaveWidgets() {
@@ -6312,6 +6366,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (empty) empty.classList.add('hidden');
             grid.innerHTML = dbState.widgets.map(function (w) { return _dbRenderWidget(w); }).join('');
             _dbBindDrag();
+            _dbBindResize();
+            _dbBindClocks();
         }
         // [r78] 위젯 헤더 드래그 재배치 (SortableJS)
         function _dbBindDrag() {
@@ -6389,20 +6445,39 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (st === 'progress') return '◐';
             return '○';
         }
-        // [r78] 위젯 헤더 — 드래그 핸들 + 클릭(이동) 분리. 더블클릭은 안하고 드래그/클릭만.
-        function _dbHeadHtml(w, headText, sub, navAction) {
+        // [r78] 위젯 헤더 — 드래그 핸들 + 클릭(이동) + [r79] + 버튼 + 우클릭 옵션
+        function _dbHeadHtml(w, headText, sub, navAction, addAction) {
             var icon = headText.match(/^(\S+)\s/);
             var iconStr = icon ? icon[1] + ' ' : '';
             var titleStr = icon ? headText.slice(iconStr.length) : headText;
             var nav = navAction ? 'onclick="event.stopPropagation();' + navAction + '"' : '';
-            return '<div class="db-widget-head">' +
+            var addBtn = addAction ? '<button class="db-widget-add" onclick="event.stopPropagation();' + addAction + '" title="이 위젯에 빠르게 추가">＋</button>' : '';
+            return '<div class="db-widget-head" oncontextmenu="_dbHeadCtx(event,\'' + w.id + '\')">' +
                 '<span class="db-widget-drag-handle" title="드래그하여 배치 변경">⋮⋮</span>' +
                 '<div class="db-widget-title" ' + nav + ' title="클릭하여 ' + (icon ? icon[1] : '🔗') + ' 페이지로 이동">' +
                 iconStr + titleStr +
-                '</div>' + (sub || '') + '</div>';
+                '</div>' + (sub || '') + addBtn + '</div>';
+        }
+        // [r79] 출처 메타 헬퍼 — 우측 정렬 회색 라벨
+        function _dbMeta(text) {
+            if (!text) return '';
+            return '<span class="db-r-meta">' + _annEsc(text) + '</span>';
+        }
+        function _dbProjectName(projId) {
+            var p = (currentData.projects || []).find(function (x) { return x.id === projId; });
+            return p ? p.name : '';
+        }
+        function _dbSprintName(sprId) {
+            var s = (currentData.sprints || []).find(function (x) { return x.id === sprId; });
+            return s ? s.weekLabel : '';
+        }
+        function _dbUserName(userId) {
+            if (!userId) return '';
+            var u = (currentData.users || []).find(function (x) { return x.id === userId; });
+            return u ? (u.displayName || u.email || '') : '';
         }
         function _dbRenderWidget(w) {
-            var body = '', head = '', sub = '', nav = '';
+            var body = '', head = '', sub = '', nav = '', addAct = '';
             var wid = w.id;
             if (w.type === 'category') {
                 var cat = (currentData.categories || []).find(function (c) { return c.id === w.catId; });
@@ -6410,14 +6485,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 head = '📋 ' + (cat.title || '카테고리');
                 sub = '<span class="db-widget-sub">· ' + _annEsc(cat.subtitle || '') + '</span>';
                 nav = 'switchView(\'kanban\')';
+                addAct = "addNewTask('" + cat.id + "','bottom');setTimeout(dbRender,200)";
                 var tasks = (currentData.tasks || []).filter(function (t) { return t.catId === w.catId && (t.zone || 'shelf') !== 'buried' && !_dbIsHidden(wid, 'task', t.id); });
                 var done = tasks.filter(function (t) { return t.status === 'completed'; }).length;
                 var pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
                 var show = tasks.slice(0, w.size * 3);
                 body = show.map(function (t) {
                     var st = t.status === 'completed' ? 'completed' : t.status === 'progress' ? 'progress' : 'pending';
-                    var tip = (t.desc || '') + (t.dueDate ? ' · 마감 ' + t.dueDate : '');
-                    return '<div class="db-widget-row" title="' + _annEsc(t.title) + (tip ? '\n' + _annEsc(tip) : '') + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + t.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'task\',id:\'' + t.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status db-r-' + st + '">' + _dbStatusDot(st) + '</span><span class="db-r-title">' + _annEsc(t.title || '(제목 없음)') + '</span></div>';
+                    var assigneeNm = _dbUserName(t.assigneeId);
+                    var meta = (t.dueDate ? '📅 ' + t.dueDate : '') + (assigneeNm ? (t.dueDate ? ' · ' : '') + assigneeNm : '');
+                    var tip = (t.desc || '') + (t.dueDate ? '\n마감 ' + t.dueDate : '') + (assigneeNm ? '\n담당: ' + assigneeNm : '');
+                    return '<div class="db-widget-row" title="' + _annEsc(t.title) + (tip ? '\n' + _annEsc(tip) : '') + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + t.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'task\',id:\'' + t.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status db-r-' + st + '">' + _dbStatusDot(st) + '</span><span class="db-r-title">' + _annEsc(t.title || '(제목 없음)') + '</span>' + _dbMeta(meta) + '</div>';
                 }).join('');
                 if (!show.length) body = '<div class="db-widget-empty">아직 할 일이 없습니다</div>';
                 body += '<div class="db-widget-progress"><span>' + done + '/' + tasks.length + ' 완료</span><div class="db-widget-progress-bar"><div style="width:' + pct + '%;"></div></div><span>' + pct + '%</span></div>';
@@ -6425,6 +6503,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var sp = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
                 head = '🏃 활성 스프린트';
                 nav = 'switchView(\'sprint\')';
+                addAct = "switchView('sprint');setTimeout(function(){if(typeof startSprint==='function')startSprint()},120)";
                 if (sp) {
                     sub = '<span class="db-widget-sub">· ' + _annEsc(sp.weekLabel || '') + '</span>';
                     head = '🏃 ' + _annEsc(sp.weekLabel || '활성 스프린트');
@@ -6437,34 +6516,42 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var show = spTasks.slice(0, w.size * 2);
                     body += show.map(function (t) {
                         var st = t.status === 'completed' ? 'completed' : t.status === 'progress' ? 'progress' : 'pending';
-                        return '<div class="db-widget-row" title="' + _annEsc(t.title) + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + t.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'task\',id:\'' + t.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status db-r-' + st + '">' + _dbStatusDot(st) + '</span><span class="db-r-title">' + _annEsc(t.title || '(제목 없음)') + '</span></div>';
+                        var cat = (currentData.categories || []).find(function (c) { return c.id === t.catId; });
+                        var meta = (cat && cat.title) ? cat.title : '';
+                        return '<div class="db-widget-row" title="' + _annEsc(t.title) + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + t.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'task\',id:\'' + t.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status db-r-' + st + '">' + _dbStatusDot(st) + '</span><span class="db-r-title">' + _annEsc(t.title || '(제목 없음)') + '</span>' + _dbMeta(meta) + '</div>';
                     }).join('');
                     body += '<div class="db-widget-progress"><span>' + spDone + '/' + spTasks.length + ' 완료</span><div class="db-widget-progress-bar"><div style="width:' + spPct + '%;"></div></div><span>' + spPct + '%</span></div>';
                 } else {
-                    body = '<div class="db-widget-empty">활성 스프린트가 없습니다</div>';
+                    body = '<div class="db-widget-empty">활성 스프린트가 없습니다<br><span style="font-size:11px;opacity:.7;">＋ 버튼으로 시작하세요</span></div>';
                 }
             } else if (w.type === 'kanban') {
                 head = '📋 칸반 보드 요약';
                 nav = 'switchView(\'kanban\')';
+                addAct = "switchView('kanban');setTimeout(addNewCategory,120)";
                 var projCats = (currentData.categories || []).filter(function (c) { return (c.projectId || 'default') === activeProjectId && !c.ownerUserId; });
+                if (w.filterSprintId) projCats = projCats.filter(function (c) { return c.sprintId === w.filterSprintId; });
                 if (!projCats.length) body = '<div class="db-widget-empty">카테고리가 없습니다</div>';
                 else body = projCats.slice(0, w.size * 2).map(function (c) {
                     var ts = (currentData.tasks || []).filter(function (t) { return t.catId === c.id && (t.zone || 'shelf') !== 'buried'; });
                     var d = ts.filter(function (t) { return t.status === 'completed'; }).length;
                     var p = ts.length ? Math.round(d / ts.length * 100) : 0;
-                    return '<div class="db-widget-row" title="' + _annEsc(c.title) + ' · ' + d + '/' + ts.length + ' 완료" onclick="event.stopPropagation();switchView(\'kanban\')"><span class="db-r-title">' + _annEsc(c.title) + '</span><span style="font-size:11px;color:var(--c-text3);">' + d + '/' + ts.length + '</span><div style="width:50px;height:4px;background:var(--ios-fill);border-radius:2px;overflow:hidden;flex-shrink:0;"><div style="width:' + p + '%;height:100%;background:var(--c-accent);"></div></div></div>';
+                    var sprName = _dbSprintName(c.sprintId);
+                    return '<div class="db-widget-row" title="' + _annEsc(c.title) + ' · ' + d + '/' + ts.length + ' 완료" onclick="event.stopPropagation();switchView(\'kanban\')"><span class="db-r-title">' + _annEsc(c.title) + '</span><span style="font-size:11px;color:var(--c-text3);">' + d + '/' + ts.length + '</span><div style="width:50px;height:4px;background:var(--ios-fill);border-radius:2px;overflow:hidden;flex-shrink:0;"><div style="width:' + p + '%;height:100%;background:var(--c-accent);"></div></div>' + _dbMeta(sprName) + '</div>';
                 }).join('');
             } else if (w.type === 'calendarMini') {
                 head = '📅 캘린더';
                 nav = 'switchView(\'calendar\')';
-                // 미니 캘린더: 이번 달 그리드
+                addAct = 'switchView(\'calendar\');setTimeout(calOpenAddEvent,120)';
+                // 미니 캘린더: 이번 달 그리드 (필터: 특정 캘린더만 표시 옵션)
                 var now = new Date(); var y = now.getFullYear(), mo = now.getMonth();
                 sub = '<span class="db-widget-sub">· ' + (mo + 1) + '월</span>';
                 var firstWd = new Date(y, mo, 1).getDay();
                 var daysIn = new Date(y, mo + 1, 0).getDate();
                 var todayD = now.getDate();
                 var visEvs = (currentData.calEvents || []).filter(function (ev) {
-                    var d = new Date(ev.start); return !isNaN(d) && d.getFullYear() === y && d.getMonth() === mo;
+                    var d = new Date(ev.start); if (isNaN(d) || d.getFullYear() !== y || d.getMonth() !== mo) return false;
+                    if (w.filterCalId && ev.calId !== w.filterCalId) return false;
+                    return true;
                 });
                 var evByDay = {}; visEvs.forEach(function (ev) {
                     var d = new Date(ev.start).getDate(); (evByDay[d] = evByDay[d] || []).push(ev);
@@ -6477,18 +6564,33 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 for (var d = 1; d <= daysIn; d++) {
                     var has = !!evByDay[d];
                     var isToday = (d === todayD);
-                    body += '<div title="' + d + '일' + (has ? ' · ' + evByDay[d].length + '건' : '') + '" style="padding:3px 0;border-radius:4px;cursor:pointer;' + (isToday ? 'background:var(--c-accent);color:#fff;font-weight:800;' : (has ? 'background:var(--ios-fill);color:var(--c-text);' : 'color:var(--c-text2);')) + '" onclick="event.stopPropagation();switchView(\'calendar\')">' + d + (has ? '<span style="display:block;width:3px;height:3px;border-radius:50%;background:' + (isToday ? '#fff' : 'var(--c-accent)') + ';margin:1px auto 0;"></span>' : '') + '</div>';
+                    var hoverHtml = '';
+                    if (has) {
+                        hoverHtml = evByDay[d].slice(0, 4).map(function (ev) {
+                            var cal = (currentData.calendars || []).find(function (cc) { return cc.id === ev.calId; });
+                            var col = (cal && cal.color) || '#999';
+                            var meId = (currentUser && currentUser.id) || null;
+                            var isPriv = (cal && cal.scope === 'personal' && cal.ownerUserId !== meId && !ev.public);
+                            var t = isPriv ? '비공개' : (ev.title || '(제목 없음)');
+                            var when = _pad2(new Date(ev.start).getHours()) + ':' + _pad2(new Date(ev.start).getMinutes());
+                            return '<div style=\'display:flex;align-items:center;gap:6px;padding:3px 4px;\'><span style=\'width:7px;height:7px;border-radius:50%;background:' + col + ';flex-shrink:0;\'></span><span style=\'font-size:10.5px;color:#888;\'>' + when + '</span><span style=\'font-size:11px;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;\'>' + _annEsc(t) + '</span></div>';
+                        }).join('');
+                        if (evByDay[d].length > 4) hoverHtml += '<div style=\'font-size:10px;color:var(--c-text3);padding:2px 4px 0;\'>+' + (evByDay[d].length - 4) + '건 더보기</div>';
+                    }
+                    body += '<div data-cm-day="' + d + '" data-cm-popup="' + (hoverHtml ? hoverHtml.replace(/"/g, '&quot;') : '') + '" style="padding:3px 0;border-radius:4px;cursor:pointer;position:relative;' + (isToday ? 'background:var(--c-accent);color:#fff;font-weight:800;' : (has ? 'background:var(--ios-fill);color:var(--c-text);' : 'color:var(--c-text2);')) + '" onmouseenter="_dbCalMiniHover(event,this)" onmouseleave="_dbCalMiniHoverHide()" onclick="event.stopPropagation();switchView(\'calendar\')">' + d + (has ? '<span style="display:block;width:3px;height:3px;border-radius:50%;background:' + (isToday ? '#fff' : 'var(--c-accent)') + ';margin:1px auto 0;"></span>' : '') + '</div>';
                 }
                 body += '</div>';
             } else if (w.type === 'upcoming') {
                 head = '📅 다가오는 일정';
                 nav = 'switchView(\'calendar\')';
+                addAct = 'switchView(\'calendar\');setTimeout(calOpenAddEvent,120)';
                 var now = Date.now();
                 var upcoming = (currentData.calEvents || [])
                     .filter(function (ev) { return ev.start && new Date(ev.start).getTime() >= now && !_dbIsHidden(wid, 'event', ev.id); })
                     .filter(function (ev) {
                         var cal = (currentData.calendars || []).find(function (c) { return c.id === ev.calId; });
                         if (!cal) return false;
+                        if (w.filterCalId && cal.id !== w.filterCalId) return false;
                         var meId = (currentUser && currentUser.id) || null;
                         if (cal.scope === 'personal') return cal.ownerUserId === meId;
                         if (cal.scope === 'project') return cal.projectId === activeProjectId;
@@ -6505,21 +6607,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var meId = (currentUser && currentUser.id) || null;
                     var isPriv = (cal && cal.scope === 'personal' && cal.ownerUserId !== meId && !ev.public);
                     var title = isPriv ? '비공개' : (ev.title || '(제목 없음)');
-                    return '<div class="db-widget-row" title="' + _annEsc(title) + ' · ' + when + (ev.desc && !isPriv ? '\n' + _annEsc(ev.desc) : '') + '" onclick="event.stopPropagation();switchView(\'calendar\')" oncontextmenu="_dbCtx(event,{kind:\'event\',id:\'' + ev.id + '\',wid:\'' + wid + '\'})"><span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span><span class="db-r-status" style="background:transparent;color:var(--c-text3);font-size:10.5px;padding:0;">' + when + '</span><span class="db-r-title">' + _annEsc(title) + '</span></div>';
+                    return '<div class="db-widget-row" title="' + _annEsc(title) + ' · ' + when + (ev.desc && !isPriv ? '\n' + _annEsc(ev.desc) : '') + '" onclick="event.stopPropagation();switchView(\'calendar\')" oncontextmenu="_dbCtx(event,{kind:\'event\',id:\'' + ev.id + '\',wid:\'' + wid + '\'})"><span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span><span class="db-r-status" style="background:transparent;color:var(--c-text3);font-size:10.5px;padding:0;">' + when + '</span><span class="db-r-title">' + _annEsc(title) + '</span>' + _dbMeta(cal ? cal.name : '') + '</div>';
                 }).join('');
             } else if (w.type === 'myTasks') {
                 head = '⭐ 내 할 일';
                 nav = 'switchView(\'kanban\')';
+                addAct = "switchView('kanban')";
                 var meId = (currentUser && currentUser.id) || null;
                 var myTasks = (currentData.tasks || [])
-                    .filter(function (t) { return (t.projectId || 'default') === activeProjectId && (t.zone || 'shelf') !== 'buried' && t.status !== 'completed' && !_dbIsHidden(wid, 'task', t.id); })
+                    .filter(function (t) { return (w.filterProjectId ? t.projectId === w.filterProjectId : (t.projectId || 'default') === activeProjectId) && (t.zone || 'shelf') !== 'buried' && t.status !== 'completed' && !_dbIsHidden(wid, 'task', t.id); })
+                    .filter(function (t) {
+                        if (w.filterSprintId) return t.sprintId === w.filterSprintId;
+                        return true;
+                    })
                     .filter(function (t) { return (t.assigneeId === meId) || (t.assignees && t.assignees.indexOf(meId) > -1) || t.isStarred; })
                     .slice(0, w.size * 4);
                 if (!myTasks.length) body = '<div class="db-widget-empty">담당하거나 즐겨찾기한 진행 카드가 없습니다</div>';
                 else body = myTasks.map(function (t) {
                     var st = t.status === 'progress' ? 'progress' : 'pending';
                     var tip = (t.desc || '') + (t.dueDate ? '\n마감: ' + t.dueDate : '');
-                    return '<div class="db-widget-row" title="' + _annEsc(t.title) + (tip ? '\n' + _annEsc(tip) : '') + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + t.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'task\',id:\'' + t.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status db-r-' + st + '">' + _dbStatusDot(st) + '</span><span class="db-r-title">' + (t.isStarred ? '⭐ ' : '') + _annEsc(t.title || '(제목 없음)') + '</span></div>';
+                    var sprName = _dbSprintName(t.sprintId);
+                    var meta = (t.dueDate ? '📅' + t.dueDate.slice(5) : '') + (sprName ? (t.dueDate ? ' · ' : '') + sprName : '');
+                    return '<div class="db-widget-row" title="' + _annEsc(t.title) + (tip ? '\n' + _annEsc(tip) : '') + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + t.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'task\',id:\'' + t.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status db-r-' + st + '">' + _dbStatusDot(st) + '</span><span class="db-r-title">' + (t.isStarred ? '⭐ ' : '') + _annEsc(t.title || '(제목 없음)') + '</span>' + _dbMeta(meta) + '</div>';
                 }).join('');
             } else if (w.type === 'reviewQueue') {
                 head = '🗳 결재 대기';
@@ -6537,7 +6646,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (!myReviews.length) body = '<div class="db-widget-empty">대기 중인 결재가 없습니다</div>';
                 else body = myReviews.map(function (r) {
                     var ttl = r.title || r.reason || '결재 요청';
-                    return '<div class="db-widget-row" title="' + _annEsc(ttl) + (r.reason ? '\n' + _annEsc(r.reason) : '') + '" onclick="event.stopPropagation();openReviewInbox()" oncontextmenu="_dbCtx(event,{kind:\'review\',id:\'' + r.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:var(--ios-fill2);color:var(--c-text2);">📌</span><span class="db-r-title">' + _annEsc(ttl) + '</span></div>';
+                    var proposer = _dbUserName(r.proposerId);
+                    return '<div class="db-widget-row" title="' + _annEsc(ttl) + (r.reason ? '\n' + _annEsc(r.reason) : '') + '" onclick="event.stopPropagation();openReviewInbox()" oncontextmenu="_dbCtx(event,{kind:\'review\',id:\'' + r.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:var(--ios-fill2);color:var(--c-text2);">📌</span><span class="db-r-title">' + _annEsc(ttl) + '</span>' + _dbMeta(proposer ? '기안: ' + proposer : '') + '</div>';
                 }).join('');
             } else if (w.type === 'unreadComments') {
                 head = '💬 안읽은 코멘트';
@@ -6558,11 +6668,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (!unread.length) body = '<div class="db-widget-empty">새 코멘트가 없습니다</div>';
                 else body = unread.map(function (u) {
                     var txt = (u.c.text || '').slice(0, 80);
-                    return '<div class="db-widget-row" title="' + _annEsc(u.task.title) + '\n' + _annEsc(u.c.text || '') + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + u.task.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'comment\',id:\'' + u.task.id + ':' + u.ts + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:var(--c-accent-soft);color:var(--c-accent);">💬</span><span class="db-r-title"><b>' + _annEsc(u.task.title) + '</b> · ' + _annEsc(txt) + '</span></div>';
+                    var author = _dbUserName(u.c.author) || u.c.author || '';
+                    return '<div class="db-widget-row" title="' + _annEsc(u.task.title) + '\n' + _annEsc(u.c.text || '') + '" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + u.task.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'comment\',id:\'' + u.task.id + ':' + u.ts + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:var(--c-accent-soft);color:var(--c-accent);">💬</span><span class="db-r-title"><b>' + _annEsc(u.task.title) + '</b> · ' + _annEsc(txt) + '</span>' + _dbMeta(author) + '</div>';
                 }).join('');
             } else if (w.type === 'recentDocs') {
                 head = '📖 최근 열어본 문서';
                 nav = 'switchView(\'docs\')';
+                addAct = "switchView('docs');setTimeout(function(){if(typeof addTopLevelDoc==='function')addTopLevelDoc()},120)";
                 var arr = [];
                 try { arr = JSON.parse(localStorage.getItem(_dbRecentDocsKey()) || '[]'); } catch (e) {}
                 var rdocs = arr.map(function (x) { return { d: (currentData.docs || []).find(function (dx) { return dx.id === x.id; }), at: x.at }; }).filter(function (x) { return x.d; }).slice(0, w.size * 3);
@@ -6570,20 +6682,23 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 else body = rdocs.map(function (x) {
                     var when = new Date(x.at);
                     var label = (when.getMonth() + 1) + '/' + when.getDate();
-                    return '<div class="db-widget-row" title="' + _annEsc(x.d.title || '') + '" onclick="event.stopPropagation();switchView(\'docs\');setTimeout(function(){if(typeof openDoc===\'function\')openDoc(\'' + x.d.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'doc\',id:\'' + x.d.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:transparent;color:var(--c-text3);font-size:10.5px;padding:0;">' + label + '</span><span class="db-r-title">' + (x.d.emoji || '📄') + ' ' + _annEsc(x.d.title || '(제목 없음)') + '</span></div>';
+                    var projName = _dbProjectName(x.d.projectId);
+                    return '<div class="db-widget-row" title="' + _annEsc(x.d.title || '') + '" onclick="event.stopPropagation();switchView(\'docs\');setTimeout(function(){if(typeof openDoc===\'function\')openDoc(\'' + x.d.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'doc\',id:\'' + x.d.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:transparent;color:var(--c-text3);font-size:10.5px;padding:0;">' + label + '</span><span class="db-r-title">' + (x.d.emoji || '📄') + ' ' + _annEsc(x.d.title || '(제목 없음)') + '</span>' + _dbMeta(projName) + '</div>';
                 }).join('');
             } else if (w.type === 'recentEdited') {
                 head = '✏️ 최근 작성된 문서';
                 nav = 'switchView(\'docs\')';
+                addAct = "switchView('docs');setTimeout(function(){if(typeof addTopLevelDoc==='function')addTopLevelDoc()},120)";
                 var allDocs = (currentData.docs || [])
-                    .filter(function (d) { return (d.projectId || 'default') === activeProjectId && !_dbIsHidden(wid, 'doc', d.id); })
+                    .filter(function (d) { return (w.filterProjectId ? d.projectId === w.filterProjectId : (d.projectId || 'default') === activeProjectId) && !_dbIsHidden(wid, 'doc', d.id); })
                     .sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); })
                     .slice(0, w.size * 3);
                 if (!allDocs.length) body = '<div class="db-widget-empty">작성된 문서가 없습니다</div>';
                 else body = allDocs.map(function (d) {
                     var when = d.updatedAt ? new Date(d.updatedAt) : null;
                     var label = when ? ((when.getMonth() + 1) + '/' + when.getDate()) : '';
-                    return '<div class="db-widget-row" title="' + _annEsc(d.title || '') + '" onclick="event.stopPropagation();switchView(\'docs\');setTimeout(function(){if(typeof openDoc===\'function\')openDoc(\'' + d.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'doc\',id:\'' + d.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:transparent;color:var(--c-text3);font-size:10.5px;padding:0;">' + label + '</span><span class="db-r-title">' + (d.emoji || '📄') + ' ' + _annEsc(d.title || '(제목 없음)') + '</span></div>';
+                    var author = _dbUserName(d.updatedBy || d.createdBy);
+                    return '<div class="db-widget-row" title="' + _annEsc(d.title || '') + '" onclick="event.stopPropagation();switchView(\'docs\');setTimeout(function(){if(typeof openDoc===\'function\')openDoc(\'' + d.id + '\')},80)" oncontextmenu="_dbCtx(event,{kind:\'doc\',id:\'' + d.id + '\',wid:\'' + wid + '\'})"><span class="db-r-status" style="background:transparent;color:var(--c-text3);font-size:10.5px;padding:0;">' + label + '</span><span class="db-r-title">' + (d.emoji || '📄') + ' ' + _annEsc(d.title || '(제목 없음)') + '</span>' + _dbMeta(author) + '</div>';
                 }).join('');
             } else if (w.type === 'serverStatus') {
                 head = '📡 서버 상태';
@@ -6593,6 +6708,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var tasks = (currentData.tasks || []).length;
                 var docs = (currentData.docs || []).length;
                 body = '<div class="db-widget-row" title="Supabase 연결 상태"><span class="db-r-status" style="background:' + (connected ? 'rgba(59,122,87,.18);color:#2c6849' : 'rgba(210,57,61,.18);color:#a13c40') + ';">' + (connected ? '✓' : '✕') + '</span><span class="db-r-title"><b>Supabase</b> ' + (connected ? '연결됨' : '끊김') + '</span></div>';
+                // [r79] DB 사용량 (renderStatusView에서 캐시한 값 활용)
+                var dbInfo = window._dbSizeEstimate;
+                if (dbInfo) {
+                    var pctDb = dbInfo.pct;
+                    var warn = pctDb > 70 ? '#d2393d' : (pctDb > 40 ? '#d49a1c' : 'var(--c-accent)');
+                    body += '<div class="db-widget-row" title="추정값 · 정확한 값은 서버 상태 페이지 참조"><span class="db-r-status" style="background:transparent;color:var(--c-text3);">🗃️</span><span class="db-r-title">DB ' + ((dbInfo.used/1024/1024).toFixed(1)) + ' MB / 500 MB</span><span class="db-r-meta" style="color:' + warn + ';">' + pctDb.toFixed(1) + '%</span></div>';
+                    body += '<div class="db-widget-progress-bar" style="margin:4px 6px 8px;"><div style="width:' + pctDb + '%;background:' + warn + ';"></div></div>';
+                } else {
+                    body += '<div class="db-widget-row"><span class="db-r-status" style="background:transparent;color:var(--c-text3);">🗃️</span><span class="db-r-title">DB 사용량 확인 중...</span></div>';
+                    // 서버 상태 페이지로 1회 들어갔다 오면 캐시 채워짐
+                    setTimeout(function () { if (typeof renderStatusView === 'function') renderStatusView().then(function () { if (currentView === 'dashboard') dbRender(); }); }, 200);
+                }
                 body += '<div class="db-widget-row" title="현재 활성 멤버 수"><span class="db-r-status" style="background:transparent;color:var(--c-text3);">👥</span><span class="db-r-title">팀원 ' + users + '명</span></div>';
                 body += '<div class="db-widget-row" title="전체 태스크 수"><span class="db-r-status" style="background:transparent;color:var(--c-text3);">📋</span><span class="db-r-title">태스크 ' + tasks + '개</span></div>';
                 body += '<div class="db-widget-row" title="전체 문서 수"><span class="db-r-status" style="background:transparent;color:var(--c-text3);">📚</span><span class="db-r-title">문서 ' + docs + '개</span></div>';
@@ -6600,6 +6727,26 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 head = '📦 최근 커밋';
                 nav = 'switchView(\'git\')';
                 body = '<div class="db-widget-empty">Git 연동 시 표시됩니다<br><span style="font-size:11px;opacity:.7;">사이드바 Git 탭에서 레포 설정</span></div>';
+            } else if (w.type === 'memo') {
+                head = '📝 개인 메모';
+                body = '<textarea class="db-memo" oninput="dbMemoChange(\'' + wid + '\', this.value)" placeholder="여기에 메모를 입력하세요...&#10;(자동 저장 · 로컬)">' + _annEsc(w.memo || '') + '</textarea>';
+            } else if (w.type === 'clock') {
+                head = '🕒 시계';
+                body = '<div class="db-clock-wrap" id="db-clock-' + wid + '">' +
+                    '<div class="db-clock-time" id="db-clock-time-' + wid + '">--:--:--</div>' +
+                    '<div class="db-clock-date" id="db-clock-date-' + wid + '">--</div>' +
+                    '</div>';
+                // setInterval 등록은 dbRender 후 _dbBindClocks에서 처리
+            } else if (w.type === 'photo') {
+                head = '🖼️ 사진';
+                body = '<div class="db-photo-wrap">';
+                if (w.photoSrc) {
+                    body += '<img src="' + w.photoSrc + '" class="db-photo-img" alt="' + _annEsc(w.photoName || '사진') + '" title="' + _annEsc(w.photoName || '') + '">';
+                    body += '<div class="db-photo-actions"><button onclick="event.stopPropagation();dbPhotoChange(\'' + wid + '\')">변경</button><button onclick="event.stopPropagation();dbPhotoClear(\'' + wid + '\')">제거</button></div>';
+                } else {
+                    body += '<div class="db-widget-empty" style="cursor:pointer;" onclick="dbPhotoChange(\'' + wid + '\')">🖼️<br>클릭하여 사진 선택<br><span style="font-size:11px;opacity:.7;">로컬 파일 또는 공용 드라이브</span></div>';
+                }
+                body += '</div>';
             }
             return '<div class="db-widget size-' + (w.size || 2) + '" data-wid="' + w.id + '">' +
                 '<div class="db-widget-actions">' +
@@ -6607,9 +6754,265 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 '<button class="db-w-act" onclick="dbResizeWidget(\'' + w.id + '\',1)" title="확대">+</button>' +
                 '<button class="db-w-act danger" onclick="dbDeleteWidget(\'' + w.id + '\')" title="삭제">✕</button>' +
                 '</div>' +
-                _dbHeadHtml(w, head, sub, nav) +
+                _dbHeadHtml(w, head, sub, nav, addAct) +
                 '<div class="db-widget-body" oncontextmenu="if(event.target===this)_dbCtx(event,{kind:\'widget\',id:\'\',wid:\'' + w.id + '\'})">' + body + '</div>' +
+                '<div class="db-widget-resize" data-wid="' + w.id + '" title="드래그하여 크기 조절"></div>' +
                 '</div>';
+        }
+        // [r79] 메모 위젯 — onChange 시 widget 객체에 저장
+        function dbMemoChange(wid, val) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            w.memo = val;
+            _dbSaveWidgets();
+        }
+        // [r79] 시계 위젯 — setInterval로 1초마다 갱신
+        function _dbBindClocks() {
+            // 기존 인터벌 정리
+            if (window._dbClockTimer) { clearInterval(window._dbClockTimer); window._dbClockTimer = null; }
+            var clocks = document.querySelectorAll('[id^="db-clock-time-"]');
+            if (!clocks.length) return;
+            function tick() {
+                var n = new Date();
+                var t = _pad2(n.getHours()) + ':' + _pad2(n.getMinutes()) + ':' + _pad2(n.getSeconds());
+                var dow = ['일', '월', '화', '수', '목', '금', '토'][n.getDay()];
+                var dt = n.getFullYear() + '. ' + (n.getMonth() + 1) + '. ' + n.getDate() + ' (' + dow + ')';
+                document.querySelectorAll('[id^="db-clock-time-"]').forEach(function (el) { el.textContent = t; });
+                document.querySelectorAll('[id^="db-clock-date-"]').forEach(function (el) { el.textContent = dt; });
+            }
+            tick();
+            window._dbClockTimer = setInterval(tick, 1000);
+        }
+        // [r79] 사진 위젯 — 로컬/드라이브 선택
+        async function dbPhotoChange(wid) {
+            var choice = await _photoChooser();
+            if (!choice) return;
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            if (choice === 'local') {
+                var input = document.createElement('input');
+                input.type = 'file'; input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+                input.onchange = function (e) {
+                    var f = e.target.files && e.target.files[0]; if (!f) return;
+                    if (f.size > 4 * 1024 * 1024) { showToast('사진은 4MB 이하만(로컬)', 'alert'); return; }
+                    var reader = new FileReader();
+                    reader.onload = function (ev) { w.photoSrc = ev.target.result; w.photoName = f.name; _dbSaveWidgets(); dbRender(); };
+                    reader.readAsDataURL(f);
+                };
+                input.click();
+            } else {
+                // 공용 드라이브에서 png/jpg/gif 선택
+                var imgs = (driveState && driveState.files || []).filter(function (f) {
+                    if (!f.mime) return false;
+                    return /^image\/(png|jpe?g|gif|webp)/.test(f.mime);
+                });
+                if (!imgs.length) { showToast('공용 드라이브에 이미지 파일이 없습니다', 'alert'); return; }
+                var pickerHtml = '<div style="max-height:400px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">' +
+                    imgs.map(function (f) {
+                        return '<div onclick="dbPickDrivePhoto(\'' + wid + '\',\'' + f.id.replace(/'/g, "\\'") + '\')" style="cursor:pointer;border:1px solid var(--c-border);border-radius:6px;overflow:hidden;background:var(--ios-fill);">' +
+                            '<img src="' + f.url + '" style="width:100%;height:90px;object-fit:cover;display:block;">' +
+                            '<div style="font-size:10.5px;padding:4px 6px;color:var(--c-text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(f.name) + '</div>' +
+                            '</div>';
+                    }).join('') + '</div>';
+                var prevHtml = document.body.innerHTML;
+                var modal = document.createElement('div');
+                modal.id = '_photoPickerModal';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;';
+                modal.innerHTML = '<div style="background:var(--c-paper);border-radius:12px;padding:18px;width:560px;max-width:92vw;box-shadow:0 16px 48px rgba(0,0,0,.32);"><div style="display:flex;align-items:center;margin-bottom:12px;"><h3 style="margin:0;flex:1;font-size:16px;font-weight:700;color:var(--c-text);">드라이브에서 사진 선택</h3><button onclick="document.getElementById(\'_photoPickerModal\').remove()" style="background:none;border:none;cursor:pointer;color:var(--c-text2);font-size:14px;">✕</button></div>' + pickerHtml + '</div>';
+                modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+                document.body.appendChild(modal);
+            }
+        }
+        function dbPickDrivePhoto(wid, fileId) {
+            var f = (driveState && driveState.files || []).find(function (x) { return x.id === fileId; });
+            if (!f) return;
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            w.photoSrc = f.url; w.photoName = f.name;
+            _dbSaveWidgets(); dbRender();
+            var modal = document.getElementById('_photoPickerModal'); if (modal) modal.remove();
+        }
+        function dbPhotoClear(wid) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            delete w.photoSrc; delete w.photoName;
+            _dbSaveWidgets(); dbRender();
+        }
+        async function _photoChooser() {
+            return new Promise(function (resolve) {
+                var ov = document.createElement('div');
+                ov.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;';
+                ov.innerHTML = '<div style="background:var(--c-paper);border-radius:12px;padding:24px;min-width:300px;box-shadow:0 16px 48px rgba(0,0,0,.32);"><div style="font-size:16px;font-weight:700;color:var(--c-text);margin-bottom:14px;text-align:center;">사진 선택 방법</div>' +
+                    '<button data-c="local" style="display:block;width:100%;padding:14px;background:var(--ios-fill);border:1px solid var(--c-border);border-radius:8px;color:var(--c-text);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">💻 로컬 파일</button>' +
+                    '<button data-c="drive" style="display:block;width:100%;padding:14px;background:var(--ios-fill);border:1px solid var(--c-border);border-radius:8px;color:var(--c-text);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">🗂️ 공용 드라이브</button>' +
+                    '<button data-c="" style="display:block;width:100%;padding:8px;background:transparent;border:none;color:var(--c-text2);font-size:12.5px;cursor:pointer;">취소</button>' +
+                    '</div>';
+                ov.addEventListener('click', function (e) {
+                    var b = e.target.closest('[data-c]');
+                    if (b) { var c = b.getAttribute('data-c'); ov.remove(); resolve(c || null); }
+                    else if (e.target === ov) { ov.remove(); resolve(null); }
+                });
+                document.body.appendChild(ov);
+            });
+        }
+        // [r79] 미니 캘린더 호버 팝업
+        var _dbCalHoverEl = null;
+        function _dbCalMiniHover(e, el) {
+            var popHtml = el.getAttribute('data-cm-popup');
+            if (!popHtml) return;
+            if (!_dbCalHoverEl) {
+                _dbCalHoverEl = document.createElement('div');
+                _dbCalHoverEl.id = '_dbCalHover';
+                _dbCalHoverEl.style.cssText = 'position:fixed;z-index:720;background:var(--c-paper);border:1px solid var(--c-border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px;min-width:240px;max-width:340px;pointer-events:none;';
+                document.body.appendChild(_dbCalHoverEl);
+            }
+            var d = el.getAttribute('data-cm-day');
+            _dbCalHoverEl.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--c-text3);padding:0 4px 4px;border-bottom:1px solid var(--c-border);margin-bottom:4px;">' + d + '일</div>' + popHtml;
+            var r = el.getBoundingClientRect();
+            var x = Math.min(r.left + r.width / 2 - 120, window.innerWidth - 350);
+            var y = r.bottom + 6;
+            // 화면 하단 넘으면 위로
+            if (y + 200 > window.innerHeight) y = r.top - 6 - 200;
+            _dbCalHoverEl.style.left = Math.max(8, x) + 'px';
+            _dbCalHoverEl.style.top = Math.max(8, y) + 'px';
+            _dbCalHoverEl.style.display = 'block';
+        }
+        function _dbCalMiniHoverHide() {
+            if (_dbCalHoverEl) _dbCalHoverEl.style.display = 'none';
+        }
+        // [r79] 위젯 헤더 우클릭 — 위젯별 설정/필터 옵션
+        function _dbHeadCtx(e, wid) {
+            e.preventDefault(); e.stopPropagation();
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            var menu = document.getElementById('db-row-ctx'); if (!menu) return;
+            var items = [];
+            if (w.type === 'sprint' || w.type === 'kanban' || w.type === 'myTasks') {
+                // 프로젝트 필터
+                items.push({ ico: '📂', label: '프로젝트 필터: ' + (w.filterProjectId ? (_dbProjectName(w.filterProjectId) || '?') : '현재 프로젝트'), act: '_dbFilterProject(\'' + wid + '\')' });
+                // 스프린트 필터
+                items.push({ ico: '🏃', label: '스프린트 필터: ' + (w.filterSprintId ? (_dbSprintName(w.filterSprintId) || '?') : '전체'), act: '_dbFilterSprint(\'' + wid + '\')' });
+            }
+            if (w.type === 'calendarMini' || w.type === 'upcoming') {
+                items.push({ ico: '📅', label: '캘린더 필터: ' + (w.filterCalId ? (currentData.calendars||[]).find(function(c){return c.id===w.filterCalId;}).name : '전체'), act: '_dbFilterCal(\'' + wid + '\')' });
+            }
+            if (w.type === 'photo') {
+                items.push({ ico: '🖼️', label: '사진 변경', act: 'dbPhotoChange(\'' + wid + '\')' });
+            }
+            // 공통: 크기 조절(1~4)
+            items.push({ sep: true });
+            [1, 2, 3, 4].forEach(function (s) {
+                items.push({ ico: (w.size === s ? '●' : '○'), label: '크기 ' + s + '칸', act: 'dbResizeWidget(\'' + wid + '\',' + (s - (w.size || 2)) + ')' });
+            });
+            items.push({ sep: true });
+            items.push({ ico: '🗑', label: '위젯 삭제', danger: true, act: 'dbDeleteWidget(\'' + wid + '\')' });
+            menu.innerHTML = items.map(function (it) {
+                if (it.sep) return '<div class="db-ctx-sep"></div>';
+                return '<div class="db-ctx-item' + (it.danger ? ' danger' : '') + '" onclick="dbHideRowCtx();' + it.act + '"><span>' + it.ico + '</span> ' + it.label + '</div>';
+            }).join('');
+            var x = Math.min(e.clientX, window.innerWidth - 280);
+            var y = Math.min(e.clientY, window.innerHeight - 360);
+            menu.style.left = x + 'px'; menu.style.top = y + 'px';
+            menu.classList.remove('hidden');
+            setTimeout(function () { document.addEventListener('mousedown', _dbCtxOutside, true); }, 10);
+        }
+        async function _dbFilterProject(wid) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            var opts = [{ key: '', label: '(현재 프로젝트)' }].concat((currentData.projects || []).map(function (p) { return { key: p.id, label: p.name }; }));
+            var picker = document.createElement('div');
+            picker.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;';
+            picker.innerHTML = '<div style="background:var(--c-paper);border-radius:12px;padding:18px;min-width:300px;max-width:400px;box-shadow:0 16px 48px rgba(0,0,0,.32);"><div style="font-size:16px;font-weight:700;color:var(--c-text);margin-bottom:12px;">프로젝트 필터</div>' +
+                opts.map(function (o) { return '<button data-k="' + o.key + '" style="display:block;width:100%;padding:10px;background:' + (w.filterProjectId === (o.key || null) ? 'var(--c-accent-soft)' : 'var(--ios-fill)') + ';border:1px solid var(--c-border);border-radius:6px;color:var(--c-text);font-size:13px;text-align:left;cursor:pointer;margin-bottom:5px;">' + _annEsc(o.label) + '</button>'; }).join('') +
+                '<button data-k="__cancel__" style="display:block;width:100%;padding:8px;background:transparent;border:none;color:var(--c-text2);font-size:12px;cursor:pointer;margin-top:6px;">닫기</button></div>';
+            picker.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-k]');
+                if (!b) { if (e.target === picker) picker.remove(); return; }
+                var k = b.getAttribute('data-k');
+                if (k === '__cancel__') { picker.remove(); return; }
+                if (k === '') delete w.filterProjectId; else w.filterProjectId = k;
+                _dbSaveWidgets(); dbRender();
+                picker.remove();
+            });
+            document.body.appendChild(picker);
+        }
+        function _dbFilterSprint(wid) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            var sprints = (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; });
+            var opts = [{ key: '', label: '(전체)' }].concat(sprints.map(function (s) { return { key: s.id, label: (s.status === 'active' ? '🏃 ' : '📋 ') + s.weekLabel }; }));
+            var picker = document.createElement('div');
+            picker.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;';
+            picker.innerHTML = '<div style="background:var(--c-paper);border-radius:12px;padding:18px;min-width:300px;max-width:400px;box-shadow:0 16px 48px rgba(0,0,0,.32);"><div style="font-size:16px;font-weight:700;color:var(--c-text);margin-bottom:12px;">스프린트 필터</div>' +
+                opts.map(function (o) { return '<button data-k="' + o.key + '" style="display:block;width:100%;padding:10px;background:' + (w.filterSprintId === (o.key || null) ? 'var(--c-accent-soft)' : 'var(--ios-fill)') + ';border:1px solid var(--c-border);border-radius:6px;color:var(--c-text);font-size:13px;text-align:left;cursor:pointer;margin-bottom:5px;">' + _annEsc(o.label) + '</button>'; }).join('') +
+                '<button data-k="__cancel__" style="display:block;width:100%;padding:8px;background:transparent;border:none;color:var(--c-text2);font-size:12px;cursor:pointer;margin-top:6px;">닫기</button></div>';
+            picker.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-k]');
+                if (!b) { if (e.target === picker) picker.remove(); return; }
+                var k = b.getAttribute('data-k');
+                if (k === '__cancel__') { picker.remove(); return; }
+                if (k === '') delete w.filterSprintId; else w.filterSprintId = k;
+                _dbSaveWidgets(); dbRender();
+                picker.remove();
+            });
+            document.body.appendChild(picker);
+        }
+        function _dbFilterCal(wid) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            var opts = [{ key: '', label: '(전체)' }].concat((currentData.calendars || []).map(function (c) { return { key: c.id, label: c.name + ' (' + (c.scope === 'personal' ? '개인' : c.scope === 'team' ? '팀' : '프로젝트') + ')' }; }));
+            var picker = document.createElement('div');
+            picker.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;';
+            picker.innerHTML = '<div style="background:var(--c-paper);border-radius:12px;padding:18px;min-width:300px;max-width:400px;box-shadow:0 16px 48px rgba(0,0,0,.32);"><div style="font-size:16px;font-weight:700;color:var(--c-text);margin-bottom:12px;">캘린더 필터</div>' +
+                opts.map(function (o) { return '<button data-k="' + o.key + '" style="display:block;width:100%;padding:10px;background:' + (w.filterCalId === (o.key || null) ? 'var(--c-accent-soft)' : 'var(--ios-fill)') + ';border:1px solid var(--c-border);border-radius:6px;color:var(--c-text);font-size:13px;text-align:left;cursor:pointer;margin-bottom:5px;">' + _annEsc(o.label) + '</button>'; }).join('') +
+                '<button data-k="__cancel__" style="display:block;width:100%;padding:8px;background:transparent;border:none;color:var(--c-text2);font-size:12px;cursor:pointer;margin-top:6px;">닫기</button></div>';
+            picker.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-k]');
+                if (!b) { if (e.target === picker) picker.remove(); return; }
+                var k = b.getAttribute('data-k');
+                if (k === '__cancel__') { picker.remove(); return; }
+                if (k === '') delete w.filterCalId; else w.filterCalId = k;
+                _dbSaveWidgets(); dbRender();
+                picker.remove();
+            });
+            document.body.appendChild(picker);
+        }
+        // [r79] 모서리 드래그 리사이즈
+        function _dbBindResize() {
+            var grid = document.getElementById('db-grid'); if (!grid) return;
+            grid.querySelectorAll('.db-widget-resize').forEach(function (handle) {
+                if (handle._bound) return; handle._bound = true;
+                handle.addEventListener('mousedown', function (e) {
+                    e.preventDefault(); e.stopPropagation();
+                    var wid = handle.getAttribute('data-wid');
+                    var widget = handle.closest('.db-widget');
+                    if (!widget) return;
+                    var rect = widget.getBoundingClientRect();
+                    var startX = e.clientX;
+                    var startSize = (dbState.widgets || []).find(function (w) { return w.id === wid; });
+                    if (!startSize) return;
+                    var baseSize = startSize.size || 2;
+                    var unitW = rect.width / baseSize;
+                    var startMoveSize = baseSize;
+                    function onMove(ev) {
+                        var dx = ev.clientX - startX;
+                        var newSize = Math.max(1, Math.min(4, Math.round(baseSize + dx / unitW)));
+                        if (newSize !== startMoveSize) {
+                            startMoveSize = newSize;
+                            startSize.size = newSize;
+                            widget.className = widget.className.replace(/size-\d+/g, '') + ' size-' + newSize;
+                        }
+                    }
+                    function onUp() {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                        _dbSaveWidgets();
+                        dbRender(); // 행 수 등 재계산
+                    }
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                });
+            });
         }
         function dbToggleEditMode() {
             dbState.editMode = !dbState.editMode;
@@ -6631,8 +7034,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             _dbSaveWidgets();
             dbRender();
         }
-        // [r78] 위젯 추가 모달 — 11종 위젯
+        // [r78/r79] 위젯 추가 모달 — 15종 위젯
         var _DB_WIDGET_TYPES = [
+            { v: 'clock', l: '🕒 시계', d: '실시간 디지털 시계 + 날짜' },
+            { v: 'memo', l: '📝 개인 메모', d: '간단한 메모 (로컬 저장)' },
+            { v: 'photo', l: '🖼️ 사진', d: '로컬 또는 드라이브의 사진 표시' },
             { v: 'sprint', l: '🏃 활성 스프린트 요약', d: '현재 활성 스프린트의 목표·진행률·카드 목록' },
             { v: 'kanban', l: '📋 칸반 보드 요약', d: '카테고리별 카드 수·진척률 한눈에' },
             { v: 'category', l: '📋 단일 카테고리 프리뷰', d: '특정 카테고리 카드 목록 + 진척률' },
@@ -6644,7 +7050,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             { v: 'recentDocs', l: '📖 최근 열어본 문서', d: '본인이 최근 열람한 문서' },
             { v: 'recentEdited', l: '✏️ 최근 작성된 문서', d: '최근 업데이트된 문서' },
             { v: 'recentCommits', l: '📦 최근 커밋', d: 'Git 연동 시 표시' },
-            { v: 'serverStatus', l: '📡 서버 상태', d: 'Supabase 연결 · 데이터 통계' }
+            { v: 'serverStatus', l: '📡 서버 상태', d: 'Supabase 연결 · DB 사용량 · 통계' }
         ];
         function dbOpenAddWidget() {
             // 위젯 종류 옵션
@@ -19285,6 +19691,8 @@ ${intrLog}
             applyDarkModeState();
             applySettingsToDOM();
             applyHeaderCollapse();
+            // [r79] 첫 로드 시 대시보드로 진입(미인증/인증 모두 동일)
+            if (typeof switchView === 'function') switchView('dashboard');
             // [v40] 인증 체크 — 통과 시에만 initSupabase, 미인증이면 로그인 모달이 데이터 로드 차단
             checkAuthOnLoad().then(function(isAuthenticated) {
                 _setupAuthStateListener();
