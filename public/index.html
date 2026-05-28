@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r113 (Phase A — Deep Wiki 1차 MD 자동 생성기 가동: r112 골격 위에 진짜 위키 생성 시스템 구현. 백엔드: ① wiki_generator.py — Git clone → 파일 트리 스캔 → 폴더 카테고리 자동 분류(_FOLDER_PATTERNS 유니티 12종 + 일반 9종 + 폴백 root) → 카테고리별 LLM 호출(_CATEGORY_PROMPT, 코드 발췌·표·Mermaid 가능 한국어 마크다운) → deep_wiki_pages INSERT. _scan_repo는 카테고리당 최대 12개 파일·3500자/파일 본문. 카테고리 2개 미만은 root로 머지. 개요 페이지(_overview) 자동 추가. ② main.py 신규 엔드포인트 4개 — POST /wiki/generate(SSE 진행률 clone_done/scan_done/progress/page_done/done), GET /wiki/pages(트리 메타), GET /wiki/page?slug=(본문), DELETE /wiki/pages(전체 삭제). 프론트: ③ Deep Wiki 페이지 활성화 — dwpGenerate(uiPrompt로 Git URL 입력 + SSE 진행률 표시), dwpRefreshTree(/wiki/pages 호출 + 트리 렌더), dwpOpenPage(/wiki/page + 마크다운 DOMPurify 렌더 + 메타 헤더). 사이드바에서 Deep Wiki 진입 시 트리 자동 로드) -->
+<!-- BUILD: 2026-05-28 r114 (Phase B — Deep Wiki UI 정교화: r113 위에 mermaid.js CDN 임포트 + 본문 후처리에서 ```mermaid 코드블록을 SVG 다이어그램으로 변환(_dwpRenderMermaidBlocks). 우측 목차(_dwpBuildTOC) — h2/h3 추출해 클릭 스크롤. 페이지 내 링크(_dwpAttachLinkHandlers) — ?slug=xxx 또는 [slug](slug) 형태 SPA 라우팅. 좌측 트리 검색바(_dwpFilterTree). 본문 3열 레이아웃: 좌트리(280px) + 본문(880px center) + 우TOC(200px). r115 감사 섹션 placeholder 추가) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -34,6 +34,8 @@
 //# sourceMappingURL=purify.min.js.map
 </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- [r114] Mermaid 다이어그램 (Deep Wiki 본문 ```mermaid 코드블록 렌더용) -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
     
     <!-- [v21 PERF B3] Mammoth(~650KB)/Turndown(~35KB) 정적 로드 제거 — DOCX 임포트나 프리뷰→에디터 동기화시에만 동적으로 로드
          초기 로드에서 ~520ms (모바일 4G) + ~200ms 파싱 절감 -->
@@ -4443,21 +4445,32 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
         </div>
 
-        <!-- [r112/r113] 진짜 Deep Wiki — Git 레포 LLM 자동 분석 위키 페이지 -->
+        <!-- [r112~r114] 진짜 Deep Wiki — Git 레포 LLM 자동 분석 위키 페이지 (DeepWiki.com 모사) -->
         <div id="deepwikiPages-view" class="hidden" onclick="event.stopPropagation()">
             <div class="dwp-wrap" style="display:flex;height:calc(100vh - 60px);overflow:hidden;">
                 <!-- 좌측: 페이지 트리 -->
                 <aside class="dwp-tree" style="width:280px;flex-shrink:0;border-right:1px solid var(--c-border);background:var(--c-paper);padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
                     <div style="font-size:13px;font-weight:800;color:var(--c-text);padding:0 4px 8px;border-bottom:1px solid var(--c-border);margin-bottom:6px;display:flex;align-items:center;gap:6px;">📘 Deep Wiki <button onclick="dwpRefreshTree()" style="margin-left:auto;background:none;border:none;color:var(--c-text3);cursor:pointer;font-size:13px;" title="새로고침">🔄</button></div>
                     <button onclick="dwpGenerate()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;width:100%;text-align:left;padding:8px 12px;">🤖 위키 자동 생성 (1차 MD)</button>
-                    <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서 (r115)">📊 기획 대조 보고서 (2차)</button>
+                    <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서">📊 기획 대조 보고서 (2차)</button>
                     <div id="dwp-progress" style="font-size:11px;color:var(--c-text2);padding:6px 4px;min-height:14px;"></div>
-                    <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;">자동 생성 페이지</div>
+                    <!-- [r114] 페이지 검색 -->
+                    <input id="dwp-search" type="text" placeholder="🔍 페이지 검색..." oninput="_dwpFilterTree()" style="background:var(--c-card);color:var(--c-text);border:1px solid var(--c-border);border-radius:7px;padding:6px 10px;font-size:12px;margin-top:8px;width:100%;box-sizing:border-box;">
+                    <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;display:flex;justify-content:space-between;"><span>자동 생성 페이지</span><span id="dwp-tab-pages" style="cursor:pointer;color:var(--c-accent);" onclick="dwpShowTab('pages')">[1차]</span></div>
                     <div id="dwp-tree" style="display:flex;flex-direction:column;gap:2px;"></div>
+                    <!-- [r115] 감사 보고서 트리 -->
+                    <div id="dwp-audits-section" style="display:none;">
+                        <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;">📊 감사 보고서 (2차)</div>
+                        <div id="dwp-audits" style="display:flex;flex-direction:column;gap:2px;"></div>
+                    </div>
                 </aside>
-                <!-- 본문 -->
-                <main class="dwp-body" style="flex:1;overflow-y:auto;padding:30px 40px 80px;">
-                    <div id="dwp-content" style="max-width:920px;margin:0 auto;"></div>
+                <!-- 본문 + 우측 TOC -->
+                <main class="dwp-body" style="flex:1;display:flex;overflow:hidden;">
+                    <div style="flex:1;overflow-y:auto;padding:30px 40px 80px;">
+                        <div id="dwp-content" style="max-width:880px;margin:0 auto;"></div>
+                    </div>
+                    <!-- [r114] 우측 목차 -->
+                    <aside id="dwp-toc" style="width:200px;flex-shrink:0;border-left:1px solid var(--c-border);padding:30px 12px;overflow-y:auto;display:none;font-size:12px;background:var(--c-paper);"></aside>
                 </main>
             </div>
         </div>
@@ -7917,6 +7930,95 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
+        // [r114] Mermaid 1회만 초기화
+        var _dwpMermaidReady = false;
+        function _dwpInitMermaid() {
+            if (_dwpMermaidReady) return;
+            try {
+                if (window.mermaid && typeof window.mermaid.initialize === 'function') {
+                    window.mermaid.initialize({
+                        startOnLoad: false,
+                        theme: document.body.classList.contains('dark') ? 'dark' : 'default',
+                        securityLevel: 'loose',
+                        fontFamily: 'inherit',
+                    });
+                    _dwpMermaidReady = true;
+                }
+            } catch (e) { console.warn('[mermaid init]', e); }
+        }
+        // [r114] 본문 안 ```mermaid 코드블록을 다이어그램으로 변환
+        async function _dwpRenderMermaidBlocks(containerEl) {
+            if (!containerEl || !window.mermaid) return;
+            _dwpInitMermaid();
+            // marked는 <pre><code class="language-mermaid">…</code></pre> 형태로 출력
+            var blocks = containerEl.querySelectorAll('pre code.language-mermaid, pre > code[class*="mermaid"]');
+            for (var i = 0; i < blocks.length; i++) {
+                var codeEl = blocks[i];
+                var src = codeEl.textContent || '';
+                var pre = codeEl.parentElement;
+                var id = 'mmd-' + Date.now() + '-' + i;
+                try {
+                    var out = await window.mermaid.render(id, src);
+                    var svg = out && out.svg ? out.svg : '';
+                    if (svg && pre) {
+                        var wrap = document.createElement('div');
+                        wrap.className = 'dwp-mermaid';
+                        wrap.style.cssText = 'margin:14px 0;padding:12px;background:var(--ios-fill);border:1px solid var(--c-border);border-radius:10px;overflow-x:auto;';
+                        wrap.innerHTML = svg;
+                        pre.replaceWith(wrap);
+                    }
+                } catch (e) {
+                    if (pre) {
+                        var err = document.createElement('div');
+                        err.style.cssText = 'margin:8px 0;padding:8px 10px;background:rgba(210,57,61,0.1);border:1px solid rgba(210,57,61,0.4);border-radius:6px;font-size:11.5px;color:#d2393d;';
+                        err.textContent = '⚠ Mermaid 렌더 실패: ' + (e.message || e);
+                        pre.parentNode.insertBefore(err, pre);
+                    }
+                }
+            }
+        }
+        // [r114] 페이지 내 [[slug]] 또는 ?slug=xxx 링크 → SPA 라우팅
+        function _dwpAttachLinkHandlers(containerEl) {
+            if (!containerEl) return;
+            var anchors = containerEl.querySelectorAll('a[href]');
+            anchors.forEach(function (a) {
+                var href = a.getAttribute('href') || '';
+                // ?slug=xxx → dwpOpenPage
+                var m = href.match(/[?&]slug=([^&#]+)/);
+                if (m) {
+                    a.setAttribute('href', '#');
+                    a.addEventListener('click', function (ev) {
+                        ev.preventDefault();
+                        dwpOpenPage(decodeURIComponent(m[1]));
+                    });
+                    return;
+                }
+                // [[slug]] 패턴은 marked 후 [slug](slug) 형태가 됨 → href가 slug면 페이지 링크로 해석
+                if (/^[a-z0-9_-]+$/i.test(href) && _dwpState.pages.some(function (p) { return p.slug === href; })) {
+                    a.addEventListener('click', function (ev) {
+                        ev.preventDefault();
+                        dwpOpenPage(href);
+                    });
+                }
+            });
+        }
+        // [r114] 본문 헤더(h2/h3) 추출해 우측 TOC 만들기
+        function _dwpBuildTOC(containerEl, tocEl) {
+            if (!tocEl) return;
+            var headers = containerEl.querySelectorAll('h2, h3');
+            if (!headers.length) { tocEl.innerHTML = ''; tocEl.style.display = 'none'; return; }
+            tocEl.style.display = '';
+            var items = [];
+            headers.forEach(function (h, idx) {
+                var id = 'dwp-h-' + idx;
+                h.id = id;
+                var level = h.tagName === 'H3' ? 1 : 0;
+                var txt = (h.textContent || '').trim();
+                items.push('<a href="#' + id + '" onclick="event.preventDefault();document.getElementById(\'' + id + '\').scrollIntoView({behavior:\'smooth\',block:\'start\'});" style="display:block;padding:3px 4px;font-size:11.5px;color:var(--c-text2);text-decoration:none;border-left:2px solid transparent;padding-left:' + (8 + level * 10) + 'px;" onmouseover="this.style.color=\'var(--c-accent)\';this.style.borderLeftColor=\'var(--c-accent)\';" onmouseout="this.style.color=\'var(--c-text2)\';this.style.borderLeftColor=\'transparent\';">' + _annEsc(txt) + '</a>');
+            });
+            tocEl.innerHTML = '<div style="font-size:10.5px;font-weight:800;color:var(--c-text3);text-transform:uppercase;letter-spacing:.04em;padding:0 4px 6px;border-bottom:1px solid var(--c-border);margin-bottom:6px;">목차</div>' + items.join('');
+        }
+
         async function dwpOpenPage(slug) {
             _dwpState.currentSlug = slug;
             _dwpRenderTree();
@@ -7932,7 +8034,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var html;
                 try { html = DOMPurify.sanitize(parseMarkdownWithTables(md), domPurifyConfig); }
                 catch (e) { html = '<pre style="white-space:pre-wrap;">' + md.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</pre>'; }
-                // 메타 헤더 (생성 시각·커밋·관련 파일 등)
                 var meta = page.meta || {};
                 var metaHtml = '<div style="font-size:11px;color:var(--c-text3);margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--c-border);display:flex;gap:14px;flex-wrap:wrap;">' +
                     (page.git_commit ? '<span>📦 커밋: <code>' + _annEsc(page.git_commit) + '</code></span>' : '') +
@@ -7940,11 +8041,30 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     (meta.generated_by ? '<span>🤖 ' + _annEsc(meta.generated_by) + '</span>' : '') +
                     (page.updated_at ? '<span>🕐 ' + new Date(page.updated_at).toLocaleString() + '</span>' : '') +
                     '</div>';
-                if (box) box.innerHTML = metaHtml + html;
+                if (box) box.innerHTML = metaHtml + '<div id="dwp-body-inner">' + html + '</div>';
+                // [r114] 본문 후처리 — Mermaid, 페이지 링크, TOC
+                var inner = box ? box.querySelector('#dwp-body-inner') : null;
+                if (inner) {
+                    await _dwpRenderMermaidBlocks(inner);
+                    _dwpAttachLinkHandlers(inner);
+                    var tocEl = document.getElementById('dwp-toc');
+                    if (tocEl) _dwpBuildTOC(inner, tocEl);
+                }
                 if (box) box.scrollTop = 0;
             } catch (e) {
                 _dwpRenderEmpty('페이지 로드 실패: ' + (e.message || e));
             }
+        }
+        // [r114] 좌측 트리 검색 — 페이지 제목 부분 매칭
+        function _dwpFilterTree() {
+            var input = document.getElementById('dwp-search');
+            var q = input ? (input.value || '').trim().toLowerCase() : '';
+            var tree = document.getElementById('dwp-tree');
+            if (!tree) return;
+            tree.querySelectorAll('button').forEach(function (btn) {
+                var t = (btn.textContent || '').toLowerCase();
+                btn.style.display = (!q || t.indexOf(q) >= 0) ? '' : 'none';
+            });
         }
 
         async function dwpGenerate() {
@@ -8021,8 +8141,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
-        function dwpAudit() {
-            showToast('📊 기획 대조(2차 MD)는 r115에서 구현됩니다. 1차 위키 + 프로젝트 위키(canon) 대조 → 일치도 보고서.', 'info');
+        // [r115] 감사 보고서 — 구현은 아래에서 (placeholder는 dwpAudit가 실행기로 덮어씀)
+        function dwpShowTab(tab) {
+            // r115에서 동적으로 audits 섹션 visible 토글
+            var a = document.getElementById('dwp-audits-section');
+            if (a) a.style.display = (tab === 'audits') ? '' : 'none';
         }
 
         function dwShowSetupGuide() {
