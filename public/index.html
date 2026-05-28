@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r103 (Deep Wiki 컬럼 추측 에러 수정: r102-B에서 select에 assignee_id 추측 컬럼명 넣었는데 실제 tasks 스키마는 assignees(jsonb 배열). 사용자 보고: 'column tasks.assignee_id does not exist'. 수정: indexer.py — tasks/sprints/wiki_docs 모두 select("*")로 변경하여 스키마에 어떤 컬럼이 있든 안전. 메타 추출은 .get()으로 안전 접근 + 실제 컬럼명 반영(assignees jsonb, dev_name legacy, cat_id, cat_badge, bury_reason, done_at, intrusion_count, milestone_criteria, section_order, attachments 등 dbUpsertTask/dbUpsertSprint 코드 검증된 컬럼만). r103 후 ⚙️ → 📋 태스크 인덱싱 다시 시도하면 에러 안 남) -->
+<!-- BUILD: 2026-05-28 r104 (rag.py f-string NameError 수정: r102 _enforce_user_message의 f-string 안내 텍스트에 "「{q}」", "{query}" placeholder가 그대로 있어서 Python f-string이 변수 q를 평가하려다 NameError. 사용자 보고: "❌ 오류: name 'q' is not defined". 수정: 안내문에서 {q} → escape "{{q}}" (f-string 평가 후 literal "{q}" 출력) + "「{q}」" placeholder 형식 안내를 평문 예시("예: '인덱스에서 「칸반 데이터 모델」에 대한 정보를 찾지 못했습니다.'")로 변경. 검증: _enforce_user_message('??', [...]) 호출 성공, 결과에 {q} {query} literal 안내 포함) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
