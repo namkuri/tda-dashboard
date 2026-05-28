@@ -1,6 +1,8 @@
 """인덱서 — Git 코드, Supabase wiki_docs, 태스크, 스프린트 → 청크 → 임베딩 → pgvector."""
 import os
 import shutil
+import stat
+import traceback
 from pathlib import Path
 from typing import AsyncIterator, Optional, Dict, Any
 import git  # GitPython
@@ -9,6 +11,37 @@ from config import settings
 from chunker import chunk_text, chunk_code, count_tokens
 from ollama_client import OllamaClient, get_ollama
 from supabase_store import SupabaseStore, get_store
+
+
+def _rm_readonly(func, path, exc_info):
+    """Windows에서 .git의 읽기전용 파일 강제 삭제용 콜백.
+
+    shutil.rmtree(..., onerror=_rm_readonly) 형식으로 사용.
+    .git 객체 파일들이 read-only로 표시되어 일반 삭제가 안 되는 문제 해결.
+    """
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass  # 정말 안 되면 무시 (clone_from이 실패하면 그때 명확한 에러)
+
+
+def _safe_remove_repo(repo_path: Path) -> None:
+    """레포 폴더 안전 삭제 — Windows 잠금 파일 처리 포함."""
+    if not repo_path.exists():
+        return
+    # 1차: 일반 삭제
+    shutil.rmtree(repo_path, onerror=_rm_readonly)
+    # 2차: 그래도 남아있으면 chmod 후 재시도
+    if repo_path.exists():
+        for root, dirs, files in os.walk(repo_path):
+            for d in dirs:
+                try: os.chmod(os.path.join(root, d), stat.S_IWRITE)
+                except Exception: pass
+            for f in files:
+                try: os.chmod(os.path.join(root, f), stat.S_IWRITE)
+                except Exception: pass
+        shutil.rmtree(repo_path, ignore_errors=True)
 
 
 # 인덱싱할 코드 파일 확장자 (DeepWiki 참고 — 일반적 프로그래밍 언어)
@@ -53,17 +86,36 @@ async def index_git_repo(
 
     try:
         if repo_path.exists() and clean_first:
-            shutil.rmtree(repo_path, ignore_errors=True)
+            yield {"event": "info", "message": f"기존 폴더 정리 중: {repo_path.name}"}
+            _safe_remove_repo(repo_path)
+            if repo_path.exists():
+                yield {"event": "error", "message": f"기존 폴더 삭제 실패 — 수동으로 삭제 필요: {repo_path}"}
+                return
         if not repo_path.exists():
-            yield {"event": "clone_start", "repo": repo_name}
-            git.Repo.clone_from(git_url, repo_path, branch=branch, depth=1)
+            yield {"event": "clone_start", "repo": repo_name, "url": git_url}
+            try:
+                git.Repo.clone_from(git_url, repo_path, branch=branch, depth=1)
+            except git.exc.GitCommandError as gce:
+                # [r93] GitPython 에러는 stderr를 포함해 자세한 정보 노출
+                stderr = (gce.stderr or "").strip()
+                stdout = (gce.stdout or "").strip()
+                detail = stderr or stdout or str(gce)
+                yield {"event": "error", "message": f"git clone 실패 ({gce.status}): {detail}"}
+                return
             yield {"event": "clone_done"}
         else:
             # 기존 clone — pull
-            repo = git.Repo(repo_path)
-            repo.remotes.origin.pull()
+            try:
+                repo = git.Repo(repo_path)
+                repo.remotes.origin.pull()
+                yield {"event": "pull_done"}
+            except Exception as pe:
+                yield {"event": "error", "message": f"git pull 실패: {pe} — clean_first=True로 재시도 권장"}
+                return
     except Exception as e:
-        yield {"event": "error", "message": f"clone 실패: {e}"}
+        # 알 수 없는 예외 — traceback 포함
+        tb = traceback.format_exc().splitlines()[-3:]
+        yield {"event": "error", "message": f"clone 처리 실패: {type(e).__name__}: {e}", "trace": tb}
         return
 
     # 2. 기존 청크 삭제

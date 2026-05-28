@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r90 (Deep Wiki Phase 2 백엔드 풀세트: deepwiki-integration/ 폴더에 FastAPI 서버(main/config/ollama_client/supabase_store/chunker/indexer/retriever/rag) + setup.bat/run.bat + requirements.txt + .env.example + migrations/001_doc_chunks.sql + USER_TASKS.md(체크리스트) + README.md. 프론트엔드 ⚙️ 설정에 인덱싱 섹션 추가: Git 레포 URL 입력 + 4개 트리거 버튼(🗂 코드 / 📚 문서 / 📋 태스크 / 🏃 스프린트) + SSE 진행률 스트리밍 표시(시작/clone/cleaned/progress/done/error/warn 이벤트별 다국어 메시지). dwTriggerIndex가 fetch ReadableStream으로 SSE 라인 파싱, 100% 완료 시 토스트) -->
+<!-- BUILD: 2026-05-28 r93 (Deep Wiki 사용성 개선 3건: ① 답변 스트리밍 가시화 — 첫 토큰 전 "🧠 생각 중..." + 도착 후 in-place 업데이트 + 토큰 카운터/경과초/깜빡 커서. 전체 리렌더 대신 마지막 봇 body만 갱신해 부드러움. ② Git 클론 실패 — Windows에서 .git 읽기전용 파일 삭제 안 됨 → _rm_readonly(stat.S_IWRITE 권한 부여) + _safe_remove_repo 2단계 cleanup. GitCommandError stderr/stdout 포함한 상세 에러 메시지. ③ 검색 임계치 0.3→0.15 완화 + 결과 3개 미만이면 임계치 무시 폴백 — "관련 문서·코드가 인덱싱돼 있지 않습니다" 오답 줄임) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -7451,26 +7451,74 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var buf = '';
             var content = '';
             var sources = [];
+            var tokenCount = 0;
+            var startTime = Date.now();
+            // [r93] 첫 토큰 도착 전엔 "생각 중..." 표시
+            _dwSetStreamingPlaceholder(botIdx, '🧠 생각 중...');
             while (true) {
                 var chunk = await reader.read();
                 if (chunk.done) break;
                 buf += decoder.decode(chunk.value, { stream: true });
-                // SSE 라인: "data: {json}\n\n"
                 var lines = buf.split('\n');
                 buf = lines.pop() || '';
+                var anyDelta = false;
                 lines.forEach(function (line) {
                     if (!line.startsWith('data:')) return;
                     var data = line.slice(5).trim();
                     if (!data || data === '[DONE]') return;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.delta) content += ev.delta;
+                        if (ev.delta) {
+                            content += ev.delta;
+                            tokenCount += 1;
+                            anyDelta = true;
+                        }
                         if (ev.sources) sources = ev.sources;
                     } catch (e) { /* ignore */ }
                 });
+                if (anyDelta) {
+                    // [r93] 스트리밍 중엔 in-place 텍스트 업데이트 (전체 리렌더 X) — 부드럽게
+                    var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                    _dwUpdateStreamingMsg(botIdx, content, tokenCount, elapsed);
+                }
                 dwState.messages[botIdx] = { role: 'bot', content: content, sources: sources };
-                dwRenderMessages();
             }
+            // 스트리밍 완료 후 최종 MD 렌더링
+            dwRenderMessages();
+        }
+        // [r93] 마지막 봇 메시지의 body에 in-place 텍스트 업데이트 (전체 리렌더 X)
+        function _dwSetStreamingPlaceholder(botIdx, txt) {
+            var box = document.getElementById('dw-messages');
+            if (!box) return;
+            var bots = box.querySelectorAll('.dw-msg.bot .dw-msg-body');
+            if (!bots.length) return;
+            var lastBody = bots[bots.length - 1];
+            lastBody.innerHTML = '<div style="color:var(--c-text3);font-size:13px;display:flex;align-items:center;gap:6px;">' +
+                '<span class="dw-typing"><span></span><span></span><span></span></span>' +
+                '<span>' + txt + '</span>' +
+                '</div>';
+        }
+        function _dwUpdateStreamingMsg(botIdx, content, tokenCount, elapsedSec) {
+            var box = document.getElementById('dw-messages');
+            if (!box) return;
+            var bots = box.querySelectorAll('.dw-msg.bot .dw-msg-body');
+            if (!bots.length) return;
+            var lastBody = bots[bots.length - 1];
+            // 텍스트는 escape만 (스트리밍 중 MD 파싱 비용 절약)
+            // 마지막에 깜빡이는 커서 추가
+            var safe = (content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // newline → <br>
+            safe = safe.replace(/\n/g, '<br>');
+            // 토큰 카운터 + 경과 시간 (작게)
+            var meta = '<div style="font-size:11px;color:var(--c-text3);margin-bottom:6px;display:flex;gap:10px;">' +
+                '<span>🧠 생성 중 · ' + tokenCount + ' tokens</span>' +
+                '<span>⏱ ' + elapsedSec + 's</span>' +
+                '<span style="color:var(--c-accent);animation:dw-typing-pulse 1s infinite;">●</span>' +
+                '</div>';
+            lastBody.innerHTML = meta + '<div style="white-space:pre-wrap;line-height:1.65;">' + safe + '<span style="display:inline-block;width:8px;height:14px;background:var(--c-accent);vertical-align:middle;margin-left:2px;animation:dw-typing-pulse 0.6s infinite;"></span></div>';
+            // 자동 스크롤 — 사용자가 위로 스크롤했으면 따라가지 않음
+            var nearBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) < 120;
+            if (nearBottom) box.scrollTop = box.scrollHeight;
         }
         // [r90] 인덱싱 트리거 — SSE 진행률 스트리밍
         async function dwTriggerIndex(kind) {
