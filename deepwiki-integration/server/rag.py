@@ -96,16 +96,14 @@ def _enforce_user_message(user_content: str, chunks: List[Dict[str, Any]]) -> st
 
 1) 컨텍스트 청크들을 한 번 훑어 사용자 질문과 관련된 **단서**를 모두 모읍니다.
 2) 단서 1개 이상 있으면 → 그것을 묶어서 답변. 짧은 코드 발췌(```언어 블록)와 `[N]` 출처 인용.
-3) 단서가 전혀 없거나 청크들이 모두 무관한 내용이면 → 다음 정형 응답:
+3) 단서가 전혀 없거나 청크들이 모두 무관한 내용이면 → 다음 형식으로 답하세요 (반드시 실제 사용자 키워드와 실제 파일 경로로 치환):
 
-```
-인덱스에서 「<질문 키워드>」에 대한 정보를 찾지 못했습니다.
+   - 첫 줄: "인덱스에서 「{q}」에 대한 정보를 찾지 못했습니다." (여기서 {q}는 사용자의 실제 키워드)
+   - 다음에 "관련 가능성 있는 파일:" 헤더
+   - 그 아래 위 컨텍스트의 실제 파일 경로 1~3개 bullet
+   - 마지막에 "더 구체적인 키워드로 다시 질문해 주세요"
 
-관련 가능성 있는 파일 (직접 확인 권장):
-- {src_list[0] if src_list else '(없음)'}
-
-더 구체적인 키워드(예: 함수명·테이블명 원문)로 다시 질문해 주세요.
-```
+**절대 금지**: "<질문 키워드>" 같은 placeholder 문자열을 답변에 literal로 출력하면 안 됨 — 반드시 사용자의 진짜 질문 단어로 치환.
 
 **중요**: 정형 응답은 정말로 단서가 0개일 때만. 단서가 있는데도 정형 응답을 선택하면 위반.
 
@@ -144,8 +142,10 @@ async def chat_stream(
         yield {"delta": f"❌ 검색 실패: {e}\n\nDB·임베딩 모델 상태를 확인하세요."}
         return
 
-    # 진단 메타 송신
-    yield {"meta": _retrieval_meta(chunks)}
+    # 진단 메타 송신 — [r102] query도 포함해 클라이언트가 placeholder 치환에 사용
+    meta_data = _retrieval_meta(chunks)
+    meta_data["query"] = query
+    yield {"meta": meta_data}
 
     # [r97] 컨텍스트 품질 게이트 — 약한 매칭은 LLM 호출 우회
     if chunks:
@@ -204,7 +204,7 @@ async def chat_stream(
     ]
     llm_messages.extend(enforced_messages[-6:])
 
-    # 5. LLM 스트리밍
+    # 5. LLM 스트리밍 — placeholder 치환은 클라이언트 측에서 (스트리밍 단위로 깔끔히 처리)
     ollama = get_ollama()
     try:
         async for delta in ollama.chat_stream(messages=llm_messages, model=model):

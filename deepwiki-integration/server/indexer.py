@@ -338,11 +338,19 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
 
 
 async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
-    """Supabase tasks → 청크 → 임베딩."""
+    """Supabase tasks → 청크 → 임베딩.
+
+    [r102] 상태·날짜·존·담당자 등 라이브 메타 정보도 content에 포함.
+    "진행중인 태스크", "마감 임박" 같은 동적 질문에 답할 수 있게.
+    """
     ollama = get_ollama()
     store = get_store()
 
-    q = store.client.table("tasks").select("id,title,description,details,project_id,cat_id")
+    # [r102] 더 많은 컬럼 조회 — 상태/존/날짜/담당자
+    q = store.client.table("tasks").select(
+        "id,title,description,details,project_id,cat_id,status,zone,priority,"
+        "sprint_id,due_date,assignee_id,is_starred,carryover_count"
+    )
     if project_id:
         q = q.eq("project_id", project_id)
     res = q.execute()
@@ -369,7 +377,29 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
         ]))
         if not (title or body).strip():
             continue
-        full_text = f"# {title}\n\n{body}"
+        # [r102] 상태 메타를 본문 머리에 추가 — LLM이 "진행중/완료/마감임박" 판별 가능
+        meta_lines = ["## 메타"]
+        status = t.get("status") or "?"
+        zone = t.get("zone") or "?"
+        prio = t.get("priority") or "?"
+        # 상태를 영문+한국어 양쪽으로 — LIKE 검색 보강
+        status_kr = {"pending": "대기중", "progress": "진행중", "completed": "완료"}.get(status, status)
+        zone_kr = {"now": "Now (지금)", "shelf": "Shelf (선반)", "buried": "Buried (묻힘)"}.get(zone, zone)
+        meta_lines.append(f"- 상태: {status} ({status_kr})")
+        meta_lines.append(f"- Zone: {zone_kr}")
+        meta_lines.append(f"- 우선순위: {prio}")
+        if t.get("sprint_id"):
+            meta_lines.append(f"- 스프린트 ID: {t['sprint_id']}")
+        if t.get("due_date"):
+            meta_lines.append(f"- 마감일 (due_date): {t['due_date']}")
+        if t.get("assignee_id"):
+            meta_lines.append(f"- 담당자 ID: {t['assignee_id']}")
+        if t.get("is_starred"):
+            meta_lines.append("- ⭐ 별표 (starred)")
+        if t.get("carryover_count"):
+            meta_lines.append(f"- 이월 횟수: {t['carryover_count']}")
+        meta_block = "\n".join(meta_lines)
+        full_text = f"# {title}\n\n{meta_block}\n\n## 본문\n{body}"
         # [r95] 기본 템플릿 태스크 ("새로운 태스크 (New Task)" + "요약 설명을 입력하세요") 스킵
         if _is_empty_template_chunk(full_text, title):
             skipped_empty += 1
@@ -406,11 +436,19 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
 
 
 async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
-    """Supabase sprints (goal/checklists) → 임베딩."""
+    """Supabase sprints (goal/checklists + status + dates + participants) → 임베딩.
+
+    [r102] 상태(active/closed/planned)·날짜·끼어들기·참여자 등 라이브 메타도 함께.
+    "진행중인 스프린트", "끼어들기 카운트" 같은 동적 질문에 답할 수 있게.
+    """
     ollama = get_ollama()
     store = get_store()
 
-    q = store.client.table("sprints").select("id,week_label,goal,checklists,project_id")
+    # [r102] 상태·날짜·끼어들기·참여자 컬럼 추가 조회
+    q = store.client.table("sprints").select(
+        "id,week_label,goal,checklists,project_id,status,start_date,end_date,"
+        "intrusion_count,intrusion_log,carryover_from_previous,participants,closed_at"
+    )
     if project_id:
         q = q.eq("project_id", project_id)
     res = q.execute()
@@ -437,11 +475,33 @@ async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[
                 if isinstance(cl, dict) and cl.get("text"):
                     checklist_text += "- " + cl["text"] + "\n"
 
-        full = f"# 스프린트 {wlabel}\n\n## 목표\n{goal}\n\n## 체크리스트\n{checklist_text}"
+        # [r102] 상태·날짜·끼어들기 메타를 머리에 추가 — 영문+한국어 둘 다로 LIKE 검색 보강
+        status = sp.get("status") or "planned"
+        status_kr = {"active": "진행중 (active)", "closed": "종료됨 (closed)", "planned": "예정 (planned)"}.get(status, status)
+        meta_lines = ["## 스프린트 메타", f"- ID: {sp.get('id')}", f"- 상태: {status_kr}"]
+        if sp.get("start_date"):
+            meta_lines.append(f"- 시작일 (startDate): {sp['start_date']}")
+        if sp.get("end_date"):
+            meta_lines.append(f"- 종료일 (endDate): {sp['end_date']}")
+        if sp.get("intrusion_count") is not None:
+            meta_lines.append(f"- 끼어들기 카운트 (intrusionCount): {sp['intrusion_count']}")
+        intrusion_log = sp.get("intrusion_log") or []
+        if isinstance(intrusion_log, list) and intrusion_log:
+            meta_lines.append(f"- 끼어들기 기록 {len(intrusion_log)}건")
+        carryover = sp.get("carryover_from_previous") or []
+        if isinstance(carryover, list) and carryover:
+            meta_lines.append(f"- 이전 스프린트 이월 카드 {len(carryover)}개")
+        participants = sp.get("participants") or []
+        if isinstance(participants, list) and participants:
+            meta_lines.append(f"- 참여자 {len(participants)}명")
+        if sp.get("closed_at"):
+            meta_lines.append(f"- 종료 시각: {sp['closed_at']}")
+        meta_block = "\n".join(meta_lines)
+        full = f"# 스프린트 {wlabel}\n\n{meta_block}\n\n## 목표 (goal)\n{goal}\n\n## 체크리스트 (checklists)\n{checklist_text}"
         if not full.strip():
             continue
-        # [r95] 목표·체크리스트 모두 비어있으면 스킵
-        if _is_empty_template_chunk(full, wlabel):
+        # [r95] 목표·체크리스트 모두 비어있으면 스킵 (단, 메타 자체로도 정보 있음 — 임계치 완화)
+        if _is_empty_template_chunk(full, wlabel) and not status:
             skipped_empty += 1
             continue
         chunks = chunk_text(full)

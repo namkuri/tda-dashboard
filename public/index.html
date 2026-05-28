@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r101 (Deep Wiki 마지막 빠진 퍼즐 — 한국어→영문 키워드 매핑: r100 후 LLM이 여전히 정형 응답으로 빠지던 진짜 원인은 한국어 추상 쿼리("칸반 보드 데이터 모델")에 영문 식별자가 0개여서 r97 하이브리드 LIKE 검색이 작동 안 함. 임베딩 검색만으로는 보고서.md만 매칭되고 public/index.html 진짜 코드가 못 들어옴. 수정: retriever.py _KOREAN_KEYWORD_MAP 40+ 항목 — "칸반"→[kanban, Category, Board, renderBoard, kanban_categories], "데이터"→[payload, schema, table, dbUpsert], "모델"→[model, schema], "스프린트"→[Sprint, dbUpsertSprint, intrusionCount], "끼어들기"→[intrusion, intrusionLog], "회고"→[retrospective, endSprint], "리뷰"→[review, review_requests], "캘린더"→[calendar, calendar_events], 등 TDA 도메인 어휘. _extract_identifiers가 한국어 부분 단어 발견 시 매핑된 영문 키워드 최대 10개 자동 추가 → LIKE 검색이 진짜 dbUpsertCategory 부근 청크 잡아냄. 재인덱싱 불필요, 서버 재시작만으로 즉시 적용) -->
+<!-- BUILD: 2026-05-28 r102 (Deep Wiki 동적 데이터 + Placeholder 보정 3건: r101 후 "진행중인 스프린트 설명해줘" 같은 동적 상태 질문에 답 못 + LLM이 prompt placeholder "<질문 키워드>"를 literal로 출력하는 버그. 수정: A. retriever.py — 한국어 매핑 키 자체도 ilike 검색 키워드에 포함. "스프린트" → ko='스프린트' + en=['Sprint','sprints',...] 둘 다 LIKE 검색. sprint/task/wiki 청크가 순수 한국어로 저장돼 영문 LIKE에만 매칭 안 되던 문제 해결. B. indexer.py — index_sprints/index_tasks가 status·startDate·endDate·intrusionCount·zone·dueDate·assignee_id·participants 등 라이브 메타 필드를 청크 content에 함께 저장. "## 메타" 섹션 머리에 영문+한국어 양쪽으로(active=진행중, shelf=Shelf 선반) → LLM이 "활성 상태인 스프린트" 질문에 답 가능. C. _dwScrubPlaceholders 프론트 함수 — LLM이 "<질문 키워드>" placeholder를 literal로 출력하면 meta.query의 실제 사용자 쿼리로 자동 치환. 스트리밍 중·최종 렌더 둘 다 적용. 서버 prompt도 평문 형식 가이드로 변경해 LLM 복사 빈도 ↓. 필요 작업: sprint/task 청크 메타 적용은 ⚙️ → 📋 태스크 인덱싱 + 🏃 스프린트 인덱싱 재실행 필요) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -7386,9 +7386,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var bodyHtml;
                 if (isUser) bodyHtml = _annEsc(m.content);
                 else {
+                    // [r102] LLM이 프롬프트 placeholder를 literal로 출력하는 경우 자동 치환
+                    var cleaned = _dwScrubPlaceholders(m.content || '', m.meta);
                     // 봇 응답은 마크다운 렌더 시도
-                    try { bodyHtml = DOMPurify.sanitize(parseMarkdownWithTables(m.content || ''), domPurifyConfig); }
-                    catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;">' + _annEsc(m.content || '') + '</pre>'; }
+                    try { bodyHtml = DOMPurify.sanitize(parseMarkdownWithTables(cleaned), domPurifyConfig); }
+                    catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;">' + _annEsc(cleaned) + '</pre>'; }
                 }
                 // [r94] 검색 진단 칩 — 봇 메시지 상단에 "📚 N청크 · 유사도 0.XX~0.YY" 표시
                 var metaHtml = isUser ? '' : _dwRetrievalChipHtml(m.meta);
@@ -7520,6 +7522,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // 스트리밍 완료 후 최종 MD 렌더링
             dwRenderMessages();
         }
+        // [r102] LLM이 prompt 안의 placeholder 텍스트를 literal로 출력하는 버그 보정
+        function _dwScrubPlaceholders(content, meta) {
+            if (!content) return content;
+            var q = (meta && meta.query) || '';
+            if (!q) return content;
+            // 자주 새는 placeholder 패턴 — 사용자 쿼리로 치환
+            var patterns = ['<질문 키워드>', '「<질문 키워드>」', '<query>', '<q>', '{q}', '{query}', '<keyword>'];
+            patterns.forEach(function (p) {
+                while (content.indexOf(p) >= 0) {
+                    content = content.replace(p, q);
+                }
+            });
+            return content;
+        }
         // [r94] 검색 진단 칩 HTML — 봇 메시지 상단에 항상 표시
         function _dwRetrievalChipHtml(meta) {
             if (!meta) return '';
@@ -7562,9 +7578,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var bots = box.querySelectorAll('.dw-msg.bot .dw-msg-body');
             if (!bots.length) return;
             var lastBody = bots[bots.length - 1];
+            // [r102] 스트리밍 중에도 placeholder 치환 — 사용자가 깨끗한 텍스트만 봄
+            var cleanContent = _dwScrubPlaceholders(content || '', retrievalMeta);
             // 텍스트는 escape만 (스트리밍 중 MD 파싱 비용 절약)
             // 마지막에 깜빡이는 커서 추가
-            var safe = (content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            var safe = cleanContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             // newline → <br>
             safe = safe.replace(/\n/g, '<br>');
             var chipHtml = _dwRetrievalChipHtml(retrievalMeta); // [r94] 검색 진단 칩

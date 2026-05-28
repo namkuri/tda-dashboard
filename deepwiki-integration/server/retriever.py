@@ -86,13 +86,12 @@ _KOREAN_KEYWORD_MAP = {
 
 
 def _extract_identifiers(query: str) -> List[str]:
-    """[r97→r101] 쿼리에서 검색에 쓸 키워드 추출.
+    """[r97→r101→r102] 쿼리에서 검색에 쓸 키워드 추출.
 
     1) 영문 식별자(camelCase/snake_case 등) 정규식 추출.
     2) [r101] 한국어 추상 키워드는 _KOREAN_KEYWORD_MAP으로 영문 식별자 보강.
-
-    예: "칸반 보드 데이터 모델" → ["kanban", "Category", "Board", "payload",
-                                  "schema", "table", "renderBoard", ...]
+    3) [r102] 한국어 매핑 키 자체도 LIKE 검색 키워드에 추가 — sprint/task/wiki
+       청크가 순수 한국어로 저장돼 있을 때 잡기 위함.
     """
     matches = _IDENTIFIER_RE.findall(query or "")
     seen = set()
@@ -110,13 +109,18 @@ def _extract_identifiers(query: str) -> List[str]:
     expanded: List[str] = []
     for ko, mapped in _KOREAN_KEYWORD_MAP.items():
         if ko in q:
+            # [r102] 매핑 키(한국어 단어) 자체도 LIKE 키워드로 추가 — sprint 등
+            # 청크가 한국어로 저장돼 있을 때 매칭되도록.
+            if ko not in seen:
+                expanded.insert(0, ko)  # 한국어를 앞쪽에 배치 — 우선 LIKE
+                seen.add(ko)
             for m in mapped:
                 if m in seen or m in expanded:
                     continue
                 expanded.append(m)
                 seen.add(m)
-    # 폭주 방지 — 매핑 확장은 최대 10개까지만
-    out.extend(expanded[:10])
+    # 폭주 방지 — 매핑 확장은 최대 12개까지만 (한국어 + 영문)
+    out.extend(expanded[:12])
     return out
 
 
