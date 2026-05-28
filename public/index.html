@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r121 (Deep Wiki 품질 + repo/버전 관리: r120 위키 품질 개선 — DeepWiki 스타일 8섹션(개요·아키텍처·핵심 클래스·데이터 모델·API·의존성·코드 발췌·메모) + 한국어 강제(영문 답변 금지) + Mermaid 강제 + 환각 금지. _build_overview_page도 카테고리 Mermaid 그래프·표·사용 가이드 추가. r121 repo+버전 관리 — deep_wiki_pages에 repo_name·generation_id·is_latest 컬럼(003_wiki_versioning.sql). 새 생성 시 기존 같은 repo는 is_latest=false로 보존, 새 페이지 is_latest=true. /wiki/pages에 repo_name/generation_id/only_latest 필터. 새 /wiki/repos 엔드포인트 → repos·generations 묶음. 좌측 트리에 📦 레포 + 🕐 버전 드롭다운, 생성 완료 시 새 repo/gen 자동 선택. id 형식: dwp:project:repo:generation:slug) -->
+<!-- BUILD: 2026-05-29 r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -8067,13 +8067,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
             }
         }
-        // [r114] 페이지 내 [[slug]] 또는 ?slug=xxx 링크 → SPA 라우팅
-        function _dwpAttachLinkHandlers(containerEl) {
+        // [r114/r122] 페이지 내 SPA 링크 + [path/file:line] Sources → GitHub 링크 자동 변환
+        function _dwpAttachLinkHandlers(containerEl, pageMeta) {
             if (!containerEl) return;
+            // 1) ?slug=xxx + [slug] SPA 라우팅
             var anchors = containerEl.querySelectorAll('a[href]');
             anchors.forEach(function (a) {
                 var href = a.getAttribute('href') || '';
-                // ?slug=xxx → dwpOpenPage
                 var m = href.match(/[?&]slug=([^&#]+)/);
                 if (m) {
                     a.setAttribute('href', '#');
@@ -8083,13 +8083,65 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     });
                     return;
                 }
-                // [[slug]] 패턴은 marked 후 [slug](slug) 형태가 됨 → href가 slug면 페이지 링크로 해석
                 if (/^[a-z0-9_-]+$/i.test(href) && _dwpState.pages.some(function (p) { return p.slug === href; })) {
                     a.addEventListener('click', function (ev) {
                         ev.preventDefault();
                         dwpOpenPage(href);
                     });
                 }
+            });
+
+            // 2) [r122] [path/file.ext:N-M] 패턴을 클릭 가능한 Sources 배지로 변환
+            //    DeepWiki 스타일: 작은 회색 배지, 호버 시 GitHub URL 풀로
+            var gitUrl = (pageMeta && pageMeta.git_url) || '';
+            var gitCommit = (pageMeta && pageMeta.git_commit) || '';
+            if (!gitUrl) return;
+            // Source ref regex: [path/file.ext] 또는 [path/file.ext:N] 또는 [path/file.ext:N-M]
+            var srcRe = /\[([A-Za-z0-9_\-./]+\.(?:cs|js|jsx|ts|tsx|py|cpp|c|h|hpp|rs|go|java|kt|sh|bat|sql|md|json|yaml|yml|html|css))(?::(\d+)(?:-(\d+))?)?\]/g;
+            var walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+            var textNodes = [];
+            var node;
+            while (node = walker.nextNode()) {
+                if (node.parentElement && /^(a|code|pre|script|style)$/i.test(node.parentElement.tagName)) continue;
+                if (srcRe.test(node.nodeValue || '')) textNodes.push(node);
+                srcRe.lastIndex = 0;
+            }
+            textNodes.forEach(function (tn) {
+                var txt = tn.nodeValue || '';
+                var lastEnd = 0;
+                var frag = document.createDocumentFragment();
+                var match;
+                srcRe.lastIndex = 0;
+                while ((match = srcRe.exec(txt)) !== null) {
+                    if (match.index > lastEnd) {
+                        frag.appendChild(document.createTextNode(txt.slice(lastEnd, match.index)));
+                    }
+                    var path = match[1];
+                    var ls = match[2] ? parseInt(match[2], 10) : null;
+                    var le = match[3] ? parseInt(match[3], 10) : ls;
+                    // GitHub URL 빌드
+                    var base = gitUrl.replace(/\.git$/, '').replace(/\/$/, '');
+                    var ref = gitCommit || 'HEAD';
+                    var ghUrl = base + '/blob/' + ref + '/' + path;
+                    if (ls) ghUrl += '#L' + ls + (le && le !== ls ? '-L' + le : '');
+                    // 배지 a
+                    var a = document.createElement('a');
+                    a.href = ghUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener';
+                    a.className = 'dwp-src-ref';
+                    a.style.cssText = 'display:inline-block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;background:var(--ios-fill);color:var(--c-text2);padding:1px 7px;margin:0 2px;border-radius:9999px;border:1px solid var(--c-border);text-decoration:none;line-height:1.5;white-space:nowrap;vertical-align:middle;';
+                    a.title = 'GitHub에서 보기: ' + ghUrl;
+                    var label = path.split('/').pop();
+                    if (ls) label += ':' + ls + (le && le !== ls ? '-' + le : '');
+                    a.textContent = '📄 ' + label;
+                    frag.appendChild(a);
+                    lastEnd = match.index + match[0].length;
+                }
+                if (lastEnd < txt.length) {
+                    frag.appendChild(document.createTextNode(txt.slice(lastEnd)));
+                }
+                tn.parentNode.replaceChild(frag, tn);
             });
         }
         // [r114] 본문 헤더(h2/h3) 추출해 우측 TOC 만들기
@@ -8132,11 +8184,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     (page.updated_at ? '<span>🕐 ' + new Date(page.updated_at).toLocaleString() + '</span>' : '') +
                     '</div>';
                 if (box) box.innerHTML = metaHtml + '<div id="dwp-body-inner">' + html + '</div>';
-                // [r114] 본문 후처리 — Mermaid, 페이지 링크, TOC
+                // [r114/r122] 본문 후처리 — Mermaid, 페이지 링크, Sources 배지, TOC
                 var inner = box ? box.querySelector('#dwp-body-inner') : null;
                 if (inner) {
                     await _dwpRenderMermaidBlocks(inner);
-                    _dwpAttachLinkHandlers(inner);
+                    _dwpAttachLinkHandlers(inner, page);
                     var tocEl = document.getElementById('dwp-toc');
                     if (tocEl) _dwpBuildTOC(inner, tocEl);
                 }
@@ -8379,7 +8431,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var inner = box ? box.querySelector('#dwp-body-inner') : null;
                 if (inner) {
                     await _dwpRenderMermaidBlocks(inner);
-                    _dwpAttachLinkHandlers(inner);
+                    // [r122] audit에도 동일하게 — 첫 latest page의 git_url 재사용
+                    var refMeta = (_dwpState.pages && _dwpState.pages[0]) || {};
+                    _dwpAttachLinkHandlers(inner, refMeta);
                     var tocEl = document.getElementById('dwp-toc');
                     if (tocEl) _dwpBuildTOC(inner, tocEl);
                 }
