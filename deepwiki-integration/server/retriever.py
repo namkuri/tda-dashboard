@@ -26,9 +26,74 @@ _STOPWORDS = {"this", "that", "with", "from", "have", "what", "when", "where", "
 # LIKE 검색 시 임베딩 sim에 더해줄 보너스 (LIKE 매칭은 정확하므로 강한 부스트)
 _LIKE_BOOST = 0.20
 
+# [r101] 한국어 추상 키워드 → TDA 프로젝트의 영문 식별자 매핑.
+# 한국어로 "칸반 데이터 모델" 같이 질문하면 영문 식별자가 0개라 LIKE 검색이
+# 작동 안 했음 — 이 매핑으로 영문 키워드를 자동 추가해 정확 매칭 보강.
+# 키는 한국어 부분 단어, 값은 LIKE 검색에 추가될 영문 식별자 리스트.
+_KOREAN_KEYWORD_MAP = {
+    # 칸반 / 보드
+    "칸반": ["kanban", "Category", "Board", "renderBoard", "kanban_categories"],
+    "보드": ["Board", "renderBoard", "kanban_categories"],
+    "카테고리": ["Category", "kanban_categories", "dbUpsertCategory", "dbDeleteCategory", "addNewCategory"],
+    "컬럼": ["column", "field"],
+    # 태스크 / 카드
+    "태스크": ["Task", "tasks", "dbUpsertTask", "dbDeleteTask", "addNewTask"],
+    "카드": ["task", "dbUpsertTask", "renderBoard", "openCardModal"],
+    # 스프린트
+    "스프린트": ["Sprint", "sprints", "dbUpsertSprint", "startSprint", "endSprint", "renderSprint"],
+    "회고": ["retrospective", "generateRetrospective", "endSprint"],
+    "끼어들기": ["intrusion", "intrusionCount", "intrusionLog"],
+    # 데이터 / 스키마
+    "데이터": ["payload", "schema", "table", "dbUpsert"],
+    "모델": ["model", "schema", "table", "payload"],
+    "테이블": ["table", "schema", "supabaseClient", "from"],
+    "스키마": ["schema", "table", "migration"],
+    "구조": ["payload", "schema", "model"],
+    "필드": ["field", "column", "payload"],
+    # 인증 / 사용자
+    "로그인": ["login", "auth", "signIn", "supabaseClient.auth"],
+    "인증": ["auth", "OAuth", "deep_link"],
+    "사용자": ["user", "users", "currentUser", "myNickname"],
+    "프로필": ["profile", "user", "displayName", "avatar"],
+    # 문서 / 위키
+    "문서": ["doc", "wiki_docs", "dbUpsertDoc", "renderDoc"],
+    "위키": ["wiki", "wiki_docs", "Canon", "wikiDoc"],
+    "그래프": ["graph", "diagram", "renderGraph"],
+    # 리뷰 / 결재
+    "리뷰": ["review", "review_requests", "dbUpsertReview"],
+    "결재": ["approval", "review", "approve"],
+    # 일반 함수/검색
+    "함수": ["function", "async"],
+    "검색": ["search", "filter", "query"],
+    "필터": ["filter", "applyFilters", "filterDev", "filterStatus"],
+    "렌더": ["render", "renderBoard", "renderSprint"],
+    # Zone (TDA 고유)
+    "선반": ["Shelf", "zone"],
+    "지금": ["Now", "zone"],
+    "묻힘": ["Buried", "zone"],
+    # 캘린더 / 일정
+    "캘린더": ["calendar", "calendar_events", "dbUpsertEvent"],
+    "일정": ["event", "calendar_events"],
+    # 자료
+    "에셋": ["asset", "assets", "asset_folders"],
+    "이슈": ["issue", "issues"],
+    "버그": ["bug", "bug_reports"],
+    # Deep Wiki
+    "임베딩": ["embedding", "embed", "ollama"],
+    "청크": ["chunk", "doc_chunks", "chunk_text", "chunk_code"],
+    "유사도": ["similarity", "SIMILARITY_THRESHOLD"],
+}
+
 
 def _extract_identifiers(query: str) -> List[str]:
-    """쿼리에서 영문 식별자 추출 (camelCase/snake_case/PascalCase, 4자+, stopwords 제외)."""
+    """[r97→r101] 쿼리에서 검색에 쓸 키워드 추출.
+
+    1) 영문 식별자(camelCase/snake_case 등) 정규식 추출.
+    2) [r101] 한국어 추상 키워드는 _KOREAN_KEYWORD_MAP으로 영문 식별자 보강.
+
+    예: "칸반 보드 데이터 모델" → ["kanban", "Category", "Board", "payload",
+                                  "schema", "table", "renderBoard", ...]
+    """
     matches = _IDENTIFIER_RE.findall(query or "")
     seen = set()
     out = []
@@ -40,6 +105,18 @@ def _extract_identifiers(query: str) -> List[str]:
             continue
         seen.add(m)
         out.append(m)
+    # [r101] 한국어 부분 단어 → 매핑된 영문 식별자 추가
+    q = query or ""
+    expanded: List[str] = []
+    for ko, mapped in _KOREAN_KEYWORD_MAP.items():
+        if ko in q:
+            for m in mapped:
+                if m in seen or m in expanded:
+                    continue
+                expanded.append(m)
+                seen.add(m)
+    # 폭주 방지 — 매핑 확장은 최대 10개까지만
+    out.extend(expanded[:10])
     return out
 
 
