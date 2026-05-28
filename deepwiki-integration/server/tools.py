@@ -128,8 +128,9 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         "function": {
             "name": "search_vector",
             "description": (
-                "정적 컨텐츠(코드 파일, 위키 문서, 보고서)를 벡터 의미 검색으로 찾습니다. "
-                "사용자가 함수 동작, 데이터 모델 설명, 아키텍처 등 코드/문서 관련 질문을 할 때 호출. "
+                "정적 컨텐츠(코드 파일, 위키 문서 본문, 보고서)를 벡터 의미 검색으로 찾습니다. "
+                "사용자가 함수 동작, 데이터 모델 설명, 아키텍처 등 코드/문서 본문 관련 질문을 할 때 호출. "
+                "주의: '문서가 뭐 있어' 같은 목록 질문에는 list_docs를 사용. 이건 의미 검색용. "
                 "반환: 청크 배열 [{source_type, source_id, title, content, similarity}]"
             ),
             "parameters": {
@@ -145,6 +146,148 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     "top_k": {"type": "integer", "description": "결과 수 (기본 6)."},
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    # ─── [r111] 신규 도구 6종 ───
+    {
+        "type": "function",
+        "function": {
+            "name": "list_docs",
+            "description": (
+                "위키 문서·프로젝트 문서·개인 문서 목록을 가져옵니다. "
+                "사용자가 '문서 목록', '프로젝트 위키에 뭐 있어', '최근 작성된 문서', '승인된 문서' 등을 물을 때 호출. "
+                "kind='wiki'=일반 문서, 'canon'=프로젝트 위키(승인), 'diagram'=그래프. "
+                "반환: 문서 메타 배열 (title, kind, parent_id, sort_order, emoji, meta, updated_at)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["wiki", "canon", "diagram"],
+                        "description": "문서 종류 (선택, 미지정 시 전체).",
+                    },
+                    "recent_first": {"type": "boolean", "description": "최근 작성 순 정렬 (기본 true)."},
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 30)."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_reviews",
+            "description": (
+                "결재(리뷰) 요청 목록을 가져옵니다. "
+                "사용자가 '내 결재함', '내가 결재할 문건', '결재 대기 중', '진행중인 리뷰' 등을 물을 때 호출. "
+                "반환: 리뷰 배열 (title, type, status, proposer_name, expires_at, votes, target_task_id, target_doc_id)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "approved", "rejected", "expired", "closed"],
+                        "description": "상태 필터 (선택).",
+                    },
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 20)."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_calendar_events",
+            "description": (
+                "캘린더 일정 목록을 가져옵니다. "
+                "사용자가 '이번달 일정', '오늘 일정', '다가오는 미팅', '이번 주 스케줄' 등을 물을 때 호출. "
+                "반환: 일정 배열 (title, start_at, end_at, description, owner_user_id, is_public)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID (선택, 미지정 시 사용자 개인 포함 전체)."},
+                    "from_date": {"type": "string", "description": "시작일 YYYY-MM-DD (선택)."},
+                    "to_date": {"type": "string", "description": "종료일 YYYY-MM-DD (선택)."},
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 30)."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_issues",
+            "description": (
+                "이슈 트래커의 이슈 목록을 가져옵니다. "
+                "사용자가 '이슈', '버그', '진행 중 이슈', '내 담당 이슈' 등을 물을 때 호출. "
+                "반환: 이슈 배열 (title, description, priority, status, assignee, due_date, target)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "status": {
+                        "type": "string",
+                        "enum": ["open", "in_progress", "resolved", "closed"],
+                        "description": "이슈 상태 (선택).",
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["p0", "p1", "p2", "p3"],
+                        "description": "우선순위 (선택).",
+                    },
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 30)."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_sprints",
+            "description": (
+                "스프린트 목록을 가져옵니다 (메타만, 카드 없음). "
+                "사용자가 '지난 스프린트', '스프린트 히스토리', '예정 스프린트' 등 다수 조회를 원할 때 호출. "
+                "단일 진행중 스프린트 + 카드를 보려면 get_active_sprint."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "closed", "planned"],
+                        "description": "상태 필터 (선택).",
+                    },
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 20)."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_users",
+            "description": (
+                "팀원/사용자 목록을 가져옵니다. "
+                "사용자가 '팀원 누구야', '참여자 목록' 등을 물을 때 호출."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID (선택)."},
+                },
+                "required": [],
             },
         },
     },
@@ -167,9 +310,23 @@ async def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             return await _tool_list_tasks(arguments)
         if name == "search_vector":
             return await _tool_search_vector(arguments)
+        # [r111] 신규 도구 6개
+        if name == "list_docs":
+            return await _tool_list_docs(arguments)
+        if name == "list_reviews":
+            return await _tool_list_reviews(arguments)
+        if name == "list_calendar_events":
+            return await _tool_list_calendar_events(arguments)
+        if name == "list_issues":
+            return await _tool_list_issues(arguments)
+        if name == "list_sprints":
+            return await _tool_list_sprints(arguments)
+        if name == "list_users":
+            return await _tool_list_users(arguments)
         return {"ok": False, "error": f"Unknown tool: {name}"}
     except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        import traceback
+        return {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc().splitlines()[-3:]}
 
 
 async def _tool_get_active_sprint(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -308,4 +465,248 @@ async def _tool_search_vector(args: Dict[str, Any]) -> Dict[str, Any]:
             "similarity": round(c.get("similarity", 0), 3),
             "content": (c.get("content") or "")[:1200],
         })
+    return {"ok": True, "result": out, "count": len(out)}
+
+
+# ─────────────────────────────────────────────
+# [r111] 신규 도구 6종 구현
+# ─────────────────────────────────────────────
+
+async def _tool_list_docs(args: Dict[str, Any]) -> Dict[str, Any]:
+    """위키 문서·프로젝트 위키·다이어그램 목록 조회."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    q = store.client.table("wiki_docs").select("*").eq("project_id", project_id)
+    if args.get("kind"):
+        q = q.eq("kind", args["kind"])
+    # sort
+    recent_first = args.get("recent_first", True)
+    if recent_first:
+        q = q.order("updated_at", desc=True)
+    else:
+        q = q.order("sort_order")
+    limit = int(args.get("limit") or 30)
+    q = q.limit(limit)
+    res = q.execute()
+    rows = res.data or []
+    # 컨텐츠 미리보기만 (전체는 너무 김), 작성자 이름 join
+    creator_ids: List[str] = []
+    for r in rows:
+        if r.get("created_by"):
+            creator_ids.append(r["created_by"])
+    user_map = await _resolve_users(creator_ids) if creator_ids else {}
+    out = []
+    for r in rows:
+        meta = r.get("meta") or {}
+        # 폴더 여부, 승인(approved) 여부 같은 메타 추출
+        item = {
+            "id": r.get("id"),
+            "title": r.get("title") or "(제목 없음)",
+            "kind": r.get("kind") or "wiki",
+            "parent_id": r.get("parent_id"),
+            "emoji": r.get("emoji") or "📄",
+            "is_folder": bool(meta.get("isFolder")),
+            "is_deprecated": bool(r.get("is_deprecated")),
+            "is_locked": bool(r.get("is_locked")),
+            "updated_at": r.get("updated_at"),
+            "content_preview": (r.get("content") or "").strip()[:200],
+            "content_length": len(r.get("content") or ""),
+            "meta": {k: v for k, v in meta.items() if k in ("isFolder", "version", "approved", "approvedBy", "approvedAt", "official")},
+        }
+        if r.get("created_by"):
+            item["creator"] = user_map.get(r["created_by"], {"id": r["created_by"], "name": r["created_by"][:8]})
+        out.append(item)
+    return {"ok": True, "result": out, "count": len(out)}
+
+
+async def _tool_list_reviews(args: Dict[str, Any]) -> Dict[str, Any]:
+    """결재 요청 목록 — 사용자가 처리할 리뷰."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    q = store.client.table("review_requests").select("*").eq("project_id", project_id)
+    if args.get("status"):
+        q = q.eq("status", args["status"])
+    # 삭제된 거 제외
+    try:
+        q = q.eq("deleted", False)
+    except Exception:
+        pass  # deleted 컬럼 없으면 무시
+    q = q.order("expires_at", desc=False).limit(int(args.get("limit") or 20))
+    try:
+        res = q.execute()
+        rows = res.data or []
+    except Exception as e:
+        return {"ok": False, "error": f"review_requests 테이블 조회 실패: {e}"}
+    # proposer/assignee user 이름 join
+    uids = []
+    for r in rows:
+        if r.get("proposer_id"):
+            uids.append(r["proposer_id"])
+    user_map = await _resolve_users(uids) if uids else {}
+    out = []
+    for r in rows:
+        out.append({
+            "id": r.get("id"),
+            "title": r.get("title") or "(제목 없음)",
+            "type": r.get("type"),
+            "status": r.get("status"),
+            "proposer": user_map.get(r.get("proposer_id")) or {"name": r.get("proposer_name") or "(미상)"},
+            "proposer_name": r.get("proposer_name"),
+            "reason": r.get("reason"),
+            "target_task_id": r.get("target_task_id"),
+            "target_doc_id": r.get("target_doc_id"),
+            "sprint_id": r.get("sprint_id"),
+            "expires_at": r.get("expires_at"),
+            "decided_at": r.get("decided_at"),
+            "decision_tag": r.get("decision_tag"),
+            "votes_count": len(r.get("votes") or []),
+            "comments_count": len(r.get("log") or []),
+        })
+    return {"ok": True, "result": out, "count": len(out)}
+
+
+async def _tool_list_calendar_events(args: Dict[str, Any]) -> Dict[str, Any]:
+    """캘린더 일정 목록."""
+    store = get_store()
+    try:
+        q = store.client.table("calendar_events").select("*")
+    except Exception as e:
+        return {"ok": False, "error": f"calendar_events 테이블 없음: {e}"}
+    if args.get("project_id"):
+        q = q.eq("project_id", args["project_id"])
+    # 날짜 범위 필터
+    if args.get("from_date"):
+        try:
+            q = q.gte("start_at", args["from_date"])
+        except Exception:
+            pass
+    if args.get("to_date"):
+        try:
+            q = q.lte("start_at", args["to_date"])
+        except Exception:
+            pass
+    q = q.order("start_at").limit(int(args.get("limit") or 30))
+    try:
+        res = q.execute()
+        rows = res.data or []
+    except Exception as e:
+        return {"ok": False, "error": f"calendar_events 조회 실패: {e}"}
+    # owner user 이름 join
+    uids = [r["owner_user_id"] for r in rows if r.get("owner_user_id")]
+    user_map = await _resolve_users(uids) if uids else {}
+    out = []
+    for r in rows:
+        out.append({
+            "id": r.get("id"),
+            "title": r.get("title") or "(제목 없음)",
+            "start_at": r.get("start_at"),
+            "end_at": r.get("end_at"),
+            "description": (r.get("description") or "")[:300],
+            "owner": user_map.get(r.get("owner_user_id")) or {"name": "(미상)"},
+            "is_public": bool(r.get("is_public")),
+            "project_id": r.get("project_id"),
+        })
+    return {"ok": True, "result": out, "count": len(out)}
+
+
+async def _tool_list_issues(args: Dict[str, Any]) -> Dict[str, Any]:
+    """이슈 트래커 이슈 목록."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    try:
+        q = store.client.table("issues").select("*").eq("project_id", project_id)
+    except Exception as e:
+        return {"ok": False, "error": f"issues 테이블 조회 실패: {e}"}
+    if args.get("status"):
+        q = q.eq("status", args["status"])
+    if args.get("priority"):
+        q = q.eq("priority", args["priority"])
+    q = q.order("priority").limit(int(args.get("limit") or 30))
+    try:
+        res = q.execute()
+        rows = res.data or []
+    except Exception as e:
+        return {"ok": False, "error": f"issues 조회 실패: {e}"}
+    uids = [r["assignee_id"] for r in rows if r.get("assignee_id")]
+    user_map = await _resolve_users(uids) if uids else {}
+    out = []
+    for r in rows:
+        out.append({
+            "id": r.get("id"),
+            "title": r.get("title"),
+            "description": (r.get("description") or "")[:300],
+            "priority": r.get("priority"),
+            "status": r.get("status"),
+            "target": r.get("target"),
+            "due_date": r.get("due_date"),
+            "assignee": user_map.get(r.get("assignee_id")) if r.get("assignee_id") else None,
+            "created_at": r.get("created_at"),
+            "updated_at": r.get("updated_at"),
+        })
+    return {"ok": True, "result": out, "count": len(out)}
+
+
+async def _tool_list_sprints(args: Dict[str, Any]) -> Dict[str, Any]:
+    """스프린트 목록 — 메타만 (카드 없음)."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    q = store.client.table("sprints").select("*").eq("project_id", project_id)
+    if args.get("status"):
+        q = q.eq("status", args["status"])
+    q = q.order("start_date", desc=True).limit(int(args.get("limit") or 20))
+    res = q.execute()
+    rows = res.data or []
+    out = []
+    for r in rows:
+        out.append({
+            "id": r.get("id"),
+            "weekLabel": r.get("week_label"),
+            "goal": r.get("goal"),
+            "status": r.get("status"),
+            "startDate": r.get("start_date"),
+            "endDate": r.get("end_date"),
+            "intrusionCount": r.get("intrusion_count") or 0,
+            "carryoverCount": len(r.get("carryover_from_previous") or []),
+            "checklistCount": len(r.get("checklists") or []),
+            "closedAt": r.get("closed_at"),
+        })
+    return {"ok": True, "result": out, "count": len(out)}
+
+
+async def _tool_list_users(args: Dict[str, Any]) -> Dict[str, Any]:
+    """팀원/사용자 목록."""
+    store = get_store()
+    # project_id 가 있으면 그 프로젝트 participants만, 없으면 전체
+    if args.get("project_id"):
+        try:
+            proj_res = store.client.table("projects").select("participants").eq("id", args["project_id"]).limit(1).execute()
+            participants = (proj_res.data or [{}])[0].get("participants") or []
+            if participants:
+                user_map = await _resolve_users(list(participants))
+                return {"ok": True, "result": list(user_map.values()), "count": len(user_map)}
+        except Exception:
+            pass
+    # 폴백: 전체 users
+    try:
+        res = store.client.table("users").select("id,display_name,email,status_message").limit(50).execute()
+        rows = res.data or []
+    except Exception as e:
+        return {"ok": False, "error": f"users 조회 실패: {e}"}
+    out = [
+        {
+            "id": u.get("id"),
+            "name": u.get("display_name") or (u.get("email", "").split("@")[0] if u.get("email") else u.get("id", "")[:8]),
+            "email": u.get("email"),
+            "status_message": u.get("status_message"),
+        }
+        for u in rows
+    ]
     return {"ok": True, "result": out, "count": len(out)}
