@@ -174,6 +174,24 @@ async def index_all_delete(source_type: Optional[str] = None, project_id: Option
     return {"deleted": deleted}
 
 
+def _model_installed(target: str, installed: list) -> bool:
+    """모델 매칭 헬퍼 — Ollama는 :latest 등 태그를 자동 추가하므로 base name 비교 포함.
+
+    예: target='nomic-embed-text', installed=['nomic-embed-text:latest'] → True
+        target='qwen2.5-coder:14b', installed=['qwen2.5-coder:14b'] → True
+    """
+    if not target:
+        return False
+    target_base = target.split(":")[0]
+    for m in installed:
+        if m == target:
+            return True
+        m_base = m.split(":")[0]
+        if m_base == target_base:
+            return True
+    return False
+
+
 @app.on_event("startup")
 async def startup():
     print("\n" + "═" * 60)
@@ -184,10 +202,17 @@ async def startup():
     if await ollama.ping():
         models = await ollama.list_models()
         print(f"  🟢 Ollama 연결 OK · 설치된 모델: {len(models)}개")
-        if settings.LLM_MODEL not in models:
+        # [r92] :latest 태그 자동 매칭 — Ollama 저장명에 태그가 붙어도 정확히 인식
+        if not _model_installed(settings.LLM_MODEL, models):
             print(f"  ⚠️  설정된 LLM '{settings.LLM_MODEL}' 가 ollama list에 없음 — pull 필요")
-        if settings.EMBED_MODEL not in models:
-            print(f"  ⚠️  임베딩 모델 '{settings.EMBED_MODEL}' 가 없음 — ollama pull {settings.EMBED_MODEL}")
+            print(f"      → ollama pull {settings.LLM_MODEL}")
+        else:
+            print(f"  ✓  LLM '{settings.LLM_MODEL}' 사용 가능")
+        if not _model_installed(settings.EMBED_MODEL, models):
+            print(f"  ⚠️  임베딩 모델 '{settings.EMBED_MODEL}' 가 없음 — pull 필요")
+            print(f"      → ollama pull {settings.EMBED_MODEL}")
+        else:
+            print(f"  ✓  임베딩 '{settings.EMBED_MODEL}' 사용 가능")
     else:
         print(f"  🔴 Ollama 연결 실패 ({settings.OLLAMA_BASE_URL})")
     if store.ping():
