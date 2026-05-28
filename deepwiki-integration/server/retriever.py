@@ -130,12 +130,17 @@ async def retrieve(
     source_types: Optional[List[str]] = None,
     top_k: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """질문 → 임베딩 + 영문 식별자 LIKE → 병합 → 다양성 dedup.
+    """질문 → 임베딩 + 영문/한국어 키워드 LIKE → 병합 → 다양성 → top_k.
 
-    [r97] 하이브리드 검색:
+    [r97/r101/r102] 하이브리드 검색:
     - 임베딩 벡터 검색 (의미 매칭)
     - 쿼리에 영문 식별자가 있으면 LIKE 정확 매칭도 병행
+    - 한국어 매핑 키도 LIKE 검색에 포함 (sprint 등 한국어 청크 잡기)
     - LIKE 매칭은 sim +0.20 부스트로 상위 강제
+
+    [r106] source_type 다양성 보장:
+    - top_k 안에 sprint·task·wiki 각 최소 1~2개씩 강제 포함 (있다면)
+    - code 한 종류가 결과 전체를 점유하지 않도록
     """
     top_k = top_k or settings.TOP_K
     ollama = get_ollama()
@@ -143,7 +148,7 @@ async def retrieve(
 
     # 1. 벡터 임베딩 검색
     embedding = await ollama.embed(query)
-    fetch_count = max(top_k * 3, 24)
+    fetch_count = max(top_k * 5, 40)  # [r106] 더 많이 뽑아서 다양성 위한 후보 확보
     vec_results = store.search(
         query_embedding=embedding,
         project_id=project_id,
@@ -151,7 +156,7 @@ async def retrieve(
         top_k=fetch_count,
     )
 
-    # 2. [r97] 영문 식별자 LIKE 검색 — 정확 키워드 매칭 보강
+    # 2. [r97] 영문 식별자 + [r102] 한국어 매핑 키 LIKE 검색
     identifiers = _extract_identifiers(query)
     like_results = []
     if identifiers:
@@ -163,9 +168,8 @@ async def retrieve(
             limit=fetch_count,
         )
 
-    # 3. 병합 — like_results는 sim에 _LIKE_BOOST 적용, 중복은 max(sim)
+    # 3. 병합
     merged = _merge_results(vec_results, like_results)
-
     if not merged:
         return []
 
@@ -174,11 +178,61 @@ async def retrieve(
     if len(filtered) < 3:
         filtered = merged
 
-    # 5. source_id별 dedup
+    # 5. source_id별 청크 수 제한 (한 파일이 결과 점유 방지)
     diversified = _dedup_by_source(filtered, max_per_source=MAX_CHUNKS_PER_SOURCE)
 
-    # 6. 최종 top_k
-    return diversified[:top_k]
+    # 6. [r106] source_type 다양성 보장 — sprint/task/wiki 무조건 포함
+    return _ensure_type_diversity(diversified, top_k)
+
+
+# [r106] source_type별 결과 쿼터 — top_k 안에서 각 타입 최소 보장.
+# code는 코드/문서 파일, wiki/task/sprint는 사용자가 만든 라이브 데이터.
+# 사용자 질문이 칸반·스프린트·태스크에 관한 경우 라이브 데이터가 더 중요한데
+# 보고서.md 같은 큰 code 파일에 밀려 안 들어오는 문제 해결.
+_TYPE_QUOTAS = {
+    "sprint": 2,  # 사용자의 실제 스프린트 정보 — 가장 적게 인덱싱돼서 강제 포함
+    "task": 3,    # 칸반 카드 — 사용자가 만든 핵심 데이터
+    "wiki": 2,    # 사용자가 쓴 위키 문서
+    "code": 5,    # 코드/문서 파일 — 양이 많으니 쿼터 큼
+}
+
+
+def _ensure_type_diversity(chunks: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
+    """[r106] top_k 안에 각 source_type 최소 N개 보장.
+
+    1) source_type별로 청크 분리 (유사도 내림차순 유지)
+    2) 각 type 쿼터만큼 우선 채택
+    3) 남은 자리는 sim 높은 순으로 채움
+    4) 최종 sim 내림차순 정렬
+    """
+    if not chunks:
+        return []
+    by_type: Dict[str, List[Dict[str, Any]]] = {}
+    for c in chunks:
+        t = c.get("source_type") or "?"
+        by_type.setdefault(t, []).append(c)
+
+    # 각 type 쿼터만큼 채택 (있는 만큼만)
+    picked_ids = set()
+    result: List[Dict[str, Any]] = []
+    for stype, quota in _TYPE_QUOTAS.items():
+        for c in by_type.get(stype, [])[:quota]:
+            cid = c.get("id")
+            if cid not in picked_ids:
+                picked_ids.add(cid)
+                result.append(c)
+
+    # 남은 자리는 sim 높은 순으로
+    remaining = [c for c in chunks if c.get("id") not in picked_ids]
+    remaining.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+    while len(result) < top_k and remaining:
+        c = remaining.pop(0)
+        picked_ids.add(c.get("id"))
+        result.append(c)
+
+    # 최종 sim 내림차순
+    result.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+    return result[:top_k]
 
 
 def _like_search(
