@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r94 (Deep Wiki "모른다" 오답 해결 3건: ① 시스템 프롬프트 완화 — "컨텍스트에 없으면 모른다"를 "단서를 적극 활용해 부분답변·추정·출처 인용"으로. 파일명·함수명·필드명에서 단서 추출하도록 명시. ② /debug/search 엔드포인트 — q·project_id·source_types 파라미터로 청크/유사도 직접 확인. 인덱스 진단용. ③ 검색 진단 칩 — SSE에 {meta:{retrieved,avg_sim,max_sim,top}} 이벤트 추가. 봇 응답 상단에 "🔍 N청크 매칭 · 유사도 0.XX~0.YY" 칩(ok/mid/weak/empty 톤). 검색 임계치 0.15→0.10 추가 완화 + 폴백 시 top-K 전부 반환) -->
+<!-- BUILD: 2026-05-28 r95 (Deep Wiki 빈 템플릿 가비지 청소 — r94 진단 결과 "여기에 내용을 작성하세요"·"새로운 태스크" 같은 기본 플레이스홀더가 한국어 짧은 질문과 코사인 유사도 0.93+로 false-positive 매칭되어 진짜 컨텐츠를 밀어내는 문제 해결. ① indexer.py _is_empty_template_chunk + 11개 패턴 + 30자 임계치. wiki/task/sprint 인덱싱 전 스킵, "done" 이벤트에 skipped_empty 카운트. ② POST /index/cleanup_empty — 기존 doc_chunks에서 빈 템플릿만 즉시 일괄 삭제(재임베딩 없이). 페이지네이션 스캔 + 500개 배치 삭제 + 처음 5개 샘플 반환. ③ ⚙️ 설정 모달에 "🧹 빈 템플릿 청크 청소" 버튼 추가, uiConfirm + 진행 표시) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4496,6 +4496,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <button onclick="dwTriggerIndex('task')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">📋 태스크 인덱싱</button>
                             <button onclick="dwTriggerIndex('sprint')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">🏃 스프린트 인덱싱</button>
                         </div>
+                        <!-- [r95] 빈 템플릿 청크 청소 — 재인덱싱 없이 즉시 노이즈 제거 -->
+                        <div style="margin-top:8px;">
+                            <button onclick="dwCleanupEmpty()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text2);border:1px dashed var(--c-border);width:100%;font-size:12px;" title="기본 템플릿(여기에 내용을 작성하세요, 새로운 태스크 등)만 들어간 청크를 일괄 삭제합니다. 재인덱싱 없이 즉시 적용.">🧹 빈 템플릿 청크 청소</button>
+                        </div>
                         <div id="dw-index-progress" style="margin-top:10px;font-size:12px;color:var(--c-text2);min-height:18px;"></div>
                     </div>
                 </div>
@@ -7627,6 +7631,40 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } catch (e) {
                 pgEl.innerHTML = '❌ 요청 실패: ' + _annEsc(e.message || e);
                 showToast('❌ 인덱싱 요청 실패: ' + (e.message || e), 'alert');
+            }
+        }
+        // [r95] 빈 템플릿 청크 일괄 삭제 (재인덱싱 없이 즉시 노이즈 제거)
+        async function dwCleanupEmpty() {
+            var s = _dwGetSettings();
+            if (!s.backendUrl) { showToast('⚙️ 백엔드 URL 먼저 설정', 'alert'); return; }
+            var pgEl = document.getElementById('dw-index-progress');
+            if (!pgEl) return;
+            var ok = await uiConfirm({
+                title: '빈 템플릿 청크 청소',
+                message: '"여기에 내용을 작성하세요", "새로운 태스크 (New Task)" 등 기본 템플릿만 들어간 청크를 일괄 삭제합니다.\n\n재인덱싱(임베딩 재계산)은 하지 않으므로 매우 빠릅니다.\n\n진행할까요?',
+                confirmText: '청소'
+            });
+            if (!ok) return;
+            pgEl.innerHTML = '🧹 빈 청크 스캔 중...';
+            try {
+                var res = await fetch(s.backendUrl + '/index/cleanup_empty', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                var msg = '🧹 스캔 ' + data.scanned + '개 · 삭제 <b style="color:var(--c-accent);">' + data.deleted + '개</b> · 남은 청크 ' + data.remaining + '개';
+                if (data.samples && data.samples.length) {
+                    msg += '<div style="font-size:11px;color:var(--c-text3);margin-top:6px;">예시 삭제: '
+                        + data.samples.map(function (sm) { return _annEsc((sm.source_title || '?').slice(0, 24)); }).join(' · ')
+                        + '</div>';
+                }
+                pgEl.innerHTML = msg;
+                showToast('✅ 빈 템플릿 ' + data.deleted + '개 삭제됨', 'success');
+            } catch (e) {
+                pgEl.innerHTML = '❌ 청소 실패: ' + _annEsc(e.message || e);
+                showToast('❌ 청소 요청 실패: ' + (e.message || e), 'alert');
             }
         }
 

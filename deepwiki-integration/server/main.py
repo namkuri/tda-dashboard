@@ -13,7 +13,7 @@ from ollama_client import get_ollama
 from supabase_store import get_store
 from rag import chat_stream
 from retriever import retrieve, SIMILARITY_THRESHOLD
-from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints
+from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints, _is_empty_template_chunk
 
 
 app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
@@ -197,6 +197,60 @@ async def debug_search(
             }
             for i, c in enumerate(chunks)
         ],
+    }
+
+
+@app.post("/index/cleanup_empty")
+async def cleanup_empty(project_id: Optional[str] = None):
+    """[r95] 기존 doc_chunks 중 빈 템플릿/플레이스홀더 청크 일괄 삭제 (재인덱싱 없이).
+
+    "여기에 내용을 작성하세요", "요약 설명을 입력하세요" 등 기본 템플릿이 인덱싱돼
+    벡터 검색 결과를 오염시키는 문제를 즉시 해결. 재인덱싱(임베딩 재계산) 없이
+    DB만 정리해서 시간을 아낌.
+    """
+    store = get_store()
+    # 청크 전수 스캔 — 페이지네이션 (Supabase 기본 limit 1000)
+    all_chunks = []
+    page = 0
+    page_size = 1000
+    while True:
+        q = store.client.table("doc_chunks").select("id,content,source_title,source_type")
+        if project_id:
+            q = q.eq("project_id", project_id)
+        q = q.range(page * page_size, (page + 1) * page_size - 1)
+        res = q.execute()
+        rows = res.data or []
+        if not rows:
+            break
+        all_chunks.extend(rows)
+        if len(rows) < page_size:
+            break
+        page += 1
+    # 빈 템플릿 판별
+    to_delete_ids = []
+    samples = []  # 처음 5개 샘플 (UI 표시용)
+    for c in all_chunks:
+        if _is_empty_template_chunk(c.get("content", "") or "", c.get("source_title", "") or ""):
+            to_delete_ids.append(c["id"])
+            if len(samples) < 5:
+                samples.append({
+                    "source_type": c.get("source_type"),
+                    "source_title": c.get("source_title"),
+                    "preview": (c.get("content", "") or "")[:80],
+                })
+    # 배치 삭제 (500개씩)
+    deleted = 0
+    if to_delete_ids:
+        BATCH = 500
+        for i in range(0, len(to_delete_ids), BATCH):
+            ids = to_delete_ids[i:i + BATCH]
+            store.client.table("doc_chunks").delete().in_("id", ids).execute()
+            deleted += len(ids)
+    return {
+        "scanned": len(all_chunks),
+        "deleted": deleted,
+        "remaining": len(all_chunks) - deleted,
+        "samples": samples,
     }
 
 

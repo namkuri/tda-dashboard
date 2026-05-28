@@ -44,6 +44,56 @@ def _safe_remove_repo(repo_path: Path) -> None:
         shutil.rmtree(repo_path, ignore_errors=True)
 
 
+# [r95] 빈/플레이스홀더 콘텐츠 필터 — 짧은 한국어끼리 비교 시 false positive가 심해
+# "여기에 내용을 작성하세요" 같은 기본 템플릿 텍스트가 0.9+ 유사도로 매칭되어
+# 진짜 컨텐츠를 밀어내는 문제를 해결.
+_EMPTY_TEMPLATE_PATTERNS = [
+    # 위키 문서 기본 본문
+    "여기에 내용을 작성하세요",
+    "여기에 내용을 작성하세",  # 사용자가 뒤를 살짝 수정한 변종도 잡음
+    # 태스크 기본 description / details
+    "요약 설명을 입력하세요",
+    "클릭하여 상세 내용을 마크다운으로 작성하세요",
+    "상세 내용을 마크다운으로 작성하세요",
+    # 영문 변종
+    "Write your content here",
+    "Click to write details",
+    # 제목 자동 생성
+    "새로운 태스크 (New Task)",
+    "새로운 태스크",
+    "(제목 없음)",
+    "(No title)",
+    "(Untitled)",
+]
+# 제목·플레이스홀더 빼고 남는 실질 글자 수 임계치 — 미만이면 인덱싱 스킵
+_MIN_NONEMPTY_LEN = 30
+
+
+def _is_empty_template_chunk(content: str, title: str = "") -> bool:
+    """청크가 사실상 빈 템플릿/플레이스홀더만 포함하는지 검사.
+
+    True → 인덱싱에서 제외 (벡터 검색에 노이즈 추가 방지).
+    """
+    if not content or not content.strip():
+        return True
+    t = content
+    # 1. 최상단 `# 제목` 라인 제거
+    lines = t.split("\n", 1)
+    if lines and lines[0].lstrip().startswith("#"):
+        t = lines[1] if len(lines) > 1 else ""
+    # 2. 알려진 플레이스홀더 문구 제거
+    for p in _EMPTY_TEMPLATE_PATTERNS:
+        t = t.replace(p, "")
+    # 3. 제목 자체가 플레이스홀더면 그것도 제거
+    if title:
+        for p in _EMPTY_TEMPLATE_PATTERNS:
+            t = t.replace(p, "")
+        t = t.replace(title, "")
+    # 4. 공백·줄바꿈만 남으면 빈 청크
+    stripped = "".join(t.split())
+    return len(stripped) < _MIN_NONEMPTY_LEN
+
+
 # 인덱싱할 코드 파일 확장자 (DeepWiki 참고 — 일반적 프로그래밍 언어)
 CODE_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".vue", ".svelte",
@@ -222,6 +272,7 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
     yield {"event": "cleaned", "deleted": deleted}
 
     chunks_inserted = 0
+    skipped_empty = 0
     batch = []
     BATCH_SIZE = 32
 
@@ -230,6 +281,10 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
         content = doc.get("content") or ""
         kind = doc.get("kind", "wiki")
         if not content.strip():
+            continue
+        # [r95] 빈 템플릿 (예: "여기에 내용을 작성하세요") 스킵 — 노이즈 매칭 방지
+        if _is_empty_template_chunk(content, title):
+            skipped_empty += 1
             continue
         chunks = chunk_text(content)
         for ci, chunk in enumerate(chunks):
@@ -262,7 +317,7 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
         store.upsert_chunks(batch)
         chunks_inserted += len(batch)
 
-    yield {"event": "done", "chunks_inserted": chunks_inserted}
+    yield {"event": "done", "chunks_inserted": chunks_inserted, "skipped_empty": skipped_empty}
 
 
 async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
@@ -285,6 +340,7 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
         store.delete_by_source("task")
 
     chunks_inserted = 0
+    skipped_empty = 0
     batch = []
     BATCH_SIZE = 32
 
@@ -297,6 +353,10 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
         if not (title or body).strip():
             continue
         full_text = f"# {title}\n\n{body}"
+        # [r95] 기본 템플릿 태스크 ("새로운 태스크 (New Task)" + "요약 설명을 입력하세요") 스킵
+        if _is_empty_template_chunk(full_text, title):
+            skipped_empty += 1
+            continue
         chunks = chunk_text(full_text)
         for ci, chunk in enumerate(chunks):
             try:
@@ -325,7 +385,7 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
         store.upsert_chunks(batch)
         chunks_inserted += len(batch)
 
-    yield {"event": "done", "chunks_inserted": chunks_inserted}
+    yield {"event": "done", "chunks_inserted": chunks_inserted, "skipped_empty": skipped_empty}
 
 
 async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
@@ -347,6 +407,7 @@ async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[
         store.delete_by_source("sprint")
 
     chunks_inserted = 0
+    skipped_empty = 0
     batch = []
 
     for idx, sp in enumerate(sprints):
@@ -361,6 +422,10 @@ async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[
 
         full = f"# 스프린트 {wlabel}\n\n## 목표\n{goal}\n\n## 체크리스트\n{checklist_text}"
         if not full.strip():
+            continue
+        # [r95] 목표·체크리스트 모두 비어있으면 스킵
+        if _is_empty_template_chunk(full, wlabel):
+            skipped_empty += 1
             continue
         chunks = chunk_text(full)
         for ci, chunk in enumerate(chunks):
@@ -388,4 +453,4 @@ async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[
         store.upsert_chunks(batch)
         chunks_inserted += len(batch)
 
-    yield {"event": "done", "chunks_inserted": chunks_inserted}
+    yield {"event": "done", "chunks_inserted": chunks_inserted, "skipped_empty": skipped_empty}
