@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r84 (#1 DB 테이블 미생성 진단: DB_OPTIONAL_TABLES 6개(calendars/calendar_events/asset_folders/assets/issues/bug_reports) 추가, dbMigrationSql에 CREATE TABLE IF NOT EXISTS 멱등 포함, dbCheckSchema가 테이블+컬럼 누락 분리 보고. #2 다이제틱 DB 저장 대기 그라데이션: .db-pending 클래스 + db-shimmer 키프레임(웜 액센트 색상 2.4s 무한 흐름) — 에셋/이슈/버그리포트 카드에 _pending 마킹, 저장 완료 시 해제. #3 DB 저장 실패 알람: dbUpsertAsset/Issue/BugReport가 {ok,error} 반환, 실패 시 카드에 .db-failed(빨간 그라데이션 보더) + "⚠ 미저장" 라벨 + showToast 빨간 알람) -->
+<!-- BUILD: 2026-05-28 r85 (RLS 정책 차단 해결: Supabase가 신규 테이블에 자동으로 켜놓은 row-level security가 INSERT 차단(42501 "new row violates row-level security policy") → dbMigrationSql에 'alter table X disable row level security;' 6개 추가(다른 기존 테이블과 동일 정책). dbUpsertAsset/Issue/BugReport/AssetFolder 모두 RLS 에러(42501/row-level security/RLS) 감지해 사용자에게 "RLS 정책 차단 — 서버 상태 > 🔍 점검의 최신 SQL 재실행 필요" 친절 메시지. 사용자 액션: 서버 상태 > 🔍 점검 → 📋 SQL 복사 → Supabase SQL Editor에서 재실행) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -7141,7 +7141,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var em = error.message || '';
                     if (/relation .* does not exist|42P01/i.test(em)) {
                         console.warn('[dbUpsertAsset] assets 테이블 없음');
-                        return { ok: false, error: 'assets 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                        return { ok: false, error: 'assets 테이블 미생성 — 서버 상태 > 🔍 점검 후 SQL 실행 필요' };
+                    }
+                    if (/row-level security|RLS|42501/i.test(em)) {
+                        return { ok: false, error: 'RLS 정책 차단 — 서버 상태 > 🔍 점검의 최신 SQL 재실행 필요 (disable row level security 포함됨)' };
                     }
                     console.error('[dbUpsertAsset]', error);
                     return { ok: false, error: em };
@@ -7160,7 +7163,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (error) {
                     var em2 = error.message || '';
                     if (/relation .* does not exist|42P01/i.test(em2)) {
-                        return { ok: false, error: 'asset_folders 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                        return { ok: false, error: 'asset_folders 테이블 미생성 — 서버 상태 > 🔍 점검 후 SQL 실행 필요' };
+                    }
+                    if (/row-level security|RLS|42501/i.test(em2)) {
+                        return { ok: false, error: 'RLS 정책 차단 — 서버 상태 > 🔍 점검의 최신 SQL 재실행 필요' };
                     }
                     return { ok: false, error: em2 };
                 }
@@ -7330,7 +7336,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (error) {
                     var em = error.message || '';
                     if (/relation .* does not exist|42P01/i.test(em)) {
-                        return { ok: false, error: 'issues 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                        return { ok: false, error: 'issues 테이블 미생성 — 서버 상태 > 🔍 점검 후 SQL 실행 필요' };
+                    }
+                    if (/row-level security|RLS|42501/i.test(em)) {
+                        return { ok: false, error: 'RLS 정책 차단 — 서버 상태 > 🔍 점검의 최신 SQL 재실행 필요 (disable row level security 포함됨)' };
                     }
                     console.error('[dbUpsertIssue]', error);
                     return { ok: false, error: em };
@@ -7477,7 +7486,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (error) {
                     var em = error.message || '';
                     if (/relation .* does not exist|42P01/i.test(em)) {
-                        return { ok: false, error: 'bug_reports 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                        return { ok: false, error: 'bug_reports 테이블 미생성 — 서버 상태 > 🔍 점검 후 SQL 실행 필요' };
+                    }
+                    if (/row-level security|RLS|42501/i.test(em)) {
+                        return { ok: false, error: 'RLS 정책 차단 — 서버 상태 > 🔍 점검의 최신 SQL 재실행 필요 (disable row level security 포함됨)' };
                     }
                     console.error('[dbUpsertBugReport]', error);
                     return { ok: false, error: em };
@@ -10700,6 +10712,13 @@ return data;
             lines.push('-- [r84] 신규 테이블 — 없으면 생성');
             DB_OPTIONAL_TABLES.forEach(function (t) {
                 lines.push('create table if not exists ' + t[0] + ' (' + t[1] + ');');
+            });
+            lines.push('');
+            // [r85] RLS(Row-Level Security) 비활성화 — Supabase가 신규 테이블에 RLS를 켜놔서 INSERT가 차단됨.
+            //   팀 워크스페이스 도구라 인증된 사용자 전부 접근 허용(다른 기존 테이블과 동일 정책).
+            lines.push('-- [r85] RLS 비활성화 — 신규 테이블 INSERT 차단 해제 (기존 테이블과 동일한 정책)');
+            DB_OPTIONAL_TABLES.forEach(function (t) {
+                lines.push('alter table ' + t[0] + ' disable row level security;');
             });
             lines.push('');
             lines.push('-- [컬럼] 기존 테이블에 없는 컬럼 추가');
