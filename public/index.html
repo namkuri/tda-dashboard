@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r72 (칸반: 보드+진척률을 한 스크롤 영역(#board-scroll)으로 통합→가로스크롤 동기, 진척률 하단정렬+바닥여백, 하단 빈공간 제거(80/60px 패딩 삭제). 트렐로풍: 카테고리 컬럼 은은한 패널(--c-sidebar-bg)+헤더정리+카드 그림자 경량화) -->
+<!-- BUILD: 2026-05-28 r73 (트렐로 카드: 카드는 [○상태원 + 제목 + P우선순위(우)]로 단순화, 카드 클릭=상세 모달(#card-modal, 기존 편집핸들러 재사용·렌더보드 후 자동동기·Esc 닫기). 카테고리 헤더=제목+카운트+⋯메뉴(zone-counts/상단+ 제거). 전체 카드 드래그, 콘텐츠 높이 자동) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1971,9 +1971,23 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* [r72] 트렐로풍 단순화: 카테고리 컬럼을 은은한 패널로(카드가 떠 보이게) + 헤더/카드 정리 */
         html.is-desktop .kanban-col-wrapper { background: var(--c-sidebar-bg); border: 1px solid var(--c-border); padding: 9px 9px 11px; border-radius: 12px; }
         html.is-desktop .col-header { border-bottom: none; padding: 1px 4px 8px; margin-bottom: 6px; }
-        html.is-desktop .task-card { box-shadow: 0 1px 2px rgba(0,0,0,0.10); border-color: var(--c-border); }
+        html.is-desktop .task-card { box-shadow: 0 1px 2px rgba(0,0,0,0.10); border-color: var(--c-border); border-left-width: 1px !important; margin-bottom: 8px; }
+        html.is-desktop .task-card.collapsed { height: auto; }
         html.is-desktop .task-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.16); }
         html.is-desktop .add-task-btm { border-width: 1.5px; }
+        /* [r73] 트렐로풍 단순 카드 행: 동그라미(상태·변경) + 제목 + 우선순위(우) */
+        .tc-row { display: flex; align-items: center; gap: 9px; padding: 9px 11px; cursor: pointer; }
+        .tc-check { width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--c-text3); background: transparent; flex-shrink: 0; cursor: pointer; padding: 0; position: relative; transition: border-color .12s, background .12s; }
+        .tc-check:hover { border-color: var(--c-text2); }
+        .tc-check.tc-progress { border-color: var(--st-warn, #c2843e); background: linear-gradient(90deg, var(--st-warn, #c2843e) 50%, transparent 50%); }
+        .tc-check.tc-completed { border-color: var(--st-ok, #4e8d6e); background: var(--st-ok, #4e8d6e); }
+        .tc-check.tc-completed::after { content: '✓'; color: #fff; font-size: 11px; font-weight: 900; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; line-height: 1; }
+        .tc-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; }
+        .tc-title.tc-done { text-decoration: line-through; color: var(--c-text3); }
+        .tc-pri { flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800; }
+        .tc-pri.p0 { color: var(--st-danger, #c15747); }
+        .tc-pri.p1 { color: var(--st-warn, #c2843e); }
+        .tc-pri.p2 { color: var(--c-text3); }
 
         /* 위키링크 → 클레이/웜 (청색 제거) */
         .wikilink { color: var(--c-accent); border-bottom-color: var(--c-accent-soft); }
@@ -3947,6 +3961,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </button>
             <p id="auth-error" style="display:none;margin-top:16px;padding:10px;background:#fee;color:#c00;border-radius:6px;font-size:12px;"></p>
             <p style="margin-top:24px;font-size:11px;color:var(--ios-label3,#9b968a);">팀원만 데이터에 접근 가능합니다 (RLS 적용)</p>
+        </div>
+    </div>
+
+    <!-- [r73] 카드 상세 모달 (트렐로풍) — 칸반 카드 클릭 시 열림 -->
+    <div id="card-modal" class="bg-black bg-opacity-60 z-[110] backdrop-blur-sm" style="display:none;" onclick="if(event.target===this) closeCardModal()">
+        <div class="card-modal-content overflow-y-auto" style="width:min(720px, 92vw); max-height:90vh; background:var(--c-card); color:var(--c-text); border:1px solid var(--c-border); border-radius:14px; padding:18px 22px; box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+            <div class="cm-header flex items-center justify-between mb-3">
+                <h3 class="text-base font-black" style="color:var(--c-text);">카드 상세</h3>
+                <button onclick="closeCardModal()" class="cm-close" style="font-size:18px; background:transparent; border:none; color:var(--c-text2); cursor:pointer; padding:4px 10px; border-radius:6px;" title="닫기 (Esc)">✕</button>
+            </div>
+            <div class="cm-body" id="card-modal-body"></div>
         </div>
     </div>
 
@@ -9965,6 +9990,80 @@ addEventListener("resize",sendPos);
         function handleEnterKey(e) { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }
         var _expandedCards = {}; // [조용한 카드] 세션 펼침 상태(기본 접힘) — 매 로드 시 보드는 깔끔하게 접힘
         function toggleTaskCard(e, taskId) { if (e) e.stopPropagation(); if (_expandedCards[taskId]) delete _expandedCards[taskId]; else _expandedCards[taskId] = true; renderBoard(); }
+        // [r73] 카드 상세 모달 — 칸반 카드 클릭 시 펼침 대신 팝업으로(트렐로풍). 동일 편집 핸들러 재사용.
+        var _cardModalId = null;
+        function openCardModal(taskId) {
+            var task = (currentData.tasks || []).find(function (t) { return t.id === taskId; });
+            if (!task) return;
+            _cardModalId = taskId;
+            var body = document.getElementById('card-modal-body');
+            if (body) body.innerHTML = _cardDetailHtml(task);
+            if (typeof openModal === 'function') openModal('card-modal');
+        }
+        function closeCardModal() {
+            _cardModalId = null;
+            if (typeof closeModal === 'function') closeModal('card-modal');
+        }
+        function _refreshOpenCardModal() {
+            if (!_cardModalId) return;
+            var modal = document.getElementById('card-modal');
+            if (!modal || modal.style.display === 'none') { _cardModalId = null; return; }
+            var task = (currentData.tasks || []).find(function (t) { return t.id === _cardModalId; });
+            if (!task) { closeCardModal(); return; }
+            // 편집 중(modal 내부의 contenteditable/textarea/input 포커스)이면 갱신 스킵 — 입력 끊김 방지
+            var ae = document.activeElement;
+            if (ae && modal.contains(ae) && (ae.isContentEditable || ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')) return;
+            var body = document.getElementById('card-modal-body');
+            if (body) body.innerHTML = _cardDetailHtml(task);
+        }
+        function _cardDetailHtml(task) {
+            var tagColor = (currentData.tagColors || {})[task.catBadge] || '#57544c';
+            var statusInfo = getStatusInfo(task.status);
+            var commentsHtml = (task.comments || []).map(function (c, i) { return ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text || ''}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time || ''}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `; }).join('');
+            return `
+                <div class="task-card-inner relative z-10">
+                    <div class="flex flex-wrap gap-1.5 items-center mb-3">
+                        <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span>
+                        <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')" title="클릭하여 상태 변경 (대기 → 진행 → 완료)">${statusInfo.text}</span>
+                        <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')" title="${task.isStarred ? '즐겨찾기 해제' : '즐겨찾기'}">${task.isStarred ? '⭐' : '☆'}</span>
+                        ${typeof renderAssigneeBadge === 'function' ? renderAssigneeBadge(task, 'board') : ''}
+                        <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')" title="클릭하여 태그·색상 수정">${task.catBadge || ''}</span>
+                        ${typeof renderDueBadge === 'function' ? renderDueBadge(task, 'board') : ''}
+                    </div>
+                    <div class="flex justify-between items-start mb-1">
+                        <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-[1.2rem] flex-1 mr-2" style="color:var(--c-text);">${task.title || ''}</h3>
+                        <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')" title="클릭하여 우선순위 변경 (P0 → P1 → P2)">${task.priority || 'p2'}</span>
+                    </div>
+                    <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] mb-2 font-medium" style="color:var(--c-text2);">${task.desc || ''}</p>
+                    ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''}
+                    <div class="details-content">
+                        <div class="scrollable-content relative">
+                            <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details || ''), domPurifyConfig)}</div>
+                            <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details || ''}</textarea>
+                            <div class="script-list mt-3 mb-1">
+                                <strong class="text-[11px] block mb-1 font-bold" style="color:var(--c-text2);">TARGET SCRIPTS (수정 가능):</strong>
+                                <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-[11px] break-all" style="color:var(--c-accent);">${(task.scripts || []).join(', ')}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ${typeof renderTaskLinkedDocsPanel === 'function' ? renderTaskLinkedDocsPanel(task) : ''}
+                ${typeof renderTaskReviewsPanel === 'function' ? renderTaskReviewsPanel(task) : ''}
+                <div class="comments-section relative z-10 mt-3">
+                    <div class="comments-list">${commentsHtml}</div>
+                    <div class="comment-input-wrap mt-2">
+                        <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)">
+                        <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button>
+                    </div>
+                </div>
+                <div class="cm-footer mt-4 pt-3 flex gap-2 justify-end" style="border-top:1px solid var(--c-border);">
+                    ${(task.zone || 'shelf') !== 'buried' ? `<button onclick="buryTaskWithReason(event,'${task.id}')" class="px-3 py-1.5 rounded text-xs font-bold" style="background:var(--ios-fill); color:var(--c-text2); border:1px solid var(--c-border);">🗑 처내기</button>` : ''}
+                    <button onclick="deleteTask(event,'${task.id}')" class="px-3 py-1.5 rounded text-xs font-bold" style="background:#c15747; color:#fff;">✕ 삭제</button>
+                </div>
+            `;
+        }
+        // Esc로 카드 모달 닫기
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _cardModalId) closeCardModal(); });
         // [조용한 카드] 접힘 카드 요약 메타: 상태·담당자·기한·연결/리뷰/코멘트 개수
         function _cardSummaryMeta(task, statusInfo) {
             var parts = [];
@@ -12847,10 +12946,9 @@ ${intrLog}
                         <div class="ch-left cat-controls" onclick="event.stopPropagation()">
                             <span class="ch-drag" title="드래그하여 컬럼 순서 변경 (이 브라우저에만 저장)" onclick="event.stopPropagation()">⠿</span>
                             <h2 class="ch-title" onclick="toggleCategoryFocus('${cat.id}')">${cat.title}</h2>
-                            <span class="ch-count">${catTotal}</span>${zcHtml}
+                            <span class="ch-count">${catTotal}</span>
                         </div>
                         <div class="ch-right cat-controls" onclick="event.stopPropagation()">
-                            <button class="ch-add" onclick="addNewTask('${cat.id}', 'top')" title="이 카테고리에 할 일 추가">+</button>
                             <button class="ch-more" onclick="catMenu(event, '${cat.id}')" title="메뉴 (복사·이름변경·삭제·정렬)">⋯</button>
                         </div>
                     </div>
@@ -12885,20 +12983,17 @@ ${intrLog}
                     .map(x => x.t);
 
                 catTasks.forEach(task => {
-                    const tagColor = currentData.tagColors[task.catBadge] || '#57544c'; const statusInfo = getStatusInfo(task.status);
-                    const _isCol = !_expandedCards[task.id]; // [조용한 카드] 기본 접힘(세션 펼침 상태 기준)
-                    const card = document.createElement('div'); card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} ${_isCol ? 'collapsed' : ''} zone-${task.zone || 'shelf'}`; card.setAttribute('data-id', task.id);
-                    card.oncontextmenu = function(e) { showCardContextMenu(e, task.id); }; // [v40 B2] 우클릭 메뉴(결정 요청 등)
-                    if (_isCol) {
-                        card.innerHTML = `<div class="card-actions"><div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div></div>`
-                            + `<div class="card-sum" onclick="toggleTaskCard(event,'${task.id}')" title="클릭하여 펼치기">`
-                            + `<div class="cs-line"><span class="cs-pri ${task.priority}">${(task.priority || 'p2').toUpperCase()}</span><span class="cs-title ${task.status === 'completed' ? 'cs-done' : ''}">${task.title || '(제목 없음)'}</span></div>`
-                            + `<div class="cs-meta" onclick="event.stopPropagation()">${_cardSummaryMeta(task, statusInfo)}</div></div>`;
-                        colList.appendChild(card);
-                        return;
-                    }
-                    const commentsHtml = task.comments.map((c, i) => ` <div class="comment-item flex justify-between items-start"> <div class="flex flex-col pr-2"> <span class="text-[10px] font-bold text-blue-600 mb-0.5">${c.author || '익명'}</span> <span class="text-[12px] break-all">${c.text}</span> </div> <div class="flex items-center gap-2 flex-shrink-0 mt-0.5"> <span class="text-[9px] text-gray-400 font-mono">${c.time}</span> <button onclick="deleteComment('${task.id}', ${i})" class="text-gray-300 hover:text-red-400">✕</button> </div> </div> `).join('');
-                    card.innerHTML = ` <div class="card-actions"> <div class="drag-handle" title="드래그하여 이동 (필터링 중 비활성)">⠿</div> <button class="action-btn toggle-btn" onclick="toggleTaskCard(event, '${task.id}')" title="펼침/닫힘 토글">↕</button> ${(task.zone || 'shelf') !== 'buried' ? `<button class="action-btn" onclick="buryTaskWithReason(event, '${task.id}')" title="처내기 (Buried, 사유 필수)">🗑</button>` : ''} <button class="action-btn" onclick="deleteTask(event, '${task.id}')" title="삭제(영구)">✕</button> </div> <div class="completed-overlay"></div> <div class="task-card-inner relative z-10"> <div class="flex flex-wrap gap-1.5 items-center mb-3 pr-20"> <span class="badge ${getZoneClass(task.zone)}" onclick="cycleZone(event, '${task.id}')" title="클릭하여 Zone 변경 (Now ↔ Shelf ↔ Buried)">${getZoneIcon(task.zone)} ${getZoneLabel(task.zone)}</span> <span class="badge ${statusInfo.class}" onclick="cycleStatus(event, '${task.id}')" title="클릭하여 상태 변경 (대기 → 진행 → 완료)">${statusInfo.text}</span> <span class="badge ${task.isStarred ? 'bg-yellow-400 text-yellow-900 shadow-sm' : 'bg-gray-200 text-gray-500'}" onclick="toggleStar(event, '${task.id}')" title="${task.isStarred ? '즐겨찾기 해제' : '즐겨찾기'}">${task.isStarred ? '⭐' : '☆'}</span> ${renderAssigneeBadge(task, 'board')} <span class="badge badge-cat" style="background-color: ${tagColor};" onclick="editTag(event, '${task.id}')" title="클릭하여 태그·색상 수정">${task.catBadge}</span> ${renderDueBadge(task, 'board')} </div> <div class="flex justify-between items-start mb-1 pr-4"> <h3 contenteditable="true" onblur="updateTaskText('${task.id}', 'title', this)" onkeydown="handleEnterKey(event)" class="editable-text font-black text-gray-900 text-[1.1rem] flex-1 mr-2">${task.title}</h3> <span class="cursor-pointer text-[10px] font-mono font-black uppercase mt-1 ${task.priority === 'p0' ? 'text-red-500' : (task.priority === 'p1' ? 'text-yellow-600' : 'text-blue-500')}" onclick="cyclePriority(event, '${task.id}')" title="클릭하여 우선순위 변경 (P0 → P1 → P2)">${task.priority}</span> </div> <p contenteditable="true" onblur="updateTaskText('${task.id}', 'desc', this)" onkeydown="handleEnterKey(event)" class="editable-text text-[13px] text-gray-600 mb-2 font-medium">${task.desc}</p> ${task.time && task.status === 'completed' ? `<p class="text-[11px] text-emerald-600 font-bold mb-1">✓ Check: ${task.time}</p>` : ''} <div class="details-content"> <div class="scrollable-content relative"> <div id="md-render-${task.id}" class="markdown-body" onclick="editMarkdown('${task.id}')">${DOMPurify.sanitize(parseMarkdownWithTables(task.details), domPurifyConfig)}</div> <textarea id="md-editor-${task.id}" class="hidden md-textarea" onblur="saveMarkdown('${task.id}', this)" onmouseup="showToolbar(this)" onkeyup="showToolbar(this)" onpaste="handlePaste(event)">${task.details}</textarea> <div class="script-list mt-3 mb-1"> <strong class="text-[11px] block mb-1 text-gray-500 font-bold">TARGET SCRIPTS (수정 가능):</strong> <div contenteditable="true" onblur="updateTaskScripts('${task.id}', this)" class="editable-text font-mono text-blue-600 text-[11px] break-all">${task.scripts.join(', ')}</div> </div> </div> </div> </div> ${renderTaskLinkedDocsPanel(task)} ${renderTaskReviewsPanel(task)} <div class="comments-section relative z-10"> <div class="comments-list">${commentsHtml}</div> <div class="comment-input-wrap"> <input type="text" class="comment-input" placeholder="코멘트 남기기..." onkeydown="handleCommentKey(event, '${task.id}', this)"> <button onclick="submitComment('${task.id}', this)" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-[11px] font-bold">등록</button> </div> </div> `;
+                    const statusInfo = getStatusInfo(task.status);
+                    const card = document.createElement('div');
+                    card.className = `task-card ${task.priority} ${task.status === 'completed' ? 'is-completed' : ''} ${task.status === 'progress' ? 'is-progress' : ''} collapsed zone-${task.zone || 'shelf'}`;
+                    card.setAttribute('data-id', task.id);
+                    card.oncontextmenu = function(e) { showCardContextMenu(e, task.id); };
+                    // [r73] 트렐로풍 단순 카드: 상태 동그라미(좌, 클릭=상태변경) + 제목 + 우선순위(우). 카드 클릭=상세 모달.
+                    card.innerHTML = `<div class="tc-row" onclick="openCardModal('${task.id}')" title="클릭하여 카드 상세">`
+                        + `<button class="tc-check tc-${task.status||'pending'}" onclick="event.stopPropagation(); cycleStatus(event,'${task.id}')" title="상태: ${statusInfo.text} (클릭하여 변경)"></button>`
+                        + `<span class="tc-title ${task.status === 'completed' ? 'tc-done' : ''}">${task.title || '(제목 없음)'}</span>`
+                        + `<span class="tc-pri ${task.priority||'p2'}">${(task.priority || 'p2').toUpperCase()}</span>`
+                        + `</div>`;
                     colList.appendChild(card);
                 });
 
@@ -12912,7 +13007,7 @@ ${intrLog}
                     colList.appendChild(_empty);
                 }
 
-                new Sortable(colList, { group: 'tasks', animation: 250, handle: '.drag-handle', filter: '.col-empty', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', disabled: isFiltering, onEnd: function (evt) { const taskId = evt.item.getAttribute('data-id'); const newCatId = evt.to.id; const movedTask = currentData.tasks.find(t => t.id === taskId); movedTask.catId = newCatId; var _tc = currentData.categories.find(c => c.id === newCatId); if (_tc) { movedTask.sprintId = _tc.sprintId || null; } dbUpsertTask(movedTask); const newTasksOrder = []; document.querySelectorAll('.task-card').forEach(el => { const id = el.getAttribute('data-id'); const found = currentData.tasks.find(t => t.id === id); if(found) newTasksOrder.push(found); }); currentData.tasks = newTasksOrder; saveData(); dbUpdateTaskSortOrders(newTasksOrder); } });
+                new Sortable(colList, { group: 'tasks', animation: 250, filter: '.col-empty', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', disabled: isFiltering, onEnd: function (evt) { const taskId = evt.item.getAttribute('data-id'); const newCatId = evt.to.id; const movedTask = currentData.tasks.find(t => t.id === taskId); movedTask.catId = newCatId; var _tc = currentData.categories.find(c => c.id === newCatId); if (_tc) { movedTask.sprintId = _tc.sprintId || null; } dbUpsertTask(movedTask); const newTasksOrder = []; document.querySelectorAll('.task-card').forEach(el => { const id = el.getAttribute('data-id'); const found = currentData.tasks.find(t => t.id === id); if(found) newTasksOrder.push(found); }); currentData.tasks = newTasksOrder; saveData(); dbUpdateTaskSortOrders(newTasksOrder); } });
             });
 
             if (projCats.length === 0) {
@@ -12932,6 +13027,7 @@ ${intrLog}
             attachFavoriteButtonsToMedia(document.getElementById('board'));
             if (typeof renderSprintBand === 'function') renderSprintBand(); // [v40 Day2 청크 4]
             if (typeof renderReviewBadge === 'function') renderReviewBadge(); // [v40 Day3 청크 2]
+            if (typeof _refreshOpenCardModal === 'function') _refreshOpenCardModal(); // [r73] 카드 모달 열려 있으면 동기 갱신
         }
 
         // [r50 #3] 카테고리 순서(로컬 전용) — 프로젝트별 localStorage
