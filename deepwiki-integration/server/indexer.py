@@ -175,6 +175,7 @@ async def index_git_repo(
 
     # 3. 파일 순회
     all_files = []
+    skipped_by_size = []  # [r98] 크기 초과로 스킵된 파일 명세 (사용자가 즉시 확인 가능)
     for path in repo_path.rglob("*"):
         if not path.is_file():
             continue
@@ -186,11 +187,27 @@ async def index_git_repo(
             continue
         # 크기 제한
         try:
-            if path.stat().st_size > settings.MAX_FILE_SIZE_KB * 1024:
+            sz = path.stat().st_size
+            if sz > settings.MAX_FILE_SIZE_KB * 1024:
+                # [r98] 스킵된 파일 명세 기록 — 사용자가 어떤 파일이 누락됐는지 알 수 있게
+                rel = str(path.relative_to(repo_path)).replace("\\", "/")
+                skipped_by_size.append({"file": rel, "size_kb": round(sz / 1024, 1)})
                 continue
         except Exception:
             continue
         all_files.append(path)
+
+    # [r98] 크기 초과 스킵 파일을 warn 이벤트로 명시 알림
+    if skipped_by_size:
+        # 상위 5개만 메시지에 포함
+        sample = ", ".join([f'{s["file"]}({s["size_kb"]}KB)' for s in skipped_by_size[:5]])
+        more = f" 외 {len(skipped_by_size)-5}개" if len(skipped_by_size) > 5 else ""
+        yield {
+            "event": "warn",
+            "message": f"⚠ 크기 초과({settings.MAX_FILE_SIZE_KB}KB)로 스킵된 파일 {len(skipped_by_size)}개: {sample}{more}. "
+                       f"필요시 .env에 MAX_FILE_SIZE_KB를 더 크게 설정 후 재인덱싱.",
+            "skipped_files": skipped_by_size,
+        }
 
     total = len(all_files)
     yield {"event": "start", "total_files": total}

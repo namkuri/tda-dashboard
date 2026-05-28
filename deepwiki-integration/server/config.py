@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 50
     TOP_K: int = 8
     GIT_CLONE_DIR: str = "./repos"
-    MAX_FILE_SIZE_KB: int = 500
+    # [r98] 500KB → 4MB 상향 — public/index.html 같은 단일 거대 파일(1.84MB)을
+    # 인덱싱 대상에 포함하기 위함. .env에서 오버라이드 가능.
+    MAX_FILE_SIZE_KB: int = 4000
 
     @property
     def cors_origins_list(self) -> List[str]:

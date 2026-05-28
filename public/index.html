@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r97 (Deep Wiki RAG 품질 4건: r96 후 진단 — ① public/index.html이 결과에서 사라짐(영문 식별자 검색이 한국어 짧은 텍스트 false-positive에 밀림) ② LLM이 system 무시하고 "추정으로는…" 일반 상식 답변 ③ 사용자가 인덱싱 상태 확인 어려움. 수정: A. retriever.py — 하이브리드 검색(_extract_identifiers + _like_search): camelCase/snake_case/PascalCase 영문 식별자 자동 추출, ilike '%ident%' 정확 매칭 결과를 sim +0.20 부스트로 임베딩과 병합. STOPWORDS로 일반 영단어 제외. B. rag.py — _enforce_user_message: 마지막 user message 앞에 강제 지침 prefix("일반 상식 답변 금지, 컨텍스트 외 답변 거부"). Qwen이 system은 약하게/user는 강하게 따르는 특성 활용. C. rag.py — 컨텍스트 품질 게이트: 평균 sim<0.40 AND 최대 sim<0.50 이면 LLM 호출 우회하고 직접 "인덱스 약함 + 관련 파일 리스트" 정형 응답. D. /health?verbose=true — supabase_store.top_sources: source_id별 청크 수 상위 15개 진단 정보 노출, public/index.html 등 인덱싱 상태 즉시 확인) -->
+<!-- BUILD: 2026-05-28 r98 (Deep Wiki 진짜 원인 발견 + 수정: r97 /health?verbose=true 결과 public/index.html이 top_sources에 0개 — 그동안 모든 r94~r97 검색 품질 작업이 무력했던 진짜 원인. indexer.py가 MAX_FILE_SIZE_KB=500(KB)으로 1.84MB짜리 public/index.html을 **통째로 스킵**했음. TDA 칸반 코드 전체가 이 파일에 들어 있어서 dbUpsertCategory·kanban_categories 검색이 전부 실패했음. 수정: A. config.py — MAX_FILE_SIZE_KB 기본 500→4000(KB, 4MB). .env.example 동시 갱신. B. indexer.py — 크기 초과 스킵 시 SSE warn 이벤트로 파일명+사이즈 명시 알림(skipped_files). 사용자가 인덱싱 진행 중 누락 파일 즉시 확인 가능. C. r98 적용 후 코드 재인덱싱 필요 — 그래야 public/index.html 122+ 청크가 들어와서 진짜 칸반 코드 검색 가능) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
