@@ -212,22 +212,103 @@ async def wiki_generate(req: WikiGenerateRequest):
 
 
 @app.get("/wiki/pages")
-async def wiki_pages(project_id: str):
-    """프로젝트의 자동 생성 위키 페이지 목록 (트리용 메타만)."""
+async def wiki_pages(
+    project_id: str,
+    repo_name: Optional[str] = None,
+    generation_id: Optional[str] = None,
+    only_latest: bool = True,
+):
+    """[r121] 프로젝트의 자동 생성 위키 페이지 목록.
+
+    필터:
+      - repo_name: 특정 레포만
+      - generation_id: 특정 생성 회차만
+      - only_latest: True면 is_latest=true만 (기본). False면 모든 버전.
+    """
+    if not project_id:
+        raise HTTPException(400, "project_id 필수")
+    store = get_store()
+    try:
+        q = (
+            store.client.table("deep_wiki_pages")
+            .select("id,slug,title,parent_slug,sort_order,summary,git_url,git_commit,updated_at,meta,repo_name,generation_id,is_latest")
+            .eq("project_id", project_id)
+        )
+        if repo_name:
+            q = q.eq("repo_name", repo_name)
+        if generation_id:
+            q = q.eq("generation_id", generation_id)
+        elif only_latest:
+            # 003 SQL 미실행이면 is_latest 컬럼 없음 → 폴백
+            try:
+                q = q.eq("is_latest", True)
+            except Exception:
+                pass
+        q = q.order("sort_order")
+        res = q.execute()
+        return {"pages": res.data or [], "count": len(res.data or [])}
+    except Exception as e:
+        # is_latest 컬럼 없어서 실패하면 폴백 — 전체 조회
+        msg = str(e)
+        if "is_latest" in msg or "repo_name" in msg or "generation_id" in msg:
+            try:
+                fallback = (
+                    store.client.table("deep_wiki_pages")
+                    .select("*")
+                    .eq("project_id", project_id)
+                    .order("sort_order")
+                    .execute()
+                )
+                return {"pages": fallback.data or [], "count": len(fallback.data or []), "warn": "003_wiki_versioning.sql 미실행 — 버전 컬럼 없이 전체 페이지 표시"}
+            except Exception as e2:
+                return {"pages": [], "count": 0, "error": f"조회 실패: {e2}"}
+        return {"pages": [], "count": 0, "error": f"deep_wiki_pages 조회 실패: {e}"}
+
+
+@app.get("/wiki/repos")
+async def wiki_repos(project_id: str):
+    """[r121] 프로젝트의 위키 레포·버전 목록 (좌측 그룹화 UI용)."""
     if not project_id:
         raise HTTPException(400, "project_id 필수")
     store = get_store()
     try:
         res = (
             store.client.table("deep_wiki_pages")
-            .select("id,slug,title,parent_slug,sort_order,summary,git_url,git_commit,updated_at,meta")
+            .select("repo_name,generation_id,git_url,git_commit,is_latest,updated_at")
             .eq("project_id", project_id)
-            .order("sort_order")
             .execute()
         )
-        return {"pages": res.data or [], "count": len(res.data or [])}
+        rows = res.data or []
     except Exception as e:
-        return {"pages": [], "count": 0, "error": f"deep_wiki_pages 테이블 미생성 또는 조회 실패: {e}"}
+        return {"repos": [], "error": f"조회 실패: {e}"}
+    # repo_name 별로 generation 묶기
+    repos: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        rname = r.get("repo_name") or "(unknown)"
+        gen = r.get("generation_id") or "legacy"
+        if rname not in repos:
+            repos[rname] = {"repo_name": rname, "git_url": r.get("git_url"), "generations": {}}
+        if gen not in repos[rname]["generations"]:
+            repos[rname]["generations"][gen] = {
+                "generation_id": gen,
+                "git_commit": r.get("git_commit"),
+                "is_latest": bool(r.get("is_latest")),
+                "updated_at": r.get("updated_at"),
+                "page_count": 0,
+            }
+        repos[rname]["generations"][gen]["page_count"] += 1
+    # 정리: generations를 list로 변환 + 최신순 정렬
+    out = []
+    for rname, info in repos.items():
+        gens = sorted(info["generations"].values(), key=lambda g: g.get("updated_at") or "", reverse=True)
+        out.append({
+            "repo_name": rname,
+            "git_url": info.get("git_url"),
+            "generations": gens,
+            "latest_gen": gens[0]["generation_id"] if gens else None,
+        })
+    out.sort(key=lambda r: r["repo_name"])
+    return {"repos": out, "count": len(out)}
 
 
 @app.get("/wiki/page")

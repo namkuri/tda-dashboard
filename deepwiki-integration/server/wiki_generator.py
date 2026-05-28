@@ -1,27 +1,19 @@
-"""[r113] 자동 위키 페이지 생성기 (Deep Wiki Phase A).
+"""[r113→r120→r121] 자동 위키 페이지 생성기 (Deep Wiki Phase A).
 
-유니티(또는 일반) Git 레포를 분석해 LLM이 위키 페이지 N개를 생성한다.
+유니티(또는 일반) Git 레포를 분석해 LLM이 8섹션 형태의 깊이 있는 위키 페이지를 생성한다.
 
-흐름:
-  1) Git clone (indexer가 사용한 경로 재사용)
-  2) 파일 트리 스캔 → 주요 폴더(카테고리) 자동 추출
-  3) 각 카테고리에 대해:
-     - 그 폴더의 주요 코드 파일들을 모아 LLM에 전달
-     - LLM이 마크다운 위키 페이지 작성 (개요·주요 클래스·의존성·코드 발췌)
-  4) 전체 개요 페이지 1개 추가 (top-level + 카테고리 인덱스)
-  5) deep_wiki_pages 테이블에 upsert
-
-SSE 진행률 이벤트:
-  {"event": "stage", "stage": "clone"|"scan"|"generate"|"save"}
-  {"event": "progress", "current": i, "total": N, "category": "..."}
-  {"event": "page_done", "slug": "...", "title": "..."}
-  {"event": "done", "pages_created": M}
+r121 변경:
+- repo_name(git_url에서 추출), generation_id(timestamp), is_latest 컬럼 활용
+- 같은 repo 재생성 시 이전 버전 보존 (is_latest=false로 마킹)
+- 새 생성은 is_latest=true
+- 다른 repo의 페이지는 영향 없음
 """
 import os
 import re
 import json
 import shutil
 import stat
+from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator, Dict, Any, List, Optional, Tuple
 import git
@@ -138,49 +130,72 @@ def _read_file_truncated(abs_path: str, max_chars: int = 4000) -> str:
 # LLM 프롬프트
 # ─────────────────────────────────────────────
 
-_CATEGORY_PROMPT = """당신은 코드베이스 위키 작성자입니다. 아래 코드 파일들을 읽고
-이 카테고리(시스템)에 대한 한국어 마크다운 위키 페이지를 작성하세요.
+_CATEGORY_PROMPT = """당신은 DeepWiki 스타일의 깊이 있는 코드 위키 작성자입니다. 아래 코드 파일들을 정독하고 시스템에 대한 종합 분석 위키 페이지를 작성하세요.
 
-## 출력 형식 (반드시 이 구조)
+# 🚨 절대 규칙
+1. **반드시 한국어로 답변** — 영문 답변 절대 금지. 식별자·파일경로·코드만 원문 유지. 모든 설명·헤더·표 헤더는 한국어.
+2. 코드에 명시된 사실만 작성. 추측은 "~로 보임" 명시.
+3. "일반적으로 ~합니다" 같은 일반 상식 답변 금지.
+
+# 📋 출력 형식 — 다음 8개 섹션 모두 포함 (DeepWiki 표준)
 
 # {{카테고리 제목}}
 
-## 개요
-이 시스템이 무엇을 하고 왜 존재하는지 2~4문장으로.
+## 1. 개요
+이 시스템의 책임(Responsibility)·주요 사용처를 3~5문장으로. 비즈니스 가치도 짧게.
 
-## 주요 클래스/함수/모듈
-파일에서 핵심 식별자를 인라인 코드(`identifier`)로 인용 + 한 줄 역할 설명. 표 형식 권장:
-
-| 이름 | 파일 | 역할 |
-|------|------|------|
-| `ClassName` | `path/to/file.cs` | ... |
-
-## 내부 흐름 / 호출 관계
-가능하면 함수 호출 흐름·이벤트·상태 전환을 화살표(`A → B`)로 표시. 복잡하면 Mermaid:
+## 2. 아키텍처
+시스템의 구성 방식·계층 구조·디자인 패턴(Observer/Singleton/MVC 등)을 설명. Mermaid 다이어그램 권장:
 ```mermaid
-graph LR
-  A --> B
+graph TD
+    A[엔트리포인트] --> B[핵심 모듈]
+    B --> C[서비스]
 ```
 
-## 핵심 코드 발췌
-가장 중요한 부분 5~25줄을 코드 블록으로. 너무 길면 시그니처+한 줄 주석만.
+## 3. 핵심 클래스/모듈
+모든 주요 클래스·함수·인터페이스를 표로:
 
-## 관련 파일
-- `path/to/file1.cs`
-- `path/to/file2.cs`
+| 이름 | 파일 | 종류 | 역할 |
+|------|------|------|------|
+| `ClassName` | `path/file.cs` | 클래스 | 한 줄 설명 |
+| `MethodName` | `path/file.cs` | 메서드 | 한 줄 설명 |
 
-## 메모
-구현 시 주의할 점, 알려진 한계, TODO 등 (있을 때만).
+## 4. 데이터 모델 / 상태
+- 주요 데이터 구조(struct/class/SO)·필드·타입
+- 상태 머신 있으면 Mermaid stateDiagram
+- 영속화 방식(저장 위치·직렬화)
 
-## 규칙
-- 한국어로 답변하되, 식별자·파일경로는 원문 유지
-- 코드에 명시되지 않은 일반 상식 답변 금지 ("일반적으로 ~는...")
-- 추측은 "~으로 보임" 표현으로 명시
-- 코드에서 직접 인용한 사실만 적기
+## 5. 주요 API / 진입점
+public 메서드, 이벤트, Unity 콜백(Start/Update 등) 목록:
+- `Method(args) → return` — 호출 시점·역할
+- `OnEvent(payload)` — 어디서 발화·구독
 
-## 카테고리: {category_title}
-## 슬러그: {slug}
-## 파일 수: {total_files} (아래는 그 중 {shown_files}개 본문)
+## 6. 의존성 / 데이터 흐름
+- **upstream**: 이 시스템을 호출하는 곳
+- **downstream**: 이 시스템이 의존하는 외부 모듈
+- 호출 시퀀스 가능하면 Mermaid sequenceDiagram
+
+## 7. 핵심 코드 발췌
+가장 중요한 부분 1~3개를 코드블록으로 (각 5~25줄). 인용 후 무엇이 핵심인지 한 줄 코멘트.
+
+```csharp
+// 핵심 로직 발췌
+public void DoSomething() {
+    // ...
+}
+```
+
+## 8. 메모 / 주의사항
+- 알려진 한계·TODO·주석에 적힌 미해결 이슈
+- 사용 시 흔한 실수·주의점
+- 관련 파일 전체 목록(`- path1\n- path2`)
+
+---
+
+# 입력 데이터
+- 카테고리: {category_title}
+- 슬러그: `{slug}`
+- 파일 수: {total_files} (아래는 그 중 {shown_files}개 본문)
 
 {files_block}
 """
@@ -212,9 +227,18 @@ async def _llm_generate_page(
         files_block=files_block,
     )
     ollama = get_ollama()
-    # 단순 chat 호출 (도구 없음) — content가 곧 마크다운 페이지
+    # [r120] 한국어 강제 + DeepWiki 스타일 깊이 + 환각 금지
+    system_msg = (
+        "당신은 시니어 소프트웨어 엔지니어 + 테크니컬 라이터입니다. DeepWiki 스타일 코드 위키를 작성합니다.\n"
+        "🚨 절대 규칙:\n"
+        "1. 모든 답변은 **한국어**로 작성. 영문 응답 금지. 식별자·파일경로·코드 인용만 원문 유지.\n"
+        "2. 사용자가 지정한 8섹션 형식을 정확히 따를 것 (개요·아키텍처·핵심 클래스·데이터 모델·API·의존성·코드 발췌·메모).\n"
+        "3. 표(파이프 문법)·Mermaid 다이어그램·코드블록을 적극 사용.\n"
+        "4. 코드에 없는 사실 만들지 말 것. 추측은 '~로 보입니다' 명시.\n"
+        "5. 빈 섹션이라도 헤더는 유지하고 '(해당 내용 없음)' 명시."
+    )
     messages = [
-        {"role": "system", "content": "당신은 친절하고 정확한 코드 위키 작성자입니다. 한국어로 답합니다."},
+        {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},
     ]
     # 비스트리밍, 더 큰 응답 허용
@@ -339,12 +363,17 @@ async def generate_wiki(
     cat_count = len(categories)
     yield {"event": "scan_done", "category_count": cat_count, "merged": merged_slugs}
 
-    # ─ 3) 기존 페이지 삭제 (이 프로젝트의 자동 생성 페이지만)
+    # ─ 3) [r121] repo 이름 + 생성 ID — 이전 버전 보존, 같은 repo만 is_latest=false 처리
+    repo_clean = re.sub(r"[^a-zA-Z0-9_-]", "_", repo_name)[:60] or "unknown"
+    generation_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     try:
-        store.client.table("deep_wiki_pages").delete().eq("project_id", project_id).execute()
-        yield {"event": "info", "message": f"기존 위키 페이지 정리됨"}
+        # 같은 (project_id, repo_name) 의 기존 페이지는 is_latest=false 로 마킹
+        store.client.table("deep_wiki_pages").update({"is_latest": False}) \
+            .eq("project_id", project_id).eq("repo_name", repo_clean).execute()
+        yield {"event": "info", "message": f"기존 '{repo_clean}' 버전들을 옛 버전으로 마킹 (보존)"}
     except Exception as e:
-        yield {"event": "warn", "message": f"기존 페이지 삭제 실패 (테이블 없음?): {e}"}
+        # repo_name 컬럼 없으면 무시 (003_wiki_versioning.sql 미실행 환경)
+        yield {"event": "warn", "message": f"is_latest 업데이트 실패 (003 SQL 미실행?): {e}"}
 
     # ─ 4) 카테고리별 LLM 생성 + 저장
     yield {"event": "stage", "stage": "generate", "message": f"LLM이 {cat_count}개 카테고리에 대해 위키 페이지 생성 중..."}
@@ -370,11 +399,14 @@ async def generate_wiki(
         except Exception as e:
             yield {"event": "warn", "message": f"LLM 실패 ({slug}): {type(e).__name__}: {e}"}
             continue
-        # DB 저장
-        page_id = f"dwp:{project_id}:{slug}"
+        # [r121] DB 저장 — id에 repo_name + generation_id 포함
+        page_id = f"dwp:{project_id}:{repo_clean}:{generation_id}:{slug}"
         record = {
             "id": page_id,
             "project_id": project_id,
+            "repo_name": repo_clean,
+            "generation_id": generation_id,
+            "is_latest": True,
             "git_url": git_url,
             "git_commit": commit_hash,
             "slug": slug,
@@ -402,8 +434,11 @@ async def generate_wiki(
     try:
         overview_content = _build_overview_page(git_url, commit_hash, created_pages, categories)
         store.client.table("deep_wiki_pages").upsert({
-            "id": f"dwp:{project_id}:_overview",
+            "id": f"dwp:{project_id}:{repo_clean}:{generation_id}:_overview",
             "project_id": project_id,
+            "repo_name": repo_clean,
+            "generation_id": generation_id,
+            "is_latest": True,
             "git_url": git_url,
             "git_commit": commit_hash,
             "slug": "_overview",
@@ -412,40 +447,81 @@ async def generate_wiki(
             "sort_order": -1,  # 항상 최상단
             "summary": f"{len(created_pages)}개 카테고리 자동 위키 ({commit_hash or '?'} 기준)",
             "content": overview_content,
-            "meta": {"is_overview": True, "page_count": len(created_pages)},
+            "meta": {"is_overview": True, "page_count": len(created_pages), "repo": repo_clean, "generation": generation_id},
         }).execute()
         yield {"event": "page_done", "slug": "_overview", "title": "📘 프로젝트 개요"}
     except Exception as e:
         yield {"event": "warn", "message": f"개요 페이지 실패: {e}"}
 
-    yield {"event": "done", "pages_created": len(created_pages) + 1}
+    yield {
+        "event": "done",
+        "pages_created": len(created_pages) + 1,
+        "repo_name": repo_clean,
+        "generation_id": generation_id,
+    }
 
 
 def _build_overview_page(git_url: str, commit: Optional[str], pages: List[Dict[str, Any]], categories: Dict[str, Dict[str, Any]]) -> str:
-    """카테고리 인덱스 마크다운 페이지."""
+    """[r120] 프로젝트 전체 개요 페이지 — 카테고리 인덱스 + Mermaid 의존성 그래프."""
+    total_files = sum(c["total_files"] for c in categories.values())
     lines = [
         "# 📘 프로젝트 개요",
         "",
-        f"**Git 레포:** [{git_url}]({git_url})",
-        f"**커밋:** `{commit or '?'}`" if commit else "**커밋:** (미상)",
-        f"**자동 생성 페이지:** {len(pages)}개",
+        f"**Git 레포:** [{git_url}]({git_url})  ",
+        f"**커밋:** `{commit or '?'}`  " if commit else "**커밋:** (미상)  ",
+        f"**자동 생성 페이지:** {len(pages)}개  ",
+        f"**분석 파일 총합:** {total_files}개",
         "",
-        "이 위키는 LLM이 코드를 분석해 자동 작성한 1차 문서입니다. 카테고리별 페이지에서 시스템·클래스·흐름을 확인하세요.",
+        "이 위키는 LLM(Qwen 2.5-Coder 14B)이 코드를 분석해 자동 작성한 1차 문서입니다. 좌측 트리에서 카테고리별 페이지를 열어 시스템·클래스·흐름을 확인하세요.",
         "",
-        "## 카테고리 목록",
+        "## 📊 카테고리 구조",
         "",
-        "| 슬러그 | 제목 | 파일 수 |",
-        "|--------|------|---------|",
+        "```mermaid",
+        "graph TD",
+        "    ROOT[\"📘 프로젝트 루트\"]",
     ]
+    # Mermaid 노드 — 카테고리들
     by_slug = {p["slug"]: p for p in pages}
-    for slug, cat in sorted(categories.items(), key=lambda x: x[1]["total_files"], reverse=True):
+    cat_items = sorted(categories.items(), key=lambda x: x[1]["total_files"], reverse=True)
+    for slug, cat in cat_items:
+        node_id = slug.replace("-", "_").replace(":", "_")
         title = by_slug.get(slug, {}).get("title") or cat["title"]
-        lines.append(f"| [`{slug}`](#{slug}) | {title} | {cat['total_files']} |")
+        lines.append(f"    ROOT --> {node_id}[\"{title}<br/>({cat['total_files']}개 파일)\"]")
+    lines.extend(["```", ""])
+
+    # 카테고리 표
+    lines.extend([
+        "## 📁 카테고리 목록",
+        "",
+        "| 카테고리 | 슬러그 | 파일 수 | 비고 |",
+        "|----------|--------|---------|------|",
+    ])
+    for slug, cat in cat_items:
+        title = by_slug.get(slug, {}).get("title") or cat["title"]
+        summary = by_slug.get(slug, {}).get("summary") or ""
+        # 요약은 60자 컷
+        if len(summary) > 60:
+            summary = summary[:60] + "…"
+        lines.append(f"| **{title}** | `{slug}` | {cat['total_files']} | {summary} |")
+
     lines.extend([
         "",
-        "## 카테고리 페이지 링크",
+        "## 🔗 페이지 바로가기",
         "",
     ])
     for p in pages:
-        lines.append(f"- **[{p['title']}](?slug={p['slug']})** (`{p['slug']}`)")
+        if p["slug"] == "_overview":
+            continue
+        lines.append(f"- 📄 **[{p['title']}](?slug={p['slug']})** — {p.get('summary', '')[:80]}")
+
+    lines.extend([
+        "",
+        "## 💡 사용 가이드",
+        "",
+        "- 좌측 트리에서 페이지 클릭 → 해당 시스템의 상세 분석 (8섹션: 개요·아키텍처·핵심 클래스·데이터 모델·API·의존성·코드 발췌·메모)",
+        "- 페이지 본문의 Mermaid 다이어그램은 자동 렌더링됩니다",
+        "- 우측 목차(TOC)로 페이지 내 빠른 이동",
+        "- 좌측 검색바로 페이지 제목 필터링",
+        "- ⚙️ AI Agent에서 \"이 시스템 어떻게 동작해?\" 같은 질문도 가능 (위키 페이지를 컨텍스트로 활용)",
+    ])
     return "\n".join(lines)

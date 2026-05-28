@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r119 (Hallucination 차단 + UI 동시 실행 차단 2건: 사용자 보고 ① "이번 주 일정+내 결재+진행중 스프린트" 복합 질문에 LLM이 search_vector만 호출 후 매칭 0개 받고도 가짜 데이터(프로젝트 회의 2023-10-05, Dev A, AI 테스트 W45 등) 생성 ② 1차 위키 작성 중 다른 버튼 누를 수 있음. 수정: A. agent.py 시스템 프롬프트 강화 — 🚨 절대 금지: 데이터 환각 섹션 추가, 가짜 회의/사람/날짜/스프린트/결재 예시 명시, 도구 결과 빈 배열이면 "데이터 없음" 정직 답변 강제, 복합 질문 처리(여러 도구 순차 호출), search_vector 단독 사용 키워드 제한("이번 주", "현재", "내", "결재" 등). B. _dwpState.isRunning + _dwpSetRunning — dwpGenerate/dwpAudit 진행 중 모든 🤖/📊/🔄 버튼 disabled+opacity 0.45+cursor not-allowed. try/finally로 보장 해제) -->
+<!-- BUILD: 2026-05-29 r121 (Deep Wiki 품질 + repo/버전 관리: r120 위키 품질 개선 — DeepWiki 스타일 8섹션(개요·아키텍처·핵심 클래스·데이터 모델·API·의존성·코드 발췌·메모) + 한국어 강제(영문 답변 금지) + Mermaid 강제 + 환각 금지. _build_overview_page도 카테고리 Mermaid 그래프·표·사용 가이드 추가. r121 repo+버전 관리 — deep_wiki_pages에 repo_name·generation_id·is_latest 컬럼(003_wiki_versioning.sql). 새 생성 시 기존 같은 repo는 is_latest=false로 보존, 새 페이지 is_latest=true. /wiki/pages에 repo_name/generation_id/only_latest 필터. 새 /wiki/repos 엔드포인트 → repos·generations 묶음. 좌측 트리에 📦 레포 + 🕐 버전 드롭다운, 생성 완료 시 새 repo/gen 자동 선택. id 형식: dwp:project:repo:generation:slug) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4454,6 +4454,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button onclick="dwpGenerate()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;width:100%;text-align:left;padding:8px 12px;">🤖 위키 자동 생성 (1차 MD)</button>
                     <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서">📊 기획 대조 보고서 (2차)</button>
                     <div id="dwp-progress" style="font-size:11px;color:var(--c-text2);padding:6px 4px;min-height:14px;"></div>
+                    <!-- [r121] repo + 버전 선택 -->
+                    <div id="dwp-repo-selector" style="display:none;"></div>
                     <!-- [r114] 페이지 검색 -->
                     <input id="dwp-search" type="text" placeholder="🔍 페이지 검색..." oninput="_dwpFilterTree()" style="background:var(--c-card);color:var(--c-text);border:1px solid var(--c-border);border-radius:7px;padding:6px 10px;font-size:12px;margin-top:8px;width:100%;box-sizing:border-box;">
                     <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;">자동 생성 페이지 (1차)</div>
@@ -7872,8 +7874,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
-        // [r113~r115] Deep Wiki 상태 — 1차 페이지·2차 감사 보고서 통합
-        var _dwpState = { pages: [], audits: [], currentSlug: null, currentAuditId: null, isRunning: false };
+        // [r113~r121] Deep Wiki 상태 — 1차 페이지·2차 감사·repo/버전 관리
+        var _dwpState = {
+            pages: [], audits: [],
+            currentSlug: null, currentAuditId: null,
+            isRunning: false,
+            repos: [],              // [r121] [{repo_name, git_url, generations:[{generation_id, git_commit, is_latest, page_count}]}]
+            currentRepo: null,      // [r121] 선택된 repo_name
+            currentGen: null,       // [r121] 선택된 generation_id (null = 최신)
+        };
 
         // [r119] 위키 생성/감사 진행 중 모든 액션 버튼 비활성화
         function _dwpSetRunning(running) {
@@ -7905,21 +7914,86 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!url) { _dwpRenderEmpty('백엔드 URL이 설정되어 있지 않습니다. AI Agent 페이지의 ⚙️ 설정에서 먼저 설정하세요.'); return; }
             if (!activeProjectId) { _dwpRenderEmpty('프로젝트가 선택되어 있지 않습니다.'); return; }
             try {
-                var res = await fetch(url + '/wiki/pages?project_id=' + encodeURIComponent(activeProjectId));
+                // [r121] repos 먼저 로드 (repo·버전 selector)
+                var rRes = await fetch(url + '/wiki/repos?project_id=' + encodeURIComponent(activeProjectId));
+                var rData = rRes.ok ? await rRes.json() : { repos: [] };
+                _dwpState.repos = rData.repos || [];
+                // 현재 repo 선택이 없으면 첫 repo 자동 선택
+                if (!_dwpState.currentRepo && _dwpState.repos.length) {
+                    _dwpState.currentRepo = _dwpState.repos[0].repo_name;
+                    _dwpState.currentGen = null; // 최신
+                }
+                _dwpRenderRepoSelector();
+                // [r121] 선택된 repo/gen으로 페이지 로드
+                var pageQs = 'project_id=' + encodeURIComponent(activeProjectId);
+                if (_dwpState.currentRepo) pageQs += '&repo_name=' + encodeURIComponent(_dwpState.currentRepo);
+                if (_dwpState.currentGen) pageQs += '&generation_id=' + encodeURIComponent(_dwpState.currentGen) + '&only_latest=false';
+                var res = await fetch(url + '/wiki/pages?' + pageQs);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 var data = await res.json();
                 _dwpState.pages = data.pages || [];
                 _dwpRenderTree();
                 if (!_dwpState.pages.length) {
-                    _dwpRenderEmpty('아직 생성된 위키 페이지가 없습니다. 좌측 🤖 버튼으로 자동 생성하세요.');
-                } else if (!_dwpState.currentSlug) {
-                    // 첫 페이지(또는 _overview) 자동 열기
+                    _dwpRenderEmpty(_dwpState.repos.length
+                        ? '선택된 레포·버전에 페이지가 없습니다.'
+                        : '아직 생성된 위키 페이지가 없습니다. 좌측 🤖 버튼으로 자동 생성하세요.');
+                } else if (!_dwpState.currentSlug || !_dwpState.pages.find(function(p){return p.slug===_dwpState.currentSlug;})) {
                     var ov = _dwpState.pages.find(function (p) { return p.slug === '_overview'; });
                     dwpOpenPage((ov || _dwpState.pages[0]).slug);
                 }
             } catch (e) {
-                _dwpRenderEmpty('페이지 조회 실패: ' + (e.message || e) + '<br><br>SQL 002_wiki_pages.sql을 Supabase에서 먼저 실행했는지 확인하세요.');
+                _dwpRenderEmpty('페이지 조회 실패: ' + (e.message || e) + '<br><br>SQL 002_wiki_pages.sql + 003_wiki_versioning.sql 실행 확인.');
             }
+        }
+
+        // [r121] repo + generation 선택 드롭다운
+        function _dwpRenderRepoSelector() {
+            var el = document.getElementById('dwp-repo-selector');
+            if (!el) return;
+            if (!_dwpState.repos.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+            el.style.display = '';
+            var html = '';
+            // Repo 드롭다운
+            html += '<div style="display:flex;flex-direction:column;gap:4px;margin:6px 0;">';
+            html += '<label style="font-size:10px;font-weight:700;color:var(--c-text3);text-transform:uppercase;letter-spacing:.04em;">📦 레포</label>';
+            html += '<select id="dwp-repo-select" onchange="dwpSelectRepo(this.value)" style="background:var(--c-card);color:var(--c-text);border:1px solid var(--c-border);border-radius:6px;padding:4px 6px;font-size:12px;">';
+            _dwpState.repos.forEach(function (r) {
+                var sel = (r.repo_name === _dwpState.currentRepo) ? ' selected' : '';
+                var pages = r.generations.reduce(function(a, g){ return a + (g.page_count || 0); }, 0);
+                html += '<option value="' + r.repo_name + '"' + sel + '>' + _annEsc(r.repo_name) + ' (' + r.generations.length + ' 버전 · ' + pages + ' 페이지)</option>';
+            });
+            html += '</select></div>';
+            // Generation 드롭다운
+            var curRepo = _dwpState.repos.find(function (r) { return r.repo_name === _dwpState.currentRepo; });
+            if (curRepo && curRepo.generations.length) {
+                html += '<div style="display:flex;flex-direction:column;gap:4px;margin:6px 0;">';
+                html += '<label style="font-size:10px;font-weight:700;color:var(--c-text3);text-transform:uppercase;letter-spacing:.04em;">🕐 생성 버전</label>';
+                html += '<select id="dwp-gen-select" onchange="dwpSelectGen(this.value)" style="background:var(--c-card);color:var(--c-text);border:1px solid var(--c-border);border-radius:6px;padding:4px 6px;font-size:12px;">';
+                html += '<option value="">⭐ 최신 (latest)</option>';
+                curRepo.generations.forEach(function (g) {
+                    var sel = (g.generation_id === _dwpState.currentGen) ? ' selected' : '';
+                    var label = g.generation_id;
+                    if (g.is_latest) label += ' · 최신';
+                    if (g.git_commit) label += ' · ' + g.git_commit.slice(0, 7);
+                    label += ' · ' + g.page_count + 'p';
+                    html += '<option value="' + g.generation_id + '"' + sel + '>' + _annEsc(label) + '</option>';
+                });
+                html += '</select></div>';
+            }
+            el.innerHTML = html;
+        }
+
+        function dwpSelectRepo(repoName) {
+            _dwpState.currentRepo = repoName;
+            _dwpState.currentGen = null;
+            _dwpState.currentSlug = null;
+            dwpRefreshTree();
+        }
+
+        function dwpSelectGen(genId) {
+            _dwpState.currentGen = genId || null;
+            _dwpState.currentSlug = null;
+            dwpRefreshTree();
         }
 
         function _dwpRenderTree() {
@@ -8145,9 +8219,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             } else if (ev.event === 'page_done') {
                                 _dwpProgress('✅ ' + _annEsc(ev.title));
                             } else if (ev.event === 'done') {
-                                _dwpProgress('🎉 완료 — ' + ev.pages_created + '개 페이지 생성됨');
-                                showToast('🎉 Deep Wiki 생성 완료 (' + ev.pages_created + '개 페이지)', 'success');
-                                setTimeout(dwpRefreshTree, 200);
+                                _dwpProgress('🎉 완료 — ' + ev.pages_created + '개 페이지 (' + (ev.repo_name || '?') + ' / ' + (ev.generation_id || '') + ')');
+                                showToast('🎉 Deep Wiki 생성 완료 (' + ev.pages_created + '개 · ' + (ev.repo_name || '?') + ')', 'success');
+                                // [r121] 새 repo/gen 자동 선택
+                                if (ev.repo_name) {
+                                    _dwpState.currentRepo = ev.repo_name;
+                                    _dwpState.currentGen = null; // 최신 자동
+                                    _dwpState.currentSlug = null;
+                                }
+                                setTimeout(dwpRefreshTree, 300);
                             } else if (ev.event === 'error') {
                                 _dwpProgress('<span style="color:#d2393d;">❌ ' + _annEsc(ev.message) + '</span>');
                                 showToast('❌ 위키 생성 실패: ' + (ev.message || ''), 'alert');
