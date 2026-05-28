@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r74 (#card-modal 중앙정렬 CSS 등록(스크롤 튐 수정), 카테고리 드래그=제목 자체로 통합(⠿ 아이콘 제거·cursor grab), 보드 컬럼 간격 2rem→1rem(좌측 16px 유지). HTML 임베드 Storage 이관(DRIVE_BUCKET, 인라인 폴백·캐시), 서버 상태에 DB 카드(테이블 행수+인라인HTML 경고) 추가) -->
+<!-- BUILD: 2026-05-28 r75 (A: 진척률 헤더/클립보드 제거 + 카테고리 드래그 순서 진척률 카드에도 즉시 반영. C: 개인 칸반보드 MVP — boardScope 토글버튼(좌측), category.ownerUserId+task.linkedTaskId 필드, "📋 내 칸반보드 / 🏃 팀 칸반보드" 스위치, 팀카드 우클릭 → "🔒 개인 칸반보드로 연결" 컨텍스트 메뉴, [프로젝트명] 스프린트명 카테고리 자동 생성, cycleStatus 양방향 상태 동기(_syncLinkedStatus), DB resilient drop. B: 운영 그룹에 📅 캘린더 사이드바 + 안내 페이지 스텁 — 풀구현은 다음 라운드) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2941,6 +2941,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="cs-grp-items" data-grp="ops">
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
                     <button class="cs-nav active" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
+                    <button class="cs-nav" data-nav="calendar" id="cs-nav-calendar" onclick="switchView('calendar')" title="캘린더 (개인·팀·프로젝트 일정)"><span class="cs-ico">📅</span><span class="cs-label">캘린더</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
                     <button class="cs-nav" data-nav="review" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
                     <button class="cs-nav" data-nav="comment" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
@@ -3087,6 +3088,37 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         <!-- [r49] 히스토리(활동 기록) 페이지 -->
         <div id="history-view" class="hidden" onclick="event.stopPropagation()"></div>
+
+        <!-- [r75] 캘린더 페이지 (개인·팀·프로젝트 일정) — Google Calendar 클론 구현은 다음 라운드 -->
+        <div id="calendar-view" class="hidden" onclick="event.stopPropagation()">
+            <div style="max-width:1080px;margin:32px auto;padding:24px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:12px;">
+                <h2 style="font-size:22px;font-weight:800;color:var(--c-text);margin-bottom:12px;">📅 캘린더</h2>
+                <p style="color:var(--c-text2);font-size:14px;line-height:1.6;margin-bottom:18px;">
+                    팀·개인·프로젝트 일정을 한 곳에서. <b>Google 캘린더 클론</b> UI/UX와<br>
+                    개인 일정 공개 플래그(체크 안 하면 팀원에겐 "비공개"로 표시), 드래그 이동, 우클릭 색상 변경 등 — <b>다음 라운드에서 구현</b>됩니다.
+                </p>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+                    <div style="padding:14px;background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;">
+                        <div style="font-size:20px;margin-bottom:6px;">👤</div>
+                        <div style="font-weight:700;color:var(--c-text);margin-bottom:4px;">개인 캘린더</div>
+                        <div style="font-size:12px;color:var(--c-text3);">내 일정 (공개 플래그로 팀에 공유)</div>
+                    </div>
+                    <div style="padding:14px;background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;">
+                        <div style="font-size:20px;margin-bottom:6px;">👥</div>
+                        <div style="font-weight:700;color:var(--c-text);margin-bottom:4px;">팀 캘린더</div>
+                        <div style="font-size:12px;color:var(--c-text3);">팀 공통 일정 (모두 보임)</div>
+                    </div>
+                    <div style="padding:14px;background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;">
+                        <div style="font-size:20px;margin-bottom:6px;">📋</div>
+                        <div style="font-weight:700;color:var(--c-text);margin-bottom:4px;">프로젝트 캘린더</div>
+                        <div style="font-size:12px;color:var(--c-text3);">현재 프로젝트 한정 일정</div>
+                    </div>
+                </div>
+                <div style="margin-top:18px;padding:12px 14px;background:var(--ios-fill);border-left:3px solid var(--c-accent);border-radius:6px;font-size:12px;color:var(--c-text2);">
+                    🚧 곧 추가됩니다 — 월/주/일 그리드, 일정 추가/편집/삭제, 드래그 이동, 우클릭 컨텍스트 메뉴, 공개 플래그.
+                </div>
+            </div>
+        </div>
 
         <!-- [그래프 뷰] 옵시디언식 전역 지식 그래프 (canvas force-directed, 현 프로젝트 한정) -->
         <style>
@@ -3294,7 +3326,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="flex-1 flex items-center justify-end"><span id="filter-warning" class="text-[12px] text-red-500 font-bold bg-red-50 px-3 py-1 rounded hidden border border-red-200">※ 필터 중 드래그 비활성화</span></div>
             </div>
             <!-- PC action bar (hidden on mobile, visible on desktop) -->
-            <div id="pc-kanban-actions" onclick="event.stopPropagation()" class="flex justify-end mb-4 relative z-10" style="padding:4px 16px 0;">
+            <div id="pc-kanban-actions" onclick="event.stopPropagation()" class="flex items-center mb-4 relative z-10" style="padding:4px 16px 0;">
+                <!-- [r75] 좌측: 개인/팀 칸반 토글 -->
+                <button onclick="_toggleBoardScope()" id="board-scope-btn" class="util-btn shadow-sm mr-auto" style="background:var(--c-accent);color:#fff;" title="개인 칸반보드 ↔ 팀 칸반보드 전환">📋 내 칸반보드</button>
                 <button onclick="expandAll()" class="util-btn bg-gray-600 shadow-sm mr-2">🔽 전체 펼침</button>
                 <button onclick="collapseAll()" class="util-btn bg-gray-600 shadow-sm mr-2">🔼 전체 줄임</button>
                 <button onclick="exportToDiscord()" class="util-btn bg-indigo-500 shadow-sm mr-2">💬 Discord(MD) 복사</button>
@@ -3312,10 +3346,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div id="board" onclick="event.stopPropagation()"></div>
 
                 <div id="kanban-progress" class="relative z-10" onclick="event.stopPropagation()">
-                    <div class="flex items-center gap-3 mb-4" style="padding-left:16px;">
-                        <h2 class="text-2xl font-black text-gray-800">카테고리별 진척률 (Category Progress)</h2>
-                        <button class="text-xl hover:scale-110 transition-transform bg-gray-100 p-2 rounded-lg border border-gray-300 shadow-sm" onclick="copyProgressToClipboard()" title="진척률 마크다운 복사">📋</button>
-                    </div>
                     <div id="progress-container"></div>
                 </div>
             </div>
@@ -6465,6 +6495,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [그래프 뷰] 토글 (#gview-view는 display:flex 고정 — .hidden만 토글)
             var _csGv = document.getElementById('cs-nav-gview'); if (_csGv) _csGv.classList.toggle('active', viewName === 'gview');
             var _gvvw = document.getElementById('gview-view'); if (_gvvw) _gvvw.classList.toggle('hidden', viewName !== 'gview');
+            // [r75] 캘린더 토글
+            var _csCal = document.getElementById('cs-nav-calendar'); if (_csCal) _csCal.classList.toggle('active', viewName === 'calendar');
+            var _calvw = document.getElementById('calendar-view'); if (_calvw) { _calvw.classList.toggle('hidden', viewName !== 'calendar'); _calvw.classList.toggle('block', viewName === 'calendar'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -6587,6 +6620,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gpgv = document.getElementById('gif-picker'); if (_gpgv) _gpgv.style.display = 'none';
                 if (typeof gvOpen === 'function') gvOpen();
+            } else if (viewName === 'calendar') {
+                // [r75] 캘린더 — 다음 라운드에서 Google Calendar 클론 풀구현
+                var _kvcal = document.getElementById('kanban-view'); if (_kvcal) { _kvcal.classList.add('hidden'); _kvcal.classList.remove('block'); }
+                var _dvcal = document.getElementById('docs-view'); if (_dvcal) { _dvcal.classList.add('hidden'); _dvcal.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpcal = document.getElementById('gif-picker'); if (_gpcal) _gpcal.style.display = 'none';
+                // 캘린더 자체는 정적 안내 페이지 — 별도 렌더 함수 없음
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
@@ -7173,7 +7213,9 @@ return data;
                 linked_doc_ids: task.linkedDocIds || [],
                 created_by: task.createdBy || (currentUser ? currentUser.id : null),
                 assignees: task.assignees || [],
-                due_date: task.dueDate || null
+                due_date: task.dueDate || null,
+                // [r75] 개인 칸반: 팀 카드와 연결(상태 동기화용)
+                linked_task_id: task.linkedTaskId || null
             };
             let { error } = await supabaseClient.from('tasks').upsert(payload);
             // [라운드8] due_date 컬럼 미생성 환경 보호: 마감기한만 빼고 재시도(기존 저장 보존)
@@ -7181,6 +7223,12 @@ return data;
                 delete payload.due_date;
                 ({ error } = await supabaseClient.from('tasks').upsert(payload));
                 if (!error) console.warn('[dbUpsertTask] due_date 컬럼 없음 — 마감기한 제외 저장. SQL: alter table tasks add column if not exists due_date date;');
+            }
+            // [r75] linked_task_id 컬럼 미생성 환경 보호
+            if (error && /linked_task_id/.test(error.message || '')) {
+                delete payload.linked_task_id;
+                ({ error } = await supabaseClient.from('tasks').upsert(payload));
+                if (!error) console.warn('[dbUpsertTask] linked_task_id 컬럼 없음 — 개인 칸반 연결 제외 저장. SQL: alter table tasks add column if not exists linked_task_id text;');
             }
             if (error) {
                 console.error('[dbUpsertTask]', error);
@@ -7194,11 +7242,19 @@ return data;
         }
         async function dbUpsertCategory(cat) {
             if (!supabaseClient) return;
-            const { error } = await supabaseClient.from('kanban_categories').upsert({
+            // [r75] 개인 칸반: owner_user_id 컬럼 추가(미생성 환경에서는 자동 드롭 후 재시도)
+            const payload = {
                 id: cat.id, project_id: cat.projectId || activeProjectId,
                 title: cat.title, subtitle: cat.subtitle || '',
-                sprint_id: cat.sprintId || null
-            });
+                sprint_id: cat.sprintId || null,
+                owner_user_id: cat.ownerUserId || null
+            };
+            let { error } = await supabaseClient.from('kanban_categories').upsert(payload);
+            if (error && /owner_user_id/.test(error.message || '')) {
+                delete payload.owner_user_id;
+                ({ error } = await supabaseClient.from('kanban_categories').upsert(payload));
+                if (!error) console.warn('[dbUpsertCategory] owner_user_id 컬럼 없음 — 개인 칸반 식별 제외 저장. SQL: alter table kanban_categories add column if not exists owner_user_id text;');
+            }
             if (error) console.error('[dbUpsertCategory]', error);
         }
         async function dbDeleteCategory(catId) {
@@ -7406,6 +7462,8 @@ return data;
             ['sprints', 'attachments', "jsonb default '[]'::jsonb"],
             ['sprints', 'checklists', "jsonb default '[]'::jsonb"],
             ['kanban_categories', 'sprint_id', 'text'],
+            ['kanban_categories', 'owner_user_id', 'text'], // [r75] 개인 칸반: 본인 전용 카테고리
+            ['tasks', 'linked_task_id', 'text'],            // [r75] 개인 칸반: 팀↔개인 카드 양방향 동기화
             ['wiki_docs', 'kind', "text default 'wiki'"],
             ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"]
         ];
@@ -7531,7 +7589,9 @@ return data;
             return {
                 projects:   (projData || []),
                 categories: (catData || []).map(c => ({
-                    id: c.id, title: c.title, subtitle: c.subtitle, projectId: c.project_id || 'default', sprintId: c.sprint_id || null
+                    id: c.id, title: c.title, subtitle: c.subtitle, projectId: c.project_id || 'default', sprintId: c.sprint_id || null,
+                    // [r75] 개인 칸반: 본인 전용 카테고리 식별 (null = 팀 공용)
+                    ownerUserId: c.owner_user_id || null
                 })),
                 tasks: (taskData || []).map(t => ({
                     id: t.id, catId: t.cat_id, projectId: t.project_id || 'default', title: t.title,
@@ -7554,7 +7614,9 @@ return data;
                     assignees: t.assignees || [],
                     // [라운드8] 담당자 실계정 연결(assignees[0]) + 마감기한
                     assigneeId: (t.assignees && t.assignees[0]) || null,
-                    dueDate: t.due_date || null
+                    dueDate: t.due_date || null,
+                    // [r75] 개인 칸반: 팀 카드 → 개인 미러 카드 양방향 동기화 키
+                    linkedTaskId: t.linked_task_id || null
                 })),
                 docs: (docData || []).map(d => ({
                     id: d.id, projectId: d.project_id, parentId: d.parent_id,
@@ -7808,7 +7870,8 @@ return data;
                                     // [v40 Day3 청크1] zone/sprint/링크 멀티유저 동기화 (Day2 청크1~4 갭 보완)
                                     zone: u.zone || 'shelf', sprintId: u.sprint_id || null,
                                     linkedDocIds: u.linked_doc_ids || [],
-                                    assignees: u.assignees || [], assigneeId: (u.assignees && u.assignees[0]) || null, dueDate: u.due_date || null
+                                    assignees: u.assignees || [], assigneeId: (u.assignees && u.assignees[0]) || null, dueDate: u.due_date || null,
+                                    linkedTaskId: u.linked_task_id || null // [r75]
                                 });
                             }
                         } else if (ev === 'INSERT') {
@@ -7820,7 +7883,8 @@ return data;
                                     dev: t.dev_name, catBadge: t.cat_badge,
                                     isStarred: t.is_starred, time: t.completed_at, zone: t.zone || 'shelf', sprintId: t.sprint_id || null,
                                     scripts: t.scripts || [], isCollapsed: false, comments: [], linkedDocIds: t.linked_doc_ids || [],
-                                    assignees: t.assignees || [], assigneeId: (t.assignees && t.assignees[0]) || null, dueDate: t.due_date || null
+                                    assignees: t.assignees || [], assigneeId: (t.assignees && t.assignees[0]) || null, dueDate: t.due_date || null,
+                                    linkedTaskId: t.linked_task_id || null // [r75]
                                 });
                             }
                         } else if (ev === 'DELETE') {
@@ -9938,6 +10002,22 @@ addEventListener("resize",sendPos);
         let filterZone = 'active';
         let selectedBoardSprintId = 'all'; // [#2] 칸반 스프린트 스코프: 'all' | 'none'(미지정) | sprintId
         let _boardSprintInit = false;
+        // [r75] 칸반 스코프: 'team' = 팀 스프린트 칸반(기본) | 'personal' = 본인 전용 카테고리만(스프린트 무관)
+        let boardScope = 'team';
+        function _toggleBoardScope() {
+            boardScope = (boardScope === 'team') ? 'personal' : 'team';
+            // 버튼 라벨 갱신
+            var btn = document.getElementById('board-scope-btn');
+            if (btn) btn.innerHTML = (boardScope === 'team') ? '📋 내 칸반보드' : '🏃 팀 칸반보드';
+            // 스프린트 콤보(밴드) 표시는 팀 모드에서만 의미 있음
+            var band = document.getElementById('sprint-band');
+            if (band) band.style.display = (boardScope === 'personal') ? 'none' : '';
+            var fsp = document.getElementById('filter-sprint-wrap');
+            if (fsp) fsp.style.display = (boardScope === 'personal') ? 'none' : '';
+            renderBoard();
+            if (typeof renderProgress === 'function') renderProgress();
+            if (typeof showToast === 'function') showToast(boardScope === 'personal' ? '🔒 개인 칸반보드로 전환' : '🏃 팀 칸반보드로 복귀', 'info');
+        }
         function applyFilters() {
             filterDev = document.getElementById('filter-dev').value;
             filterStatus = document.getElementById('filter-status').value;
@@ -10177,7 +10257,124 @@ addEventListener("resize",sendPos);
         }
         function cyclePriority(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); task.priority = task.priority === 'p0' ? 'p1' : (task.priority === 'p1' ? 'p2' : 'p0'); saveData(); dbUpsertTask(task); }
         function sortCategory(e, catId, order) { e.stopPropagation(); const catTasks = currentData.tasks.filter(t => t.catId === catId); const otherTasks = currentData.tasks.filter(t => t.catId !== catId); catTasks.sort((a, b) => { const weight = { 'p0': 0, 'p1': 1, 'p2': 2 }; return order === 'asc' ? weight[a.priority] - weight[b.priority] : weight[b.priority] - weight[a.priority]; }); currentData.tasks = [...otherTasks, ...catTasks]; saveData(); dbUpdateTaskSortOrders(currentData.tasks); }
-        function cycleStatus(e, taskId) { e.stopPropagation(); const taskIndex = currentData.tasks.findIndex(t => t.id === taskId); if (taskIndex === -1) return; const task = currentData.tasks[taskIndex]; if(task.status === 'pending') { task.status = 'progress'; } else if(task.status === 'progress') { task.status = 'completed'; task.time = new Date().toLocaleString(); task.doneAt = new Date().toISOString(); /* [v40] auto-bury 기준 시각 */ } else { task.status = 'pending'; task.time = null; task.doneAt = null; } if (task.status === 'completed') { currentData.tasks.splice(taskIndex, 1); currentData.tasks.push(task); } saveData(); dbUpsertTask(task); renderBoard(); }
+        function cycleStatus(e, taskId) { e.stopPropagation(); const taskIndex = currentData.tasks.findIndex(t => t.id === taskId); if (taskIndex === -1) return; const task = currentData.tasks[taskIndex]; if(task.status === 'pending') { task.status = 'progress'; } else if(task.status === 'progress') { task.status = 'completed'; task.time = new Date().toLocaleString(); task.doneAt = new Date().toISOString(); /* [v40] auto-bury 기준 시각 */ } else { task.status = 'pending'; task.time = null; task.doneAt = null; } if (task.status === 'completed') { currentData.tasks.splice(taskIndex, 1); currentData.tasks.push(task); } saveData(); dbUpsertTask(task); if (typeof _syncLinkedStatus === 'function') _syncLinkedStatus(task); renderBoard(); }
+
+        // [r75] 개인 칸반: 팀↔개인 카드 양방향 상태 동기화
+        //   - 팀 카드(source) → 연결된 모든 미러 카드의 status·doneAt·time을 갱신
+        //   - 개인 미러(source) → 연결된 원본 팀 카드의 status 갱신
+        function _syncLinkedStatus(srcTask) {
+            if (!srcTask || _syncLinkedStatus._guard) return;
+            _syncLinkedStatus._guard = true;
+            try {
+                var changed = [];
+                // 1) src가 팀 원본인 경우: 미러(linkedTaskId === src.id)들을 동기화
+                (currentData.tasks || []).forEach(function (t) {
+                    if (t.id === srcTask.id) return;
+                    if (t.linkedTaskId === srcTask.id) {
+                        if (t.status !== srcTask.status) {
+                            t.status = srcTask.status;
+                            t.time = srcTask.time || null;
+                            t.doneAt = srcTask.doneAt || null;
+                            changed.push(t);
+                        }
+                    }
+                });
+                // 2) src가 미러인 경우: 원본(src.linkedTaskId === t.id)을 동기화
+                if (srcTask.linkedTaskId) {
+                    var origin = (currentData.tasks || []).find(function (t) { return t.id === srcTask.linkedTaskId; });
+                    if (origin && origin.status !== srcTask.status) {
+                        origin.status = srcTask.status;
+                        origin.time = srcTask.time || null;
+                        origin.doneAt = srcTask.doneAt || null;
+                        changed.push(origin);
+                    }
+                }
+                if (changed.length) {
+                    saveData();
+                    changed.forEach(function (t) { if (typeof dbUpsertTask === 'function') dbUpsertTask(t); });
+                    if (typeof showToast === 'function') showToast('🔗 연결 카드 ' + changed.length + '개 상태 동기화', 'info');
+                }
+            } finally {
+                _syncLinkedStatus._guard = false;
+            }
+        }
+
+        // [r75] 팀 카드 우클릭 → 본인 개인 칸반보드에 미러 카드 생성
+        //   - 카테고리: "[프로젝트명] 스프린트명" (이미 있으면 재사용), ownerUserId = currentUser.id
+        //   - 미러 카드: 제목 유지, status 동기화, linkedTaskId = 원본 id, 스프린트 무관
+        async function linkToPersonalKanban(taskId) {
+            var src = (currentData.tasks || []).find(function (t) { return t.id === taskId; });
+            if (!src) { if (typeof showToast === 'function') showToast('카드를 찾을 수 없습니다', 'alert'); return; }
+            var meId = (currentUser && currentUser.id) || null;
+            if (!meId) { if (typeof showToast === 'function') showToast('⚠️ 로그인 필요 (개인 칸반)', 'alert'); return; }
+            // 이미 본인 개인 칸반에 미러가 있으면 중복 생성 방지
+            var existsMirror = (currentData.tasks || []).find(function (t) {
+                if (t.linkedTaskId !== src.id) return false;
+                var c = (currentData.categories || []).find(function (cc) { return cc.id === t.catId; });
+                return c && c.ownerUserId === meId;
+            });
+            if (existsMirror) {
+                if (typeof showToast === 'function') showToast('이미 개인 칸반에 연결되어 있습니다', 'info');
+                return;
+            }
+            // 카테고리 이름: "[프로젝트명] 스프린트명"
+            var proj = (currentData.projects || []).find(function (p) { return p.id === (src.projectId || activeProjectId); });
+            var projName = (proj && proj.name) || '프로젝트';
+            var sp = (currentData.sprints || []).find(function (s) { return s.id === src.sprintId; });
+            var spName = (sp && sp.weekLabel) || '비스프린트';
+            var catTitle = '[' + projName + '] ' + spName;
+            // 동일 제목 + 본인 소유 카테고리 있으면 재사용
+            var cat = (currentData.categories || []).find(function (c) {
+                return c.ownerUserId === meId && (c.projectId || 'default') === (src.projectId || activeProjectId) && c.title === catTitle;
+            });
+            if (!cat) {
+                cat = {
+                    id: 'cat-' + Date.now() + '-pk',
+                    title: catTitle, subtitle: 'PERSONAL · 팀 카드 연결',
+                    projectId: src.projectId || activeProjectId,
+                    sprintId: null,
+                    ownerUserId: meId
+                };
+                currentData.categories.push(cat);
+                if (typeof dbUpsertCategory === 'function') await dbUpsertCategory(cat);
+            }
+            // 미러 카드 생성
+            var mirror = {
+                id: 'task-' + Date.now() + '-pk',
+                catId: cat.id,
+                projectId: src.projectId || activeProjectId,
+                title: src.title || '(제목 없음)',
+                desc: src.desc || '',
+                details: src.details || '',
+                priority: src.priority || 'p2',
+                status: src.status || 'pending',
+                dev: src.dev || '',
+                catBadge: src.catBadge || '',
+                isStarred: false,
+                time: src.time || null,
+                doneAt: src.doneAt || null,
+                scripts: [],
+                comments: [],
+                zone: 'now',
+                sprintId: null,
+                buryReason: '',
+                buryHistory: [],
+                carryoverCount: 0,
+                linkedDocIds: [],
+                createdBy: meId,
+                assignees: [meId],
+                assigneeId: meId,
+                dueDate: src.dueDate || null,
+                linkedTaskId: src.id // 핵심: 원본 팀 카드 참조
+            };
+            currentData.tasks.push(mirror);
+            saveData();
+            if (typeof dbUpsertTask === 'function') await dbUpsertTask(mirror);
+            if (typeof showToast === 'function') showToast('🔒 개인 칸반에 연결됨: ' + catTitle, 'success');
+            // 개인 칸반으로 자동 전환
+            if (boardScope !== 'personal') _toggleBoardScope();
+            else { renderBoard(); if (typeof renderProgress === 'function') renderProgress(); }
+        }
 
         // [v40 Day2 청크 1] Zone 순환 (Shelf → Now → Buried → Shelf)
         async function cycleZone(e, taskId) {
@@ -12971,7 +13168,7 @@ ${intrLog}
         let activeTagEdit = null;
         async function editTag(e, taskId) { e.stopPropagation(); const task = currentData.tasks.find(t => t.id === taskId); const newTagName = await uiPrompt({ title: '태그 수정', label: '새 태그 이름', value: task.catBadge || '' }); if (newTagName === null) return; const finalTag = newTagName.trim() || task.catBadge; activeTagEdit = { oldTag: task.catBadge, newTag: finalTag }; const colorPicker = document.getElementById('hidden-color-picker'); colorPicker.value = currentData.tagColors[task.catBadge] || '#57544c'; setTimeout(() => colorPicker.click(), 100); }
         function onColorPicked(e) { if(!activeTagEdit) return; const newColor = e.target.value; const { oldTag, newTag } = activeTagEdit; const affectedTasks = []; currentData.tasks.forEach(t => { if(t.catBadge === oldTag) { t.catBadge = newTag; affectedTasks.push(t); } }); currentData.tagColors[newTag] = newColor; activeTagEdit = null; saveData(); dbUpsertTagColor(newTag, newColor); affectedTasks.forEach(t => dbUpsertTask(t)); }
-        async function addNewCategory() { const title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름을 입력하세요', placeholder: '예: 전투 시스템' }); if (title && title.trim()) { var _sid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId) ? selectedBoardSprintId : null; const newCat = { id: "cat-" + Date.now(), title: title.trim(), subtitle: "CUSTOM MODULE", projectId: activeProjectId, sprintId: _sid }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); var _cs = (currentData.sprints || []).find(x => x.id === _sid); if (_cs && typeof _sprintLogHist === 'function') { _sprintLogHist(_cs, 'category-add', '카테고리 "' + newCat.title + '" 추가'); dbUpsertSprint(_cs); } renderBoard(); } }
+        async function addNewCategory() { const title = await uiPrompt({ title: '새 카테고리', label: '카테고리 이름을 입력하세요', placeholder: '예: 전투 시스템' }); if (title && title.trim()) { var _isPersonal = (boardScope === 'personal'); var _sid = (!_isPersonal && (currentData.sprints || []).some(s => s.id === selectedBoardSprintId)) ? selectedBoardSprintId : null; var _own = _isPersonal ? ((currentUser && currentUser.id) || null) : null; if (_isPersonal && !_own) { if (typeof showToast === 'function') showToast('⚠️ 개인 칸반은 로그인 필요', 'alert'); return; } const newCat = { id: "cat-" + Date.now(), title: title.trim(), subtitle: _isPersonal ? "PERSONAL" : "CUSTOM MODULE", projectId: activeProjectId, sprintId: _sid, ownerUserId: _own }; currentData.categories.push(newCat); saveData(); dbUpsertCategory(newCat); if (!_isPersonal) { var _cs = (currentData.sprints || []).find(x => x.id === _sid); if (_cs && typeof _sprintLogHist === 'function') { _sprintLogHist(_cs, 'category-add', '카테고리 "' + newCat.title + '" 추가'); dbUpsertSprint(_cs); } } renderBoard(); if (typeof renderProgress === 'function') renderProgress(); } }
         async function editCategoryName(e, catId) { e.stopPropagation(); const cat = currentData.categories.find(c => c.id === catId); const newName = await uiPrompt({ title: '카테고리 이름 수정', label: '카테고리 이름', value: cat.title || '' }); if(newName && newName.trim()) { cat.title = newName.trim(); saveData(); dbUpsertCategory(cat); } }
         async function deleteCategory(e, catId) { e.stopPropagation(); if(await uiConfirm({ title: '카테고리 삭제', message: '카테고리와 내부 모든 할 일이 함께 삭제됩니다. 계속할까요?', confirmText: '삭제', danger: true })) { currentData.categories = currentData.categories.filter(c => c.id !== catId); currentData.tasks = currentData.tasks.filter(t => t.catId !== catId); if(focusedCategoryId === catId) focusedCategoryId = null; saveData(); dbDeleteCategory(catId); } }
         function addNewTask(catId, position = 'top') {
@@ -13007,8 +13204,20 @@ ${intrLog}
             if(isFiltering) filterWarning.classList.remove('hidden'); else filterWarning.classList.add('hidden');
 
             // [#1] 스프린트별 카테고리: 선택 스프린트가 유효하면 그 스프린트 카테고리만, 아니면(스프린트 없음 등) 전부
+            // [r75] 개인 칸반: boardScope='personal' = ownerUserId === currentUser.id만, 'team' = ownerUserId 없는 팀 공용만
             const _spValid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId);
-            const projCats = currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId && (!_spValid || (_pc.sprintId || null) === selectedBoardSprintId));
+            const _meId = (currentUser && currentUser.id) || null;
+            const _isPersonal = (boardScope === 'personal');
+            const projCats = currentData.categories.filter(_pc => {
+                if ((_pc.projectId || 'default') !== activeProjectId) return false;
+                if (_isPersonal) {
+                    // 개인 칸반: 본인 전용만 + 스프린트 필터는 무시(개인 보드는 스프린트 무관)
+                    return _pc.ownerUserId && _meId && _pc.ownerUserId === _meId;
+                }
+                // 팀 칸반: 팀 공용(ownerUserId 없음)만 + 기존 스프린트 필터 유지
+                if (_pc.ownerUserId) return false;
+                return (!_spValid || (_pc.sprintId || null) === selectedBoardSprintId);
+            });
             // [r50 #3] 사용자가 지정한 카테고리 순서(로컬 저장) 적용
             var _catOrder = _loadCatOrder();
             if (_catOrder.length) projCats.sort(function (a, b) { var ia = _catOrder.indexOf(a.id), ib = _catOrder.indexOf(b.id); return (ia < 0 ? 9999 : ia) - (ib < 0 ? 9999 : ib); });
@@ -13104,6 +13313,7 @@ ${intrLog}
                     onEnd: function () {
                         var ids = []; board.querySelectorAll('.kanban-col-wrapper[data-catid]').forEach(function (el) { ids.push(el.getAttribute('data-catid')); });
                         _saveCatOrder(ids);
+                        if (typeof renderProgress === 'function') renderProgress(); // [r75] 진척률 카드도 같은 순서로 즉시 갱신
                         if (typeof showToast === 'function') showToast('🗂️ 카테고리 순서 저장됨 (이 브라우저)', 'info');
                     }
                 });
@@ -13120,8 +13330,19 @@ ${intrLog}
         function renderProgress() {
             const container = document.getElementById('progress-container'); container.innerHTML = '';
             // [변경] 카테고리별 진척률도 칸반 보드처럼 "현재 보는 스프린트"의 카테고리만 표시
+            // [r75] 개인/팀 스코프 동기화 + _loadCatOrder 정렬
             const _spValid = (currentData.sprints || []).some(s => s.id === selectedBoardSprintId);
-            currentData.categories.filter(_pc => (_pc.projectId || 'default') === activeProjectId && (!_spValid || (_pc.sprintId || null) === selectedBoardSprintId)).forEach(cat => {
+            const _meIdP = (currentUser && currentUser.id) || null;
+            const _isPersonalP = (boardScope === 'personal');
+            var _pCats = currentData.categories.filter(_pc => {
+                if ((_pc.projectId || 'default') !== activeProjectId) return false;
+                if (_isPersonalP) return (_pc.ownerUserId && _meIdP && _pc.ownerUserId === _meIdP);
+                if (_pc.ownerUserId) return false;
+                return (!_spValid || (_pc.sprintId || null) === selectedBoardSprintId);
+            });
+            var _pOrder = (typeof _loadCatOrder === 'function') ? _loadCatOrder() : [];
+            if (_pOrder.length) _pCats.sort(function (a, b) { var ia = _pOrder.indexOf(a.id), ib = _pOrder.indexOf(b.id); return (ia < 0 ? 9999 : ia) - (ib < 0 ? 9999 : ib); });
+            _pCats.forEach(cat => {
                 const catTasks = currentData.tasks.filter(t => t.catId === cat.id); const total = catTasks.length; const done = catTasks.filter(t => t.status === 'completed').length; const percent = total === 0 ? 0 : Math.round((done / total) * 100);
                 const div = document.createElement('div'); div.className = 'bg-white border-2 border-gray-100 p-5 rounded-xl shadow-sm'; div.innerHTML = ` <div class="flex justify-between items-center mb-3"> <span class="text-[15px] font-black text-gray-800">${cat.title}</span> <span class="text-sm font-mono font-black text-emerald-600">${percent}%</span> </div> <div class="progress-bar-container"><div class="progress-fill" style="width: ${percent}%"></div></div> <p class="text-[11px] text-gray-400 mt-3 font-mono font-bold uppercase tracking-wider">${done} / ${total} TASKS COMPLETE</p> `; container.appendChild(div);
             });
@@ -15121,10 +15342,15 @@ ${intrLog}
             var menu = document.getElementById('tree-context-menu');
             if (!menu) return;
             if (menu.parentNode !== document.body) document.body.appendChild(menu);
+            // [r75] 팀 칸반에서만 "개인 칸반보드로 연결" 표시 (개인 보드에서는 의미 없음)
+            var _ctxScopeItem = (boardScope === 'team')
+                ? '<div class="ctx-menu-item" onclick="hideTreeContextMenu();linkToPersonalKanban(\'' + taskId + '\')"><span>🔒</span> 개인 칸반보드로 연결</div><div class="ctx-menu-sep"></div>'
+                : '';
             menu.innerHTML =
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openReviewModal(\'decision\',\'' + taskId + '\',null)"><span>🗳</span> 결정 요청 (이 카드)</div>' +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openLinkPicker(\'task\',\'' + taskId + '\',\'doc\')"><span>🔗</span> 문서 연결</div>' +
                 '<div class="ctx-menu-sep"></div>' +
+                _ctxScopeItem +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();buryTaskWithReason(event,\'' + taskId + '\')"><span>🗑</span> 처내기 (Buried)</div>' +
                 '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();deleteTask(event,\'' + taskId + '\')"><span>❌</span> 삭제</div>';
             var x = Math.min(e.clientX, window.innerWidth - 230);
