@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r87 (#1 탐색기 문서 카테고리 3분할: docWiki/docCanon/docPersonal 별도 카테고리. #2·3 본문 검색 토글(📖 본문 검색 체크박스) + 매치 위치 주변 ±80자 발췌 + <mark> 하이라이트(웜 액센트), 본문 일괄 fetch(_xpDocContentCache, 100개 배치 IN 쿼리). 미리보기 패널도 검색 시 발췌+하이라이트, 평소 MD 렌더 4000자 한계. #4 사용자 프로필 풀구현: openProfileModal(targetId)=본인=편집/타인=보기, 상태 메시지 필드(users.status_message), 아바타 ✏️ 버튼 → 로컬 파일 압축(256px JPEG 0.85) → Storage drive/avatars/ 업로드 → users.avatar_url 갱신. xpJump user → 프로필 모달. #5 닉네임 영속 버그: setUserFromAuth가 pb3_nickname_custom_{userId} 플래그 우선 확인, 커스텀 닉네임 보존. _syncNickFromDb로 DB users.display_name도 우선) -->
+<!-- BUILD: 2026-05-28 r88 (#1 탐색기에 💬 코멘트 카테고리 추가 — 모든 task.comments 평탄화, 합성 ID(taskId:ts), xpJump → 해당 카드 모달. #2 코멘트 사이드바 다크 테마 가독성: 헤더를 var(--ios-fill)+var(--c-text)로 변경(흰배경 흰글씨 문제 해결), 코멘트 카드도 var(--c-card) + var(--c-border) 테마 변수, 호버 시 액센트 보더. 빈 상태 안내 추가 "💬 등록된 코멘트가 없습니다.\n칸반 카드를 열고 코멘트를 남기면 여기에 모입니다." 안읽은 코멘트 위젯 버그: c.author가 닉네임 문자열인데 currentUser.id와 비교해서 모두 "타인 코멘트"로 잡힘 + lastVisit 정확히 직전 방문이라 거의 0건 → id/nickname/email 모두 매칭 + 최근 7일은 항상 노출 폴백. 코멘트 카드 클릭 → 칸반 + 해당 카드 모달 자동 열기) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3187,12 +3187,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     </div>
 
     <!-- 💬 전체 코멘트 모아보기 사이드바 -->
-    <div id="comments-sidebar" class="fixed right-0 top-0 h-full w-[450px] z-[120] transform translate-x-full transition-transform duration-300 ease-in-out" style="display:flex;flex-direction:column;background:var(--ios-bg2);border-left:0.5px solid var(--ios-sep);box-shadow:-4px 0 24px rgba(0,0,0,0.12);">
-        <div class="p-5 border-b flex justify-between items-center bg-orange-50">
-            <h2 class="text-xl font-black text-orange-800 flex items-center gap-2">💬 전체 코멘트 현황</h2>
-            <button onclick="closeSidebars()" class="text-gray-400 hover:text-red-500 text-2xl font-bold transition-colors">✕</button>
+    <div id="comments-sidebar" class="fixed right-0 top-0 h-full w-[450px] z-[120] transform translate-x-full transition-transform duration-300 ease-in-out" style="display:flex;flex-direction:column;background:var(--c-paper);border-left:1px solid var(--c-border);box-shadow:-4px 0 24px rgba(0,0,0,0.18);">
+        <!-- [r88 #2] 헤더를 테마 변수로 — 다크/라이트 모두 가독성 보장 -->
+        <div style="padding:16px 20px;border-bottom:1px solid var(--c-border);display:flex;justify-content:space-between;align-items:center;background:var(--ios-fill);flex-shrink:0;">
+            <h2 style="font-size:18px;font-weight:800;color:var(--c-text);display:flex;align-items:center;gap:8px;margin:0;">💬 전체 코멘트 현황</h2>
+            <button onclick="closeSidebars()" style="background:none;border:none;color:var(--c-text3);font-size:20px;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px;" title="닫기">✕</button>
         </div>
-        <div id="comments-list-container" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-gray-50"></div>
+        <div id="comments-list-container" class="flex-1 overflow-y-auto" style="padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--c-paper);"></div>
     </div>
 
     <!-- iOS 네이티브 탭 바 -->
@@ -7149,6 +7150,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             { k: 'docCanon', label: '📘 프로젝트 위키' },
             { k: 'docPersonal', label: '🔒 개인 문서' },
             { k: 'task', label: '📋 태스크' },
+            { k: 'comment', label: '💬 코멘트' }, // [r88 #1]
             { k: 'sprint', label: '🏃 스프린트' },
             { k: 'issue', label: '🐛 이슈' },
             { k: 'asset', label: '🎮 에셋' },
@@ -7181,6 +7183,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).forEach(function (t) {
                 var cat = (currentData.categories || []).find(function (c) { return c.id === t.catId; });
                 all.push({ kind: 'task', id: t.id, title: t.title || '(제목 없음)', snippet: (t.desc || ''), meta: (cat ? cat.title : '') + ' · ' + (t.status || 'pending') + (t.dueDate ? ' · 📅' + t.dueDate : '') });
+            });
+            // [r88 #1] 코멘트 — 모든 task의 comments를 평탄화
+            (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).forEach(function (t) {
+                (t.comments || []).forEach(function (c) {
+                    var ts = c.timestamp || (c.time ? new Date(c.time).getTime() : 0);
+                    var when = ts ? new Date(ts).toLocaleString('ko-KR') : (c.time || '');
+                    all.push({
+                        kind: 'comment',
+                        id: t.id + ':' + ts, // 합성 ID — 점프 시 task로 이동
+                        title: (c.text || '').slice(0, 80) || '(빈 코멘트)',
+                        snippet: c.text || '',
+                        meta: '👤 ' + (c.author || '익명') + ' · ' + when + ' · 📌 ' + (t.title || ''),
+                        // 점프용 보조 정보
+                        _taskId: t.id
+                    });
+                });
             });
             // 스프린트
             (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; }).forEach(function (s) {
@@ -7264,7 +7282,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 _xpRenderPreview(null);
                 return;
             }
-            var kindLabels = { docWiki:'📚 문서', docCanon:'📘 위키', docPersonal:'🔒 개인', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
+            var kindLabels = { docWiki:'📚 문서', docCanon:'📘 위키', docPersonal:'🔒 개인', task:'📋 태스크', comment:'💬 코멘트', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
             listEl.innerHTML = items.slice(0, 300).map(function (it) {
                 var sel = (xpState.selectedKind === it.kind && xpState.selectedId === it.id) ? ' selected' : '';
                 // [r87 #3] 매칭 부분 발췌 + 하이라이팅
@@ -7354,7 +7372,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 box.innerHTML = '<div class="xp-preview-empty">👈 항목을 선택하면 미리보기가 표시됩니다</div>';
                 return;
             }
-            var kindLabels = { docWiki:'📚 문서', docCanon:'📘 프로젝트 위키', docPersonal:'🔒 개인 문서', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
+            var kindLabels = { docWiki:'📚 문서', docCanon:'📘 프로젝트 위키', docPersonal:'🔒 개인 문서', task:'📋 태스크', comment:'💬 코멘트', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
             var isDoc = (it.kind === 'docWiki' || it.kind === 'docCanon' || it.kind === 'docPersonal');
             // [r87 #3] 검색어 있으면 매치 위치 주변 발췌 + 하이라이트
             var q = (document.getElementById('xp-search').value || '').toLowerCase().trim();
@@ -7374,7 +7392,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } else {
                 bodyHtml = '<div style="color:var(--c-text3);font-style:italic;padding:12px;">(미리보기 내용 없음 — ' + (isDoc ? '본문 검색 켜기 또는 ' : '') + '문서 열기로 확인)</div>';
             }
-            var jumpLabel = { docWiki: '📚 문서 열기', docCanon: '📘 위키 열기', docPersonal: '🔒 개인 문서 열기', task: '📋 카드 열기', sprint: '🏃 스프린트로', issue: '🐛 이슈로', asset: '🎮 에셋 매니저로', event: '📅 캘린더로', review: '🗳 리뷰함으로', file: '🗂️ 드라이브로', bug: '🐞 리포트 보기', user: '👤 프로필 보기' }[it.kind] || '바로가기';
+            var jumpLabel = { docWiki: '📚 문서 열기', docCanon: '📘 위키 열기', docPersonal: '🔒 개인 문서 열기', task: '📋 카드 열기', comment: '💬 카드 열기 (코멘트)', sprint: '🏃 스프린트로', issue: '🐛 이슈로', asset: '🎮 에셋 매니저로', event: '📅 캘린더로', review: '🗳 리뷰함으로', file: '🗂️ 드라이브로', bug: '🐞 리포트 보기', user: '👤 프로필 보기' }[it.kind] || '바로가기';
             box.innerHTML =
                 '<div class="xp-preview-head">' + (kindLabels[it.kind] || '') + ' · ' + _annEsc(it.title || '') + '</div>' +
                 '<div class="xp-preview-meta">' + _annEsc(it.meta || '') + '</div>' +
@@ -7392,6 +7410,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // 카테고리별 바로가기 행동
             if (kind === 'doc') { switchView('docs'); setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80); return; }
             if (kind === 'task') { switchView('kanban'); setTimeout(function () { if (typeof openCardModal === 'function') openCardModal(id); }, 80); return; }
+            // [r88 #1] 코멘트 → 합성 ID(taskId:ts)에서 taskId 추출해 카드 모달 열기
+            if (kind === 'comment') {
+                var taskId = String(id).split(':')[0];
+                switchView('kanban'); setTimeout(function () { if (typeof openCardModal === 'function') openCardModal(taskId); }, 80);
+                return;
+            }
             if (kind === 'sprint') { switchView('sprint'); return; }
             if (kind === 'issue') { switchView('issues'); setTimeout(function () { if (typeof issEditIssue === 'function') issEditIssue(id); }, 80); return; }
             if (kind === 'asset') { switchView('assets'); setTimeout(function () { if (typeof amEditAsset === 'function') amEditAsset(id); }, 80); return; }
@@ -8495,13 +8519,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } else if (w.type === 'unreadComments') {
                 head = '💬 안읽은 코멘트';
                 nav = 'toggleCommentsSidebar()';
+                // [r88 #2] lastVisit이 너무 최근이면 0건 → 최근 7일 폴백
                 var lastVisit = _dbGetLastVisit();
+                var sevenDaysAgo = Date.now() - 7 * 86400000;
+                if (lastVisit > sevenDaysAgo) lastVisit = sevenDaysAgo; // 최근 7일은 항상 노출
                 var meId3 = (currentUser && currentUser.id) || null;
+                var meName = myNickname || '';
                 var unread = [];
                 (currentData.tasks || []).forEach(function (t) {
                     (t.comments || []).forEach(function (c) {
                         var ts = c.timestamp || (c.time ? new Date(c.time).getTime() : 0);
-                        if (ts > lastVisit && c.author !== meId3 && !_dbIsHidden(wid, 'comment', t.id + ':' + ts)) {
+                        // [r88 #2] author는 닉네임 문자열 — id, nickname, email 모두 매칭 시도
+                        var isMine = (c.author === meId3) || (c.author === meName) || (myEmail && c.author === myEmail);
+                        if (ts > lastVisit && !isMine && !_dbIsHidden(wid, 'comment', t.id + ':' + ts)) {
                             unread.push({ task: t, c: c, ts: ts });
                         }
                     });
@@ -17226,7 +17256,42 @@ ${intrLog}
         function submitComment(taskId, inputOrButton) { const inputEl = inputOrButton.tagName === 'INPUT' ? inputOrButton : inputOrButton.previousElementSibling; const text = inputEl.value.trim(); if(!text) return; const task = currentData.tasks.find(t => t.id === taskId); const newComment = { text: text, time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}), timestamp: Date.now(), author: myNickname }; task.comments.push(newComment); inputEl.value = ''; saveData(); dbInsertComment(taskId, newComment); playNotificationSound('comment'); showToast("코멘트가 등록되었습니다.", "success"); if(!document.getElementById('comments-sidebar').classList.contains('translate-x-full')) renderCommentsSidebar(); }
         async function deleteComment(taskId, index) { if(await uiConfirm({ title: '코멘트 삭제', message: '코멘트를 삭제할까요?', confirmText: '삭제', danger: true })) { const task = currentData.tasks.find(t => t.id === taskId); const removed = task.comments.splice(index, 1)[0]; saveData(); if(removed) dbDeleteComment(taskId, removed.timestamp); if(!document.getElementById('comments-sidebar').classList.contains('translate-x-full')) renderCommentsSidebar(); } }
 
-        function renderCommentsSidebar() { const container = document.getElementById('comments-list-container'); if(!container) return; let allComments = []; currentData.tasks.forEach(task => { if(task.comments) { task.comments.forEach(c => { allComments.push({ taskTitle: task.title, taskPriority: task.priority, text: c.text, time: c.time, timestamp: c.timestamp || 0, author: c.author || '익명' }); }); } }); allComments.sort((a, b) => b.timestamp - a.timestamp); if(allComments.length === 0) { container.innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm font-bold">등록된 코멘트가 없습니다.</div>'; return; } container.innerHTML = allComments.map(c => { const pColor = c.taskPriority === 'p0' ? 'text-red-500' : (c.taskPriority === 'p1' ? 'text-yellow-600' : 'text-blue-500'); const timeStr = c.timestamp ? getTimeAgo(c.timestamp) : c.time; return ` <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-1 hover:border-orange-300 transition-colors"> <div class="flex justify-between items-start mb-1"> <span class="text-[11px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">${c.author}</span> <span class="text-[10px] text-gray-400 font-mono font-bold">${timeStr}</span> </div> <div class="text-[13px] text-gray-800 break-all leading-snug">${c.text}</div> <div class="text-[10px] font-bold mt-2 pt-2 border-t border-gray-100 truncate"> 📌 <span class="${pColor} uppercase mr-1">[${c.taskPriority}]</span> <span class="text-gray-500">${c.taskTitle}</span> </div> </div> `; }).join(''); }
+        // [r88 #2] 다크 테마 가독성 + 빈 상태 가이드 + 클릭으로 해당 카드 모달 열기
+        function renderCommentsSidebar() {
+            const container = document.getElementById('comments-list-container');
+            if (!container) return;
+            let allComments = [];
+            (currentData.tasks || []).forEach(task => {
+                if (task.comments && task.comments.length) {
+                    task.comments.forEach(c => {
+                        allComments.push({
+                            taskId: task.id, taskTitle: task.title, taskPriority: task.priority,
+                            text: c.text, time: c.time, timestamp: c.timestamp || 0, author: c.author || '익명'
+                        });
+                    });
+                }
+            });
+            allComments.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            if (allComments.length === 0) {
+                container.innerHTML = '<div style="text-align:center;color:var(--c-text3);margin-top:40px;padding:20px;font-size:13px;line-height:1.6;">💬 등록된 코멘트가 없습니다.<br><span style="font-size:11.5px;opacity:.7;">칸반 카드를 열고 코멘트를 남기면 여기에 모입니다.</span></div>';
+                return;
+            }
+            container.innerHTML = allComments.map(c => {
+                const pColor = c.taskPriority === 'p0' ? '#d2393d' : (c.taskPriority === 'p1' ? '#d49a1c' : 'var(--c-accent)');
+                const timeStr = c.timestamp ? (typeof getTimeAgo === 'function' ? getTimeAgo(c.timestamp) : new Date(c.timestamp).toLocaleString('ko-KR')) : (c.time || '');
+                return '<div onclick="closeSidebars();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + c.taskId + '\')},80)" style="background:var(--c-card);padding:12px;border-radius:10px;border:1px solid var(--c-border);box-shadow:0 1px 2px rgba(0,0,0,.04);display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:border-color .15s,background .15s;" onmouseover="this.style.borderColor=\'var(--c-accent)\';this.style.background=\'var(--ios-fill)\';" onmouseout="this.style.borderColor=\'var(--c-border)\';this.style.background=\'var(--c-card)\';">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+                    '<span style="font-size:11px;font-weight:700;color:var(--c-accent);background:var(--c-accent-soft);padding:2px 8px;border-radius:9999px;">👤 ' + _annEsc(c.author) + '</span>' +
+                    '<span style="font-size:10px;color:var(--c-text3);font-family:ui-monospace,monospace;font-weight:600;">' + _annEsc(timeStr) + '</span>' +
+                    '</div>' +
+                    '<div style="font-size:13px;color:var(--c-text);line-height:1.55;word-break:break-all;">' + _annEsc(c.text) + '</div>' +
+                    '<div style="font-size:10.5px;font-weight:600;margin-top:6px;padding-top:6px;border-top:1px solid var(--c-border);color:var(--c-text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+                    '📌 <span style="color:' + pColor + ';font-weight:800;text-transform:uppercase;">[' + (c.taskPriority || 'p2') + ']</span> ' +
+                    '<span style="color:var(--c-text2);">' + _annEsc(c.taskTitle || '(제목 없음)') + '</span>' +
+                    '</div>' +
+                    '</div>';
+            }).join('');
+        }
 
         // [v40 Day2 청크 1] Zone helpers
         function getZoneIcon(zone)  { return zone === 'now' ? '📌' : zone === 'buried' ? '🗑' : '📦'; }
