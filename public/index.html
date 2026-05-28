@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r83 (#1 이슈/에셋/버그리포트 DB 로드 추가 — initSupabase Promise.all에 4개 SELECT + _assembleCurrentData 매핑(issues/assetFolders/assets/bugReports). #2 문서 하이어라키 정렬: 새 문서 sortOrder=Date.now()로 부여, 같은 sortOrder는 createdAt 폴백 → 생성 순서 안정 (수동 드래그 전까지 셔플 없음). #3 스프린트 카드 인라인 편집: desc contenteditable + Enter 저장 + dbUpsertTask, 제목 더블클릭 또는 우클릭 → uiPrompt로 이름 변경. spvCardCtx 메뉴(이름변경/펼치기/담당자/마감일/삭제). #4 보편 인용 팝업: 모든 textarea/input/contenteditable 우클릭 → 검색가능한 카탈로그(멤버/프로젝트/스프린트/목표/태스크/체크리스트/문서/리뷰/일정/드라이브/에셋/이슈 12종) → 클릭으로 [[type:id]] 토큰 삽입) -->
+<!-- BUILD: 2026-05-28 r84 (#1 DB 테이블 미생성 진단: DB_OPTIONAL_TABLES 6개(calendars/calendar_events/asset_folders/assets/issues/bug_reports) 추가, dbMigrationSql에 CREATE TABLE IF NOT EXISTS 멱등 포함, dbCheckSchema가 테이블+컬럼 누락 분리 보고. #2 다이제틱 DB 저장 대기 그라데이션: .db-pending 클래스 + db-shimmer 키프레임(웜 액센트 색상 2.4s 무한 흐름) — 에셋/이슈/버그리포트 카드에 _pending 마킹, 저장 완료 시 해제. #3 DB 저장 실패 알람: dbUpsertAsset/Issue/BugReport가 {ok,error} 반환, 실패 시 카드에 .db-failed(빨간 그라데이션 보더) + "⚠ 미저장" 라벨 + showToast 빨간 알람) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2647,6 +2647,43 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-widget-resize::before { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid var(--c-text3); border-bottom: 2px solid var(--c-text3); }
         .db-widget:hover .db-widget-resize { opacity: .8; }
         .db-widget-resize:hover { opacity: 1 !important; }
+        /* [r84 #2/#3] DB 저장 대기/실패 다이제틱 피드백 */
+        @keyframes db-shimmer {
+            0%   { background-position: -120% 0; }
+            100% { background-position: 220% 0; }
+        }
+        .db-pending {
+            position: relative;
+            background-image: linear-gradient(
+                90deg,
+                rgba(201, 100, 66, 0) 0%,
+                rgba(201, 100, 66, 0.18) 30%,
+                rgba(201, 100, 66, 0.32) 50%,
+                rgba(201, 100, 66, 0.18) 70%,
+                rgba(201, 100, 66, 0) 100%
+            ) !important;
+            background-size: 220% 100% !important;
+            background-repeat: no-repeat !important;
+            background-color: var(--c-card) !important;
+            animation: db-shimmer 2.4s ease-in-out infinite;
+            border-color: var(--c-accent) !important;
+        }
+        body.dark .db-pending {
+            background-image: linear-gradient(
+                90deg,
+                rgba(201, 100, 66, 0) 0%,
+                rgba(201, 100, 66, 0.22) 30%,
+                rgba(201, 100, 66, 0.40) 50%,
+                rgba(201, 100, 66, 0.22) 70%,
+                rgba(201, 100, 66, 0) 100%
+            ) !important;
+        }
+        .db-failed {
+            background: linear-gradient(135deg, rgba(210, 57, 61, 0.10), rgba(210, 57, 61, 0.04)) !important;
+            border: 1px solid rgba(210, 57, 61, 0.55) !important;
+            box-shadow: 0 0 0 2px rgba(210, 57, 61, 0.08) inset;
+        }
+
         /* [r83 #4] 보편 인용 팝업 */
         .cite-box { background: var(--c-paper); border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,.4); width: 720px; max-width: 92vw; height: 70vh; max-height: 580px; display: flex; flex-direction: column; overflow: hidden; }
         .cite-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--c-border); background: var(--ios-fill); gap: 8px; }
@@ -6950,9 +6987,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var stLabel = { planned: '📋 계획', progress: '🔥 진행', done: '✅ 완료', blocked: '⛔ 보류' }[st] || st;
             var asgn = (currentData.users || []).find(function (m) { return m.id === a.assigneeId; });
             var asgnName = asgn ? (asgn.displayName || asgn.email) : '미지정';
-            return '<div class="am-asset" onclick="amEditAsset(\'' + a.id + '\')">' +
+            // [r84 #2/#3] DB 저장 상태 시각화
+            var stateClass = a._pending ? ' db-pending' : (a._failed ? ' db-failed' : '');
+            var stateTip = a._pending ? '\n💾 DB에 저장 중...' : (a._failed ? '\n❌ DB 저장 실패: ' + (a._failReason || '') : '');
+            return '<div class="am-asset' + stateClass + '" title="' + _annEsc(a.name) + stateTip + '" onclick="amEditAsset(\'' + a.id + '\')">' +
                 '<div class="am-asset-head"><span class="am-asset-ico">' + ico + '</span><span class="am-asset-name">' + _annEsc(a.name || '에셋') + '</span><span class="am-asset-status ' + st + '">' + stLabel + '</span></div>' +
-                '<div class="am-asset-meta"><span>👤 ' + _annEsc(asgnName) + '</span>' + (a.fileLink ? '<span>🔗 ' + (a.fileLink.startsWith('http') ? '외부' : '드라이브') + '</span>' : '') + '</div>' +
+                '<div class="am-asset-meta"><span>👤 ' + _annEsc(asgnName) + '</span>' + (a.fileLink ? '<span>🔗 ' + (a.fileLink.startsWith('http') ? '외부' : '드라이브') + '</span>' : '') + (a._failed ? '<span style="color:#d2393d;">⚠ 미저장</span>' : '') + '</div>' +
                 '</div>';
         }
         function amToggleFolder(fid) {
@@ -7034,11 +7074,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         async function amSaveAsset() {
             var name = document.getElementById('am-e-name').value.trim();
             if (!name) { showToast('이름을 입력하세요', 'alert'); return; }
-            var asset;
+            var asset, isNew = false;
             if (amState.editingId) {
                 asset = (currentData.assets || []).find(function (x) { return x.id === amState.editingId; });
                 if (!asset) return;
             } else {
+                isNew = true;
                 asset = { id: 'asset-' + Date.now(), projectId: activeProjectId, createdAt: Date.now(), createdBy: (currentUser && currentUser.id) || null };
                 if (!currentData.assets) currentData.assets = [];
                 currentData.assets.push(asset);
@@ -7051,11 +7092,23 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             asset.notes = document.getElementById('am-e-notes').value;
             asset.fileLink = document.getElementById('am-e-file').value;
             asset.updatedAt = Date.now();
+            // [r84 #2] DB 저장 전: _pending 마킹 → 그라데이션 표시
+            asset._pending = true; asset._failed = false;
             saveData();
-            await dbUpsertAsset(asset);
             closeModal('am-edit-modal');
             amRender();
-            showToast(amState.editingId ? '✅ 에셋 저장됨' : '✅ 에셋 추가됨', 'success');
+            // 비동기 DB 저장 → 결과로 _pending/_failed 갱신
+            var res = await dbUpsertAsset(asset);
+            if (res && res.ok) {
+                asset._pending = false; asset._failed = false;
+                amRender();
+                showToast(isNew ? '✅ 에셋 추가됨' : '✅ 에셋 저장됨', 'success');
+            } else {
+                asset._pending = false; asset._failed = true;
+                asset._failReason = (res && res.error) || '알 수 없는 오류';
+                amRender();
+                showToast('❌ 에셋 저장 실패: ' + asset._failReason, 'alert');
+            }
         }
         async function amDeleteAsset() {
             if (!amState.editingId) return;
@@ -7075,7 +7128,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
         // DB 함수 (테이블 없으면 자동 폴백)
         async function dbUpsertAsset(a) {
-            if (!supabaseClient) return;
+            if (!supabaseClient) return { ok: false, error: '오프라인' };
             try {
                 const { error } = await supabaseClient.from('assets').upsert({
                     id: a.id, project_id: a.projectId, name: a.name, kind: a.kind || 'other',
@@ -7084,26 +7137,35 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     created_by: a.createdBy || null, created_at: a.createdAt ? new Date(a.createdAt).toISOString() : null,
                     updated_at: a.updatedAt ? new Date(a.updatedAt).toISOString() : null
                 });
-                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
-                    console.warn('[dbUpsertAsset] assets 테이블 없음 — SQL 필요. 서버 상태 > DB 마이그레이션 SQL 참조');
-                    return;
+                if (error) {
+                    var em = error.message || '';
+                    if (/relation .* does not exist|42P01/i.test(em)) {
+                        console.warn('[dbUpsertAsset] assets 테이블 없음');
+                        return { ok: false, error: 'assets 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                    }
+                    console.error('[dbUpsertAsset]', error);
+                    return { ok: false, error: em };
                 }
-                if (error) console.error('[dbUpsertAsset]', error);
-            } catch (e) { console.warn('[dbUpsertAsset]', e); }
+                return { ok: true };
+            } catch (e) { console.warn('[dbUpsertAsset]', e); return { ok: false, error: e.message || '저장 실패' }; }
         }
         async function dbDeleteAsset(id) {
             if (!supabaseClient) return;
             try { await supabaseClient.from('assets').delete().eq('id', id); } catch (e) {}
         }
         async function dbUpsertAssetFolder(f) {
-            if (!supabaseClient) return;
+            if (!supabaseClient) return { ok: false, error: '오프라인' };
             try {
                 const { error } = await supabaseClient.from('asset_folders').upsert({ id: f.id, project_id: f.projectId, name: f.name });
-                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
-                    console.warn('[dbUpsertAssetFolder] asset_folders 테이블 없음');
-                    return;
+                if (error) {
+                    var em2 = error.message || '';
+                    if (/relation .* does not exist|42P01/i.test(em2)) {
+                        return { ok: false, error: 'asset_folders 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                    }
+                    return { ok: false, error: em2 };
                 }
-            } catch (e) { console.warn('[dbUpsertAssetFolder]', e); }
+                return { ok: true };
+            } catch (e) { return { ok: false, error: e.message || '저장 실패' }; }
         }
         async function dbDeleteAssetFolder(id) {
             if (!supabaseClient) return;
@@ -7163,10 +7225,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var overdue = dd < now && st !== 'closed';
                     dueLabel = '<span style="color:' + (overdue ? '#d2393d' : 'var(--c-text3)') + ';">📅 ' + i.dueDate + (overdue ? ' ⚠' : '') + '</span>';
                 }
-                return '<div class="iss-card priority-' + p + ' status-' + st + '" onclick="issEditIssue(\'' + i.id + '\')">' +
+                // [r84 #2/#3] DB 저장 상태
+                var stClass = i._pending ? ' db-pending' : (i._failed ? ' db-failed' : '');
+                var stTip = i._pending ? '\n💾 DB에 저장 중...' : (i._failed ? '\n❌ DB 저장 실패: ' + (i._failReason || '') : '');
+                return '<div class="iss-card priority-' + p + ' status-' + st + stClass + '" title="' + _annEsc(i.title) + stTip + '" onclick="issEditIssue(\'' + i.id + '\')">' +
                     '<span class="iss-c-priority" style="color:' + ({ p0: '#d2393d', p1: '#f97316', p2: '#d49a1c', p3: 'var(--c-text3)' }[p]) + ';">' + p.toUpperCase() + '</span>' +
                     '<span class="iss-c-status">' + stLabel + '</span>' +
-                    '<span class="iss-c-title">' + _annEsc(i.title || '(제목 없음)') + '</span>' +
+                    '<span class="iss-c-title">' + _annEsc(i.title || '(제목 없음)') + (i._failed ? ' <span style="color:#d2393d;font-size:11px;">⚠ 미저장</span>' : '') + '</span>' +
                     '<span class="iss-c-meta">' + dueLabel + '<span>👤 ' + _annEsc(asgnName) + '</span>' + (i.target ? '<span>🎯 ' + _annEsc(i.target) + '</span>' : '') + '</span>' +
                     '</div>';
             }).join('');
@@ -7206,11 +7271,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         async function issSaveIssue() {
             var title = document.getElementById('iss-e-title').value.trim();
             if (!title) { showToast('제목을 입력하세요', 'alert'); return; }
-            var iss;
+            var iss, isNew = false;
             if (issState.editingId) {
                 iss = (currentData.issues || []).find(function (x) { return x.id === issState.editingId; });
                 if (!iss) return;
             } else {
+                isNew = true;
                 iss = { id: 'iss-' + Date.now(), projectId: activeProjectId, createdAt: Date.now(), createdBy: (currentUser && currentUser.id) || null };
                 if (!currentData.issues) currentData.issues = [];
                 currentData.issues.push(iss);
@@ -7223,11 +7289,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             iss.dueDate = document.getElementById('iss-e-due').value || null;
             iss.target = document.getElementById('iss-e-target').value;
             iss.updatedAt = Date.now();
+            // [r84 #2] DB 저장 전: _pending 마킹
+            iss._pending = true; iss._failed = false;
             saveData();
-            await dbUpsertIssue(iss);
             closeModal('iss-edit-modal');
             issRender();
-            showToast(issState.editingId ? '✅ 이슈 저장됨' : '✅ 이슈 등록됨', 'success');
+            var res = await dbUpsertIssue(iss);
+            if (res && res.ok) {
+                iss._pending = false; iss._failed = false;
+                issRender();
+                showToast(isNew ? '✅ 이슈 등록됨' : '✅ 이슈 저장됨', 'success');
+            } else {
+                iss._pending = false; iss._failed = true;
+                iss._failReason = (res && res.error) || '알 수 없는 오류';
+                issRender();
+                showToast('❌ 이슈 저장 실패: ' + iss._failReason, 'alert');
+            }
         }
         async function issDeleteIssue() {
             if (!issState.editingId) return;
@@ -7240,7 +7317,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             issRender();
         }
         async function dbUpsertIssue(i) {
-            if (!supabaseClient) return;
+            if (!supabaseClient) return { ok: false, error: '오프라인' };
             try {
                 const { error } = await supabaseClient.from('issues').upsert({
                     id: i.id, project_id: i.projectId, title: i.title, description: i.desc || '',
@@ -7250,12 +7327,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     created_at: i.createdAt ? new Date(i.createdAt).toISOString() : null,
                     updated_at: i.updatedAt ? new Date(i.updatedAt).toISOString() : null
                 });
-                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
-                    console.warn('[dbUpsertIssue] issues 테이블 없음 — SQL 필요');
-                    return;
+                if (error) {
+                    var em = error.message || '';
+                    if (/relation .* does not exist|42P01/i.test(em)) {
+                        return { ok: false, error: 'issues 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                    }
+                    console.error('[dbUpsertIssue]', error);
+                    return { ok: false, error: em };
                 }
-                if (error) console.error('[dbUpsertIssue]', error);
-            } catch (e) { console.warn('[dbUpsertIssue]', e); }
+                return { ok: true };
+            } catch (e) { return { ok: false, error: e.message || '저장 실패' }; }
         }
         async function dbDeleteIssue(id) {
             if (!supabaseClient) return;
@@ -7286,8 +7367,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var sevLabel = { critical: '🔴 Critical', high: '🟠 High', medium: '🟡 Medium', low: '⚪ Low', request: '💡 Request' }[sev] || sev;
                 var authorName = _dbUserName(r.createdBy) || '익명';
                 var when = r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : '';
-                return '<div class="br-card" onclick="brEditReport(\'' + r.id + '\')">' +
-                    '<div class="br-c-head"><span class="br-c-title">' + _annEsc(r.title || '(제목 없음)') + '</span><span class="br-c-sev ' + sev + '">' + sevLabel + '</span></div>' +
+                // [r84 #2/#3] DB 저장 상태
+                var brClass = r._pending ? ' db-pending' : (r._failed ? ' db-failed' : '');
+                var brTip = r._pending ? 'DB에 저장 중...' : (r._failed ? '❌ DB 저장 실패: ' + (r._failReason || '') : '');
+                return '<div class="br-card' + brClass + '" title="' + _annEsc(brTip) + '" onclick="brEditReport(\'' + r.id + '\')">' +
+                    '<div class="br-c-head"><span class="br-c-title">' + _annEsc(r.title || '(제목 없음)') + (r._failed ? ' <span style="color:#d2393d;font-size:11px;">⚠ 미저장</span>' : '') + '</span><span class="br-c-sev ' + sev + '">' + sevLabel + '</span></div>' +
                     '<div class="br-c-meta"><span>👤 ' + _annEsc(authorName) + '</span><span>🕒 ' + when + '</span>' + (r.view ? '<span>📍 ' + _annEsc(r.view) + '</span>' : '') + '</div>' +
                     (r.desc ? '<div class="br-c-desc">' + _annEsc((r.desc || '').slice(0, 200)) + '</div>' : '') +
                     '</div>';
@@ -7337,11 +7421,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         async function brSaveReport() {
             var title = document.getElementById('br-e-title').value.trim();
             if (!title) { showToast('제목을 입력하세요', 'alert'); return; }
-            var rep;
+            var rep, isNew = false;
             if (brState.editingId) {
                 rep = (currentData.bugReports || []).find(function (x) { return x.id === brState.editingId; });
                 if (!rep) return;
             } else {
+                isNew = true;
                 rep = { id: 'br-' + Date.now(), createdAt: Date.now(), createdBy: (currentUser && currentUser.id) || null };
                 if (!currentData.bugReports) currentData.bugReports = [];
                 currentData.bugReports.push(rep);
@@ -7352,11 +7437,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             rep.view = document.getElementById('br-e-view').value;
             rep.env = document.getElementById('br-e-env').value;
             rep.updatedAt = Date.now();
+            // [r84 #2] _pending 마킹
+            rep._pending = true; rep._failed = false;
             saveData();
-            await dbUpsertBugReport(rep);
             closeModal('br-edit-modal');
             brRender();
-            showToast(brState.editingId ? '✅ 리포트 저장됨' : '🐞 리포트 제출됨 — 관리자에게 전달', 'success');
+            var res = await dbUpsertBugReport(rep);
+            if (res && res.ok) {
+                rep._pending = false; rep._failed = false;
+                brRender();
+                showToast(isNew ? '🐞 리포트 제출됨 — 관리자에게 전달' : '✅ 리포트 저장됨', 'success');
+            } else {
+                rep._pending = false; rep._failed = true;
+                rep._failReason = (res && res.error) || '알 수 없는 오류';
+                brRender();
+                showToast('❌ 리포트 저장 실패: ' + rep._failReason, 'alert');
+            }
         }
         async function brDeleteReport() {
             if (!brState.editingId) return;
@@ -7369,7 +7465,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             brRender();
         }
         async function dbUpsertBugReport(r) {
-            if (!supabaseClient) return;
+            if (!supabaseClient) return { ok: false, error: '오프라인' };
             try {
                 const { error } = await supabaseClient.from('bug_reports').upsert({
                     id: r.id, title: r.title, description: r.desc || '',
@@ -7378,12 +7474,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     created_at: r.createdAt ? new Date(r.createdAt).toISOString() : null,
                     updated_at: r.updatedAt ? new Date(r.updatedAt).toISOString() : null
                 });
-                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
-                    console.warn('[dbUpsertBugReport] bug_reports 테이블 없음');
-                    return;
+                if (error) {
+                    var em = error.message || '';
+                    if (/relation .* does not exist|42P01/i.test(em)) {
+                        return { ok: false, error: 'bug_reports 테이블 미생성 — 서버 상태 > DB 마이그레이션 SQL 실행 필요' };
+                    }
+                    console.error('[dbUpsertBugReport]', error);
+                    return { ok: false, error: em };
                 }
-                if (error) console.error('[dbUpsertBugReport]', error);
-            } catch (e) { console.warn('[dbUpsertBugReport]', e); }
+                return { ok: true };
+            } catch (e) { return { ok: false, error: e.message || '저장 실패' }; }
         }
         async function dbDeleteBugReport(id) {
             if (!supabaseClient) return;
@@ -10586,32 +10686,67 @@ return data;
             ['wiki_docs', 'kind', "text default 'wiki'"],
             ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"]
         ];
+        // [r84 #1] 신규 테이블 — CREATE TABLE IF NOT EXISTS (멱등)
+        var DB_OPTIONAL_TABLES = [
+            ['calendars', "id text primary key, name text, scope text, project_id text, owner_user_id text, color text"],
+            ['calendar_events', "id text primary key, cal_id text, title text, start_at timestamptz, end_at timestamptz, description text, is_public boolean default false, owner_user_id text, project_id text"],
+            ['asset_folders', "id text primary key, project_id text, name text"],
+            ['assets', "id text primary key, project_id text, name text, kind text, folder_id text, status text default 'planned', assignee_id text, notes text, file_link text, created_by text, created_at timestamptz, updated_at timestamptz"],
+            ['issues', "id text primary key, project_id text, title text, description text, priority text default 'p2', status text default 'open', assignee_id text, due_date date, target text, created_by text, created_at timestamptz, updated_at timestamptz"],
+            ['bug_reports', "id text primary key, title text, description text, severity text default 'medium', view text, env text, created_by text, created_at timestamptz, updated_at timestamptz"]
+        ];
         function dbMigrationSql() {
-            var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존'];
+            var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존', ''];
+            lines.push('-- [r84] 신규 테이블 — 없으면 생성');
+            DB_OPTIONAL_TABLES.forEach(function (t) {
+                lines.push('create table if not exists ' + t[0] + ' (' + t[1] + ');');
+            });
+            lines.push('');
+            lines.push('-- [컬럼] 기존 테이블에 없는 컬럼 추가');
             DB_OPTIONAL_COLUMNS.forEach(function (c) { lines.push('alter table ' + c[0] + ' add column if not exists ' + c[1] + ' ' + c[2] + ';'); });
             return lines.join('\n');
         }
-        // 각 선택 컬럼을 select 시도해 누락분을 찾아 보고
+        // 각 선택 컬럼/테이블을 select 시도해 누락분을 찾아 보고
         async function dbCheckSchema(btn) {
             var box = document.getElementById('schema-check-result');
             if (!supabaseClient) { if (box) { box.style.display = 'block'; box.textContent = '⚠️ DB(Supabase) 연결이 없어 점검할 수 없습니다.'; } if (typeof showToast === 'function') showToast('DB 연결 없음', 'alert'); return; }
             var prev = btn ? btn.textContent : null; if (btn) { btn.textContent = '점검 중…'; btn.disabled = true; }
-            var missing = [];
+            var missingTables = [], missingCols = [];
+            // [r84 #1] 먼저 신규 테이블 존재 여부 점검
+            for (var ti = 0; ti < DB_OPTIONAL_TABLES.length; ti++) {
+                var tname = DB_OPTIONAL_TABLES[ti][0];
+                try {
+                    var rt = await supabaseClient.from(tname).select('id').limit(1);
+                    if (rt && rt.error) {
+                        var mt = (rt.error.message || '') + ' ' + (rt.error.code || '');
+                        if (/relation .* does not exist|42P01|does not exist/i.test(mt)) missingTables.push(tname);
+                    }
+                } catch (e) { /* skip */ }
+            }
+            // 컬럼 점검 (해당 테이블이 존재할 때만)
             for (var i = 0; i < DB_OPTIONAL_COLUMNS.length; i++) {
                 var t = DB_OPTIONAL_COLUMNS[i][0], col = DB_OPTIONAL_COLUMNS[i][1];
+                if (missingTables.indexOf(t) > -1) continue; // 테이블 자체가 없으면 컬럼 점검 스킵
                 try {
                     var res = await supabaseClient.from(t).select(col).limit(1);
-                    if (res && res.error) { var m = (res.error.message || '') + ' ' + (res.error.code || ''); if (/does not exist|42703|could not find|schema cache/i.test(m)) missing.push(t + '.' + col); }
+                    if (res && res.error) { var m = (res.error.message || '') + ' ' + (res.error.code || ''); if (/does not exist|42703|could not find|schema cache/i.test(m)) missingCols.push(t + '.' + col); }
                 } catch (e) { /* 네트워크 등 — 스킵 */ }
             }
             if (btn) { btn.textContent = prev; btn.disabled = false; }
+            var total = missingTables.length + missingCols.length;
             if (box) {
                 box.style.display = 'block';
-                if (!missing.length) box.textContent = '✅ 모든 선택 컬럼이 존재합니다.\n리뷰 코멘트·제목·버전 체인이 다른 계정과 정상 동기화됩니다.';
-                else box.textContent = '⚠️ 누락 컬럼 ' + missing.length + '개:\n· ' + missing.join('\n· ') + '\n\n→ 아래 SQL을 복사해 Supabase SQL Editor에서 실행한 뒤 새로고침하세요.';
+                if (!total) box.textContent = '✅ 모든 테이블·컬럼이 존재합니다.\n이슈/에셋/버그리포트/캘린더 등 신규 기능이 다른 계정과 동기화됩니다.';
+                else {
+                    var msg = '⚠️ 누락 ' + total + '개\n';
+                    if (missingTables.length) msg += '\n■ 누락 테이블 (' + missingTables.length + '):\n· ' + missingTables.join('\n· ');
+                    if (missingCols.length) msg += '\n\n■ 누락 컬럼 (' + missingCols.length + '):\n· ' + missingCols.join('\n· ');
+                    msg += '\n\n→ 아래 SQL을 복사해 Supabase SQL Editor에서 실행한 뒤 새로고침하세요.';
+                    box.textContent = msg;
+                }
             }
-            if (typeof showToast === 'function') showToast(missing.length ? ('⚠️ 누락 컬럼 ' + missing.length + '개 — SQL 실행 필요') : '✅ 스키마 최신', missing.length ? 'alert' : 'success');
-            return missing;
+            if (typeof showToast === 'function') showToast(total ? ('⚠️ 누락 ' + total + '개 (테이블 ' + missingTables.length + ' · 컬럼 ' + missingCols.length + ') — SQL 실행 필요') : '✅ 스키마 최신', total ? 'alert' : 'success');
+            return { missingTables: missingTables, missingCols: missingCols };
         }
         // [v40 B3] canon 문서 upsert / delete
         async function dbUpsertCanonDoc(c) {
