@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r115 (Phase C — 기획 대조 2차 MD 보고서: r113 1차 자동 위키 + 사용자 canon 기획 문서 LLM 대조 → 일치도(match_score 0~1) + findings 배열 + 마크다운 보고서. 백엔드: ① wiki_auditor.py(_AUDIT_PROMPT 매핑표·미구현·부분구현·기획외 3분류 + JSON 메타 추출) → deep_wiki_audits INSERT ② main.py /wiki/audit(SSE), /wiki/audits, /wiki/audit/{id}. 프론트: ③ dwpAudit 실 구현 SSE + dwpRefreshAudits 자동 트리 + dwpOpenAudit(점수 게이지·findings 표·MD 렌더). canon 문서별 보고서 1개씩 생성, 일치도 낮은 순(문제 많은 순) 정렬 표시) -->
+<!-- BUILD: 2026-05-28 r116 (Phase D — AI Agent에 Deep Wiki 도구 5종 통합: AI Agent 챗봇이 1차 자동 위키·2차 감사 보고서를 능동 조회 가능. tools.py에 list_wiki_pages·get_wiki_page·search_wiki_pages(LIKE)·list_wiki_audits·get_wiki_audit 추가. agent.py 시스템 프롬프트에 도구 카탈로그·사용 가이드. 사용 시나리오: "전투 시스템 위키 보여줘" → get_wiki_page(slug='combat'), "기획 대조 결과" → list_wiki_audits + get_wiki_audit, "dbUpsertCategory 어느 위키에 있어?" → search_wiki_pages. AI Agent와 Deep Wiki 자동 위키 시스템 완전 통합) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">

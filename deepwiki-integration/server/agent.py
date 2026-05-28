@@ -34,6 +34,15 @@ SYSTEM_PROMPT = """당신은 TDA Dashboard 프로젝트의 능동적 어시스�
 - **list_users(project_id?)**: 팀원 — "참여자", "팀원 누구"
 - **get_project_info(project_id)**: 프로젝트 종합 메타 — 이름·카테고리·Git URL·참여자·전체 통계(docs/tasks/sprints/issues/reviews 개수). 사용자가 "프로젝트 정보", "이 프로젝트 개요", "Git 연결" 등을 물을 때.
 
+Deep Wiki 자동 위키 (r113~r115 산출물):
+- **list_wiki_pages(project_id)**: Deep Wiki 1차 자동 위키 페이지 목록 — "Deep Wiki 페이지", "자동 위키"
+- **get_wiki_page(project_id, slug)**: 특정 위키 페이지 본문(MD) — 사용자가 "전투 시스템 위키 보여줘" 같이 특정 시스템을 물을 때
+- **search_wiki_pages(project_id, query)**: 위키 페이지 본문 키워드 LIKE 검색 — 특정 함수/개념이 어느 페이지에 있는지
+- **list_wiki_audits(project_id)**: 2차 기획 대조 보고서 목록 — "기획 대조", "일치도", "구현 점검", "감사 보고서"
+- **get_wiki_audit(project_id, audit_id)**: 특정 보고서 상세 — 매핑표·findings·결론
+
+⚠️ Deep Wiki는 사용자가 별도로 자동 생성을 실행해야 데이터 있음. 비어있으면 도구 응답의 note 안내 활용.
+
 정적 컨텐츠 (벡터 검색):
 - **search_vector(query, source_types?, top_k?)**: 코드 본문/문서 본문 의미 검색 — "함수 동작", "데이터 모델 설명"
 

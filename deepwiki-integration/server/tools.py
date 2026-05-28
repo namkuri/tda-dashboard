@@ -309,6 +309,100 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             },
         },
     },
+    # ─── [r116] Phase D: Deep Wiki 자동 위키 도구 5종 ───
+    {
+        "type": "function",
+        "function": {
+            "name": "list_wiki_pages",
+            "description": (
+                "Deep Wiki(코드 자동 분석) 1차 위키 페이지 목록. "
+                "사용자가 'Deep Wiki 페이지', '자동 위키', '코드 분석 위키' 등을 물을 때 호출. "
+                "반환: 페이지 메타 (slug, title, summary, git_commit, updated_at, meta)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 30)."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_wiki_page",
+            "description": (
+                "Deep Wiki 1차 위키 페이지 한 개의 본문(마크다운) 조회. "
+                "사용자가 특정 시스템(예: '전투 시스템 위키 페이지 보여줘')을 묻거나 "
+                "list_wiki_pages 결과 중 하나를 자세히 봐야 할 때 호출."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "slug": {"type": "string", "description": "페이지 슬러그 (예: 'combat', 'managers', '_overview')."},
+                },
+                "required": ["project_id", "slug"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_wiki_pages",
+            "description": (
+                "Deep Wiki 1차 위키 페이지 본문에서 키워드 검색. "
+                "특정 함수명·테이블명·개념이 어느 페이지에 있는지 찾을 때 호출."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "query": {"type": "string", "description": "검색 키워드."},
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 10)."},
+                },
+                "required": ["project_id", "query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_wiki_audits",
+            "description": (
+                "Deep Wiki 2차 — 기획 대조 보고서 목록. "
+                "사용자가 '기획 대조', '일치도', '구현 점검', '감사 보고서' 등을 물을 때 호출. "
+                "반환: 보고서 메타 (title, summary, match_score, findings, related_canons)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_wiki_audit",
+            "description": (
+                "단일 기획 대조 보고서의 상세 본문(매핑표·findings·결론 등). "
+                "list_wiki_audits 결과 중 특정 보고서 본문이 필요할 때 호출."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "audit_id": {"type": "string", "description": "감사 보고서 id (dwa:projectId:canonId 형식)."},
+                },
+                "required": ["project_id", "audit_id"],
+            },
+        },
+    },
 ]
 
 
@@ -343,6 +437,17 @@ async def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             return await _tool_list_users(arguments)
         if name == "get_project_info":
             return await _tool_get_project_info(arguments)
+        # [r116] Phase D — Deep Wiki 도구 5종
+        if name == "list_wiki_pages":
+            return await _tool_list_wiki_pages(arguments)
+        if name == "get_wiki_page":
+            return await _tool_get_wiki_page(arguments)
+        if name == "search_wiki_pages":
+            return await _tool_search_wiki_pages(arguments)
+        if name == "list_wiki_audits":
+            return await _tool_list_wiki_audits(arguments)
+        if name == "get_wiki_audit":
+            return await _tool_get_wiki_audit(arguments)
         return {"ok": False, "error": f"Unknown tool: {name}"}
     except Exception as e:
         import traceback
@@ -790,3 +895,164 @@ async def _tool_get_project_info(args: Dict[str, Any]) -> Dict[str, Any]:
             "updated_at": proj.get("updated_at"),
         },
     }
+
+
+# ─────────────────────────────────────────────
+# [r116] Phase D — Deep Wiki 도구 5종
+# ─────────────────────────────────────────────
+
+async def _tool_list_wiki_pages(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep Wiki 1차 자동 위키 페이지 목록."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_pages")
+            .select("id,slug,title,parent_slug,sort_order,summary,git_commit,updated_at,meta")
+            .eq("project_id", project_id)
+            .order("sort_order")
+            .limit(int(args.get("limit") or 30))
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return {"ok": True, "result": [], "count": 0, "note": "Deep Wiki 자동 위키 페이지가 아직 생성되지 않았습니다. 자료 → Deep Wiki → 🤖 위키 자동 생성 클릭."}
+        return {"ok": True, "result": rows, "count": len(rows)}
+    except Exception as e:
+        return {"ok": False, "error": f"deep_wiki_pages 조회 실패: {e}"}
+
+
+async def _tool_get_wiki_page(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep Wiki 1차 페이지 본문 단건 조회."""
+    project_id = args.get("project_id")
+    slug = args.get("slug")
+    if not project_id or not slug:
+        return {"ok": False, "error": "project_id, slug required"}
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_pages")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return {"ok": True, "result": None, "note": f"slug='{slug}' 페이지 없음. list_wiki_pages 호출로 사용 가능한 슬러그 확인."}
+        # 본문 너무 길면 컷
+        page = rows[0]
+        page["content"] = (page.get("content") or "")[:6000]
+        return {"ok": True, "result": page}
+    except Exception as e:
+        return {"ok": False, "error": f"조회 실패: {e}"}
+
+
+async def _tool_search_wiki_pages(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep Wiki 1차 페이지 본문에서 LIKE 키워드 검색."""
+    project_id = args.get("project_id")
+    query = args.get("query") or ""
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    if not query.strip():
+        return {"ok": False, "error": "query required"}
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_pages")
+            .select("id,slug,title,summary,content")
+            .eq("project_id", project_id)
+            .ilike("content", f"%{query}%")
+            .limit(int(args.get("limit") or 10))
+            .execute()
+        )
+        rows = res.data or []
+        # content는 첫 등장 부근 600자 발췌
+        out = []
+        for r in rows:
+            content = r.get("content") or ""
+            idx = content.lower().find(query.lower())
+            if idx < 0:
+                excerpt = content[:600]
+            else:
+                start = max(0, idx - 100)
+                excerpt = content[start:start + 600]
+            out.append({
+                "slug": r.get("slug"),
+                "title": r.get("title"),
+                "summary": r.get("summary"),
+                "excerpt": excerpt,
+            })
+        return {"ok": True, "result": out, "count": len(out)}
+    except Exception as e:
+        return {"ok": False, "error": f"검색 실패: {e}"}
+
+
+async def _tool_list_wiki_audits(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep Wiki 2차 — 기획 대조 보고서 목록."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_audits")
+            .select("id,title,summary,match_score,findings,related_pages,related_canons,updated_at")
+            .eq("project_id", project_id)
+            .order("match_score", desc=False)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return {"ok": True, "result": [], "count": 0, "note": "기획 대조 보고서가 아직 없습니다. 자료 → Deep Wiki → 📊 기획 대조 클릭."}
+        # findings는 카운트만 LLM에 노출 (본문은 get_wiki_audit으로)
+        out = []
+        for r in rows:
+            findings = r.get("findings") or []
+            severity_counts = {"high": 0, "medium": 0, "low": 0}
+            for f in findings:
+                sev = f.get("severity") or "low"
+                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            out.append({
+                "id": r.get("id"),
+                "title": r.get("title"),
+                "summary": r.get("summary"),
+                "match_score": r.get("match_score"),
+                "findings_count": len(findings),
+                "severity_counts": severity_counts,
+                "related_pages": r.get("related_pages"),
+                "updated_at": r.get("updated_at"),
+            })
+        return {"ok": True, "result": out, "count": len(out)}
+    except Exception as e:
+        return {"ok": False, "error": f"deep_wiki_audits 조회 실패: {e}"}
+
+
+async def _tool_get_wiki_audit(args: Dict[str, Any]) -> Dict[str, Any]:
+    """단일 기획 대조 보고서 상세."""
+    project_id = args.get("project_id")
+    audit_id = args.get("audit_id")
+    if not project_id or not audit_id:
+        return {"ok": False, "error": "project_id, audit_id required"}
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_audits")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("id", audit_id)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return {"ok": True, "result": None, "note": f"audit '{audit_id}' 없음"}
+        audit = rows[0]
+        # 본문 너무 길면 컷
+        audit["content"] = (audit.get("content") or "")[:6000]
+        return {"ok": True, "result": audit}
+    except Exception as e:
+        return {"ok": False, "error": f"조회 실패: {e}"}
