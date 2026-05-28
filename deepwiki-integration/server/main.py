@@ -320,4 +320,26 @@ async def startup():
     else:
         print(f"  🔴 Supabase 연결 실패 — SUPABASE_URL/SERVICE_KEY 확인")
     print(f"  🌐 CORS 허용: {settings.cors_origins_list}")
+    # [r99] 인덱싱 설정값 표시 + 비정상 값 경고 (사용자가 .env에서 잘못 설정한 경우 잡아냄)
+    print(f"  📐 청크: CHUNK_SIZE={settings.CHUNK_SIZE}, CHUNK_OVERLAP={settings.CHUNK_OVERLAP}, TOP_K={settings.TOP_K}")
+    print(f"  📁 파일 크기 제한: MAX_FILE_SIZE_KB={settings.MAX_FILE_SIZE_KB}")
+    warnings = []
+    if settings.MAX_FILE_SIZE_KB < 1000:
+        warnings.append(
+            f"⚠️  MAX_FILE_SIZE_KB={settings.MAX_FILE_SIZE_KB} 너무 작음 — public/index.html(~1840KB) 같은 큰 단일 파일이 스킵됩니다.\n"
+            f"      → .env 에서 'MAX_FILE_SIZE_KB=4000' 으로 수정 후 재시작 권장"
+        )
+    if settings.CHUNK_SIZE < 200 or settings.CHUNK_SIZE > 1500:
+        warnings.append(
+            f"⚠️  CHUNK_SIZE={settings.CHUNK_SIZE} 비정상 — 권장 범위 200~1000 (기본 500).\n"
+            f"      너무 크면 의미 응집도 떨어지고, 너무 작으면 컨텍스트 부족."
+        )
+    if settings.CHUNK_OVERLAP >= settings.CHUNK_SIZE:
+        warnings.append(
+            f"⚠️  CHUNK_OVERLAP({settings.CHUNK_OVERLAP}) >= CHUNK_SIZE({settings.CHUNK_SIZE}) — 청킹 무한루프 위험"
+        )
+    for w in warnings:
+        print(f"  {w}")
+    if not warnings:
+        print(f"  ✓  설정 값 정상")
     print("═" * 60 + "\n")
