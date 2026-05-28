@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r71 (사이드바: 가로스크롤 제거(overflow-x hidden+라벨 말줄임), 접기버튼 삭제→좌우 구분선 드래그 리사이즈(폭 저장·더블클릭 기본값). 칸반 보드 카테고리 줄바꿈 대신 우측+가로스크롤(nowrap). 카테고리별 진척률 제목 좌패딩 16px) -->
+<!-- BUILD: 2026-05-28 r72 (칸반: 보드+진척률을 한 스크롤 영역(#board-scroll)으로 통합→가로스크롤 동기, 진척률 하단정렬+바닥여백, 하단 빈공간 제거(80/60px 패딩 삭제). 트렐로풍: 카테고리 컬럼 은은한 패널(--c-sidebar-bg)+헤더정리+카드 그림자 경량화) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -215,7 +215,7 @@
         /* [정렬] 카테고리별 진척률 박스를 칸반 보드 컬럼과 동일 좌우폭·수직 정렬 (보드 레이아웃 미러링) */
         /* 보드: #board(padding:16px) + .kanban-col-normal(flex:0 0 340px) + gap 2rem → 동일하게 미러 */
         html.is-desktop #progress-container { display: flex; flex-direction: column; gap: 2rem; width: 100%; padding-left: 16px; padding-right: 16px; }
-        @media (min-width: 1280px) { html.is-desktop #progress-container { flex-direction: row; } }
+        @media (min-width: 1280px) { html.is-desktop #progress-container { flex-direction: row; width: max-content; } }
         html.is-desktop #progress-container > div { flex: 0 0 340px; min-width: 340px; max-width: 340px; width: 340px; }
         html.is-mobile #progress-container { display: flex; flex-direction: column; gap: 16px; width: 100%; padding-left: 16px; padding-right: 16px; }
         html.is-mobile #progress-container > div { flex: 1; min-width: 280px; width: 100%; }
@@ -1514,9 +1514,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         html.is-desktop #kanban-view {
             flex: 1;
             min-height: 0;
-            overflow-y: auto;
-            padding: 0 0 80px 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0;
         }
+        /* [r72] 보드+진척률을 한 스크롤 영역으로 통합(가로 스크롤 동기) + 진척률 하단 정렬, 하단 여백만 조금 */
+        html.is-desktop #kanban-view > .filter-bar,
+        html.is-desktop #kanban-view > #pc-kanban-actions,
+        html.is-desktop #kanban-view > #mob-kanban-actions { flex-shrink: 0; }
+        html.is-desktop #board-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+        html.is-desktop #board-scroll > #board { width: max-content; }
+        #kanban-progress { padding-top: 14px; border-top: 1px solid var(--c-border); }
+        html.is-desktop #kanban-progress { margin-top: auto; width: max-content; min-width: 100%; margin-bottom: 14px; }
         /* Docs: fills remaining space, NO scroll (inner panes scroll) */
         html.is-desktop #docs-view {
             flex: 1 !important;
@@ -1952,11 +1962,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* 칸반 보드: 좌우 마진(스프린트/필터와 동일 16px) + 고정 너비 카테고리 */
         html.is-desktop #board { padding: 0 16px; }
         @media (min-width: 1280px) {
-            /* [r71] 카테고리가 늘어나면 줄바꿈(아래로) 대신 우측으로 + 가로 스크롤 */
-            html.is-desktop #board { flex-wrap: nowrap; align-items: flex-start; overflow-x: auto; }
+            /* [r71/r72] 카테고리 줄바꿈 대신 우측 정렬 — 가로 스크롤은 #board-scroll이 담당(진척률과 동기) */
+            html.is-desktop #board { flex-wrap: nowrap; align-items: flex-start; }
             html.is-desktop .kanban-col-normal { flex: 0 0 340px; min-width: 340px; max-width: 340px; width: 340px; }
             html.is-desktop .kanban-col-focused { flex: 0 0 560px; min-width: 560px; max-width: 560px; width: 560px; }
         }
+
+        /* [r72] 트렐로풍 단순화: 카테고리 컬럼을 은은한 패널로(카드가 떠 보이게) + 헤더/카드 정리 */
+        html.is-desktop .kanban-col-wrapper { background: var(--c-sidebar-bg); border: 1px solid var(--c-border); padding: 9px 9px 11px; border-radius: 12px; }
+        html.is-desktop .col-header { border-bottom: none; padding: 1px 4px 8px; margin-bottom: 6px; }
+        html.is-desktop .task-card { box-shadow: 0 1px 2px rgba(0,0,0,0.10); border-color: var(--c-border); }
+        html.is-desktop .task-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.16); }
+        html.is-desktop .add-task-btm { border-width: 1.5px; }
 
         /* 위키링크 → 클레이/웜 (청색 제거) */
         .wikilink { color: var(--c-accent); border-bottom-color: var(--c-accent-soft); }
@@ -3275,14 +3292,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button onclick="exportToDiscord()" class="util-btn" style="background:var(--ios-purple);">Discord</button>
             </div>
 
-            <div id="board" onclick="event.stopPropagation()"></div>
+            <div id="board-scroll" onclick="event.stopPropagation()">
+                <div id="board" onclick="event.stopPropagation()"></div>
 
-            <div class="mt-16 border-t-2 border-gray-200 pt-10 pb-6 relative z-10" onclick="event.stopPropagation()">
-                <div class="flex items-center gap-3 mb-8" style="padding-left:16px;">
-                    <h2 class="text-2xl font-black text-gray-800">카테고리별 진척률 (Category Progress)</h2>
-                    <button class="text-xl hover:scale-110 transition-transform bg-gray-100 p-2 rounded-lg border border-gray-300 shadow-sm" onclick="copyProgressToClipboard()" title="진척률 마크다운 복사">📋</button>
+                <div id="kanban-progress" class="relative z-10" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-3 mb-4" style="padding-left:16px;">
+                        <h2 class="text-2xl font-black text-gray-800">카테고리별 진척률 (Category Progress)</h2>
+                        <button class="text-xl hover:scale-110 transition-transform bg-gray-100 p-2 rounded-lg border border-gray-300 shadow-sm" onclick="copyProgressToClipboard()" title="진척률 마크다운 복사">📋</button>
+                    </div>
+                    <div id="progress-container"></div>
                 </div>
-                <div id="progress-container" style="padding-bottom:60px;"></div>
             </div>
         </div>
 
