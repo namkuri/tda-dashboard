@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r111 (도구 카탈로그 확장 — 앱 전체를 능동 인식: r110 후 "현재 문서들은 뭐 있어" 질문에 list_tasks(카드) 잘못 호출하는 버그. list_docs 도구가 없어서 LLM이 가장 비슷한 걸 선택. 사용자 요청: "앱에서 다루는 모든 정보 인식 — 문서·결재·일정·서버·스프린트·이슈·작성자·Git". 수정: tools.py에 6개 신규 도구 추가 — ① list_docs(project_id, kind?, recent_first?, limit?): wiki_docs 메타·작성자·승인상태(meta.approved)·종류(wiki/canon/diagram) ② list_reviews(project_id, status?): review_requests 결재 요청, proposer 이름 join, expires_at 정렬, comments_count 포함 ③ list_calendar_events(project_id?, from_date?, to_date?): 일정 owner 이름 join ④ list_issues(project_id, status?, priority?): 이슈 트래커, assignee 이름 join ⑤ list_sprints(project_id, status?): 스프린트 메타만(get_active_sprint와 분리) ⑥ list_users(project_id?): 팀원, project participants 우선. agent.py 시스템 프롬프트에 도구 선택 가이드 추가 — 9개 도구 각 용도 명시, 흔한 혼동 케이스(문서vs카드, 의미검색vs목록) 경고) -->
+<!-- BUILD: 2026-05-28 r112 (Deep Wiki 자동 위키 시스템 — 큰 그림 분리·골격 + get_project_info: 사용자의 원래 목적 명확화 — DeepWiki-Open 모사로 유니티 Git 레포 LLM 자동 분석 → 1차 MD 위키 페이지 + 기획 canon 대조 2차 MD 보고서. r93~r111의 Qwen 챗봇은 그 도구의 일부였음. 변경: ① 사이드바 분리 — 기존 "Deep Wiki" → "AI Agent"(도구 그룹, Tool Use 챗봇), 새 "Deep Wiki"(자료 그룹, 자동 위키) ② tools.py get_project_info(project_id) 도구 — 이름/Git URL/참여자/통계(docs/tasks/sprints/issues/reviews/categories/events 카운트) ③ deep_wiki_pages·deep_wiki_audits SQL 마이그레이션(002_wiki_pages.sql) — 1차 위키 페이지(slug·parent·meta) + 2차 감사(match_score·findings) ④ Deep Wiki 빈 페이지(좌트리·본문·생성/감사 버튼 placeholder) ⑤ DEEPWIKI_ROADMAP.md — r113~r116 단계별 구현 계획(Phase A: 자동 생성기, B: UI, C: 기획 대조, D: AI Agent 통합)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3412,6 +3412,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="assets" id="cs-nav-assets" onclick="switchView('assets')" title="에셋 매니저 (유니티 타겟 에셋 트리·상태·연결)"><span class="cs-ico">🎮</span><span class="cs-label">에셋 매니저</span></button>
                     <button class="cs-nav" data-nav="personal" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
                     <button class="cs-nav" data-nav="graph" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
+                    <!-- [r112] 진짜 Deep Wiki — 유니티 Git 레포 LLM 자동 분석 + 기획 일치도 보고서 (DeepWiki-Open 모사). 자동 생성기는 r113~r116에 단계적 구축 -->
+                    <button class="cs-nav" data-nav="deepwikiPages" id="cs-nav-deepwiki-pages" onclick="switchView('deepwikiPages')" title="Deep Wiki — 유니티 Git 레포를 LLM이 자동 분석한 위키 페이지 (1차) + 기획 일치도 보고서 (2차)"><span class="cs-ico">📘</span><span class="cs-label">Deep Wiki</span></button>
                 </div>
             </div>
             <div class="cs-group" data-grp="store">
@@ -3430,8 +3432,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <!-- [r81 #3] DB 도구는 서버 상태 페이지 안으로 병합 -->
                     <!-- [r86 #5] 탐색기 — 통합 검색 + 미리보기 -->
                     <button class="cs-nav" data-nav="explorer" id="cs-nav-explorer" onclick="switchView('explorer')" title="탐색기 (전체 콘텐츠 통합 검색·미리보기·바로가기)"><span class="cs-ico">🔍</span><span class="cs-label">탐색기</span></button>
-                    <!-- [r89] Deep Wiki — 자체 호스팅 RAG 챗봇 -->
-                    <button class="cs-nav" data-nav="deepwiki" id="cs-nav-deepwiki" onclick="switchView('deepwiki')" title="Deep Wiki (자체 PC RAG 챗봇 — Qwen Coder + Supabase pgvector)"><span class="cs-ico">🤖</span><span class="cs-label">Deep Wiki</span></button>
+                    <!-- [r112] r89 "Deep Wiki" → "AI Agent"로 리네임 (실제로는 Qwen Tool Use 챗봇). 진짜 Deep Wiki는 별도 자료 카테고리에 -->
+                    <button class="cs-nav" data-nav="deepwiki" id="cs-nav-deepwiki" onclick="switchView('deepwiki')" title="AI Agent (Qwen Coder 14B + Tool Use — 스프린트/카드/문서/결재/일정 등 라이브 데이터 능동 조회)"><span class="cs-ico">🤖</span><span class="cs-label">AI Agent</span></button>
                     <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태 (DB 편집 포함)"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
                     <button class="cs-nav" data-nav="bugReport" id="cs-nav-bug-report" onclick="switchView('bugReport')" title="버그 리포트 (앱 이슈 제보 + 관리자 검토)"><span class="cs-ico">🐞</span><span class="cs-label">버그 리포트</span></button>
                     <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
@@ -4441,13 +4443,54 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
         </div>
 
-        <!-- [r89] Deep Wiki — 자체 호스팅 RAG 챗봇 (Qwen Coder + pgvector) -->
+        <!-- [r112] 진짜 Deep Wiki — Git 레포 LLM 자동 분석 위키 페이지 (Phase A 골격, r113~에 채워짐) -->
+        <div id="deepwikiPages-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="dwp-wrap" style="display:flex;height:calc(100vh - 60px);overflow:hidden;">
+                <!-- 좌측: 페이지 트리 -->
+                <aside class="dwp-tree" style="width:260px;flex-shrink:0;border-right:1px solid var(--c-border);background:var(--c-paper);padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                    <div style="font-size:13px;font-weight:800;color:var(--c-text);padding:0 4px 8px;border-bottom:1px solid var(--c-border);margin-bottom:6px;">📘 Deep Wiki</div>
+                    <button onclick="dwpGenerate()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;width:100%;text-align:left;padding:8px 12px;">🤖 위키 자동 생성 (1차 MD)</button>
+                    <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서">📊 기획 대조 보고서 (2차)</button>
+                    <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:8px;text-transform:uppercase;font-weight:700;">자동 생성 페이지</div>
+                    <div id="dwp-tree" style="display:flex;flex-direction:column;gap:2px;">
+                        <div style="padding:14px 8px;font-size:12px;color:var(--c-text3);text-align:center;line-height:1.5;">
+                            아직 생성된 위키 페이지가 없습니다.<br><br>
+                            <span style="font-size:11px;">위 🤖 버튼으로 유니티 Git 레포에서<br>자동 위키를 만드세요.</span>
+                        </div>
+                    </div>
+                </aside>
+                <!-- 본문 -->
+                <main class="dwp-body" style="flex:1;overflow-y:auto;padding:30px 40px 80px;max-width:920px;margin:0 auto;">
+                    <div id="dwp-content">
+                        <div style="text-align:center;padding:60px 20px;">
+                            <div style="font-size:48px;margin-bottom:18px;">📘</div>
+                            <h1 style="font-size:24px;font-weight:800;color:var(--c-text);margin-bottom:12px;">Deep Wiki — 코드 자동 위키</h1>
+                            <p style="color:var(--c-text2);max-width:560px;margin:0 auto 24px;line-height:1.7;font-size:14px;">
+                                유니티 프로젝트 Git 레포를 LLM(Qwen 2.5-Coder 14B)이 분석해<br>
+                                <b>1차 위키 페이지</b>(시스템 개요·폴더 구조·주요 클래스·의존성)와<br>
+                                <b>2차 기획 일치도 보고서</b>(프로젝트 위키와 대조)를 자동 생성합니다.
+                            </p>
+                            <div style="display:inline-flex;flex-direction:column;gap:8px;text-align:left;background:var(--ios-fill);padding:16px 22px;border-radius:12px;border:1px solid var(--c-border);font-size:13px;color:var(--c-text2);max-width:500px;">
+                                <div><b style="color:var(--c-accent);">📋 로드맵</b></div>
+                                <div>• <b>r112</b> (현재): 골격·메뉴·DB 스키마</div>
+                                <div>• <b>r113</b>: Phase A — 1차 MD 자동 생성기</div>
+                                <div>• <b>r114</b>: Phase B — DeepWiki 형태 UI 완성</div>
+                                <div>• <b>r115</b>: Phase C — 기획 대조 2차 MD</div>
+                                <div>• <b>r116</b>: Phase D — AI Agent에 위키 도구</div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <!-- [r89] AI Agent (r112에 리네임됨) — Qwen Tool Use 챗봇 -->
         <div id="deepwiki-view" class="hidden" onclick="event.stopPropagation()">
             <div class="dw-wrap">
                 <header class="dw-head">
                     <div>
-                        <h2 class="dw-title">🤖 Deep Wiki</h2>
-                        <div class="dw-sub">자체 PC 호스팅 RAG 챗봇 · Qwen 2.5-Coder 14B + Supabase pgvector</div>
+                        <h2 class="dw-title">🤖 AI Agent</h2>
+                        <div class="dw-sub">자체 PC 호스팅 · Qwen 2.5-Coder 14B + Tool Use (스프린트·카드·문서·결재·일정 등 라이브 데이터 능동 조회)</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span id="dw-status-pill" class="dw-status dw-status-unknown" title="백엔드 연결 상태">⏳ 확인 중</span>
@@ -7838,6 +7881,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
+        // [r112] Deep Wiki 자동 위키 생성/감사 — 골격 (r113~에서 채워짐)
+        function dwpGenerate() {
+            showToast('🚧 Deep Wiki 자동 생성기는 r113에서 구현됩니다 — Git 레포를 LLM이 읽고 1차 MD 위키 페이지를 만듭니다. 현재는 ⚙️ AI Agent → 🗂 코드 인덱싱으로 검색 기반 답변만 가능.', 'info');
+        }
+        function dwpAudit() {
+            showToast('🚧 기획 대조 (2차 MD)는 r115에서 구현됩니다 — 1차 자동 위키 + 프로젝트 위키(canon) 대조 후 일치도 보고서 생성.', 'info');
+        }
+
         function dwShowSetupGuide() {
             // 새 창/모달로 README 안내
             var guide = '🔧 Deep Wiki 백엔드 설정 (Phase 2)\n\n' +
@@ -11091,6 +11142,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r89] Deep Wiki
             var _csDw = document.getElementById('cs-nav-deepwiki'); if (_csDw) _csDw.classList.toggle('active', viewName === 'deepwiki');
             var _dwvw = document.getElementById('deepwiki-view'); if (_dwvw) { _dwvw.classList.toggle('hidden', viewName !== 'deepwiki'); _dwvw.classList.toggle('block', viewName === 'deepwiki'); }
+            // [r112] 진짜 Deep Wiki — 자료 그룹 (별도 페이지, Phase A 골격)
+            var _csDwp = document.getElementById('cs-nav-deepwiki-pages'); if (_csDwp) _csDwp.classList.toggle('active', viewName === 'deepwikiPages');
+            var _dwpvw = document.getElementById('deepwikiPages-view'); if (_dwpvw) { _dwpvw.classList.toggle('hidden', viewName !== 'deepwikiPages'); _dwpvw.classList.toggle('block', viewName === 'deepwikiPages'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');

@@ -291,6 +291,24 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_project_info",
+            "description": (
+                "프로젝트의 메타데이터 — 이름, 카테고리, 참여자, 연결된 Git URL, "
+                "문서/카드/스프린트/이슈 카운트 등 종합 정보. 사용자가 '프로젝트 정보', "
+                "'프로젝트 개요', '연결된 Git', '프로젝트 통계' 등을 물을 때 호출."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
 ]
 
 
@@ -323,6 +341,8 @@ async def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             return await _tool_list_sprints(arguments)
         if name == "list_users":
             return await _tool_list_users(arguments)
+        if name == "get_project_info":
+            return await _tool_get_project_info(arguments)
         return {"ok": False, "error": f"Unknown tool: {name}"}
     except Exception as e:
         import traceback
@@ -710,3 +730,63 @@ async def _tool_list_users(args: Dict[str, Any]) -> Dict[str, Any]:
         for u in rows
     ]
     return {"ok": True, "result": out, "count": len(out)}
+
+
+async def _tool_get_project_info(args: Dict[str, Any]) -> Dict[str, Any]:
+    """[r112] 프로젝트 종합 메타 정보 — 이름·Git·참여자·통계."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    # 1) projects 테이블 — 이름·카테고리·참여자
+    try:
+        proj_res = store.client.table("projects").select("*").eq("id", project_id).limit(1).execute()
+        proj = (proj_res.data or [{}])[0]
+    except Exception as e:
+        return {"ok": False, "error": f"projects 조회 실패: {e}"}
+    if not proj:
+        return {"ok": True, "result": None, "note": "해당 project_id 가 없습니다."}
+    # 2) 참여자 이름 join
+    participants_obj = []
+    if proj.get("participants"):
+        umap = await _resolve_users(list(proj["participants"]))
+        participants_obj = [umap.get(uid, {"id": uid, "name": uid[:8]}) for uid in proj["participants"]]
+    # 3) Git URL — projects.git_url 또는 settings 테이블 폴백
+    git_url = proj.get("git_url") or None
+    if not git_url:
+        try:
+            s_res = store.client.table("settings").select("value").eq("key", f"git_url:{project_id}").limit(1).execute()
+            if s_res.data:
+                git_url = (s_res.data[0] or {}).get("value")
+        except Exception:
+            pass
+    # 4) 통계 (count="exact" 사용)
+    stats: Dict[str, int] = {}
+    for table, key in [
+        ("wiki_docs", "docs"),
+        ("tasks", "tasks"),
+        ("sprints", "sprints"),
+        ("issues", "issues"),
+        ("review_requests", "reviews"),
+        ("kanban_categories", "categories"),
+        ("calendar_events", "events"),
+    ]:
+        try:
+            r = store.client.table(table).select("id", count="exact", head=True).eq("project_id", project_id).execute()
+            stats[key] = r.count or 0
+        except Exception:
+            stats[key] = -1  # 테이블 없음
+    return {
+        "ok": True,
+        "result": {
+            "id": proj.get("id"),
+            "name": proj.get("name") or "(이름 없음)",
+            "category": proj.get("category") or "일반",
+            "git_url": git_url,
+            "participants": participants_obj,
+            "participantCount": len(participants_obj),
+            "stats": stats,
+            "created_at": proj.get("created_at"),
+            "updated_at": proj.get("updated_at"),
+        },
+    }

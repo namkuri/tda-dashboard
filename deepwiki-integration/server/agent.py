@@ -32,6 +32,7 @@ SYSTEM_PROMPT = """당신은 TDA Dashboard 프로젝트의 능동적 어시스�
 - **list_calendar_events(project_id?, from_date?, to_date?)**: 일정 — "이번달 일정", "오늘 미팅"
 - **list_issues(project_id, status?, priority?)**: 이슈 트래커 — "이슈", "버그"
 - **list_users(project_id?)**: 팀원 — "참여자", "팀원 누구"
+- **get_project_info(project_id)**: 프로젝트 종합 메타 — 이름·카테고리·Git URL·참여자·전체 통계(docs/tasks/sprints/issues/reviews 개수). 사용자가 "프로젝트 정보", "이 프로젝트 개요", "Git 연결" 등을 물을 때.
 
 정적 컨텐츠 (벡터 검색):
 - **search_vector(query, source_types?, top_k?)**: 코드 본문/문서 본문 의미 검색 — "함수 동작", "데이터 모델 설명"
