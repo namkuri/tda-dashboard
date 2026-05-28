@@ -18,13 +18,13 @@ DeepWiki-Open ([github.com/AsyncFuncAI/deepwiki-open](https://github.com/AsyncFu
 
 ## Phase별 진행 (r112~r116)
 
-### ✅ r112 (현재) — 골격
+### ✅ r112 — 골격
 - AI Agent ↔ Deep Wiki 메뉴 분리
 - `deep_wiki_pages`, `deep_wiki_audits` SQL 마이그레이션
 - 빈 페이지 + "위키 자동 생성" / "기획 대조" 버튼 자리
 - `get_project_info` 도구 (AI Agent용) 추가
 
-### 🚧 r113 — Phase A: 1차 MD 자동 생성기
+### ✅ r113 — Phase A: 1차 MD 자동 생성기
 
 **백엔드:**
 - `POST /wiki/generate` 엔드포인트 (SSE 진행률)
@@ -44,7 +44,7 @@ DeepWiki-Open ([github.com/AsyncFuncAI/deepwiki-open](https://github.com/AsyncFu
 - `dependencies` — 클래스 의존성 그래프 (Mermaid)
 - `entry-points` — Awake/Start 위치, 게임 루프
 
-### 🚧 r114 — Phase B: Deep Wiki UI 완성
+### ✅ r114 — Phase B: Deep Wiki UI 완성
 
 - 좌측 페이지 트리 (parent_slug 기반 계층)
 - 본문: 마크다운 렌더 + 코드블록 강조 + 인용 링크
@@ -54,7 +54,7 @@ DeepWiki-Open ([github.com/AsyncFuncAI/deepwiki-open](https://github.com/AsyncFu
 - 페이지 메타 (생성 시각, 관련 파일 N개, 태그)
 - DeepWiki.com 비주얼 모사 (좌측 220px 트리 / 본문 800px center / 우측 TOC)
 
-### 🚧 r115 — Phase C: 2차 MD 기획 대조
+### ✅ r115 — Phase C: 2차 MD 기획 대조
 
 **백엔드:**
 - `POST /wiki/audit` 엔드포인트
@@ -68,7 +68,7 @@ DeepWiki-Open ([github.com/AsyncFuncAI/deepwiki-open](https://github.com/AsyncFu
 - Deep Wiki 페이지에 "📊 감사" 탭 추가
 - 보고서 카드 — 일치도 게이지, 차이점 리스트, 관련 페이지·기획 링크
 
-### 🚧 r116 — Phase D: AI Agent 통합
+### ✅ r116 — Phase D: AI Agent 통합 (완료)
 
 **도구 추가 (tools.py):**
 - `list_wiki_pages(project_id, parent?, limit?)` — 1차 페이지 목록

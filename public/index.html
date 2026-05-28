@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r116 (Phase D — AI Agent에 Deep Wiki 도구 5종 통합: AI Agent 챗봇이 1차 자동 위키·2차 감사 보고서를 능동 조회 가능. tools.py에 list_wiki_pages·get_wiki_page·search_wiki_pages(LIKE)·list_wiki_audits·get_wiki_audit 추가. agent.py 시스템 프롬프트에 도구 카탈로그·사용 가이드. 사용 시나리오: "전투 시스템 위키 보여줘" → get_wiki_page(slug='combat'), "기획 대조 결과" → list_wiki_audits + get_wiki_audit, "dbUpsertCategory 어느 위키에 있어?" → search_wiki_pages. AI Agent와 Deep Wiki 자동 위키 시스템 완전 통합) -->
+<!-- BUILD: 2026-05-28 r116 (Phase A-D 완료 + 재귀 검증: r112~r116 Deep Wiki 자동 위키 시스템 + AI Agent 통합 완료. 검증: 11개 Python 모듈 모두 import OK, 15개 도구 모두 dispatch OK + empty args 정상 처리, 14개 FastAPI 엔드포인트 등록 확인, 17개 프론트 Deep Wiki 함수 모두 정의/호출 OK. TEST_GUIDE_R116.md에 4개 시나리오(라이브 데이터·자동 위키 생성·기획 대조·AI Agent 통합 활용) 단계별 가이드. DEEPWIKI_ROADMAP.md 모든 Phase ✅ 표시) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
