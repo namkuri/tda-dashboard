@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r69 (데스크톱 로컬번들 복귀: 원격 github.io 로드는 WebView2 Tracking Prevention이 storage 차단→세션 401(데이터 안 뜸). 로컬번들(tauri.localhost)은 정상이라 url 제거하고 ../public 임베드로 복귀(로그인·데이터 검증됨). + 서버 데이터 로드 실패 시 경고 토스트. 0.47.0) -->
+<!-- BUILD: 2026-05-28 r70 (사이드바 IA 재편: 테마→화면설정 내부로 이동(라이트/다크웜/순수다크 직접선택), 화면설정→도구 그룹으로 이동, 푸터에 '앱에서 열기'(PWA 설치) 버튼 신설(beforeinstallprompt 캡처). r69 로컬번들/로드실패경고 유지) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2617,7 +2617,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
     <div id="settings-modal" class="bg-black bg-opacity-60 z-[110] backdrop-blur-sm" style="display:none;">
         <div class="settings-modal-content bg-white p-6 rounded-xl shadow-2xl border border-gray-200 overflow-y-auto" style="width:min(400px,calc(100vw - 32px));max-height:85vh;">
             <h2 class="text-2xl font-black text-gray-800 mb-6 border-b pb-2">⚙️ 화면 상세 설정</h2>
-            
+
+            <!-- [r70] 테마 — 화면 설정 내부로 이동 -->
+            <div class="mb-5">
+                <label class="block text-sm font-bold text-gray-700 mb-2">🎨 테마</label>
+                <div class="flex flex-wrap gap-2" id="settings-theme-btns">
+                    <button class="thm-btn" data-thm="0" onclick="setThemeMode(0)" style="padding:7px 14px;border-radius:8px;border:1px solid var(--c-border,#d8d3c7);background:var(--ios-fill,#f0ede6);color:var(--c-text,#2f2d28);font-size:13px;font-weight:700;cursor:pointer;">☀️ 라이트</button>
+                    <button class="thm-btn" data-thm="1" onclick="setThemeMode(1)" style="padding:7px 14px;border-radius:8px;border:1px solid var(--c-border,#d8d3c7);background:var(--ios-fill,#f0ede6);color:var(--c-text,#2f2d28);font-size:13px;font-weight:700;cursor:pointer;">🌗 다크 웜</button>
+                    <button class="thm-btn" data-thm="2" onclick="setThemeMode(2)" style="padding:7px 14px;border-radius:8px;border:1px solid var(--c-border,#d8d3c7);background:var(--ios-fill,#f0ede6);color:var(--c-text,#2f2d28);font-size:13px;font-weight:700;cursor:pointer;">🌑 순수 다크</button>
+                </div>
+            </div>
+
             <div class="mb-5 bg-orange-50 p-4 rounded-lg border border-orange-100">
                 <div class="mb-2">
                     <div class="flex justify-between items-center mb-1">
@@ -2920,13 +2930,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="dbtool" onclick="toggleJsonSidebar()" title="DB 도구"><span class="cs-ico">🗄️</span><span class="cs-label">DB 도구</span></button>
                     <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
                     <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
+                    <button class="cs-nav" data-nav="settings" onclick="toggleSettings()" title="화면 설정 (테마 포함)"><span class="cs-ico">⚙️</span><span class="cs-label">화면 설정</span></button>
                 </div>
             </div>
             <div class="cs-spacer"></div>
             <div class="cs-foot">
                 <div class="cs-status"><span style="width:7px;height:7px;border-radius:50%;background:var(--ios-green);display:inline-block;flex-shrink:0;"></span> <span class="cs-label">접속 <span id="cs-online">1</span>명</span></div>
-                <button class="cs-nav" onclick="cycleDarkMode()" title="테마"><span class="cs-ico">🌙</span><span class="cs-label">테마</span></button>
-                <button class="cs-nav" onclick="toggleSettings()" title="화면 설정"><span class="cs-ico">⚙️</span><span class="cs-label">화면 설정</span></button>
+                <button class="cs-nav" id="cs-install-btn" onclick="pwaInstall()" title="이 웹앱을 데스크톱 앱으로 설치"><span class="cs-ico">📲</span><span class="cs-label">앱에서 열기</span></button>
                 <div class="cs-userpill" id="cs-user"><span style="font-size:12px;color:var(--c-text3);">로그인 필요</span></div>
             </div>
         </aside>
@@ -9738,10 +9748,47 @@ addEventListener("resize",sendPos);
             if(!modal) return;
             if(modal.style.display === 'none' || modal.style.display === '') {
                 openModal('settings-modal');
+                if (typeof _syncThemeBtns === 'function') _syncThemeBtns();
             } else {
                 closeModal('settings-modal');
             }
         }
+        // [r70] 테마를 화면설정 안으로 — 3단(라이트/다크웜/순수다크) 직접 선택
+        function setThemeMode(n) {
+            darkModeState = n;
+            if (typeof applyDarkModeState === 'function') applyDarkModeState();
+            try { localStorage.setItem('pb3_dark_state', n); } catch (e) {}
+            _syncThemeBtns();
+        }
+        function _syncThemeBtns() {
+            var box = document.getElementById('settings-theme-btns'); if (!box) return;
+            Array.prototype.forEach.call(box.querySelectorAll('.thm-btn'), function (b) {
+                var on = parseInt(b.getAttribute('data-thm'), 10) === darkModeState;
+                b.style.background = on ? 'var(--c-accent, #D97757)' : 'var(--ios-fill, #f0ede6)';
+                b.style.color = on ? '#fff' : 'var(--c-text, #2f2d28)';
+                b.style.borderColor = on ? 'var(--c-accent, #D97757)' : 'var(--c-border, #d8d3c7)';
+            });
+        }
+        // [r70] PWA "앱에서 열기"(설치) — 주소창 아이콘 가시성 보완용 사이드바 버튼.
+        //   beforeinstallprompt를 캡처해 버튼 클릭 시 설치 프롬프트를 띄움.
+        var _deferredInstallPrompt = null;
+        window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); _deferredInstallPrompt = e; _updateInstallBtn(); });
+        window.addEventListener('appinstalled', function () { _deferredInstallPrompt = null; _updateInstallBtn(); if (typeof showToast === 'function') showToast('✓ 앱으로 설치되었습니다', 'success'); });
+        function _pwaStandalone() { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
+        function _updateInstallBtn() {
+            var btn = document.getElementById('cs-install-btn'); if (!btn) return;
+            btn.style.display = (_pwaStandalone() || IS_TAURI) ? 'none' : ''; // 이미 설치(standalone)·Tauri면 숨김
+        }
+        async function pwaInstall() {
+            if (_pwaStandalone()) { if (typeof showToast === 'function') showToast('이미 앱으로 실행 중입니다 ✓', 'info'); return; }
+            if (_deferredInstallPrompt) {
+                try { _deferredInstallPrompt.prompt(); await _deferredInstallPrompt.userChoice; } catch (e) {}
+                _deferredInstallPrompt = null; _updateInstallBtn();
+            } else {
+                if (typeof showToast === 'function') showToast('주소창 오른쪽의 설치(⊕) 아이콘을 누르거나, 브라우저 메뉴 → "앱으로 설치"를 사용하세요. (Safari/Firefox는 미지원)', 'info');
+            }
+        }
+        document.addEventListener('DOMContentLoaded', function () { if (typeof _updateInstallBtn === 'function') _updateInstallBtn(); });
 
         function setZoom(level, btnElement) { uiSettings.zoomLevel = level; document.querySelectorAll('.zoom-btn').forEach(btn => btn.classList.remove('active')); if(btnElement) btnElement.classList.add('active'); saveUISettings(); }
         function toggleMute() { uiSettings.isMuted = !uiSettings.isMuted; saveUISettings(); if (!uiSettings.isMuted && uiSettings.volume > 0) { initAudio(); playNotificationSound('comment'); } }
