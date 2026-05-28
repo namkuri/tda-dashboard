@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r112 (Deep Wiki 자동 위키 시스템 — 큰 그림 분리·골격 + get_project_info: 사용자의 원래 목적 명확화 — DeepWiki-Open 모사로 유니티 Git 레포 LLM 자동 분석 → 1차 MD 위키 페이지 + 기획 canon 대조 2차 MD 보고서. r93~r111의 Qwen 챗봇은 그 도구의 일부였음. 변경: ① 사이드바 분리 — 기존 "Deep Wiki" → "AI Agent"(도구 그룹, Tool Use 챗봇), 새 "Deep Wiki"(자료 그룹, 자동 위키) ② tools.py get_project_info(project_id) 도구 — 이름/Git URL/참여자/통계(docs/tasks/sprints/issues/reviews/categories/events 카운트) ③ deep_wiki_pages·deep_wiki_audits SQL 마이그레이션(002_wiki_pages.sql) — 1차 위키 페이지(slug·parent·meta) + 2차 감사(match_score·findings) ④ Deep Wiki 빈 페이지(좌트리·본문·생성/감사 버튼 placeholder) ⑤ DEEPWIKI_ROADMAP.md — r113~r116 단계별 구현 계획(Phase A: 자동 생성기, B: UI, C: 기획 대조, D: AI Agent 통합)) -->
+<!-- BUILD: 2026-05-28 r113 (Phase A — Deep Wiki 1차 MD 자동 생성기 가동: r112 골격 위에 진짜 위키 생성 시스템 구현. 백엔드: ① wiki_generator.py — Git clone → 파일 트리 스캔 → 폴더 카테고리 자동 분류(_FOLDER_PATTERNS 유니티 12종 + 일반 9종 + 폴백 root) → 카테고리별 LLM 호출(_CATEGORY_PROMPT, 코드 발췌·표·Mermaid 가능 한국어 마크다운) → deep_wiki_pages INSERT. _scan_repo는 카테고리당 최대 12개 파일·3500자/파일 본문. 카테고리 2개 미만은 root로 머지. 개요 페이지(_overview) 자동 추가. ② main.py 신규 엔드포인트 4개 — POST /wiki/generate(SSE 진행률 clone_done/scan_done/progress/page_done/done), GET /wiki/pages(트리 메타), GET /wiki/page?slug=(본문), DELETE /wiki/pages(전체 삭제). 프론트: ③ Deep Wiki 페이지 활성화 — dwpGenerate(uiPrompt로 Git URL 입력 + SSE 진행률 표시), dwpRefreshTree(/wiki/pages 호출 + 트리 렌더), dwpOpenPage(/wiki/page + 마크다운 DOMPurify 렌더 + 메타 헤더). 사이드바에서 Deep Wiki 진입 시 트리 자동 로드) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4443,43 +4443,21 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
         </div>
 
-        <!-- [r112] 진짜 Deep Wiki — Git 레포 LLM 자동 분석 위키 페이지 (Phase A 골격, r113~에 채워짐) -->
+        <!-- [r112/r113] 진짜 Deep Wiki — Git 레포 LLM 자동 분석 위키 페이지 -->
         <div id="deepwikiPages-view" class="hidden" onclick="event.stopPropagation()">
             <div class="dwp-wrap" style="display:flex;height:calc(100vh - 60px);overflow:hidden;">
                 <!-- 좌측: 페이지 트리 -->
-                <aside class="dwp-tree" style="width:260px;flex-shrink:0;border-right:1px solid var(--c-border);background:var(--c-paper);padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
-                    <div style="font-size:13px;font-weight:800;color:var(--c-text);padding:0 4px 8px;border-bottom:1px solid var(--c-border);margin-bottom:6px;">📘 Deep Wiki</div>
+                <aside class="dwp-tree" style="width:280px;flex-shrink:0;border-right:1px solid var(--c-border);background:var(--c-paper);padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                    <div style="font-size:13px;font-weight:800;color:var(--c-text);padding:0 4px 8px;border-bottom:1px solid var(--c-border);margin-bottom:6px;display:flex;align-items:center;gap:6px;">📘 Deep Wiki <button onclick="dwpRefreshTree()" style="margin-left:auto;background:none;border:none;color:var(--c-text3);cursor:pointer;font-size:13px;" title="새로고침">🔄</button></div>
                     <button onclick="dwpGenerate()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;width:100%;text-align:left;padding:8px 12px;">🤖 위키 자동 생성 (1차 MD)</button>
-                    <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서">📊 기획 대조 보고서 (2차)</button>
-                    <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:8px;text-transform:uppercase;font-weight:700;">자동 생성 페이지</div>
-                    <div id="dwp-tree" style="display:flex;flex-direction:column;gap:2px;">
-                        <div style="padding:14px 8px;font-size:12px;color:var(--c-text3);text-align:center;line-height:1.5;">
-                            아직 생성된 위키 페이지가 없습니다.<br><br>
-                            <span style="font-size:11px;">위 🤖 버튼으로 유니티 Git 레포에서<br>자동 위키를 만드세요.</span>
-                        </div>
-                    </div>
+                    <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서 (r115)">📊 기획 대조 보고서 (2차)</button>
+                    <div id="dwp-progress" style="font-size:11px;color:var(--c-text2);padding:6px 4px;min-height:14px;"></div>
+                    <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;">자동 생성 페이지</div>
+                    <div id="dwp-tree" style="display:flex;flex-direction:column;gap:2px;"></div>
                 </aside>
                 <!-- 본문 -->
-                <main class="dwp-body" style="flex:1;overflow-y:auto;padding:30px 40px 80px;max-width:920px;margin:0 auto;">
-                    <div id="dwp-content">
-                        <div style="text-align:center;padding:60px 20px;">
-                            <div style="font-size:48px;margin-bottom:18px;">📘</div>
-                            <h1 style="font-size:24px;font-weight:800;color:var(--c-text);margin-bottom:12px;">Deep Wiki — 코드 자동 위키</h1>
-                            <p style="color:var(--c-text2);max-width:560px;margin:0 auto 24px;line-height:1.7;font-size:14px;">
-                                유니티 프로젝트 Git 레포를 LLM(Qwen 2.5-Coder 14B)이 분석해<br>
-                                <b>1차 위키 페이지</b>(시스템 개요·폴더 구조·주요 클래스·의존성)와<br>
-                                <b>2차 기획 일치도 보고서</b>(프로젝트 위키와 대조)를 자동 생성합니다.
-                            </p>
-                            <div style="display:inline-flex;flex-direction:column;gap:8px;text-align:left;background:var(--ios-fill);padding:16px 22px;border-radius:12px;border:1px solid var(--c-border);font-size:13px;color:var(--c-text2);max-width:500px;">
-                                <div><b style="color:var(--c-accent);">📋 로드맵</b></div>
-                                <div>• <b>r112</b> (현재): 골격·메뉴·DB 스키마</div>
-                                <div>• <b>r113</b>: Phase A — 1차 MD 자동 생성기</div>
-                                <div>• <b>r114</b>: Phase B — DeepWiki 형태 UI 완성</div>
-                                <div>• <b>r115</b>: Phase C — 기획 대조 2차 MD</div>
-                                <div>• <b>r116</b>: Phase D — AI Agent에 위키 도구</div>
-                            </div>
-                        </div>
-                    </div>
+                <main class="dwp-body" style="flex:1;overflow-y:auto;padding:30px 40px 80px;">
+                    <div id="dwp-content" style="max-width:920px;margin:0 auto;"></div>
                 </main>
             </div>
         </div>
@@ -7881,12 +7859,170 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
-        // [r112] Deep Wiki 자동 위키 생성/감사 — 골격 (r113~에서 채워짐)
-        function dwpGenerate() {
-            showToast('🚧 Deep Wiki 자동 생성기는 r113에서 구현됩니다 — Git 레포를 LLM이 읽고 1차 MD 위키 페이지를 만듭니다. 현재는 ⚙️ AI Agent → 🗂 코드 인덱싱으로 검색 기반 답변만 가능.', 'info');
+        // [r113] Deep Wiki — 1차 자동 위키 페이지 시스템
+        var _dwpState = { pages: [], currentSlug: null };
+
+        function _dwpBackendUrl() {
+            var s = (typeof _dwGetSettings === 'function') ? _dwGetSettings() : null;
+            return s && s.backendUrl ? s.backendUrl : '';
         }
+        function _dwpProgress(html) {
+            var el = document.getElementById('dwp-progress');
+            if (el) el.innerHTML = html;
+        }
+
+        async function dwpRefreshTree() {
+            var url = _dwpBackendUrl();
+            if (!url) { _dwpRenderEmpty('백엔드 URL이 설정되어 있지 않습니다. AI Agent 페이지의 ⚙️ 설정에서 먼저 설정하세요.'); return; }
+            if (!activeProjectId) { _dwpRenderEmpty('프로젝트가 선택되어 있지 않습니다.'); return; }
+            try {
+                var res = await fetch(url + '/wiki/pages?project_id=' + encodeURIComponent(activeProjectId));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                _dwpState.pages = data.pages || [];
+                _dwpRenderTree();
+                if (!_dwpState.pages.length) {
+                    _dwpRenderEmpty('아직 생성된 위키 페이지가 없습니다. 좌측 🤖 버튼으로 자동 생성하세요.');
+                } else if (!_dwpState.currentSlug) {
+                    // 첫 페이지(또는 _overview) 자동 열기
+                    var ov = _dwpState.pages.find(function (p) { return p.slug === '_overview'; });
+                    dwpOpenPage((ov || _dwpState.pages[0]).slug);
+                }
+            } catch (e) {
+                _dwpRenderEmpty('페이지 조회 실패: ' + (e.message || e) + '<br><br>SQL 002_wiki_pages.sql을 Supabase에서 먼저 실행했는지 확인하세요.');
+            }
+        }
+
+        function _dwpRenderTree() {
+            var el = document.getElementById('dwp-tree');
+            if (!el) return;
+            if (!_dwpState.pages.length) {
+                el.innerHTML = '<div style="padding:12px 6px;font-size:11.5px;color:var(--c-text3);text-align:center;line-height:1.6;">아직 페이지 없음</div>';
+                return;
+            }
+            // _overview 최상단, 나머지 sort_order 순
+            var pages = _dwpState.pages.slice().sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+            el.innerHTML = pages.map(function (p) {
+                var active = (p.slug === _dwpState.currentSlug) ? 'background:var(--c-accent-soft);color:var(--c-accent);' : 'color:var(--c-text2);';
+                var safeTitle = (p.title || p.slug).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var safeSlug = (p.slug || '').replace(/'/g, "\\'");
+                return '<button onclick="dwpOpenPage(\'' + safeSlug + '\')" style="text-align:left;background:none;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;' + active + '" title="' + safeTitle + '">' + safeTitle + '</button>';
+            }).join('');
+        }
+
+        function _dwpRenderEmpty(msg) {
+            var box = document.getElementById('dwp-content');
+            if (box) {
+                box.innerHTML = '<div style="text-align:center;padding:80px 20px;color:var(--c-text3);font-size:13px;line-height:1.7;">' + msg + '</div>';
+            }
+        }
+
+        async function dwpOpenPage(slug) {
+            _dwpState.currentSlug = slug;
+            _dwpRenderTree();
+            var url = _dwpBackendUrl();
+            if (!url || !activeProjectId) return;
+            var box = document.getElementById('dwp-content');
+            if (box) box.innerHTML = '<div style="text-align:center;padding:60px;color:var(--c-text3);">🔄 페이지 로딩...</div>';
+            try {
+                var res = await fetch(url + '/wiki/page?project_id=' + encodeURIComponent(activeProjectId) + '&slug=' + encodeURIComponent(slug));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var page = await res.json();
+                var md = page.content || '(빈 페이지)';
+                var html;
+                try { html = DOMPurify.sanitize(parseMarkdownWithTables(md), domPurifyConfig); }
+                catch (e) { html = '<pre style="white-space:pre-wrap;">' + md.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</pre>'; }
+                // 메타 헤더 (생성 시각·커밋·관련 파일 등)
+                var meta = page.meta || {};
+                var metaHtml = '<div style="font-size:11px;color:var(--c-text3);margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--c-border);display:flex;gap:14px;flex-wrap:wrap;">' +
+                    (page.git_commit ? '<span>📦 커밋: <code>' + _annEsc(page.git_commit) + '</code></span>' : '') +
+                    (meta.total_files ? '<span>📁 파일 ' + meta.total_files + '개</span>' : '') +
+                    (meta.generated_by ? '<span>🤖 ' + _annEsc(meta.generated_by) + '</span>' : '') +
+                    (page.updated_at ? '<span>🕐 ' + new Date(page.updated_at).toLocaleString() + '</span>' : '') +
+                    '</div>';
+                if (box) box.innerHTML = metaHtml + html;
+                if (box) box.scrollTop = 0;
+            } catch (e) {
+                _dwpRenderEmpty('페이지 로드 실패: ' + (e.message || e));
+            }
+        }
+
+        async function dwpGenerate() {
+            var url = _dwpBackendUrl();
+            if (!url) { showToast('⚙️ AI Agent 설정에서 백엔드 URL 먼저', 'alert'); return; }
+            if (!activeProjectId) { showToast('프로젝트가 선택되어 있지 않습니다', 'alert'); return; }
+            // Git URL 가져오기 (AI Agent에서 저장한 것 재사용)
+            var gitUrl = '';
+            try { gitUrl = localStorage.getItem('tda_dw_git_url') || ''; } catch (e) {}
+            gitUrl = await uiPrompt({
+                title: '🤖 Deep Wiki 자동 생성',
+                label: 'Git 레포 URL (유니티 프로젝트, 공개 레포):',
+                value: gitUrl,
+                placeholder: 'https://github.com/yourname/your-unity-game',
+            });
+            if (!gitUrl || !gitUrl.trim()) return;
+            gitUrl = gitUrl.trim();
+            try { localStorage.setItem('tda_dw_git_url', gitUrl); } catch (e) {}
+            var ok = await uiConfirm({
+                title: '시간이 걸립니다',
+                message: 'LLM이 코드 폴더별로 위키 페이지를 N개 생성합니다.\n\n약 1~5분 (레포 크기에 따라).\nOllama가 실행 중인지 확인 후 진행하세요.',
+                confirmText: '시작',
+            });
+            if (!ok) return;
+            _dwpProgress('🔄 시작 중...');
+            try {
+                var res = await fetch(url + '/wiki/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ git_url: gitUrl, project_id: activeProjectId, branch: 'main' }),
+                });
+                if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+                var reader = res.body.getReader();
+                var decoder = new TextDecoder();
+                var buf = '';
+                while (true) {
+                    var chunk = await reader.read();
+                    if (chunk.done) break;
+                    buf += decoder.decode(chunk.value, { stream: true });
+                    var lines = buf.split('\n');
+                    buf = lines.pop() || '';
+                    lines.forEach(function (line) {
+                        if (!line.startsWith('data:')) return;
+                        var data = line.slice(5).trim();
+                        if (!data || data === '[DONE]') return;
+                        try {
+                            var ev = JSON.parse(data);
+                            if (ev.event === 'stage') {
+                                _dwpProgress('🔄 ' + _annEsc(ev.message || ev.stage));
+                            } else if (ev.event === 'clone_done') {
+                                _dwpProgress('✅ Clone 완료 (커밋 <code>' + _annEsc(ev.commit || '?') + '</code>) — 스캔 중...');
+                            } else if (ev.event === 'scan_done') {
+                                _dwpProgress('📁 카테고리 ' + ev.category_count + '개 발견 — LLM 생성 시작');
+                            } else if (ev.event === 'progress') {
+                                var pct = Math.round((ev.current / ev.total) * 100);
+                                _dwpProgress('🤖 [' + ev.current + '/' + ev.total + ' · ' + pct + '%] ' + _annEsc(ev.category || ev.slug));
+                            } else if (ev.event === 'page_done') {
+                                _dwpProgress('✅ ' + _annEsc(ev.title));
+                            } else if (ev.event === 'done') {
+                                _dwpProgress('🎉 완료 — ' + ev.pages_created + '개 페이지 생성됨');
+                                showToast('🎉 Deep Wiki 생성 완료 (' + ev.pages_created + '개 페이지)', 'success');
+                                setTimeout(dwpRefreshTree, 200);
+                            } else if (ev.event === 'error') {
+                                _dwpProgress('<span style="color:#d2393d;">❌ ' + _annEsc(ev.message) + '</span>');
+                                showToast('❌ 위키 생성 실패: ' + (ev.message || ''), 'alert');
+                            } else if (ev.event === 'warn') {
+                                console.warn('[wiki/generate]', ev.message);
+                            }
+                        } catch (e) { /* ignore */ }
+                    });
+                }
+            } catch (e) {
+                _dwpProgress('<span style="color:#d2393d;">❌ 요청 실패: ' + _annEsc(e.message || e) + '</span>');
+            }
+        }
+
         function dwpAudit() {
-            showToast('🚧 기획 대조 (2차 MD)는 r115에서 구현됩니다 — 1차 자동 위키 + 프로젝트 위키(canon) 대조 후 일치도 보고서 생성.', 'info');
+            showToast('📊 기획 대조(2차 MD)는 r115에서 구현됩니다. 1차 위키 + 프로젝트 위키(canon) 대조 → 일치도 보고서.', 'info');
         }
 
         function dwShowSetupGuide() {
@@ -11142,9 +11278,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r89] Deep Wiki
             var _csDw = document.getElementById('cs-nav-deepwiki'); if (_csDw) _csDw.classList.toggle('active', viewName === 'deepwiki');
             var _dwvw = document.getElementById('deepwiki-view'); if (_dwvw) { _dwvw.classList.toggle('hidden', viewName !== 'deepwiki'); _dwvw.classList.toggle('block', viewName === 'deepwiki'); }
-            // [r112] 진짜 Deep Wiki — 자료 그룹 (별도 페이지, Phase A 골격)
+            // [r112] 진짜 Deep Wiki — 자료 그룹 (별도 페이지)
             var _csDwp = document.getElementById('cs-nav-deepwiki-pages'); if (_csDwp) _csDwp.classList.toggle('active', viewName === 'deepwikiPages');
             var _dwpvw = document.getElementById('deepwikiPages-view'); if (_dwpvw) { _dwpvw.classList.toggle('hidden', viewName !== 'deepwikiPages'); _dwpvw.classList.toggle('block', viewName === 'deepwikiPages'); }
+            // [r113] Deep Wiki 진입 시 페이지 트리 자동 로드
+            if (viewName === 'deepwikiPages' && typeof dwpRefreshTree === 'function') {
+                setTimeout(dwpRefreshTree, 50);
+            }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');

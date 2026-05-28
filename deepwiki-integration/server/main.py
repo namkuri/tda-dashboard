@@ -15,6 +15,7 @@ from rag import chat_stream as legacy_chat_stream  # [r108] 폴백용
 from agent import run as agent_run  # [r108] Tool Use 에이전트
 from retriever import retrieve, SIMILARITY_THRESHOLD
 from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints, _is_empty_template_chunk
+from wiki_generator import generate_wiki  # [r113] Deep Wiki 자동 위키
 
 
 app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
@@ -53,6 +54,14 @@ class IndexCodeRequest(BaseModel):
     project_id: Optional[str] = None
     branch: str = "main"
     generate_wiki: bool = False  # 향후: 파일별 LLM 요약을 wiki_docs로 저장
+
+
+# [r113] Deep Wiki 자동 위키 생성 요청
+class WikiGenerateRequest(BaseModel):
+    git_url: str
+    project_id: str
+    branch: str = "main"
+    model: Optional[str] = None
 
 
 class IndexWikiRequest(BaseModel):
@@ -177,6 +186,79 @@ async def index_task(req: IndexWikiRequest):
 async def index_sprint(req: IndexWikiRequest):
     """Supabase sprints 인덱싱."""
     return _sse_indexer(index_sprints(project_id=req.project_id))
+
+
+# ─────────────────────────────────────────────
+# [r113] Deep Wiki — 자동 위키 페이지 생성·조회
+# ─────────────────────────────────────────────
+
+@app.post("/wiki/generate")
+async def wiki_generate(req: WikiGenerateRequest):
+    """Git 레포 → LLM 자동 위키 페이지 N개 생성. SSE 진행률 스트리밍."""
+    return _sse_indexer(generate_wiki(
+        git_url=req.git_url,
+        project_id=req.project_id,
+        branch=req.branch,
+        clean_first=True,
+        model=req.model,
+    ))
+
+
+@app.get("/wiki/pages")
+async def wiki_pages(project_id: str):
+    """프로젝트의 자동 생성 위키 페이지 목록 (트리용 메타만)."""
+    if not project_id:
+        raise HTTPException(400, "project_id 필수")
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_pages")
+            .select("id,slug,title,parent_slug,sort_order,summary,git_url,git_commit,updated_at,meta")
+            .eq("project_id", project_id)
+            .order("sort_order")
+            .execute()
+        )
+        return {"pages": res.data or [], "count": len(res.data or [])}
+    except Exception as e:
+        return {"pages": [], "count": 0, "error": f"deep_wiki_pages 테이블 미생성 또는 조회 실패: {e}"}
+
+
+@app.get("/wiki/page")
+async def wiki_page(project_id: str, slug: str):
+    """단일 위키 페이지 본문 조회."""
+    if not project_id or not slug:
+        raise HTTPException(400, "project_id, slug 필수")
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_pages")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            raise HTTPException(404, f"슬러그 '{slug}' 페이지 없음")
+        return rows[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"조회 실패: {e}")
+
+
+@app.delete("/wiki/pages")
+async def wiki_pages_delete(project_id: str):
+    """프로젝트의 모든 자동 생성 위키 페이지 삭제."""
+    if not project_id:
+        raise HTTPException(400, "project_id 필수")
+    store = get_store()
+    try:
+        res = store.client.table("deep_wiki_pages").delete().eq("project_id", project_id).execute()
+        return {"deleted": len(res.data or [])}
+    except Exception as e:
+        raise HTTPException(500, f"삭제 실패: {e}")
 
 
 @app.get("/debug/search")
