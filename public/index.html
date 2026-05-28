@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r88 (#1 탐색기에 💬 코멘트 카테고리 추가 — 모든 task.comments 평탄화, 합성 ID(taskId:ts), xpJump → 해당 카드 모달. #2 코멘트 사이드바 다크 테마 가독성: 헤더를 var(--ios-fill)+var(--c-text)로 변경(흰배경 흰글씨 문제 해결), 코멘트 카드도 var(--c-card) + var(--c-border) 테마 변수, 호버 시 액센트 보더. 빈 상태 안내 추가 "💬 등록된 코멘트가 없습니다.\n칸반 카드를 열고 코멘트를 남기면 여기에 모입니다." 안읽은 코멘트 위젯 버그: c.author가 닉네임 문자열인데 currentUser.id와 비교해서 모두 "타인 코멘트"로 잡힘 + lastVisit 정확히 직전 방문이라 거의 0건 → id/nickname/email 모두 매칭 + 최근 7일은 항상 노출 폴백. 코멘트 카드 클릭 → 칸반 + 해당 카드 모달 자동 열기) -->
+<!-- BUILD: 2026-05-28 r89 (Deep Wiki 프론트엔드 스텁: 사이드바 🤖 Deep Wiki 항목, 풀스크린 채팅 UI(메시지 풍선+아바타+MD 렌더+출처 인용 링크), ⚙️ 설정 모달(백엔드 URL/모델/태스크 컨텍스트/스트리밍), /health 헬스체크 + 🟢/🔴 상태 pill, SSE 스트리밍 fetch(_dwStreamChat: data: JSON 라인 파싱, delta+sources 누적), 대화 영속(localStorage 최근 40개), 백엔드 미연결 시 친절 안내 + 📘 설정 가이드 alert. Phase 2 백엔드(FastAPI+Ollama+pgvector)는 다음 라운드 deepwiki-server/ 폴더로 제공) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -596,7 +596,8 @@
         #project-participants-modal.modal-open,
         #am-edit-modal.modal-open,
         #iss-edit-modal.modal-open,
-        #br-edit-modal.modal-open {
+        #br-edit-modal.modal-open,
+        #dw-settings-modal.modal-open {
             display: flex !important;
         }
 
@@ -2647,6 +2648,46 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-widget-resize::before { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid var(--c-text3); border-bottom: 2px solid var(--c-text3); }
         .db-widget:hover .db-widget-resize { opacity: .8; }
         .db-widget-resize:hover { opacity: 1 !important; }
+        /* [r89] Deep Wiki — RAG 챗봇 */
+        #deepwiki-view.block { display: block; }
+        #deepwiki-view { height: calc(100vh - 60px); overflow: hidden; }
+        .dw-wrap { display: flex; flex-direction: column; height: 100%; max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+        .dw-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 8px; border-bottom: 1px solid var(--c-border); }
+        .dw-title { font-size: 22px; font-weight: 800; color: var(--c-text); margin: 0; }
+        .dw-sub { font-size: 12px; color: var(--c-text3); margin-top: 4px; }
+        .dw-status { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; }
+        .dw-status-unknown { background: var(--ios-fill); color: var(--c-text3); }
+        .dw-status-ok { background: rgba(59,122,87,.18); color: #2c6849; }
+        .dw-status-down { background: rgba(210,57,61,.18); color: #d2393d; }
+        .dw-messages { flex: 1; overflow-y: auto; padding: 16px 4px; display: flex; flex-direction: column; gap: 12px; }
+        .dw-msg { display: flex; gap: 10px; max-width: 100%; }
+        .dw-msg.user { flex-direction: row-reverse; }
+        .dw-msg-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .dw-msg.user .dw-msg-avatar { background: var(--c-accent); color: #fff; }
+        .dw-msg.bot .dw-msg-avatar { background: var(--ios-fill); color: var(--c-text); border: 1px solid var(--c-border); }
+        .dw-msg-body { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; padding: 10px 14px; font-size: 14px; line-height: 1.65; color: var(--c-text); max-width: 80%; word-break: break-word; }
+        .dw-msg.user .dw-msg-body { background: var(--c-accent-soft); border-color: var(--c-accent); color: var(--c-text); }
+        body.dark .dw-msg.user .dw-msg-body { background: rgba(201,100,66,0.18); }
+        .dw-msg-body pre { background: var(--ios-fill); border: 1px solid var(--c-border); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-size: 12.5px; margin: 6px 0; }
+        .dw-msg-body code { background: var(--ios-fill2); color: var(--c-accent); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+        .dw-msg-sources { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--c-border); font-size: 11px; color: var(--c-text3); }
+        .dw-msg-sources b { color: var(--c-text2); }
+        .dw-empty { text-align: center; padding: 60px 20px; color: var(--c-text3); font-size: 14px; line-height: 1.7; }
+        .dw-empty .dw-empty-emoji { font-size: 48px; margin-bottom: 12px; }
+        .dw-input-wrap { display: flex; gap: 8px; padding: 12px 4px; border-top: 1px solid var(--c-border); }
+        .dw-input { flex: 1; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 10px; padding: 10px 14px; font-size: 14px; font-family: inherit; outline: none; resize: none; line-height: 1.5; }
+        .dw-input:focus { border-color: var(--c-accent); }
+        body.dark .dw-input { background: rgba(255,250,240,0.04); }
+        .dw-send { background: var(--c-accent); color: #fff; border: none; border-radius: 10px; padding: 0 22px; font-size: 14px; font-weight: 700; cursor: pointer; transition: filter .15s; align-self: flex-end; height: 42px; }
+        .dw-send:hover { filter: brightness(1.08); }
+        .dw-send:disabled { background: var(--ios-fill); color: var(--c-text3); cursor: not-allowed; }
+        .dw-foot { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px 12px; font-size: 11.5px; color: var(--c-text3); }
+        .dw-typing { display: inline-flex; gap: 3px; align-items: center; }
+        .dw-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--c-accent); animation: dw-typing-pulse 1.2s ease-in-out infinite; }
+        .dw-typing span:nth-child(2) { animation-delay: 0.2s; }
+        .dw-typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dw-typing-pulse { 0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); } 30% { opacity: 1; transform: scale(1.1); } }
+
         /* [r86 #5] 탐색기 */
         #explorer-view.block { display: block; }
         #explorer-view { height: calc(100vh - 60px); overflow: hidden; }
@@ -3383,6 +3424,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <!-- [r81 #3] DB 도구는 서버 상태 페이지 안으로 병합 -->
                     <!-- [r86 #5] 탐색기 — 통합 검색 + 미리보기 -->
                     <button class="cs-nav" data-nav="explorer" id="cs-nav-explorer" onclick="switchView('explorer')" title="탐색기 (전체 콘텐츠 통합 검색·미리보기·바로가기)"><span class="cs-ico">🔍</span><span class="cs-label">탐색기</span></button>
+                    <!-- [r89] Deep Wiki — 자체 호스팅 RAG 챗봇 -->
+                    <button class="cs-nav" data-nav="deepwiki" id="cs-nav-deepwiki" onclick="switchView('deepwiki')" title="Deep Wiki (자체 PC RAG 챗봇 — Qwen Coder + Supabase pgvector)"><span class="cs-ico">🤖</span><span class="cs-label">Deep Wiki</span></button>
                     <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태 (DB 편집 포함)"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
                     <button class="cs-nav" data-nav="bugReport" id="cs-nav-bug-report" onclick="switchView('bugReport')" title="버그 리포트 (앱 이슈 제보 + 관리자 검토)"><span class="cs-ico">🐞</span><span class="cs-label">버그 리포트</span></button>
                     <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
@@ -4388,6 +4431,59 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <div style="flex:1;"></div>
                     <button onclick="closeModal('br-edit-modal')" class="cal-btn-cancel">취소</button>
                     <button onclick="brSaveReport()" class="cal-btn-save">제출</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- [r89] Deep Wiki — 자체 호스팅 RAG 챗봇 (Qwen Coder + pgvector) -->
+        <div id="deepwiki-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="dw-wrap">
+                <header class="dw-head">
+                    <div>
+                        <h2 class="dw-title">🤖 Deep Wiki</h2>
+                        <div class="dw-sub">자체 PC 호스팅 RAG 챗봇 · Qwen 2.5-Coder 14B + Supabase pgvector</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span id="dw-status-pill" class="dw-status dw-status-unknown" title="백엔드 연결 상태">⏳ 확인 중</span>
+                        <button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);" onclick="dwOpenSettings()" title="백엔드 URL 설정">⚙️ 설정</button>
+                        <button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);" onclick="dwClearChat()" title="대화 초기화">🗑 지우기</button>
+                    </div>
+                </header>
+                <div id="dw-messages" class="dw-messages"></div>
+                <div class="dw-input-wrap">
+                    <textarea id="dw-input" class="dw-input" placeholder="질문하세요 — 프로젝트 문서·태스크·스프린트를 기반으로 답변합니다. (Shift+Enter=줄바꿈, Enter=전송)" rows="2"></textarea>
+                    <button class="dw-send" onclick="dwSend()" title="전송 (Enter)">▶ 전송</button>
+                </div>
+                <div class="dw-foot">
+                    <span>💡 Phase 1: 프론트엔드 스텁 — 백엔드 설정 후 사용 가능</span>
+                    <a href="#" onclick="event.preventDefault();dwShowSetupGuide()" style="color:var(--c-accent);text-decoration:underline;font-weight:700;">📘 백엔드 설정 가이드</a>
+                </div>
+            </div>
+        </div>
+        <!-- Deep Wiki 설정 모달 -->
+        <div id="dw-settings-modal" class="hidden fixed inset-0 z-[600]" style="background:rgba(0,0,0,.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeModal('dw-settings-modal')">
+            <div class="cal-modal-box" onclick="event.stopPropagation()">
+                <div class="cal-modal-head"><h3>⚙️ Deep Wiki 설정</h3><button onclick="closeModal('dw-settings-modal')" class="cal-x">✕</button></div>
+                <div class="cal-modal-body">
+                    <label class="cal-fld"><span>백엔드 URL (Cloudflare Tunnel)</span>
+                        <input id="dw-backend-url" type="text" placeholder="https://tda-wiki.namkuri.workers.dev">
+                    </label>
+                    <div style="font-size:11.5px;color:var(--c-text3);line-height:1.6;">PC에서 <code>cloudflared tunnel</code>로 노출한 FastAPI 백엔드 주소를 입력하세요.<br>각 사용자가 자기 PC URL을 가질 수도, 팀 공용 URL 하나로 둘 수도 있습니다.</div>
+                    <label class="cal-fld"><span>모델</span>
+                        <select id="dw-model">
+                            <option value="qwen2.5-coder:14b" selected>🧠 Qwen 2.5-Coder 14B (권장)</option>
+                            <option value="qwen2.5:14b">🧠 Qwen 2.5 14B (범용)</option>
+                            <option value="qwen2.5:7b">⚡ Qwen 2.5 7B (빠름)</option>
+                        </select>
+                    </label>
+                    <label class="cal-fld-inline"><input type="checkbox" id="dw-include-tasks" checked> 카드·스프린트도 컨텍스트에 포함</label>
+                    <label class="cal-fld-inline"><input type="checkbox" id="dw-stream" checked> 응답 스트리밍 (SSE)</label>
+                </div>
+                <div class="cal-modal-foot">
+                    <button onclick="dwHealthCheck()" class="cal-btn-cancel">🔌 연결 테스트</button>
+                    <div style="flex:1;"></div>
+                    <button onclick="closeModal('dw-settings-modal')" class="cal-btn-cancel">취소</button>
+                    <button onclick="dwSaveSettings()" class="cal-btn-save">저장</button>
                 </div>
             </div>
         </div>
@@ -7137,6 +7233,254 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         document.addEventListener('DOMContentLoaded', function () { _bindCiteContext(); });
         // (위 리스너가 늦게 등록될 가능성에 대비 즉시 한 번)
         if (document.readyState !== 'loading') _bindCiteContext();
+
+        // ═══════════════════════════════════════════════════════════════════
+        // [r89] Deep Wiki — 자체 호스팅 RAG 챗봇 (Phase 1 프론트엔드 스텁)
+        //   백엔드: localStorage('tda_dw_backend_url')에 저장된 Cloudflare Tunnel URL
+        //   엔드포인트: /health (GET), /chat (POST, SSE 스트리밍)
+        //   백엔드 미연결 시 명확한 안내 + Phase 2 설정 가이드
+        // ═══════════════════════════════════════════════════════════════════
+        var dwState = { messages: [], healthOk: false, sending: false, settings: null };
+        function _dwGetSettings() {
+            if (dwState.settings) return dwState.settings;
+            try {
+                var raw = localStorage.getItem('tda_dw_settings');
+                if (raw) dwState.settings = JSON.parse(raw);
+            } catch (e) {}
+            if (!dwState.settings) dwState.settings = { backendUrl: '', model: 'qwen2.5-coder:14b', includeTasks: true, stream: true };
+            return dwState.settings;
+        }
+        function _dwSaveSettings(s) {
+            dwState.settings = s;
+            try { localStorage.setItem('tda_dw_settings', JSON.stringify(s)); } catch (e) {}
+        }
+        function dwInit() {
+            var s = _dwGetSettings();
+            // 대화 복원 (먼저 로드, 그 다음 렌더)
+            try {
+                var saved = JSON.parse(localStorage.getItem('tda_dw_chat') || '[]');
+                if (Array.isArray(saved) && !dwState.messages.length) dwState.messages = saved;
+            } catch (e) {}
+            dwRenderMessages();
+            dwHealthCheck();
+            // Enter 키 바인딩 (DOMContentLoaded 시점 외에도 안전하게)
+            var inp = document.getElementById('dw-input');
+            if (inp && !inp._dwBound) {
+                inp._dwBound = true;
+                inp.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dwSend(); }
+                });
+            }
+        }
+        function dwOpenSettings() {
+            var s = _dwGetSettings();
+            document.getElementById('dw-backend-url').value = s.backendUrl || '';
+            document.getElementById('dw-model').value = s.model || 'qwen2.5-coder:14b';
+            document.getElementById('dw-include-tasks').checked = !!s.includeTasks;
+            document.getElementById('dw-stream').checked = (s.stream !== false);
+            openModal('dw-settings-modal');
+        }
+        function dwSaveSettings() {
+            var s = {
+                backendUrl: (document.getElementById('dw-backend-url').value || '').trim().replace(/\/$/, ''),
+                model: document.getElementById('dw-model').value,
+                includeTasks: document.getElementById('dw-include-tasks').checked,
+                stream: document.getElementById('dw-stream').checked
+            };
+            _dwSaveSettings(s);
+            closeModal('dw-settings-modal');
+            showToast('⚙️ Deep Wiki 설정 저장됨', 'success');
+            dwHealthCheck();
+        }
+        async function dwHealthCheck() {
+            var pill = document.getElementById('dw-status-pill');
+            var s = _dwGetSettings();
+            if (!s.backendUrl) {
+                pill.className = 'dw-status dw-status-unknown';
+                pill.textContent = '⚙️ 백엔드 미설정';
+                dwState.healthOk = false;
+                return;
+            }
+            pill.className = 'dw-status dw-status-unknown';
+            pill.textContent = '⏳ 확인 중...';
+            try {
+                var ctrl = new AbortController();
+                var timer = setTimeout(function () { ctrl.abort(); }, 5000);
+                var res = await fetch(s.backendUrl + '/health', { signal: ctrl.signal });
+                clearTimeout(timer);
+                if (res.ok) {
+                    var info = await res.json().catch(function () { return {}; });
+                    pill.className = 'dw-status dw-status-ok';
+                    pill.textContent = '🟢 연결됨' + (info.model ? ' · ' + info.model : '');
+                    dwState.healthOk = true;
+                    return;
+                }
+                throw new Error('HTTP ' + res.status);
+            } catch (e) {
+                pill.className = 'dw-status dw-status-down';
+                pill.textContent = '🔴 ' + (e.name === 'AbortError' ? '응답 없음' : '연결 실패');
+                dwState.healthOk = false;
+            }
+        }
+        function dwRenderMessages() {
+            var box = document.getElementById('dw-messages'); if (!box) return;
+            if (!dwState.messages.length) {
+                box.innerHTML = '<div class="dw-empty">' +
+                    '<div class="dw-empty-emoji">🤖</div>' +
+                    '<div><b>Deep Wiki에 질문해보세요</b></div>' +
+                    '<div style="font-size:12px;margin-top:6px;">프로젝트 문서·태스크·스프린트를 컨텍스트로 답변합니다.</div>' +
+                    '<div style="font-size:11px;margin-top:14px;opacity:.7;">💡 예시: "전투 시스템 관련 카드는 뭐가 있어?"<br>"PlayerCharacter 프리팹 작성 가이드 알려줘"<br>"이번 스프린트 목표를 마크다운으로 정리해줘"</div>' +
+                    '</div>';
+                return;
+            }
+            box.innerHTML = dwState.messages.map(function (m) {
+                var isUser = m.role === 'user';
+                var avatar = isUser ? '👤' : '🤖';
+                var bodyHtml;
+                if (isUser) bodyHtml = _annEsc(m.content);
+                else {
+                    // 봇 응답은 마크다운 렌더 시도
+                    try { bodyHtml = DOMPurify.sanitize(parseMarkdownWithTables(m.content || ''), domPurifyConfig); }
+                    catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;">' + _annEsc(m.content || '') + '</pre>'; }
+                }
+                var sourcesHtml = '';
+                if (m.sources && m.sources.length) {
+                    sourcesHtml = '<div class="dw-msg-sources"><b>📚 참고 문서·카드:</b> ' +
+                        m.sources.map(function (s) { return '<a href="#" onclick="event.preventDefault();dwJumpSource(\'' + s.type + '\',\'' + s.id + '\')" style="color:var(--c-accent);">' + _annEsc(s.title || s.id) + '</a>'; }).join(' · ') +
+                        '</div>';
+                }
+                return '<div class="dw-msg ' + (isUser ? 'user' : 'bot') + '">' +
+                    '<div class="dw-msg-avatar">' + avatar + '</div>' +
+                    '<div class="dw-msg-body">' + bodyHtml + sourcesHtml + '</div>' +
+                    '</div>';
+            }).join('');
+            // 마지막 메시지로 스크롤
+            box.scrollTop = box.scrollHeight;
+        }
+        function dwJumpSource(type, id) {
+            if (type === 'doc') { switchView('docs'); setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80); }
+            else if (type === 'task') { switchView('kanban'); setTimeout(function () { if (typeof openCardModal === 'function') openCardModal(id); }, 80); }
+        }
+        function dwClearChat() {
+            dwState.messages = [];
+            try { localStorage.removeItem('tda_dw_chat'); } catch (e) {}
+            dwRenderMessages();
+        }
+        async function dwSend() {
+            if (dwState.sending) return;
+            var input = document.getElementById('dw-input');
+            var text = (input.value || '').trim();
+            if (!text) return;
+            var s = _dwGetSettings();
+            if (!s.backendUrl) {
+                showToast('⚙️ 백엔드 URL을 먼저 설정하세요', 'alert');
+                dwOpenSettings();
+                return;
+            }
+            if (!dwState.healthOk) {
+                await dwHealthCheck();
+                if (!dwState.healthOk) {
+                    showToast('🔴 백엔드 연결 실패 — 설정/터널/Ollama 확인 필요', 'alert');
+                    return;
+                }
+            }
+            // 사용자 메시지 추가
+            dwState.messages.push({ role: 'user', content: text });
+            input.value = '';
+            dwRenderMessages();
+            dwState.sending = true;
+            // 봇 응답 placeholder
+            var botIdx = dwState.messages.length;
+            dwState.messages.push({ role: 'bot', content: '', _pending: true });
+            dwRenderMessages();
+            // 타이핑 인디케이터 표시
+            var box = document.getElementById('dw-messages');
+            var lastBot = box.querySelectorAll('.dw-msg.bot .dw-msg-body');
+            if (lastBot.length) lastBot[lastBot.length - 1].innerHTML = '<span class="dw-typing"><span></span><span></span><span></span></span>';
+            try {
+                // POST /chat
+                var payload = {
+                    messages: dwState.messages.slice(0, -1).map(function (m) { return { role: m.role === 'bot' ? 'assistant' : 'user', content: m.content }; }),
+                    project_id: activeProjectId,
+                    model: s.model,
+                    include_tasks: s.includeTasks,
+                    stream: s.stream
+                };
+                if (s.stream) {
+                    await _dwStreamChat(s.backendUrl + '/chat', payload, botIdx);
+                } else {
+                    var res = await fetch(s.backendUrl + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    var data = await res.json();
+                    dwState.messages[botIdx] = { role: 'bot', content: data.content || '', sources: data.sources || [] };
+                }
+            } catch (e) {
+                dwState.messages[botIdx] = { role: 'bot', content: '❌ 백엔드 응답 실패\n\n```\n' + (e.message || e) + '\n```\n\n→ ⚙️ 설정에서 백엔드 URL 확인 + PC에 Ollama/FastAPI 실행 중인지 확인하세요.' };
+            }
+            dwState.sending = false;
+            dwRenderMessages();
+            try { localStorage.setItem('tda_dw_chat', JSON.stringify(dwState.messages.slice(-40))); } catch (e) {}
+        }
+        async function _dwStreamChat(url, payload, botIdx) {
+            var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader();
+            var decoder = new TextDecoder();
+            var buf = '';
+            var content = '';
+            var sources = [];
+            while (true) {
+                var chunk = await reader.read();
+                if (chunk.done) break;
+                buf += decoder.decode(chunk.value, { stream: true });
+                // SSE 라인: "data: {json}\n\n"
+                var lines = buf.split('\n');
+                buf = lines.pop() || '';
+                lines.forEach(function (line) {
+                    if (!line.startsWith('data:')) return;
+                    var data = line.slice(5).trim();
+                    if (!data || data === '[DONE]') return;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.delta) content += ev.delta;
+                        if (ev.sources) sources = ev.sources;
+                    } catch (e) { /* ignore */ }
+                });
+                dwState.messages[botIdx] = { role: 'bot', content: content, sources: sources };
+                dwRenderMessages();
+            }
+        }
+        function dwShowSetupGuide() {
+            // 새 창/모달로 README 안내
+            var guide = '🔧 Deep Wiki 백엔드 설정 (Phase 2)\n\n' +
+                '아키텍처:\n' +
+                '  GitHub Pages → Cloudflare Tunnel → [내 PC] FastAPI + Ollama + Supabase pgvector\n\n' +
+                '1. PC에 Ollama 설치 (https://ollama.com)\n' +
+                '   ollama pull qwen2.5-coder:14b\n' +
+                '   ollama pull nomic-embed-text\n\n' +
+                '2. Supabase에서 pgvector 활성화 + 청크 테이블 생성:\n' +
+                '   create extension if not exists vector;\n' +
+                '   create table doc_chunks (id bigserial primary key, source_type text,\n' +
+                '     source_id text, chunk_idx int, content text, embedding vector(768),\n' +
+                '     updated_at timestamptz default now());\n\n' +
+                '3. FastAPI 백엔드 코드는 다음 라운드(r90)에서 제공됩니다.\n' +
+                '   레포: github.com/namkuri/tda-deepwiki (예정)\n\n' +
+                '4. Cloudflare Tunnel:\n' +
+                '   winget install cloudflare.cloudflared\n' +
+                '   cloudflared tunnel create tda-deepwiki\n' +
+                '   cloudflared tunnel route dns tda-deepwiki tda-wiki.<your-domain>\n\n' +
+                '5. ⚙️ 설정에 https://tda-wiki.<your-domain> 입력 → 🔌 연결 테스트';
+            alert(guide);
+        }
+        // 전송: Enter (Shift+Enter=줄바꿈), 설정 모달 영향 없음
+        document.addEventListener('DOMContentLoaded', function () {
+            var inp = document.getElementById('dw-input');
+            if (inp) {
+                inp.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dwSend(); }
+                });
+            }
+        });
 
         // ═══════════════════════════════════════════════════════════════════
         // [r86 #5] 탐색기 (Explorer) — 통합 검색 + 미리보기 + 바로가기
@@ -10356,6 +10700,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r86 #5] 탐색기
             var _csXp = document.getElementById('cs-nav-explorer'); if (_csXp) _csXp.classList.toggle('active', viewName === 'explorer');
             var _xpvw = document.getElementById('explorer-view'); if (_xpvw) { _xpvw.classList.toggle('hidden', viewName !== 'explorer'); _xpvw.classList.toggle('block', viewName === 'explorer'); }
+            // [r89] Deep Wiki
+            var _csDw = document.getElementById('cs-nav-deepwiki'); if (_csDw) _csDw.classList.toggle('active', viewName === 'deepwiki');
+            var _dwvw = document.getElementById('deepwiki-view'); if (_dwvw) { _dwvw.classList.toggle('hidden', viewName !== 'deepwiki'); _dwvw.classList.toggle('block', viewName === 'deepwiki'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -10519,6 +10866,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 if (typeof xpRender === 'function') xpRender();
                 setTimeout(function () { var s = document.getElementById('xp-search'); if (s) s.focus(); }, 50);
+            } else if (viewName === 'deepwiki') {
+                // [r89] Deep Wiki
+                var _kvdw = document.getElementById('kanban-view'); if (_kvdw) { _kvdw.classList.add('hidden'); _kvdw.classList.remove('block'); }
+                var _dvdw = document.getElementById('docs-view'); if (_dvdw) { _dvdw.classList.add('hidden'); _dvdw.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                if (typeof dwInit === 'function') dwInit();
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
