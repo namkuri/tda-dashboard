@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r79 (#1 첫 로드/새로고침 시 대시보드 기본 진입. #2 위젯 행 우측 메타(프로젝트·스프린트·담당자·작성자). #3 위젯 모서리 드래그 리사이즈(1~4칸, mouseup에서 저장). #4 위젯 헤더 우클릭 → 프로젝트/스프린트/캘린더 필터 + 크기 선택 + 삭제. #5 메모 위젯(자동 저장). #6 대시보드 세로 스크롤. #7 서버 상태에 DB 사용량 추정 + 진행 바, 대시보드 위젯에서도 캐시 노출. #8 위젯 헤더 + 버튼으로 카테고리/스프린트/일정/카드 빠른 추가. #9 미니 캘린더 날짜 호버 팝업(일정 색·시각·제목). #10 시계 위젯(1초 인터벌 디지털 시계). #11 사진 위젯(로컬 FileReader + 공용 드라이브 png/jpg/gif 선택)) -->
+<!-- BUILD: 2026-05-28 r80 (#1 대시보드 배치 localStorage 영속 버그: 로그인 전/후 storage key 불일치 → setUserFromAuth에서 dbState.widgets 리셋 + guest→user 마이그레이션. #2 위젯 그리드 세로축 확장: w/h 별도 저장, w-N/h-N CSS, 모서리 드래그가 양축 변경(dx/unitW·dy/unitH), 우클릭 메뉴에 가로/세로 1~4칸 각각 선택. #3 메모 MD 편집/렌더: 모달에 ✏️편집/👁미리보기 탭, parseMarkdownWithTables + DOMPurify로 렌더, 600ms 디바운스 자동 저장. 다크웜 배경: textarea와 메모 카드에 rgba(255,250,240,.04) 적용. #4 메모 리스트: w.memos=[{id,content,author,createdAt,updatedAt}], + 버튼으로 추가, 카드 클릭 → 모달 편집, 호버 시 ✕ 삭제 버튼, 레거시 단일 memo 자동 마이그레이션) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2601,9 +2601,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-btn-toggle { padding: 8px 14px; background: transparent; color: var(--c-text); border: 1px solid var(--c-border); border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
         .db-btn-toggle:hover { background: var(--ios-fill); }
         .db-btn-toggle.active { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
-        .db-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-        .db-widget { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; padding: 14px 16px; position: relative; min-height: 200px; display: flex; flex-direction: column; transition: box-shadow .15s, transform .15s; }
+        .db-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(220px, auto); gap: 14px; }
+        .db-widget { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; padding: 14px 16px; position: relative; min-height: 200px; display: flex; flex-direction: column; transition: box-shadow .15s, transform .15s; overflow: hidden; }
         .db-widget:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+        /* [r80] 가로(w) + 세로(h) 별도 — w1~4, h1~4 */
+        .db-widget.w-1 { grid-column: span 1; }
+        .db-widget.w-2 { grid-column: span 2; }
+        .db-widget.w-3 { grid-column: span 3; }
+        .db-widget.w-4 { grid-column: span 4; }
+        .db-widget.h-1 { grid-row: span 1; }
+        .db-widget.h-2 { grid-row: span 2; }
+        .db-widget.h-3 { grid-row: span 3; }
+        .db-widget.h-4 { grid-row: span 4; }
+        /* 레거시 호환 (size-N → w-N + h-1) */
         .db-widget.size-1 { grid-column: span 1; }
         .db-widget.size-2 { grid-column: span 2; }
         .db-widget.size-3 { grid-column: span 3; }
@@ -2634,8 +2644,43 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-widget-resize::before { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid var(--c-text3); border-bottom: 2px solid var(--c-text3); }
         .db-widget:hover .db-widget-resize { opacity: .8; }
         .db-widget-resize:hover { opacity: 1 !important; }
-        /* 메모 위젯 */
-        .db-memo { width: 100%; height: 100%; min-height: 140px; background: transparent; color: var(--c-text); border: none; outline: none; resize: none; font-family: inherit; font-size: 13px; line-height: 1.55; padding: 4px; box-sizing: border-box; }
+        /* [r80] 메모 위젯 — 리스트 + MD 편집 모달 */
+        .db-memo { width: 100%; height: 100%; min-height: 140px; background: var(--ios-fill); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 6px; outline: none; resize: none; font-family: inherit; font-size: 13px; line-height: 1.55; padding: 8px 10px; box-sizing: border-box; }
+        .db-memo:focus { border-color: var(--c-accent); background: var(--c-paper); }
+        .db-memo-list { display: flex; flex-direction: column; gap: 6px; max-height: 100%; overflow-y: auto; padding: 2px; }
+        .db-memo-item { background: var(--ios-fill); border: 1px solid var(--c-border); border-radius: 7px; padding: 8px 10px; cursor: pointer; transition: background .15s, border-color .15s; }
+        .db-memo-item:hover { background: var(--c-paper); border-color: var(--c-accent); }
+        body.dark .db-memo-item { background: rgba(255, 250, 240, 0.04); }
+        body.dark .db-memo-item:hover { background: rgba(201, 100, 66, 0.08); }
+        .db-memo-item-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .db-memo-item-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .db-memo-item-meta { font-size: 10.5px; color: var(--c-text3); }
+        .db-memo-del { background: transparent; color: var(--c-text3); border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; font-size: 12px; opacity: 0; transition: opacity .15s; flex-shrink: 0; }
+        .db-memo-item:hover .db-memo-del { opacity: 1; }
+        .db-memo-del:hover { background: rgba(210, 57, 61, 0.15); color: #d2393d; }
+        /* MD 편집 모달 */
+        .db-memo-modal { background: var(--c-paper); border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,.4); width: 700px; max-width: 92vw; height: 75vh; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; }
+        .db-memo-modal-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--c-border); background: var(--ios-fill); }
+        .db-memo-modal-body { flex: 1; display: flex; flex-direction: column; padding: 12px 16px; overflow: hidden; }
+        .db-memo-tabs { display: flex; gap: 4px; margin-bottom: 10px; background: var(--ios-fill); border-radius: 6px; padding: 3px; align-self: flex-start; }
+        .db-memo-tab { background: transparent; color: var(--c-text2); border: none; padding: 6px 14px; border-radius: 4px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .15s; }
+        .db-memo-tab.active { background: var(--c-paper); color: var(--c-text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+        .db-memo-edit-ta { flex: 1; background: var(--ios-fill); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 7px; padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13.5px; line-height: 1.6; outline: none; resize: none; }
+        .db-memo-edit-ta:focus { border-color: var(--c-accent); background: var(--c-paper); }
+        body.dark .db-memo-edit-ta { background: rgba(255, 250, 240, 0.04); }
+        body.dark .db-memo-edit-ta:focus { background: rgba(255, 250, 240, 0.06); }
+        .db-memo-rendered { flex: 1; padding: 12px 16px; background: var(--ios-fill); border: 1px solid var(--c-border); border-radius: 7px; overflow-y: auto; font-size: 14px; line-height: 1.65; color: var(--c-text); }
+        .db-memo-rendered h1, .db-memo-rendered h2, .db-memo-rendered h3 { color: var(--c-text); margin: 0.6em 0 0.4em; font-weight: 700; }
+        .db-memo-rendered h1 { font-size: 1.4em; border-bottom: 1px solid var(--c-border); padding-bottom: 4px; }
+        .db-memo-rendered h2 { font-size: 1.2em; }
+        .db-memo-rendered h3 { font-size: 1.05em; }
+        .db-memo-rendered p { margin: 0.4em 0; }
+        .db-memo-rendered code { background: var(--ios-fill2); color: var(--c-accent); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+        .db-memo-rendered pre { background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 6px; padding: 10px 12px; overflow-x: auto; font-size: 12.5px; }
+        .db-memo-rendered a { color: var(--c-accent); text-decoration: underline; }
+        .db-memo-rendered ul, .db-memo-rendered ol { margin: 0.4em 0; padding-left: 1.4em; }
+        .db-memo-rendered blockquote { border-left: 3px solid var(--c-accent); padding-left: 12px; color: var(--c-text2); margin: 0.5em 0; }
+        .db-memo-modal-foot { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--c-border); background: var(--ios-fill); }
         /* 시계 위젯 */
         .db-clock-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px 8px; gap: 6px; }
         .db-clock-time { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 36px; font-weight: 800; color: var(--c-accent); letter-spacing: 1px; line-height: 1; }
@@ -4510,6 +4555,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             localStorage.setItem('pb3_nickname', myNickname);
             sessionStorage.setItem('pb3_client_id', user.id);
             updateAuthUI();
+            // [r80] 대시보드 스토리지 키가 currentUser.id로 바뀜 → 위젯 재로드
+            if (typeof dbState === 'object' && dbState) {
+                dbState.widgets = null;
+                if (currentView === 'dashboard' && typeof dbRender === 'function') dbRender();
+            }
         }
 
         function updateAuthUI() {
@@ -6309,9 +6359,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         //   localStorage 키: tda_dashboard_{projectId}_{userId}
         //   widgets: [{ id, type:'category'|'sprint'|'upcoming'|'myTasks'|'reviewQueue', size:1-4, catId? }]
         // ═══════════════════════════════════════════════════════════════════
-        var dbState = { editMode: false, widgets: null, recentDocs: null };
+        var dbState = { editMode: false, widgets: null, recentDocs: null, loadedKey: null };
         function _dbStorageKey() {
             return 'tda_dashboard_' + (activeProjectId || 'default') + '_' + ((currentUser && currentUser.id) || 'guest');
+        }
+        // [r80] 로그인/프로젝트 전환 시 스토리지 key가 바뀌면 캐시 무효화 → 재로드
+        function _dbInvalidateIfKeyChanged() {
+            var k = _dbStorageKey();
+            if (dbState.loadedKey && dbState.loadedKey !== k) {
+                // 이전 키(예: guest)에서 변경한 위젯이 있고 새 키엔 데이터가 없으면 마이그레이션(1회)
+                try {
+                    var prevRaw = localStorage.getItem(dbState.loadedKey);
+                    var newRaw = localStorage.getItem(k);
+                    if (prevRaw && !newRaw && /guest/.test(dbState.loadedKey)) {
+                        localStorage.setItem(k, prevRaw); // guest → user 마이그레이션
+                    }
+                } catch (e) {}
+                dbState.widgets = null; // 재로드
+            }
         }
         function _dbLastVisitKey() {
             return 'tda_db_last_visit_' + ((currentUser && currentUser.id) || 'guest');
@@ -6355,7 +6420,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             try { localStorage.setItem(_dbLastVisitKey(), String(Date.now())); } catch (e) {}
         }
         function dbRender() {
-            if (!dbState.widgets) dbState.widgets = _dbLoadWidgets();
+            _dbInvalidateIfKeyChanged(); // [r80] 키 변경 감지 → 캐시 무효화
+            if (!dbState.widgets) {
+                dbState.widgets = _dbLoadWidgets();
+                dbState.loadedKey = _dbStorageKey(); // 현재 키 기록
+            }
             var grid = document.getElementById('db-grid'); if (!grid) return;
             var empty = document.getElementById('db-empty');
             if (!dbState.widgets.length) {
@@ -6728,8 +6797,31 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 nav = 'switchView(\'git\')';
                 body = '<div class="db-widget-empty">Git 연동 시 표시됩니다<br><span style="font-size:11px;opacity:.7;">사이드바 Git 탭에서 레포 설정</span></div>';
             } else if (w.type === 'memo') {
+                // [r80] 메모 리스트: w.memos = [{id, content, author, createdAt, updatedAt}]
+                // 단일 w.memo(문자열) 레거시 호환 — 첫 메모로 자동 마이그레이션
+                if (typeof w.memo === 'string' && !Array.isArray(w.memos)) {
+                    var legacyText = w.memo;
+                    w.memos = legacyText ? [{ id: 'm-' + Date.now(), content: legacyText, author: (currentUser && currentUser.id) || null, createdAt: Date.now(), updatedAt: Date.now() }] : [];
+                    delete w.memo; _dbSaveWidgets();
+                }
+                if (!Array.isArray(w.memos)) w.memos = [];
                 head = '📝 개인 메모';
-                body = '<textarea class="db-memo" oninput="dbMemoChange(\'' + wid + '\', this.value)" placeholder="여기에 메모를 입력하세요...&#10;(자동 저장 · 로컬)">' + _annEsc(w.memo || '') + '</textarea>';
+                sub = '<span class="db-widget-sub">· ' + w.memos.length + '개</span>';
+                addAct = "dbMemoAdd('" + wid + "')";
+                if (!w.memos.length) {
+                    body = '<div class="db-widget-empty" style="cursor:pointer;" onclick="dbMemoAdd(\'' + wid + '\')">📝<br>메모가 없습니다<br><span style="font-size:11px;opacity:.7;">＋ 버튼 또는 클릭하여 추가</span></div>';
+                } else {
+                    body = '<div class="db-memo-list">' + w.memos.slice().sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); }).map(function (m) {
+                        var preview = (m.content || '').slice(0, 80).replace(/\n/g, ' ');
+                        var when = m.updatedAt ? _dbFormatWhen(m.updatedAt) : '';
+                        var authorName = _dbUserName(m.author) || '나';
+                        return '<div class="db-memo-item" data-memo="' + m.id + '" onclick="dbMemoOpen(\'' + wid + '\',\'' + m.id + '\')">' +
+                            '<div class="db-memo-item-head"><span class="db-memo-item-title">' + (preview ? _annEsc(preview) : '<span style="color:var(--c-text3);">(빈 메모)</span>') + '</span>' +
+                            '<button class="db-memo-del" onclick="event.stopPropagation();dbMemoDelete(\'' + wid + '\',\'' + m.id + '\')" title="삭제">✕</button></div>' +
+                            '<div class="db-memo-item-meta">' + _annEsc(authorName) + ' · ' + when + '</div>' +
+                            '</div>';
+                    }).join('') + '</div>';
+                }
             } else if (w.type === 'clock') {
                 head = '🕒 시계';
                 body = '<div class="db-clock-wrap" id="db-clock-' + wid + '">' +
@@ -6748,24 +6840,154 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
                 body += '</div>';
             }
-            return '<div class="db-widget size-' + (w.size || 2) + '" data-wid="' + w.id + '">' +
+            // [r80] w/h 별도 — 기존 size 필드는 w로 매핑(레거시 호환)
+            var ww = w.w || w.size || 2;
+            var hh = w.h || 1;
+            return '<div class="db-widget w-' + ww + ' h-' + hh + '" data-wid="' + w.id + '">' +
                 '<div class="db-widget-actions">' +
-                '<button class="db-w-act" onclick="dbResizeWidget(\'' + w.id + '\',-1)" title="축소">−</button>' +
-                '<button class="db-w-act" onclick="dbResizeWidget(\'' + w.id + '\',1)" title="확대">+</button>' +
+                '<button class="db-w-act" onclick="dbResizeWidget(\'' + w.id + '\',-1)" title="가로 축소">←</button>' +
+                '<button class="db-w-act" onclick="dbResizeWidget(\'' + w.id + '\',1)" title="가로 확대">→</button>' +
                 '<button class="db-w-act danger" onclick="dbDeleteWidget(\'' + w.id + '\')" title="삭제">✕</button>' +
                 '</div>' +
                 _dbHeadHtml(w, head, sub, nav, addAct) +
                 '<div class="db-widget-body" oncontextmenu="if(event.target===this)_dbCtx(event,{kind:\'widget\',id:\'\',wid:\'' + w.id + '\'})">' + body + '</div>' +
-                '<div class="db-widget-resize" data-wid="' + w.id + '" title="드래그하여 크기 조절"></div>' +
+                '<div class="db-widget-resize" data-wid="' + w.id + '" title="드래그하여 크기 조절 (가로·세로)"></div>' +
                 '</div>';
         }
-        // [r79] 메모 위젯 — onChange 시 widget 객체에 저장
-        function dbMemoChange(wid, val) {
+        // [r80] 메모 위젯 — 리스트 + 추가/편집/삭제, 작성자/시간 메타
+        function _dbFormatWhen(ts) {
+            if (!ts) return '';
+            var d = new Date(ts), now = new Date();
+            var sameDay = d.toDateString() === now.toDateString();
+            if (sameDay) return _pad2(d.getHours()) + ':' + _pad2(d.getMinutes());
+            var sameYear = d.getFullYear() === now.getFullYear();
+            return (sameYear ? '' : d.getFullYear() + '. ') + (d.getMonth() + 1) + '. ' + d.getDate();
+        }
+        function dbMemoAdd(wid) {
             var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
             if (!w) return;
-            w.memo = val;
+            if (!Array.isArray(w.memos)) w.memos = [];
+            var newMemo = {
+                id: 'm-' + Date.now(),
+                content: '',
+                author: (currentUser && currentUser.id) || null,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+            w.memos.unshift(newMemo);
             _dbSaveWidgets();
+            dbRender();
+            // 새 메모는 바로 편집 모드
+            setTimeout(function () { dbMemoOpen(wid, newMemo.id); }, 50);
         }
+        async function dbMemoDelete(wid, memoId) {
+            if (!(await uiConfirm({ title: '메모 삭제', message: '이 메모를 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w || !Array.isArray(w.memos)) return;
+            w.memos = w.memos.filter(function (m) { return m.id !== memoId; });
+            _dbSaveWidgets();
+            dbRender();
+        }
+        // 메모 편집 모달 (MD 편집/렌더 토글)
+        function dbMemoOpen(wid, memoId) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            var m = (w.memos || []).find(function (x) { return x.id === memoId; });
+            if (!m) return;
+            // 기존 열린 모달이 있으면 제거
+            var existing = document.getElementById('_memoEditModal'); if (existing) existing.remove();
+            var modal = document.createElement('div');
+            modal.id = '_memoEditModal';
+            modal.style.cssText = 'position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
+            var authorName = _dbUserName(m.author) || '나';
+            modal.innerHTML =
+                '<div class="db-memo-modal" onclick="event.stopPropagation()">' +
+                '<div class="db-memo-modal-head">' +
+                '<span style="font-size:16px;font-weight:700;color:var(--c-text);flex:1;">📝 메모 편집</span>' +
+                '<span style="font-size:11px;color:var(--c-text3);margin-right:12px;">' + _annEsc(authorName) + ' · 작성 ' + _dbFormatWhen(m.createdAt) + (m.updatedAt && m.updatedAt !== m.createdAt ? ' · 수정 ' + _dbFormatWhen(m.updatedAt) : '') + '</span>' +
+                '<button onclick="_dbMemoModalSave(true)" style="background:none;border:none;cursor:pointer;color:var(--c-text2);font-size:18px;padding:4px 8px;">✕</button>' +
+                '</div>' +
+                '<div class="db-memo-modal-body">' +
+                '<div class="db-memo-tabs">' +
+                '<button id="_memoTabEdit" class="db-memo-tab active" onclick="_dbMemoToggleTab(\'edit\')">✏️ 편집</button>' +
+                '<button id="_memoTabView" class="db-memo-tab" onclick="_dbMemoToggleTab(\'view\')">👁 미리보기</button>' +
+                '</div>' +
+                '<textarea id="_memoEditTa" placeholder="마크다운(MD) 형식 지원 · # 제목, **굵게**, [링크](url), - 리스트 ..." class="db-memo-edit-ta">' + _annEsc(m.content || '') + '</textarea>' +
+                '<div id="_memoRendered" class="db-memo-rendered" style="display:none;"></div>' +
+                '</div>' +
+                '<div class="db-memo-modal-foot">' +
+                '<button onclick="_dbMemoModalDelete()" class="cal-btn-danger">삭제</button>' +
+                '<div style="flex:1;"></div>' +
+                '<span id="_memoSaveHint" style="font-size:11px;color:var(--c-text3);">변경사항 자동 저장</span>' +
+                '<button onclick="_dbMemoModalSave(true)" class="cal-btn-save">완료</button>' +
+                '</div>' +
+                '</div>';
+            modal.onclick = function (e) { if (e.target === modal) _dbMemoModalSave(true); };
+            document.body.appendChild(modal);
+            window._memoEditCtx = { wid: wid, memoId: memoId };
+            var ta = document.getElementById('_memoEditTa');
+            ta.focus();
+            // 입력 시 디바운스 저장
+            ta.addEventListener('input', function () {
+                clearTimeout(window._memoEditTimer);
+                window._memoEditTimer = setTimeout(function () { _dbMemoModalSave(false); }, 600);
+            });
+        }
+        function _dbMemoToggleTab(tab) {
+            var ta = document.getElementById('_memoEditTa');
+            var rendered = document.getElementById('_memoRendered');
+            var tEdit = document.getElementById('_memoTabEdit');
+            var tView = document.getElementById('_memoTabView');
+            if (tab === 'view') {
+                _dbMemoModalSave(false); // 저장 후 렌더
+                var content = ta.value || '';
+                if (typeof parseMarkdownWithTables === 'function' && typeof DOMPurify !== 'undefined') {
+                    rendered.innerHTML = DOMPurify.sanitize(parseMarkdownWithTables(content), domPurifyConfig);
+                } else {
+                    rendered.innerHTML = '<pre style="white-space:pre-wrap;font-family:inherit;">' + _annEsc(content) + '</pre>';
+                }
+                if (!content.trim()) rendered.innerHTML = '<div style="color:var(--c-text3);font-style:italic;padding:20px;text-align:center;">(내용 없음)</div>';
+                ta.style.display = 'none';
+                rendered.style.display = 'block';
+                tEdit.classList.remove('active');
+                tView.classList.add('active');
+            } else {
+                ta.style.display = 'block';
+                rendered.style.display = 'none';
+                tEdit.classList.add('active');
+                tView.classList.remove('active');
+                ta.focus();
+            }
+        }
+        function _dbMemoModalSave(close) {
+            var ctx = window._memoEditCtx; if (!ctx) return;
+            var w = (dbState.widgets || []).find(function (x) { return x.id === ctx.wid; });
+            if (!w) return;
+            var m = (w.memos || []).find(function (x) { return x.id === ctx.memoId; });
+            if (!m) return;
+            var ta = document.getElementById('_memoEditTa');
+            if (ta && ta.value !== m.content) {
+                m.content = ta.value;
+                m.updatedAt = Date.now();
+                _dbSaveWidgets();
+                var hint = document.getElementById('_memoSaveHint');
+                if (hint) { hint.textContent = '✓ 저장됨'; setTimeout(function(){ if(hint) hint.textContent = '변경사항 자동 저장'; }, 1500); }
+            }
+            if (close) {
+                var modal = document.getElementById('_memoEditModal'); if (modal) modal.remove();
+                window._memoEditCtx = null;
+                dbRender();
+            }
+        }
+        async function _dbMemoModalDelete() {
+            var ctx = window._memoEditCtx; if (!ctx) return;
+            if (!(await uiConfirm({ title: '메모 삭제', message: '이 메모를 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            var modal = document.getElementById('_memoEditModal'); if (modal) modal.remove();
+            await dbMemoDelete(ctx.wid, ctx.memoId);
+            window._memoEditCtx = null;
+        }
+        // 레거시 호환 (단일 textarea 호출)
+        function dbMemoChange(wid, val) { /* deprecated in r80 */ }
         // [r79] 시계 위젯 — setInterval로 1초마다 갱신
         function _dbBindClocks() {
             // 기존 인터벌 정리
@@ -6899,10 +7121,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (w.type === 'photo') {
                 items.push({ ico: '🖼️', label: '사진 변경', act: 'dbPhotoChange(\'' + wid + '\')' });
             }
-            // 공통: 크기 조절(1~4)
+            // [r80] 공통: 가로/세로 별도 조절
+            items.push({ sep: true });
+            var curW = w.w || w.size || 2;
+            var curH = w.h || 1;
+            [1, 2, 3, 4].forEach(function (s) {
+                items.push({ ico: (curW === s ? '●' : '○'), label: '가로 ' + s + '칸', act: 'dbResizeWidget(\'' + wid + '\',' + (s - curW) + ')' });
+            });
             items.push({ sep: true });
             [1, 2, 3, 4].forEach(function (s) {
-                items.push({ ico: (w.size === s ? '●' : '○'), label: '크기 ' + s + '칸', act: 'dbResizeWidget(\'' + wid + '\',' + (s - (w.size || 2)) + ')' });
+                items.push({ ico: (curH === s ? '●' : '○'), label: '세로 ' + s + '칸', act: 'dbResizeWidgetH(\'' + wid + '\',' + (s - curH) + ')' });
             });
             items.push({ sep: true });
             items.push({ ico: '🗑', label: '위젯 삭제', danger: true, act: 'dbDeleteWidget(\'' + wid + '\')' });
@@ -6977,7 +7205,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             });
             document.body.appendChild(picker);
         }
-        // [r79] 모서리 드래그 리사이즈
+        // [r80] 모서리 드래그 리사이즈 — 가로(w) + 세로(h) 양축
         function _dbBindResize() {
             var grid = document.getElementById('db-grid'); if (!grid) return;
             grid.querySelectorAll('.db-widget-resize').forEach(function (handle) {
@@ -6988,19 +7216,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var widget = handle.closest('.db-widget');
                     if (!widget) return;
                     var rect = widget.getBoundingClientRect();
-                    var startX = e.clientX;
-                    var startSize = (dbState.widgets || []).find(function (w) { return w.id === wid; });
-                    if (!startSize) return;
-                    var baseSize = startSize.size || 2;
-                    var unitW = rect.width / baseSize;
-                    var startMoveSize = baseSize;
+                    var startX = e.clientX, startY = e.clientY;
+                    var sw = (dbState.widgets || []).find(function (w) { return w.id === wid; });
+                    if (!sw) return;
+                    var baseW = sw.w || sw.size || 2;
+                    var baseH = sw.h || 1;
+                    var unitW = rect.width / baseW;
+                    var unitH = rect.height / baseH;
+                    var lastW = baseW, lastH = baseH;
                     function onMove(ev) {
-                        var dx = ev.clientX - startX;
-                        var newSize = Math.max(1, Math.min(4, Math.round(baseSize + dx / unitW)));
-                        if (newSize !== startMoveSize) {
-                            startMoveSize = newSize;
-                            startSize.size = newSize;
-                            widget.className = widget.className.replace(/size-\d+/g, '') + ' size-' + newSize;
+                        var dx = ev.clientX - startX, dy = ev.clientY - startY;
+                        var newW = Math.max(1, Math.min(4, Math.round(baseW + dx / unitW)));
+                        var newH = Math.max(1, Math.min(4, Math.round(baseH + dy / unitH)));
+                        if (newW !== lastW || newH !== lastH) {
+                            lastW = newW; lastH = newH;
+                            sw.w = newW; sw.h = newH; sw.size = newW; // size 동기(레거시)
+                            widget.className = widget.className.replace(/(?:^|\s)(w-\d+|h-\d+|size-\d+)/g, '') + ' w-' + newW + ' h-' + newH;
                         }
                     }
                     function onUp() {
@@ -7024,7 +7255,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function dbResizeWidget(wid, delta) {
             var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
             if (!w) return;
-            w.size = Math.max(1, Math.min(4, (w.size || 2) + delta));
+            // [r80] 가로(w) 조절. 세로는 모서리 드래그로
+            w.w = Math.max(1, Math.min(4, (w.w || w.size || 2) + delta));
+            w.size = w.w; // 레거시 동기
+            _dbSaveWidgets();
+            dbRender();
+        }
+        // [r80] 세로 크기 조절
+        function dbResizeWidgetH(wid, delta) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            w.h = Math.max(1, Math.min(4, (w.h || 1) + delta));
             _dbSaveWidgets();
             dbRender();
         }
