@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r70 (사이드바 IA 재편: 테마→화면설정 내부로 이동(라이트/다크웜/순수다크 직접선택), 화면설정→도구 그룹으로 이동, 푸터에 '앱에서 열기'(PWA 설치) 버튼 신설(beforeinstallprompt 캡처). r69 로컬번들/로드실패경고 유지) -->
+<!-- BUILD: 2026-05-28 r71 (사이드바: 가로스크롤 제거(overflow-x hidden+라벨 말줄임), 접기버튼 삭제→좌우 구분선 드래그 리사이즈(폭 저장·더블클릭 기본값). 칸반 보드 카테고리 줄바꿈 대신 우측+가로스크롤(nowrap). 카테고리별 진척률 제목 좌패딩 16px) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1892,9 +1892,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             display: flex; flex-direction: column;
             position: fixed; left: 0; top: 0; bottom: 0; width: 208px; z-index: 95;
             background: var(--c-sidebar-bg); border-right: 1px solid var(--c-border);
-            padding: 9px 8px; gap: 1px; overflow-y: auto;
+            padding: 9px 8px; gap: 1px; overflow-y: auto; overflow-x: hidden;
         }
         html.is-desktop #app-wrapper { padding-left: 208px !important; }
+        /* [r71] 사이드바 너비 드래그 리사이저 (접기 버튼 대체) */
+        #cs-resizer { display: none; }
+        html.is-desktop #cs-resizer { display: block; position: fixed; top: 0; bottom: 0; left: 208px; width: 8px; margin-left: -4px; cursor: col-resize; z-index: 96; }
+        html.is-desktop #cs-resizer::before { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--c-border); transition: background .12s, width .12s; }
+        html.is-desktop #cs-resizer:hover::before, html.is-desktop #cs-resizer.dragging::before { background: var(--c-accent); width: 2px; left: 3px; }
+        .cs-nav .cs-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         html.is-desktop #pc-header { display: none !important; }
         .cs-brand { display: flex; align-items: center; gap: 9px; padding: 2px 10px 9px; font-weight: 800; font-size: 16px; color: var(--c-text); letter-spacing: -0.02em; }
         .cs-brand .cs-dot { width: 24px; height: 24px; border-radius: 7px; background: var(--c-accent); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 800; }
@@ -1946,7 +1952,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* 칸반 보드: 좌우 마진(스프린트/필터와 동일 16px) + 고정 너비 카테고리 */
         html.is-desktop #board { padding: 0 16px; }
         @media (min-width: 1280px) {
-            html.is-desktop #board { flex-wrap: wrap; align-items: flex-start; }
+            /* [r71] 카테고리가 늘어나면 줄바꿈(아래로) 대신 우측으로 + 가로 스크롤 */
+            html.is-desktop #board { flex-wrap: nowrap; align-items: flex-start; overflow-x: auto; }
             html.is-desktop .kanban-col-normal { flex: 0 0 340px; min-width: 340px; max-width: 340px; width: 340px; }
             html.is-desktop .kanban-col-focused { flex: 0 0 560px; min-width: 560px; max-width: 560px; width: 560px; }
         }
@@ -2891,7 +2898,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         <!-- [v40] Claude 스타일 좌측 네비 사이드바 (데스크톱 전용) -->
         <aside id="claude-sidebar" onclick="event.stopPropagation()">
-            <button class="cs-collapse-btn" onclick="toggleSidebarCollapse()" title="사이드바 접기/펴기"><span id="cs-collapse-ico">◀</span></button>
             <button class="cs-project" onclick="openProjectModal()" title="프로젝트(게임) 전환">
                 <span class="cs-dot">T</span>
                 <span class="cs-label cs-brand-text" id="cs-project-name">프로젝트</span>
@@ -2940,6 +2946,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="cs-userpill" id="cs-user"><span style="font-size:12px;color:var(--c-text3);">로그인 필요</span></div>
             </div>
         </aside>
+        <!-- [r71] 사이드바 너비 드래그 핸들 (좌우 레이아웃 구분선) -->
+        <div id="cs-resizer" title="드래그하여 사이드바 너비 조절 (더블클릭=기본값)"></div>
 
         <!-- iOS 스타일 상단 바 -->
         <div id="ios-topbar" onclick="event.stopPropagation()">
@@ -3270,7 +3278,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div id="board" onclick="event.stopPropagation()"></div>
 
             <div class="mt-16 border-t-2 border-gray-200 pt-10 pb-6 relative z-10" onclick="event.stopPropagation()">
-                <div class="flex items-center gap-3 mb-8">
+                <div class="flex items-center gap-3 mb-8" style="padding-left:16px;">
                     <h2 class="text-2xl font-black text-gray-800">카테고리별 진척률 (Category Progress)</h2>
                     <button class="text-xl hover:scale-110 transition-transform bg-gray-100 p-2 rounded-lg border border-gray-300 shadow-sm" onclick="copyProgressToClipboard()" title="진척률 마크다운 복사">📋</button>
                 </div>
@@ -10130,6 +10138,33 @@ addEventListener("resize",sendPos);
             const ico = document.getElementById('cs-collapse-ico');
             if (ico) ico.textContent = collapsed ? '▶' : '◀';
         }
+        // [r71] 사이드바 너비 드래그 리사이즈 (접기 버튼 대체) — 너비 localStorage 저장, 더블클릭=기본값
+        function _applySidebarWidth(w) {
+            w = Math.max(150, Math.min(440, w | 0));
+            var sb = document.getElementById('claude-sidebar'), aw = document.getElementById('app-wrapper'), rz = document.getElementById('cs-resizer');
+            if (sb) sb.style.width = w + 'px';
+            if (aw) aw.style.setProperty('padding-left', w + 'px', 'important');
+            if (rz) rz.style.left = w + 'px';
+        }
+        function _initSidebarResizer() {
+            // 접기 상태 잔류 방지(접기 버튼 제거됨)
+            document.body.classList.remove('sidebar-collapsed');
+            try { localStorage.removeItem('pb3_sidebar_collapsed'); } catch (e) {}
+            if (!document.documentElement.classList.contains('is-desktop')) return; // 모바일은 사이드바 숨김
+            var rz = document.getElementById('cs-resizer'); if (!rz) return;
+            var saved = parseInt(localStorage.getItem('tda_sidebar_w') || '0', 10);
+            if (saved >= 150 && saved <= 440) _applySidebarWidth(saved);
+            var dragging = false;
+            rz.addEventListener('mousedown', function (e) { e.preventDefault(); dragging = true; rz.classList.add('dragging'); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; });
+            window.addEventListener('mousemove', function (e) { if (!dragging) return; _applySidebarWidth(e.clientX); });
+            window.addEventListener('mouseup', function () {
+                if (!dragging) return; dragging = false; rz.classList.remove('dragging');
+                document.body.style.cursor = ''; document.body.style.userSelect = '';
+                var sb = document.getElementById('claude-sidebar'); var w = sb ? parseInt(sb.style.width, 10) : 0;
+                if (w) { try { localStorage.setItem('tda_sidebar_w', w); } catch (e) {} }
+            });
+            rz.addEventListener('dblclick', function () { _applySidebarWidth(208); try { localStorage.setItem('tda_sidebar_w', 208); } catch (e) {} });
+        }
         // [r55] 사이드바 대분류: 접기/펴기 상태 + 그룹 내부 항목 순서(로컬 저장)
         function _saveNavOrder() {
             var order = {};
@@ -10161,13 +10196,7 @@ addEventListener("resize",sendPos);
             if (typeof Sortable === 'undefined') setTimeout(initNavGroups, 400); // Sortable CDN 로드 대기 후 드래그 바인딩
         }
         window.addEventListener('DOMContentLoaded', function () {
-            try {
-                if (localStorage.getItem('pb3_sidebar_collapsed') === '1') {
-                    document.body.classList.add('sidebar-collapsed');
-                    const ico = document.getElementById('cs-collapse-ico');
-                    if (ico) ico.textContent = '▶';
-                }
-            } catch (e) {}
+            if (typeof _initSidebarResizer === 'function') _initSidebarResizer(); // [r71] 사이드바 폭 드래그(접기 버튼 대체)
             if (typeof initNavGroups === 'function') initNavGroups();
             setTimeout(function () { if (typeof _tdaInitUpdater === 'function') _tdaInitUpdater(); }, 1800); // [r59] Tauri 데스크톱 자동 업데이트 체크
         });
