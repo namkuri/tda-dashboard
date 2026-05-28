@@ -44,6 +44,77 @@ def _safe_remove_repo(repo_path: Path) -> None:
         shutil.rmtree(repo_path, ignore_errors=True)
 
 
+def detect_default_branch(git_url: str) -> Optional[str]:
+    """[r117] git ls-remote --symref 로 원격 HEAD 가리키는 기본 브랜치 추출.
+
+    예 응답: "ref: refs/heads/master\\tHEAD"
+    실패 시 None 반환 → 호출자가 fallback 시도.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", "--symref", git_url, "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            encoding="utf-8",
+            errors="ignore",
+        )
+        out = (result.stdout or "") + (result.stderr or "")
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("ref:"):
+                # "ref: refs/heads/master\tHEAD"
+                ref_part = line.split("\t")[0].replace("ref:", "").strip()
+                if ref_part.startswith("refs/heads/"):
+                    return ref_part[len("refs/heads/"):]
+    except Exception as e:
+        print(f"[detect_default_branch] {git_url}: {type(e).__name__}: {e}")
+        return None
+    return None
+
+
+def clone_with_fallback(git_url: str, repo_path: Path, requested_branch: Optional[str] = None) -> str:
+    """[r117] Git clone — 기본 브랜치 자동 감지 + 명시 브랜치 실패 시 fallback.
+
+    1) requested_branch 명시되면 그것 먼저 시도
+    2) ls-remote 로 기본 브랜치 추출해서 시도
+    3) main/master/develop 순차 fallback
+
+    Returns: 성공한 branch 이름
+    Raises: 전부 실패 시 마지막 GitCommandError
+    """
+    candidates: List[str] = []
+    if requested_branch and requested_branch.strip():
+        candidates.append(requested_branch.strip())
+    detected = detect_default_branch(git_url)
+    if detected and detected not in candidates:
+        candidates.append(detected)
+    for fb in ["main", "master", "develop", "trunk"]:
+        if fb not in candidates:
+            candidates.append(fb)
+
+    last_err: Optional[Exception] = None
+    for b in candidates:
+        try:
+            git.Repo.clone_from(git_url, repo_path, branch=b, depth=1)
+            return b
+        except git.exc.GitCommandError as e:
+            last_err = e
+            msg = (e.stderr or "") + (e.stdout or "")
+            # "Remote branch X not found" → 다음 후보로
+            if "not found in upstream" in msg or "Remote branch" in msg:
+                # 부분 clone된 폴더 정리
+                if repo_path.exists():
+                    _safe_remove_repo(repo_path)
+                continue
+            # 다른 에러(인증·네트워크 등)는 즉시 raise
+            raise
+    if last_err:
+        raise last_err
+    raise RuntimeError("clone 실패 — 시도할 브랜치 후보 없음")
+
+
 # [r95] 빈/플레이스홀더 콘텐츠 필터 — 짧은 한국어끼리 비교 시 false positive가 심해
 # "여기에 내용을 작성하세요" 같은 기본 템플릿 텍스트가 0.9+ 유사도로 매칭되어
 # 진짜 컨텐츠를 밀어내는 문제를 해결.
@@ -144,9 +215,10 @@ async def index_git_repo(
         if not repo_path.exists():
             yield {"event": "clone_start", "repo": repo_name, "url": git_url}
             try:
-                git.Repo.clone_from(git_url, repo_path, branch=branch, depth=1)
+                # [r117] 기본 브랜치 자동 감지 + main/master/develop fallback
+                used_branch = clone_with_fallback(git_url, repo_path, requested_branch=branch)
+                yield {"event": "info", "message": f"브랜치 '{used_branch}' 클론 성공"}
             except git.exc.GitCommandError as gce:
-                # [r93] GitPython 에러는 stderr를 포함해 자세한 정보 노출
                 stderr = (gce.stderr or "").strip()
                 stdout = (gce.stdout or "").strip()
                 detail = stderr or stdout or str(gce)

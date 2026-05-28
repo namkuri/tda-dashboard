@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r116 (Phase A-D 완료 + 재귀 검증: r112~r116 Deep Wiki 자동 위키 시스템 + AI Agent 통합 완료. 검증: 11개 Python 모듈 모두 import OK, 15개 도구 모두 dispatch OK + empty args 정상 처리, 14개 FastAPI 엔드포인트 등록 확인, 17개 프론트 Deep Wiki 함수 모두 정의/호출 OK. TEST_GUIDE_R116.md에 4개 시나리오(라이브 데이터·자동 위키 생성·기획 대조·AI Agent 통합 활용) 단계별 가이드. DEEPWIKI_ROADMAP.md 모든 Phase ✅ 표시) -->
+<!-- BUILD: 2026-05-29 r117 (Git 기본 브랜치 자동 감지 — main/master/develop 등 임의 브랜치 레포 지원: 사용자 보고 git clone 실패 (128): Remote branch main not found in upstream origin (예: github.com/Ethaniya0912/pB는 master). 수정: indexer.py에 detect_default_branch(subprocess git ls-remote --symref HEAD)와 clone_with_fallback(요청 브랜치 → ls-remote 결과 → main/master/develop/trunk 순차 시도) 추가. wiki_generator.py + indexer.py 모두 활용. 프론트 dwpGenerate는 branch="" 빈 값으로 보내 서버가 자동 감지) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -8091,10 +8091,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!ok) return;
             _dwpProgress('🔄 시작 중...');
             try {
+                // [r117] branch 빈 값 = 서버가 ls-remote로 자동 감지 + main/master/develop fallback
                 var res = await fetch(url + '/wiki/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ git_url: gitUrl, project_id: activeProjectId, branch: 'main' }),
+                    body: JSON.stringify({ git_url: gitUrl, project_id: activeProjectId, branch: '' }),
                 });
                 if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
                 var reader = res.body.getReader();

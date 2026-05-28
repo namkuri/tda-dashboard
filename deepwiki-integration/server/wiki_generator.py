@@ -29,7 +29,7 @@ import git
 from config import settings
 from ollama_client import get_ollama
 from supabase_store import get_store
-from indexer import _safe_remove_repo, CODE_EXTENSIONS, SKIP_DIRS
+from indexer import _safe_remove_repo, clone_with_fallback, CODE_EXTENSIONS, SKIP_DIRS
 
 
 # ─────────────────────────────────────────────
@@ -283,10 +283,15 @@ async def generate_wiki(
             _safe_remove_repo(repo_path)
         if not repo_path.exists():
             try:
-                git.Repo.clone_from(git_url, repo_path, branch=branch, depth=1)
+                # [r117] 기본 브랜치 자동 감지 + fallback
+                used_branch = clone_with_fallback(git_url, repo_path, requested_branch=branch)
+                yield {"event": "info", "message": f"브랜치 '{used_branch}' 클론 성공"}
             except git.exc.GitCommandError as gce:
                 detail = (gce.stderr or gce.stdout or str(gce)).strip()
                 yield {"event": "error", "message": f"git clone 실패 ({gce.status}): {detail}"}
+                return
+            except Exception as ge:
+                yield {"event": "error", "message": f"clone 실패: {type(ge).__name__}: {ge}"}
                 return
         else:
             try:
