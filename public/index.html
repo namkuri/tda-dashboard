@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r82 (버그 리포트 사이드바 UX 개선: 비관리자가 🐞 버그 리포트 클릭 → 페이지 진입 없이 _brPrevView 캡처 후 즉시 작성 모달 표시. 관리자는 기존대로 리포트 페이지 진입(검토용). br-e-view를 readonly text → select(18개 뷰 옵션)로 변경, 디폴트=이전 화면(_brPrevView), 없으면 other) -->
+<!-- BUILD: 2026-05-28 r83 (#1 이슈/에셋/버그리포트 DB 로드 추가 — initSupabase Promise.all에 4개 SELECT + _assembleCurrentData 매핑(issues/assetFolders/assets/bugReports). #2 문서 하이어라키 정렬: 새 문서 sortOrder=Date.now()로 부여, 같은 sortOrder는 createdAt 폴백 → 생성 순서 안정 (수동 드래그 전까지 셔플 없음). #3 스프린트 카드 인라인 편집: desc contenteditable + Enter 저장 + dbUpsertTask, 제목 더블클릭 또는 우클릭 → uiPrompt로 이름 변경. spvCardCtx 메뉴(이름변경/펼치기/담당자/마감일/삭제). #4 보편 인용 팝업: 모든 textarea/input/contenteditable 우클릭 → 검색가능한 카탈로그(멤버/프로젝트/스프린트/목표/태스크/체크리스트/문서/리뷰/일정/드라이브/에셋/이슈 12종) → 클릭으로 [[type:id]] 토큰 삽입) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2647,6 +2647,32 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-widget-resize::before { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid var(--c-text3); border-bottom: 2px solid var(--c-text3); }
         .db-widget:hover .db-widget-resize { opacity: .8; }
         .db-widget-resize:hover { opacity: 1 !important; }
+        /* [r83 #4] 보편 인용 팝업 */
+        .cite-box { background: var(--c-paper); border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,.4); width: 720px; max-width: 92vw; height: 70vh; max-height: 580px; display: flex; flex-direction: column; overflow: hidden; }
+        .cite-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--c-border); background: var(--ios-fill); gap: 8px; }
+        .cite-head input { flex: 1; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 7px; padding: 8px 12px; font-size: 14px; outline: none; }
+        .cite-head input:focus { border-color: var(--c-accent); }
+        body.dark .cite-head input { background: rgba(255,250,240,0.04); }
+        .cite-body { flex: 1; display: flex; overflow: hidden; }
+        .cite-cats { width: 180px; flex-shrink: 0; padding: 8px 6px; border-right: 1px solid var(--c-border); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; background: var(--ios-fill); }
+        body.dark .cite-cats { background: rgba(255,250,240,0.02); }
+        .cite-cat { background: transparent; color: var(--c-text2); border: none; padding: 7px 10px; border-radius: 6px; font-size: 12.5px; font-weight: 600; cursor: pointer; text-align: left; transition: background .12s, color .12s; }
+        .cite-cat:hover { background: var(--c-paper); color: var(--c-text); }
+        .cite-cat.active { background: var(--c-accent-soft); color: var(--c-accent); font-weight: 700; }
+        .cite-items { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+        .cite-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: background .12s; display: flex; align-items: center; gap: 10px; }
+        .cite-item:hover { background: var(--ios-fill); }
+        body.dark .cite-item:hover { background: rgba(255,250,240,0.06); }
+        .cite-item-label { flex: 1; font-size: 13px; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cite-item-sub { font-size: 11px; color: var(--c-text3); flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cite-foot { padding: 8px 16px; border-top: 1px solid var(--c-border); background: var(--ios-fill); font-size: 11px; color: var(--c-text3); }
+
+        /* [r83 #3] 스프린트 카드 desc 인라인 편집 */
+        .spv-card-desc { transition: background .15s; }
+        .spv-card-desc:hover { background: var(--ios-fill); }
+        .spv-card-desc:focus { background: var(--c-paper); border: 1px solid var(--c-accent); color: var(--c-text) !important; }
+        body.dark .spv-card-desc:focus { background: rgba(255,250,240,0.06); }
+
         /* [r81 #1] 에셋 매니저 */
         #assets-view.block { display: block; }
         #assets-view { height: calc(100vh - 60px); overflow-y: auto; }
@@ -6672,6 +6698,191 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         //   widgets: [{ id, type:'category'|'sprint'|'upcoming'|'myTasks'|'reviewQueue', size:1-4, catId? }]
         // ═══════════════════════════════════════════════════════════════════
         // ═══════════════════════════════════════════════════════════════════
+        // [r83 #4] 보편 인용 컨텍스트 — 텍스트 입력 우클릭 → 카테고리/검색 팝업
+        // 항목: 사용자/프로젝트/스프린트/스프린트 목표/태스크/체크리스트/문서/리뷰/일정/드라이브 파일/Git 파일
+        // 인용 형식: [[user:id]], [[task:id]], [[doc:id]], [[sprint:id]], [[review:id]], [[event:id]],
+        //   [[file:id]], [[git:owner/repo:path]] 등
+        // ═══════════════════════════════════════════════════════════════════
+        var _citeTargetEl = null; // 우클릭한 입력 요소
+        var _citeRange = null;    // 카렛 위치 (contenteditable 용)
+        function _isCiteable(el) {
+            if (!el) return false;
+            if (el.tagName === 'TEXTAREA') return true;
+            if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'search' || !el.type)) return true;
+            if (el.isContentEditable) return true;
+            return false;
+        }
+        function _onCiteContext(e) {
+            var el = e.target;
+            while (el && !_isCiteable(el) && el !== document.body) el = el.parentNode;
+            if (!_isCiteable(el)) return;
+            // 모달 안의 입력은 모달 zIndex 보다 위로 올려 보이게
+            e.preventDefault();
+            _citeTargetEl = el;
+            // contenteditable인 경우 selection range 저장
+            if (el.isContentEditable) {
+                var sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) _citeRange = sel.getRangeAt(0).cloneRange();
+            } else {
+                _citeRange = null;
+            }
+            _openCitePicker();
+        }
+        // 페이지 전역 우클릭 리스너 (1회 바인딩)
+        function _bindCiteContext() {
+            if (window._citeBound) return; window._citeBound = true;
+            document.addEventListener('contextmenu', _onCiteContext, true);
+        }
+        // 인용 가능 항목 카탈로그 — 카테고리별 [{ key, label, items:[{id,label,token,sub?}] }]
+        function _citeCatalog() {
+            var cats = [];
+            // 1. 사용자(멤버)
+            cats.push({ key: 'user', label: '👤 멤버', items: (currentData.users || []).map(function (u) {
+                return { id: u.id, label: u.displayName || u.email || u.id, sub: u.email || '', token: '[[user:' + u.id + ']]' };
+            }) });
+            // 2. 프로젝트
+            cats.push({ key: 'project', label: '📂 프로젝트', items: (currentData.projects || []).map(function (p) {
+                return { id: p.id, label: p.name, sub: p.category || '', token: '[[project:' + p.id + ']]' };
+            }) });
+            // 3. 스프린트
+            cats.push({ key: 'sprint', label: '🏃 스프린트', items: (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; }).map(function (s) {
+                return { id: s.id, label: s.weekLabel || s.id, sub: s.goal ? s.goal.slice(0, 40) : (s.status || ''), token: '[[sprint:' + s.id + ']]' };
+            }) });
+            // 4. 스프린트 목표 (텍스트만)
+            cats.push({ key: 'goal', label: '🎯 스프린트 목표', items: (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId && s.goal; }).map(function (s) {
+                return { id: s.id, label: s.weekLabel + ' — ' + s.goal, sub: '', token: '> ' + (s.goal || '') };
+            }) });
+            // 5. 태스크 (카드)
+            cats.push({ key: 'task', label: '📋 태스크', items: (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).slice(0, 200).map(function (t) {
+                var cat = (currentData.categories || []).find(function (c) { return c.id === t.catId; });
+                return { id: t.id, label: t.title || '(제목 없음)', sub: cat ? cat.title : '', token: '[[task:' + t.id + ']]' };
+            }) });
+            // 6. 체크리스트(스프린트 체크리스트 항목)
+            var clItems = [];
+            (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId && Array.isArray(s.checklists); }).forEach(function (s) {
+                (s.checklists || []).forEach(function (it) {
+                    if (it && it.text) clItems.push({ id: s.id + ':' + (it.id || it.text), label: it.text, sub: s.weekLabel || '', token: (it.done ? '[x] ' : '[ ] ') + it.text });
+                });
+            });
+            cats.push({ key: 'checklist', label: '☑️ 체크리스트', items: clItems });
+            // 7. 문서
+            cats.push({ key: 'doc', label: '📚 문서', items: (currentData.docs || []).filter(function (d) { return d.projectId === activeProjectId && (!d.meta || !d.meta.isFolder); }).slice(0, 200).map(function (d) {
+                return { id: d.id, label: (d.emoji || '📄') + ' ' + (d.title || '(제목 없음)'), sub: d.kind || '', token: '[[doc:' + d.id + ']]' };
+            }) });
+            // 8. 리뷰
+            cats.push({ key: 'review', label: '🗳 리뷰', items: (currentData.reviews || []).filter(function (r) { return !r.deleted; }).slice(0, 100).map(function (r) {
+                return { id: r.id, label: r.title || r.reason || '결재', sub: r.status || '', token: '[[review:' + r.id + ']]' };
+            }) });
+            // 9. 캘린더 일정
+            cats.push({ key: 'event', label: '📅 일정', items: (currentData.calEvents || []).slice(0, 100).map(function (e) {
+                var d = e.start ? new Date(e.start) : null;
+                var dlabel = d ? (d.getMonth() + 1) + '/' + d.getDate() + ' ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()) : '';
+                return { id: e.id, label: e.title || '(제목 없음)', sub: dlabel, token: '[[event:' + e.id + ']]' };
+            }) });
+            // 10. 드라이브 파일
+            cats.push({ key: 'file', label: '🗂️ 드라이브 파일', items: ((driveState && driveState.files) || []).filter(function (f) { return f.projectId === activeProjectId && !f.deleted && f.mime !== '__folder__'; }).slice(0, 100).map(function (f) {
+                return { id: f.id, label: f.name, sub: f.mime || '', token: '[' + f.name + '](' + f.url + ')' };
+            }) });
+            // 11. 에셋
+            cats.push({ key: 'asset', label: '🎮 에셋', items: (currentData.assets || []).filter(function (a) { return (a.projectId || 'default') === activeProjectId; }).slice(0, 100).map(function (a) {
+                return { id: a.id, label: (AM_KIND_ICONS[a.kind] || '📦') + ' ' + a.name, sub: a.status || '', token: '[[asset:' + a.id + ']]' };
+            }) });
+            // 12. 이슈
+            cats.push({ key: 'issue', label: '🐛 이슈', items: (currentData.issues || []).filter(function (i) { return (i.projectId || 'default') === activeProjectId; }).slice(0, 100).map(function (i) {
+                return { id: i.id, label: (i.priority || 'p2').toUpperCase() + ' ' + (i.title || ''), sub: i.status || '', token: '[[issue:' + i.id + ']]' };
+            }) });
+            return cats;
+        }
+        function _openCitePicker() {
+            var existing = document.getElementById('_citeModal'); if (existing) existing.remove();
+            var modal = document.createElement('div');
+            modal.id = '_citeModal';
+            modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;';
+            modal.innerHTML =
+                '<div class="cite-box" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()">' +
+                '<div class="cite-head">' +
+                '<input type="text" id="_citeSearch" placeholder="🔍 인용할 항목 검색 (사용자·태스크·문서·일정·파일 등)" autocomplete="off">' +
+                '<button onclick="_closeCitePicker()" style="background:none;border:none;cursor:pointer;color:var(--c-text2);font-size:18px;padding:4px 10px;">✕</button>' +
+                '</div>' +
+                '<div class="cite-body">' +
+                '<div class="cite-cats" id="_citeCats"></div>' +
+                '<div class="cite-items" id="_citeItems"></div>' +
+                '</div>' +
+                '<div class="cite-foot">💡 클릭하여 인용 삽입 · Esc 닫기</div>' +
+                '</div>';
+            modal.onclick = function (e) { if (e.target === modal) _closeCitePicker(); };
+            document.body.appendChild(modal);
+            window._citeActiveCat = 'user';
+            window._citeCatalog = _citeCatalog();
+            _renderCiteCats(); _renderCiteItems('');
+            var input = document.getElementById('_citeSearch');
+            input.oninput = function () { _renderCiteItems(input.value); };
+            input.onkeydown = function (e) { if (e.key === 'Escape') _closeCitePicker(); };
+            setTimeout(function () { input.focus(); }, 30);
+        }
+        function _closeCitePicker() {
+            var modal = document.getElementById('_citeModal'); if (modal) modal.remove();
+            _citeTargetEl = null; _citeRange = null;
+        }
+        function _renderCiteCats() {
+            var box = document.getElementById('_citeCats'); if (!box) return;
+            box.innerHTML = window._citeCatalog.map(function (c) {
+                var active = window._citeActiveCat === c.key;
+                return '<button class="cite-cat' + (active ? ' active' : '') + '" data-k="' + c.key + '" onclick="_setCiteCat(\'' + c.key + '\')">' + c.label + ' <span style="color:var(--c-text3);font-size:10.5px;">(' + c.items.length + ')</span></button>';
+            }).join('');
+        }
+        function _setCiteCat(k) {
+            window._citeActiveCat = k;
+            _renderCiteCats();
+            _renderCiteItems(document.getElementById('_citeSearch').value || '');
+        }
+        function _renderCiteItems(q) {
+            var box = document.getElementById('_citeItems'); if (!box) return;
+            q = (q || '').toLowerCase().trim();
+            var cat = window._citeCatalog.find(function (c) { return c.key === window._citeActiveCat; });
+            if (!cat) { box.innerHTML = ''; return; }
+            var items = q ? cat.items.filter(function (it) {
+                return (it.label || '').toLowerCase().indexOf(q) > -1 || (it.sub || '').toLowerCase().indexOf(q) > -1;
+            }) : cat.items;
+            if (!items.length) {
+                box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--c-text3);font-size:13px;">' + (q ? '검색 결과 없음' : '항목 없음') + '</div>';
+                return;
+            }
+            box.innerHTML = items.slice(0, 200).map(function (it) {
+                var tok = (it.token || '').replace(/"/g, '&quot;');
+                return '<div class="cite-item" onclick="_pickCite(\'' + tok.replace(/'/g, "\\'") + '\')">' +
+                    '<span class="cite-item-label">' + _annEsc(it.label || '') + '</span>' +
+                    (it.sub ? '<span class="cite-item-sub">' + _annEsc(it.sub) + '</span>' : '') +
+                    '</div>';
+            }).join('');
+        }
+        function _pickCite(token) {
+            var el = _citeTargetEl;
+            if (!el) { _closeCitePicker(); return; }
+            try {
+                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                    var start = el.selectionStart || 0, end = el.selectionEnd || 0;
+                    el.value = el.value.slice(0, start) + token + el.value.slice(end);
+                    el.focus();
+                    el.selectionStart = el.selectionEnd = start + token.length;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                } else if (el.isContentEditable) {
+                    el.focus();
+                    if (_citeRange) {
+                        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(_citeRange);
+                    }
+                    document.execCommand('insertText', false, token);
+                }
+            } catch (e) {}
+            _closeCitePicker();
+            if (typeof showToast === 'function') showToast('🔗 인용 삽입됨', 'success');
+        }
+        // DOMContentLoaded 후 자동 바인딩
+        document.addEventListener('DOMContentLoaded', function () { _bindCiteContext(); });
+        // (위 리스너가 늦게 등록될 가능성에 대비 즉시 한 번)
+        if (document.readyState !== 'loading') _bindCiteContext();
+
+        // ═══════════════════════════════════════════════════════════════════
         // [r81 #4] 버그 리포트 관리자 식별 — 하드코딩 이메일 목록
         // ═══════════════════════════════════════════════════════════════════
         var TDA_ADMIN_EMAILS = ['rnk505@gmail.com'];
@@ -10483,7 +10694,7 @@ return data;
                 versionHistory: c.version_history || [], sortOrder: c.sort_order || 0
             };
         }
-        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData, usersData, reviewData, canonData, calData, calEvData) {
+        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData, usersData, reviewData, canonData, calData, calEvData, issData, amFolderData, amAssetData, brData) {
             const cmtMap = {};
             (cmtData || []).forEach(c => {
                 if (!cmtMap[c.task_id]) cmtMap[c.task_id] = [];
@@ -10565,6 +10776,37 @@ return data;
                     desc: e.description || '', public: !!e.is_public,
                     ownerUserId: e.owner_user_id || null, projectId: e.project_id || null
                 })),
+                // [r83 #1] 이슈
+                issues: (issData || []).map(i => ({
+                    id: i.id, projectId: i.project_id || 'default',
+                    title: i.title || '', desc: i.description || '',
+                    priority: i.priority || 'p2', status: i.status || 'open',
+                    assigneeId: i.assignee_id || null, dueDate: i.due_date || null,
+                    target: i.target || '', createdBy: i.created_by || null,
+                    createdAt: i.created_at ? new Date(i.created_at).getTime() : null,
+                    updatedAt: i.updated_at ? new Date(i.updated_at).getTime() : null
+                })),
+                // [r83 #1] 에셋 매니저
+                assetFolders: (amFolderData || []).map(f => ({
+                    id: f.id, projectId: f.project_id || 'default', name: f.name || ''
+                })),
+                assets: (amAssetData || []).map(a => ({
+                    id: a.id, projectId: a.project_id || 'default',
+                    name: a.name || '', kind: a.kind || 'other',
+                    folderId: a.folder_id || null, status: a.status || 'planned',
+                    assigneeId: a.assignee_id || null, notes: a.notes || '',
+                    fileLink: a.file_link || '', createdBy: a.created_by || null,
+                    createdAt: a.created_at ? new Date(a.created_at).getTime() : null,
+                    updatedAt: a.updated_at ? new Date(a.updated_at).getTime() : null
+                })),
+                // [r83 #1] 버그 리포트
+                bugReports: (brData || []).map(r => ({
+                    id: r.id, title: r.title || '', desc: r.description || '',
+                    severity: r.severity || 'medium', view: r.view || '', env: r.env || '',
+                    createdBy: r.created_by || null,
+                    createdAt: r.created_at ? new Date(r.created_at).getTime() : null,
+                    updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : null
+                })),
                 tagColors: tagColors,
                 images: {}, wikiAnnotations: {}, changeLog: []
             };
@@ -10637,7 +10879,9 @@ return data;
                 // 60개 기준 ~210KB → ~30KB, 300개 기준 ~3MB → ~150KB로 축소
                 // 모바일 4G에서 첫 로드 ~450ms ~ ~4,100ms 단축
                 const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type, is_locked, kind, meta'; // [v40 Day3 청크1/3·Day4] 링크·doc_type·is_locked 메타 포함 (없으면 dbUpsertDoc이 덮어씀)
-                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes, canonRes, calRes, calEvRes] = await Promise.all([
+                // [r83 #1] 이슈/에셋/버그리포트도 같이 로드 (테이블 미생성 시 빈 배열 폴백)
+                var _safeQ = function (p) { return p.then(function (r) { return r; }, function (e) { return { data: [], error: e }; }); };
+                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes, canonRes, calRes, calEvRes, issRes, amFolderRes, amAssetRes, brRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
                     supabaseClient.from('tasks').select('*').order('sort_order'),
@@ -10648,8 +10892,12 @@ return data;
                     supabaseClient.from('users').select('*'),                        // [v40 Day3 청크 2]
                     supabaseClient.from('review_requests').select('*').order('created_at'), // [v40 Day3 청크 2]
                     supabaseClient.from('canon_docs').select('*').order('sort_order'),     // [v40 B3] 게임 정전
-                    supabaseClient.from('calendars').select('*').then(function(r){return r;}, function(e){return {data:[],error:e};}),    // [r76]
-                    supabaseClient.from('calendar_events').select('*').then(function(r){return r;}, function(e){return {data:[],error:e};}) // [r76]
+                    _safeQ(supabaseClient.from('calendars').select('*')),    // [r76]
+                    _safeQ(supabaseClient.from('calendar_events').select('*')), // [r76]
+                    _safeQ(supabaseClient.from('issues').select('*')),          // [r83 #1] 이슈
+                    _safeQ(supabaseClient.from('asset_folders').select('*')),   // [r83 #1] 에셋 폴더
+                    _safeQ(supabaseClient.from('assets').select('*')),          // [r83 #1] 에셋
+                    _safeQ(supabaseClient.from('bug_reports').select('*'))      // [r83 #1] 버그 리포트
                 ]);
                 if (projRes.error) throw projRes.error;
                 if (taskRes.error) throw taskRes.error;
@@ -10673,7 +10921,11 @@ return data;
                     docRes.data, cmtRes.data, tagRes.data, sprintRes.data,
                     usersRes.data, reviewRes.data, (canonRes ? canonRes.data : []),
                     (calRes && !calRes.error ? calRes.data : []), // [r76]
-                    (calEvRes && !calEvRes.error ? calEvRes.data : []) // [r76]
+                    (calEvRes && !calEvRes.error ? calEvRes.data : []), // [r76]
+                    (issRes && !issRes.error ? issRes.data : []),       // [r83 #1] 이슈
+                    (amFolderRes && !amFolderRes.error ? amFolderRes.data : []), // [r83 #1] 에셋 폴더
+                    (amAssetRes && !amAssetRes.error ? amAssetRes.data : []),    // [r83 #1] 에셋
+                    (brRes && !brRes.error ? brRes.data : [])           // [r83 #1] 버그 리포트
                 );
                 currentData = validateData(currentData);
                 wikiAnnotations = currentData.wikiAnnotations || {};
@@ -11648,8 +11900,12 @@ return data;
                 childrenMap.get(pid).push(d);
                 if (pid !== '__root__') hasChildrenSet.add(pid);
             });
-            // 정렬은 한 번만
-            childrenMap.forEach(arr => arr.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)));
+            // [r83 #2] 정렬: sortOrder 우선, 같으면 createdAt(생성 순서) 폴백 — 수동 변경 전까진 안정
+            childrenMap.forEach(arr => arr.sort((a, b) => {
+                var sa = (a.sortOrder || 0), sb = (b.sortOrder || 0);
+                if (sa !== sb) return sa - sb;
+                return (a.createdAt || 0) - (b.createdAt || 0);
+            }));
             return { childrenMap, hasChildrenSet, totalInProject: projDocs.length };
         }
 
@@ -12739,7 +12995,8 @@ addEventListener("resize",sendPos);
             if (isFolder) { _newMeta = (currentDocKind === 'personal') ? { owner: (currentUser && currentUser.id) || null, visibility: 'private', isFolder: true } : { isFolder: true }; }
             if (currentDocKind === 'personal' && currentUser) personalViewUserId = currentUser.id; // 새 개인문서는 내 소유 → 내 뷰로
             var _newEmoji = isFolder ? '📁' : (currentDocKind === 'canon' ? '📜' : (currentDocKind === 'personal' ? '🔒' : '📄'));
-            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), emoji: _newEmoji, isCollapsed: false, content: isFolder ? '' : ('# ' + title + '\n\n여기에 내용을 작성하세요...'), createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta };
+            // [r83 #2] sortOrder를 Date.now()로 부여 → 생성 순서대로 정렬 안정화 (수동 드래그 전까지)
+            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), emoji: _newEmoji, isCollapsed: false, content: isFolder ? '' : ('# ' + title + '\n\n여기에 내용을 작성하세요...'), createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta, sortOrder: Date.now() };
             currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc);
             if (typeof logActivity === 'function') { var _dc = currentDocKind === 'canon' ? 'wiki' : 'doc'; logActivity(_dc, 'create', { targetId: newDoc.id, targetLabel: newDoc.title, detail: (isFolder ? '폴더' : (currentDocKind === 'canon' ? '프로젝트위키' : (currentDocKind === 'personal' ? '개인문서' : '문서'))) + ' 생성' }); }
             if (isFolder) {
@@ -13710,8 +13967,9 @@ addEventListener("resize",sendPos);
             var dueSt = _dueState(t);
             var dueLabel = t.dueDate ? ('📅 ' + _fmtDueLabel(t.dueDate) + (dueSt === 'overdue' ? ' ⚠' : '')) : '📅 기한';
             var dueColor = dueSt === 'overdue' ? 'var(--st-danger)' : (dueSt === 'soon' ? 'var(--st-warn)' : 'var(--c-text2)');
-            var head = '<div class="spv-card-head"><span class="spv-drag" title="드래그하여 스프린트/카테고리 이동">⠿</span>'
-                + '<span class="spv-card-title" onclick="event.stopPropagation();toggleSprintCard(\'' + t.id + '\')">' + _sprintEsc(t.title || '(제목 없음)') + '</span>'
+            // [r83 #3] 제목 클릭=펼치기, 더블클릭=인라인 편집, 우클릭=메뉴(이름 변경 포함)
+            var head = '<div class="spv-card-head" oncontextmenu="spvCardCtx(event,\'' + t.id + '\')"><span class="spv-drag" title="드래그하여 스프린트/카테고리 이동">⠿</span>'
+                + '<span class="spv-card-title" onclick="event.stopPropagation();toggleSprintCard(\'' + t.id + '\')" ondblclick="event.stopPropagation();spvEditTitle(event,\'' + t.id + '\')" title="클릭: 펼치기 · 더블클릭: 제목 편집 · 우클릭: 메뉴">' + _sprintEsc(t.title || '(제목 없음)') + '</span>'
                 + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();spvCycleZone(\'' + t.id + '\')" title="클릭하여 Zone 변경" style="background:var(--ios-fill2);color:var(--c-text2);">' + getZoneIcon(t.zone) + ' ' + getZoneLabel(t.zone) + '</span>'
                 + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();spvCycleStatus(\'' + t.id + '\')" title="클릭하여 상태 변경" style="background:var(--ios-fill2);color:var(--c-text2);">' + _sprintEsc(st.text) + '</span>'
                 + '<span class="spv-mini spv-mini-click" onclick="event.stopPropagation();openAssigneePicker(event,\'' + t.id + '\',\'sprint\')" title="클릭하여 담당자 변경 (팀원 계정)" style="background:var(--ios-fill2);color:var(--c-text2);display:inline-flex;align-items:center;gap:3px;">' + asgAv + _sprintEsc(asgLabel) + '</span>'
@@ -13721,8 +13979,9 @@ addEventListener("resize",sendPos);
             var detail = '';
             if (_sprintCardOpen[t.id]) {
                 var cmts = (t.comments || []).map(function (c) { return '<div class="spv-cmt"><b>' + _sprintEsc(c.author || '익명') + '</b> ' + _sprintEsc(c.text || '') + ' <span class="spv-cmt-t">' + _sprintEsc(c.time || '') + '</span></div>'; }).join('');
+                // [r83 #3] 요약 설명 클릭=즉시 편집(contenteditable)
                 detail = '<div class="spv-card-detail" onclick="event.stopPropagation()">'
-                    + '<div style="margin-bottom:6px;">' + _sprintEsc(t.desc || '요약 없음') + '</div>'
+                    + '<div contenteditable="true" class="spv-card-desc" data-id="' + t.id + '" oninput="event.stopPropagation()" onblur="spvUpdateDesc(this,\'' + t.id + '\')" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.blur();}" data-placeholder="요약 설명을 입력하세요..." style="margin-bottom:6px;padding:4px 6px;border-radius:5px;outline:none;cursor:text;' + (t.desc ? '' : 'color:var(--c-text3);') + '">' + _sprintEsc(t.desc || '요약 설명을 입력하세요...') + '</div>'
                     + '<div class="spv-card-comments">' + (cmts || '<div class="spv-cmt-empty">코멘트 없음</div>') + '</div>'
                     + '<div class="spv-cmt-input"><input type="text" placeholder="코멘트 남기기..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();sprintAddComment(\'' + t.id + '\',this);}"><button onclick="sprintAddComment(\'' + t.id + '\',this)">등록</button></div>'
                     + '</div>';
@@ -13730,6 +13989,54 @@ addEventListener("resize",sendPos);
             return '<div class="spv-card" data-id="' + t.id + '" ondragover="_spvCardAllow(event)" ondragleave="this.classList.remove(\'spv-drop-on\')" ondrop="_spvCardDrop(event,\'' + t.id + '\')">' + head + detail + '</div>';
         }
         function sprintAddComment(taskId, el) { if (typeof submitComment === 'function') submitComment(taskId, el); if (currentView === 'sprint') renderSprintView(); }
+        // [r83 #3] 스프린트 카드 — 인라인 desc/title 편집 + 우클릭 메뉴
+        function spvUpdateDesc(el, taskId) {
+            var newVal = (el.innerText || '').trim();
+            // placeholder text 무시
+            if (newVal === '요약 설명을 입력하세요...') newVal = '';
+            var t = (currentData.tasks || []).find(function (x) { return x.id === taskId; });
+            if (!t) return;
+            if ((t.desc || '') === newVal) return;
+            t.desc = newVal;
+            saveData();
+            if (typeof dbUpsertTask === 'function') dbUpsertTask(t);
+            showToast('💾 카드 설명 저장됨', 'info');
+        }
+        async function spvEditTitle(e, taskId) {
+            if (e) { e.stopPropagation(); e.preventDefault(); }
+            var t = (currentData.tasks || []).find(function (x) { return x.id === taskId; });
+            if (!t) return;
+            var newTitle = await uiPrompt({ title: '카드 제목 변경', label: '새 제목', value: t.title || '', placeholder: '카드 제목' });
+            if (newTitle === null) return;
+            newTitle = newTitle.trim();
+            if (!newTitle || newTitle === t.title) return;
+            t.title = newTitle;
+            saveData();
+            if (typeof dbUpsertTask === 'function') dbUpsertTask(t);
+            if (currentView === 'sprint') renderSprintView();
+            else renderBoard();
+            showToast('✏️ 제목 변경됨', 'success');
+        }
+        function spvCardCtx(e, taskId) {
+            e.preventDefault(); e.stopPropagation();
+            // 기존 tree-context-menu 인프라 재사용
+            var menu = document.getElementById('tree-context-menu'); if (!menu) return;
+            if (menu.parentNode !== document.body) document.body.appendChild(menu);
+            menu.innerHTML =
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();spvEditTitle(null,\'' + taskId + '\')"><span>✏️</span> 이름 변경</div>' +
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();toggleSprintCard(\'' + taskId + '\')"><span>📝</span> 설명/코멘트 펼치기</div>' +
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openAssigneePicker(event,\'' + taskId + '\',\'sprint\')"><span>👤</span> 담당자 변경</div>' +
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openDueDatePicker(event,\'' + taskId + '\',\'sprint\')"><span>📅</span> 마감기한 변경</div>' +
+                '<div class="ctx-menu-sep"></div>' +
+                '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();spvDeleteCard(\'' + taskId + '\')"><span>🗑</span> 카드 삭제</div>';
+            var x = Math.min(e.clientX, window.innerWidth - 230);
+            var y = Math.min(e.clientY, window.innerHeight - 220);
+            menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block';
+            setTimeout(function () {
+                document.addEventListener('click', hideTreeContextMenu, { once: true });
+                document.addEventListener('keydown', hideTreeContextMenu, { once: true });
+            }, 10);
+        }
         function toggleSprintExpand(id) { _sprintExpanded[id] = !_sprintExpanded[id]; renderSprintView(); }
         function toggleSprintCard(id) { _sprintCardOpen[id] = !_sprintCardOpen[id]; renderSprintView(); }
         // [#1] 한 스프린트(sid)의 카드를 카테고리별 섹션으로 (칸반 모사)
