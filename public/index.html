@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r86 (#2 버그 리포트 처리 상태(new/triaged/progress/fixed/wont/dup) — 작성 시 자동 'new', 관리자만 변경 가능, 카드에 상태 배지 + closed류는 라인스루+흐림. #3 에셋 매니저 폴더 헤더에 ＋에셋/＋폴더 버튼 2개 추가, asset_folders.parent_id 컬럼으로 하위 폴더 지원, 재귀 렌더(depth indent). #4 에셋·폴더 드래그 이동: 에셋 카드 draggable=true, 폴더 헤더 draggable=true, ondragover/ondrop 폴더 드롭존, .drag-over 하이라이트, 자기 자신의 자손에 이동 금지. #5 탐색기(도구 그룹): 11개 카테고리(전체/문서/태스크/스프린트/이슈/에셋/일정/리뷰/드라이브/버그/멤버), 좌측 카테고리 사이드바, 중앙 결과 리스트(제목+메타+스니펫), 우측 미리보기 패널(MD 렌더+바로가기/인용 버튼), 검색바(*=전체, 단어=풀텍스트). _xpBuildAll로 통합 인덱스 빌드) -->
+<!-- BUILD: 2026-05-28 r87 (#1 탐색기 문서 카테고리 3분할: docWiki/docCanon/docPersonal 별도 카테고리. #2·3 본문 검색 토글(📖 본문 검색 체크박스) + 매치 위치 주변 ±80자 발췌 + <mark> 하이라이트(웜 액센트), 본문 일괄 fetch(_xpDocContentCache, 100개 배치 IN 쿼리). 미리보기 패널도 검색 시 발췌+하이라이트, 평소 MD 렌더 4000자 한계. #4 사용자 프로필 풀구현: openProfileModal(targetId)=본인=편집/타인=보기, 상태 메시지 필드(users.status_message), 아바타 ✏️ 버튼 → 로컬 파일 압축(256px JPEG 0.85) → Storage drive/avatars/ 업로드 → users.avatar_url 갱신. xpJump user → 프로필 모달. #5 닉네임 영속 버그: setUserFromAuth가 pb3_nickname_custom_{userId} 플래그 우선 확인, 커스텀 닉네임 보존. _syncNickFromDb로 DB users.display_name도 우선) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3570,28 +3570,35 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
         </div>
 
-        <!-- [r78] 사용자 프로필 모달 (좌하단 프로필 클릭) -->
+        <!-- [r78/r87] 사용자 프로필 모달 (좌하단 프로필 클릭) -->
         <div id="profile-modal" class="hidden fixed inset-0 z-[600]" style="background:rgba(0,0,0,.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeModal('profile-modal')">
             <div class="cal-modal-box" onclick="event.stopPropagation()">
-                <div class="cal-modal-head"><h3>👤 프로필 설정</h3><button onclick="closeModal('profile-modal')" class="cal-x">✕</button></div>
+                <div class="cal-modal-head"><h3 id="profile-modal-title">👤 프로필 설정</h3><button onclick="closeModal('profile-modal')" class="cal-x">✕</button></div>
                 <div class="cal-modal-body">
-                    <div style="display:flex;align-items:center;gap:12px;padding:8px 0 16px;border-bottom:1px solid var(--c-border);margin-bottom:8px;">
-                        <div id="prof-avatar" style="width:54px;height:54px;border-radius:50%;background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;flex-shrink:0;"></div>
-                        <div>
-                            <div id="prof-email" style="font-size:13px;color:var(--c-text2);"></div>
+                    <div style="display:flex;align-items:center;gap:14px;padding:4px 0 16px;border-bottom:1px solid var(--c-border);margin-bottom:8px;">
+                        <div id="prof-avatar-wrap" style="position:relative;flex-shrink:0;">
+                            <div id="prof-avatar" style="width:68px;height:68px;border-radius:50%;background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;overflow:hidden;"></div>
+                            <button id="prof-avatar-edit" onclick="event.stopPropagation();_profileChangeAvatar()" title="아바타 변경 (이미지 업로드)" style="position:absolute;bottom:-2px;right:-2px;width:24px;height:24px;border-radius:50%;background:var(--c-accent);color:#fff;border:2px solid var(--c-paper);font-size:12px;cursor:pointer;display:none;">✏️</button>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div id="prof-name-display" style="font-size:16px;font-weight:700;color:var(--c-text);"></div>
+                            <div id="prof-email" style="font-size:12px;color:var(--c-text2);margin-top:2px;"></div>
                             <div id="prof-provider" style="font-size:11px;color:var(--c-text3);margin-top:2px;"></div>
                         </div>
                     </div>
-                    <label class="cal-fld"><span>표시 이름 (닉네임)</span>
+                    <label class="cal-fld" id="prof-fld-nickname"><span>표시 이름 (닉네임)</span>
                         <input id="prof-nickname" type="text" placeholder="예: 홍길동" maxlength="30">
                     </label>
-                    <div style="font-size:11.5px;color:var(--c-text3);line-height:1.6;">팀원에게 보이는 이름입니다. 비워두면 Google/GitHub 이름으로 자동 복원됩니다.<br><b>주의:</b> 변경 시 다른 팀원의 화면에서도 갱신됩니다(다음 로드부터).</div>
+                    <label class="cal-fld" id="prof-fld-status"><span>상태 메시지 <span style="font-size:10px;color:var(--c-text3);">· 최대 100자, 팀원에게 표시됨</span></span>
+                        <input id="prof-status-msg" type="text" placeholder="예: 🛠 카드 시스템 리팩토링 중 / 🚀 신규 빌드 배포 / 🌴 휴가 중..." maxlength="100">
+                    </label>
+                    <div id="prof-readonly-hint" style="display:none;font-size:11.5px;color:var(--c-text3);padding:6px 0;">👁 다른 사용자의 프로필 — 보기 전용</div>
                 </div>
                 <div class="cal-modal-foot">
-                    <button onclick="signOut();closeModal('profile-modal')" class="cal-btn-danger">로그아웃</button>
+                    <button id="prof-signout-btn" onclick="signOut();closeModal('profile-modal')" class="cal-btn-danger">로그아웃</button>
                     <div style="flex:1;"></div>
-                    <button onclick="closeModal('profile-modal')" class="cal-btn-cancel">취소</button>
-                    <button onclick="profileSave()" class="cal-btn-save">저장</button>
+                    <button onclick="closeModal('profile-modal')" class="cal-btn-cancel">닫기</button>
+                    <button id="prof-save-btn" onclick="profileSave()" class="cal-btn-save">저장</button>
                 </div>
             </div>
         </div>
@@ -4389,7 +4396,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="xp-wrap">
                 <header class="xp-head">
                     <h2 class="xp-title">🔍 탐색기</h2>
-                    <input id="xp-search" type="text" placeholder="검색 (제목·내용 모두) — 또는 *로 전체 보기" oninput="xpRender()" autofocus>
+                    <input id="xp-search" type="text" placeholder="검색 (제목·메타) — 또는 *로 전체 보기" oninput="xpRender()" autofocus>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--c-text2);cursor:pointer;white-space:nowrap;" title="문서 본문까지 검색 (느릴 수 있음 · DB 일괄 조회)">
+                        <input type="checkbox" id="xp-search-content" onchange="xpToggleContentSearch()">
+                        📖 본문 검색
+                    </label>
                     <div class="xp-stats" id="xp-stats">전체 0개</div>
                 </header>
                 <div class="xp-body">
@@ -4992,18 +5003,48 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             myClientId = user.id;
             myEmail = user.email || '';
             myAuthProvider = user.app_metadata?.provider || 'unknown';
-            myAvatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
-            myNickname = user.user_metadata?.full_name 
-                      || user.user_metadata?.name 
-                      || user.user_metadata?.user_name 
-                      || (user.email ? user.email.split('@')[0] : 'user');
-            localStorage.setItem('pb3_nickname', myNickname);
+            // [r87 #5] 커스텀 아바타가 저장돼 있으면 그것을 우선, 없으면 OAuth 아바타
+            var savedAvatar = localStorage.getItem('pb3_avatar_custom_' + user.id);
+            myAvatarUrl = savedAvatar || user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+            // [r87 #5] 닉네임 영속: 사용자가 수동 변경한 경우(pb3_nickname_custom=1)는 localStorage 우선,
+            //   아니면 OAuth 이름으로 채움. setUserFromAuth가 매번 호출돼도 커스텀 닉네임 유지.
+            var hasCustomNick = localStorage.getItem('pb3_nickname_custom_' + user.id) === '1';
+            var savedNick = localStorage.getItem('pb3_nickname');
+            if (hasCustomNick && savedNick) {
+                myNickname = savedNick;
+            } else {
+                myNickname = user.user_metadata?.full_name
+                          || user.user_metadata?.name
+                          || user.user_metadata?.user_name
+                          || (user.email ? user.email.split('@')[0] : 'user');
+                localStorage.setItem('pb3_nickname', myNickname);
+            }
             sessionStorage.setItem('pb3_client_id', user.id);
             updateAuthUI();
             // [r80] 대시보드 스토리지 키가 currentUser.id로 바뀜 → 위젯 재로드
             if (typeof dbState === 'object' && dbState) {
                 dbState.widgets = null;
                 if (currentView === 'dashboard' && typeof dbRender === 'function') dbRender();
+            }
+            // [r87 #5] DB 로드 후 users.display_name이 더 최신일 수 있음 → 비동기 확인
+            //   (currentData.users는 초기엔 비어있다가 initSupabase 후 채워짐)
+            setTimeout(_syncNickFromDb, 2000);
+        }
+        function _syncNickFromDb() {
+            if (!currentUser || !currentData.users) return;
+            var u = (currentData.users || []).find(function (x) { return x.id === currentUser.id; });
+            if (!u || !u.displayName) return;
+            // 커스텀 플래그가 없거나 DB가 더 최신(저장 시각 비교 불가하므로 항상 DB 신뢰)
+            if (u.displayName !== myNickname) {
+                myNickname = u.displayName;
+                localStorage.setItem('pb3_nickname', u.displayName);
+                localStorage.setItem('pb3_nickname_custom_' + currentUser.id, '1');
+                updateAuthUI();
+            }
+            if (u.avatarUrl && u.avatarUrl !== myAvatarUrl) {
+                myAvatarUrl = u.avatarUrl;
+                localStorage.setItem('pb3_avatar_custom_' + currentUser.id, u.avatarUrl);
+                updateAuthUI();
             }
         }
 
@@ -5039,39 +5080,136 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
-        // [r78] 프로필 모달 (닉네임 설정)
-        function openProfileModal() {
+        // [r78/r87] 프로필 모달 — 본인은 편집, 타인은 보기 전용
+        function openProfileModal(targetUserId) {
             if (!currentUser) { showToast('로그인이 필요합니다', 'alert'); return; }
+            var isOther = !!targetUserId && targetUserId !== currentUser.id;
+            var u;
+            if (isOther) {
+                u = (currentData.users || []).find(function (x) { return x.id === targetUserId; });
+                if (!u) { showToast('해당 사용자 정보를 찾을 수 없습니다', 'alert'); return; }
+            } else {
+                u = {
+                    id: currentUser.id, email: myEmail, displayName: myNickname,
+                    avatarUrl: myAvatarUrl, provider: myAuthProvider,
+                    statusMessage: ((currentData.users || []).find(function (x) { return x.id === currentUser.id; }) || {}).statusMessage || ''
+                };
+            }
+            // 헤더 — 표시 이름
+            document.getElementById('profile-modal-title').textContent = isOther ? '👤 ' + (u.displayName || '사용자') + ' 프로필' : '👤 내 프로필';
+            // 아바타
             var av = document.getElementById('prof-avatar');
             if (av) {
-                if (myAvatarUrl) av.innerHTML = '<img src="'+myAvatarUrl+'" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
-                else av.textContent = ((myNickname||'?')[0]||'?').toUpperCase();
+                if (u.avatarUrl) av.innerHTML = '<img src="' + u.avatarUrl + '" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;">';
+                else { av.innerHTML = ''; av.textContent = ((u.displayName || '?')[0] || '?').toUpperCase(); }
             }
-            document.getElementById('prof-email').textContent = myEmail || '';
-            document.getElementById('prof-provider').textContent = (myAuthProvider === 'github' ? '⚫ GitHub' : '🔵 Google') + ' · ID: ' + currentUser.id.slice(0, 8);
-            document.getElementById('prof-nickname').value = myNickname || '';
+            // 본인 모드: 아바타 ✏️ 노출, 타인 모드: 숨김
+            var editBtn = document.getElementById('prof-avatar-edit');
+            if (editBtn) editBtn.style.display = isOther ? 'none' : 'flex';
+            // 이름·이메일·프로바이더
+            document.getElementById('prof-name-display').textContent = u.displayName || '이름 없음';
+            document.getElementById('prof-email').textContent = u.email || '';
+            document.getElementById('prof-provider').textContent = (u.provider === 'github' ? '⚫ GitHub' : (u.provider === 'google' ? '🔵 Google' : '· OAuth')) + ' · ID: ' + (u.id || '').slice(0, 8);
+            // 닉네임/상태 — 본인은 input, 타인은 표시만
+            var nickInput = document.getElementById('prof-nickname');
+            var statusInput = document.getElementById('prof-status-msg');
+            nickInput.value = u.displayName || '';
+            statusInput.value = u.statusMessage || '';
+            nickInput.readOnly = isOther;
+            statusInput.readOnly = isOther;
+            document.getElementById('prof-readonly-hint').style.display = isOther ? 'block' : 'none';
+            document.getElementById('prof-save-btn').style.display = isOther ? 'none' : 'inline-flex';
+            document.getElementById('prof-signout-btn').style.display = isOther ? 'none' : 'inline-flex';
             openModal('profile-modal');
-            setTimeout(function(){ document.getElementById('prof-nickname').focus(); }, 50);
+            if (!isOther) setTimeout(function () { nickInput.focus(); }, 50);
+        }
+        // [r87 #4] 아바타 변경 — 로컬 파일 선택 → 압축 → Storage 업로드 → users.avatar_url 갱신
+        async function _profileChangeAvatar() {
+            if (!currentUser) return;
+            var input = document.createElement('input');
+            input.type = 'file'; input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+            input.onchange = async function (e) {
+                var f = e.target.files && e.target.files[0]; if (!f) return;
+                if (f.size > 5 * 1024 * 1024) { showToast('5MB 이하만 (압축 후 더 작아짐)', 'alert'); return; }
+                showToast('🖼 아바타 압축 중...', 'info');
+                try {
+                    var blob = await _compressAvatarImage(f);
+                    // Storage 업로드
+                    if (!supabaseClient) { showToast('오프라인 — 업로드 불가', 'alert'); return; }
+                    var path = 'avatars/' + currentUser.id + '_' + Date.now() + '.jpg';
+                    var up = await supabaseClient.storage.from(DRIVE_BUCKET).upload(path, blob, { upsert: false, contentType: 'image/jpeg' });
+                    if (up.error) { showToast('❌ 업로드 실패: ' + up.error.message, 'alert'); return; }
+                    var url = supabaseClient.storage.from(DRIVE_BUCKET).getPublicUrl(path).data.publicUrl;
+                    if (!url) { showToast('❌ URL 생성 실패', 'alert'); return; }
+                    // 즉시 반영
+                    myAvatarUrl = url;
+                    localStorage.setItem('pb3_avatar_custom_' + currentUser.id, url);
+                    // 모달의 아바타 갱신
+                    var av = document.getElementById('prof-avatar');
+                    if (av) av.innerHTML = '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">';
+                    updateAuthUI();
+                    showToast('✅ 아바타 업데이트 — 저장 버튼을 눌러 DB에 반영하세요', 'success');
+                } catch (err) {
+                    showToast('❌ 아바타 처리 실패: ' + (err.message || err), 'alert');
+                }
+            };
+            input.click();
+        }
+        // [r87 #4] 아바타 압축 — max 256px, JPEG quality 0.85
+        function _compressAvatarImage(file) {
+            return new Promise(function (resolve, reject) {
+                var img = new Image();
+                img.onload = function () {
+                    var canvas = document.createElement('canvas');
+                    var max = 256;
+                    var w = img.width, h = img.height;
+                    if (w > h) { if (w > max) { h = h * (max / w); w = max; } }
+                    else { if (h > max) { w = w * (max / h); h = max; } }
+                    canvas.width = Math.round(w); canvas.height = Math.round(h);
+                    var ctx = canvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob(function (blob) {
+                        if (blob) resolve(blob); else reject(new Error('Canvas blob 실패'));
+                    }, 'image/jpeg', 0.85);
+                };
+                img.onerror = function () { reject(new Error('이미지 로드 실패')); };
+                img.src = URL.createObjectURL(file);
+            });
         }
         async function profileSave() {
             var input = document.getElementById('prof-nickname');
-            var nick = (input.value || '').trim();
-            if (!nick) {
-                // 빈 값 → 기본(이메일 prefix or OAuth name) 복원
-                nick = (currentUser && currentUser.user_metadata && (currentUser.user_metadata.full_name || currentUser.user_metadata.name || currentUser.user_metadata.user_name))
-                    || (myEmail ? myEmail.split('@')[0] : 'user');
+            var inputVal = (input.value || '').trim();
+            var oauthDefault = (currentUser && currentUser.user_metadata && (currentUser.user_metadata.full_name || currentUser.user_metadata.name || currentUser.user_metadata.user_name))
+                || (myEmail ? myEmail.split('@')[0] : 'user');
+            var nick;
+            if (!inputVal) {
+                // [r87 #5] 빈 값 → 기본값으로 복원 + 커스텀 플래그 제거
+                nick = oauthDefault;
+                localStorage.removeItem('pb3_nickname_custom_' + currentUser.id);
+            } else {
+                nick = inputVal;
+                // [r87 #5] 커스텀 플래그 설정 → 다음 setUserFromAuth가 덮어쓰지 않음
+                localStorage.setItem('pb3_nickname_custom_' + currentUser.id, '1');
             }
             myNickname = nick;
             localStorage.setItem('pb3_nickname', nick);
+            // [r87 #4] 상태 메시지
+            var statusMsg = (document.getElementById('prof-status-msg').value || '').trim();
             updateAuthUI();
             // 현재 사용자 데이터를 currentData.users에 반영(다른 위젯에서 즉시 사용)
             var u = (currentData.users || []).find(function (x) { return x.id === currentUser.id; });
-            if (u) u.displayName = nick;
-            else if (currentData.users) currentData.users.push({ id: currentUser.id, email: myEmail, displayName: nick, avatarUrl: myAvatarUrl, provider: myAuthProvider, role: 'member' });
+            if (u) {
+                u.displayName = nick;
+                u.statusMessage = statusMsg;
+                u.avatarUrl = myAvatarUrl;
+            } else if (currentData.users) {
+                currentData.users.push({ id: currentUser.id, email: myEmail, displayName: nick, avatarUrl: myAvatarUrl, provider: myAuthProvider, role: 'member', statusMessage: statusMsg });
+            }
             // DB sync
-            await dbUpsertUser({ id: currentUser.id, email: myEmail, displayName: nick, avatarUrl: myAvatarUrl, provider: myAuthProvider });
+            await dbUpsertUser({ id: currentUser.id, email: myEmail, displayName: nick, avatarUrl: myAvatarUrl, provider: myAuthProvider, statusMessage: statusMsg });
             closeModal('profile-modal');
-            showToast('✅ 닉네임 저장됨', 'success');
+            showToast('✅ 프로필 저장됨', 'success');
             // 모든 화면 갱신
             if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
             if (typeof dbRender === 'function' && currentView === 'dashboard') dbRender();
@@ -5127,12 +5265,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         async function dbUpsertUser(u) {
             if (!supabaseClient || !u || !u.id) return;
             try {
-                const { error } = await supabaseClient.from('users').upsert({
+                // [r87 #4] status_message 추가 — 컬럼 없으면 자동 폴백
+                var payload = {
                     id: u.id, email: u.email || '',
                     display_name: u.displayName || null,
                     avatar_url: u.avatarUrl || null,
-                    provider: u.provider || null
-                });
+                    provider: u.provider || null,
+                    status_message: u.statusMessage || null
+                };
+                var { error } = await supabaseClient.from('users').upsert(payload);
+                if (error && /status_message/.test(error.message || '')) {
+                    delete payload.status_message;
+                    ({ error } = await supabaseClient.from('users').upsert(payload));
+                }
                 if (error) console.warn('[dbUpsertUser]', error);
             } catch (e) { console.warn('[dbUpsertUser]', e); }
         }
@@ -6996,10 +7141,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r86 #5] 탐색기 (Explorer) — 통합 검색 + 미리보기 + 바로가기
         // 카테고리: 문서·태스크·스프린트·이슈·에셋·일정·리뷰·드라이브·버그리포트·사용자
         // ═══════════════════════════════════════════════════════════════════
-        var xpState = { cat: 'all', selectedId: null, selectedKind: null };
+        var xpState = { cat: 'all', selectedId: null, selectedKind: null, searchContent: false };
+        // [r87 #1] 문서를 3분할
         var XP_CATS = [
             { k: 'all', label: '🌐 전체' },
-            { k: 'doc', label: '📚 문서' },
+            { k: 'docWiki', label: '📚 문서' },
+            { k: 'docCanon', label: '📘 프로젝트 위키' },
+            { k: 'docPersonal', label: '🔒 개인 문서' },
             { k: 'task', label: '📋 태스크' },
             { k: 'sprint', label: '🏃 스프린트' },
             { k: 'issue', label: '🐛 이슈' },
@@ -7010,12 +7158,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             { k: 'bug', label: '🐞 버그 리포트' },
             { k: 'user', label: '👤 멤버' }
         ];
+        // [r87 #3] 본문 캐시 — 한 번 fetch 한 doc은 메모리에 보관
+        var _xpDocContentCache = {};
         function _xpBuildAll() {
             // 카테고리별 항목 풀 (현재 프로젝트 기준, 일부는 글로벌)
             var all = [];
-            // 문서
+            // [r87 #1] 문서 3분할 — kind에 따라 docWiki/docCanon/docPersonal로 분리
+            // [r87 #2/#3] 본문 캐시 우선, 없으면 d.content (메타만 로드된 상태도 있음)
             (currentData.docs || []).filter(function (d) { return d.projectId === activeProjectId && (!d.meta || !d.meta.isFolder); }).forEach(function (d) {
-                all.push({ kind: 'doc', id: d.id, title: d.title || '(제목 없음)', snippet: (d.content || '').slice(0, 200), meta: (d.kind === 'canon' ? '게임 위키' : (d.kind === 'personal' ? '개인 문서' : '문서')) + ' · ' + (d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('ko-KR') : '') });
+                var kindKey = d.kind === 'canon' ? 'docCanon' : (d.kind === 'personal' ? 'docPersonal' : 'docWiki');
+                var kindLabel = d.kind === 'canon' ? '📘 프로젝트 위키' : (d.kind === 'personal' ? '🔒 개인 문서' : '📚 문서');
+                var content = _xpDocContentCache[d.id] || d.content || '';
+                all.push({
+                    kind: kindKey, id: d.id, title: d.title || '(제목 없음)',
+                    snippet: content.slice(0, 240),
+                    fullContent: content, // 본문 검색용
+                    contentLoaded: !!content,
+                    meta: kindLabel + ' · ' + (d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('ko-KR') : '')
+                });
             });
             // 태스크
             (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).forEach(function (t) {
@@ -7062,11 +7222,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             });
             return all;
         }
-        function xpRender() {
+        async function xpRender() {
             var listEl = document.getElementById('xp-list'); if (!listEl) return;
             var catsEl = document.getElementById('xp-cats');
             var statsEl = document.getElementById('xp-stats');
             var q = (document.getElementById('xp-search').value || '').toLowerCase().trim();
+            // [r87 #3] 본문 검색이 켜져있고 검색어가 있으면, 모든 문서의 content를 미리 로드
+            if (xpState.searchContent && q && q !== '*' && supabaseClient) {
+                await _xpEnsureDocContent();
+            }
             var all = _xpBuildAll();
             // 카테고리 카운트
             var counts = { all: 0 };
@@ -7081,24 +7245,41 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (xpState.cat !== 'all') items = items.filter(function (it) { return it.kind === xpState.cat; });
             if (q && q !== '*') {
                 items = items.filter(function (it) {
-                    return (it.title || '').toLowerCase().indexOf(q) > -1 ||
-                        (it.snippet || '').toLowerCase().indexOf(q) > -1 ||
-                        (it.meta || '').toLowerCase().indexOf(q) > -1;
+                    // 기본: title + snippet + meta
+                    if ((it.title || '').toLowerCase().indexOf(q) > -1) return true;
+                    if ((it.snippet || '').toLowerCase().indexOf(q) > -1) return true;
+                    if ((it.meta || '').toLowerCase().indexOf(q) > -1) return true;
+                    // [r87 #3] 본문 검색 켜진 경우 전체 본문에서 매칭
+                    if (xpState.searchContent && it.fullContent && it.fullContent.toLowerCase().indexOf(q) > -1) return true;
+                    return false;
                 });
             }
-            if (statsEl) statsEl.textContent = q ? (items.length + '개 검색됨 (전체 ' + all.length + '개)') : ('전체 ' + items.length + '개');
+            if (statsEl) {
+                statsEl.innerHTML = q
+                    ? (items.length + '개 검색됨 (전체 ' + all.length + '개)' + (xpState.searchContent ? ' · <span style="color:var(--c-accent);">📖 본문 검색</span>' : ''))
+                    : ('전체 ' + items.length + '개');
+            }
             if (!items.length) {
-                listEl.innerHTML = '<div class="xp-empty">' + (q ? '🔍 "' + _annEsc(q) + '"에 대한 검색 결과가 없습니다' : '📭 표시할 항목이 없습니다') + '</div>';
+                listEl.innerHTML = '<div class="xp-empty">' + (q ? '🔍 "' + _annEsc(q) + '"에 대한 검색 결과가 없습니다' + (!xpState.searchContent ? '<br><span style="font-size:12px;">💡 상단 ☑️ 본문 검색을 켜면 문서 내용도 검색합니다</span>' : '') : '📭 표시할 항목이 없습니다') + '</div>';
                 _xpRenderPreview(null);
                 return;
             }
-            var kindLabels = { doc:'📚 문서', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
+            var kindLabels = { docWiki:'📚 문서', docCanon:'📘 위키', docPersonal:'🔒 개인', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
             listEl.innerHTML = items.slice(0, 300).map(function (it) {
                 var sel = (xpState.selectedKind === it.kind && xpState.selectedId === it.id) ? ' selected' : '';
+                // [r87 #3] 매칭 부분 발췌 + 하이라이팅
+                var snippetHtml = '';
+                if (q && q !== '*' && it.snippet) {
+                    var excerpt = _xpExcerptAround(it.fullContent || it.snippet, q, 80);
+                    snippetHtml = '<div class="xp-r-snippet">' + _xpHighlight(excerpt, q) + '</div>';
+                } else if (it.snippet) {
+                    snippetHtml = '<div class="xp-r-snippet">' + _annEsc(it.snippet.slice(0, 200)) + '</div>';
+                }
+                var titleHtml = q ? _xpHighlight(it.title || '', q) : _annEsc(it.title || '');
                 return '<div class="xp-result' + sel + '" onclick="xpSelect(\'' + it.kind + '\',\'' + it.id + '\')" ondblclick="xpJump(\'' + it.kind + '\',\'' + it.id + '\')">' +
-                    '<div class="xp-r-head"><span class="xp-r-kind">' + (kindLabels[it.kind] || it.kind) + '</span><span class="xp-r-title">' + _annEsc(it.title || '') + '</span></div>' +
+                    '<div class="xp-r-head"><span class="xp-r-kind">' + (kindLabels[it.kind] || it.kind) + '</span><span class="xp-r-title">' + titleHtml + '</span></div>' +
                     '<div class="xp-r-meta">' + _annEsc(it.meta || '') + '</div>' +
-                    (it.snippet ? '<div class="xp-r-snippet">' + _annEsc(it.snippet.slice(0, 200)) + '</div>' : '') +
+                    snippetHtml +
                     '</div>';
             }).join('');
             // 선택된 항목 미리보기 유지
@@ -7108,6 +7289,50 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } else {
                 _xpRenderPreview(null);
             }
+        }
+        function xpToggleContentSearch() {
+            xpState.searchContent = document.getElementById('xp-search-content').checked;
+            xpRender();
+        }
+        // [r87 #3] 매치 위치 주변 ±N자 발췌
+        function _xpExcerptAround(text, q, radius) {
+            if (!text) return '';
+            var lower = text.toLowerCase();
+            var idx = lower.indexOf((q || '').toLowerCase());
+            if (idx < 0) return text.slice(0, 200);
+            var start = Math.max(0, idx - radius);
+            var end = Math.min(text.length, idx + q.length + radius);
+            var prefix = start > 0 ? '… ' : '';
+            var suffix = end < text.length ? ' …' : '';
+            return prefix + text.slice(start, end) + suffix;
+        }
+        // [r87 #3] 검색어 하이라이팅 (HTML escape 후 mark)
+        function _xpHighlight(text, q) {
+            if (!q || !text) return _annEsc(text || '');
+            var esc = _annEsc(text);
+            // q를 escape — 정규식 특수문자
+            var qEsc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var re = new RegExp('(' + qEsc + ')', 'gi');
+            return esc.replace(re, '<mark style="background:var(--c-accent);color:#fff;padding:0 2px;border-radius:3px;">$1</mark>');
+        }
+        // [r87 #3] 문서 본문 일괄 로드 (본문 검색 시 1회)
+        async function _xpEnsureDocContent() {
+            if (!supabaseClient || !currentData.docs) return;
+            // 캐시되지 않은 doc id 목록
+            var ids = currentData.docs
+                .filter(function (d) { return d.projectId === activeProjectId && (!d.meta || !d.meta.isFolder); })
+                .filter(function (d) { return !_xpDocContentCache[d.id] && !d.content; })
+                .map(function (d) { return d.id; });
+            if (!ids.length) return;
+            showToast('📖 본문 검색 인덱싱 중... (' + ids.length + '개)', 'info');
+            try {
+                // Supabase IN 조회로 일괄 가져오기 (in batches of 100)
+                for (var i = 0; i < ids.length; i += 100) {
+                    var batch = ids.slice(i, i + 100);
+                    var res = await supabaseClient.from('wiki_docs').select('id,content').in('id', batch);
+                    if (res && res.data) res.data.forEach(function (r) { _xpDocContentCache[r.id] = r.content || ''; });
+                }
+            } catch (e) { console.warn('[xp content load]', e); }
         }
         function xpSetCat(k) {
             xpState.cat = k;
@@ -7129,16 +7354,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 box.innerHTML = '<div class="xp-preview-empty">👈 항목을 선택하면 미리보기가 표시됩니다</div>';
                 return;
             }
-            var kindLabels = { doc:'📚 문서', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
-            // body 렌더 — doc는 MD 렌더
+            var kindLabels = { docWiki:'📚 문서', docCanon:'📘 프로젝트 위키', docPersonal:'🔒 개인 문서', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
+            var isDoc = (it.kind === 'docWiki' || it.kind === 'docCanon' || it.kind === 'docPersonal');
+            // [r87 #3] 검색어 있으면 매치 위치 주변 발췌 + 하이라이트
+            var q = (document.getElementById('xp-search').value || '').toLowerCase().trim();
             var bodyHtml = '';
-            if (it.kind === 'doc' && it.snippet) {
-                try { bodyHtml = DOMPurify.sanitize(parseMarkdownWithTables(it.snippet), domPurifyConfig); }
-                catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;">' + _annEsc(it.snippet) + '</pre>'; }
+            var contentForBody = it.fullContent || it.snippet || '';
+            if (contentForBody) {
+                if (q && q !== '*') {
+                    // 매치 부분 발췌 (±200자)
+                    var excerpt = _xpExcerptAround(contentForBody, q, 200);
+                    bodyHtml = '<div style="font-size:13px;line-height:1.6;">' + _xpHighlight(excerpt, q) + '</div>';
+                } else if (isDoc) {
+                    try { bodyHtml = DOMPurify.sanitize(parseMarkdownWithTables(contentForBody.slice(0, 4000)), domPurifyConfig); }
+                    catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;">' + _annEsc(contentForBody) + '</pre>'; }
+                } else {
+                    bodyHtml = '<pre style="white-space:pre-wrap;font-family:inherit;">' + _annEsc(contentForBody) + '</pre>';
+                }
             } else {
-                bodyHtml = '<pre style="white-space:pre-wrap;font-family:inherit;">' + _annEsc(it.snippet || '(내용 없음)') + '</pre>';
+                bodyHtml = '<div style="color:var(--c-text3);font-style:italic;padding:12px;">(미리보기 내용 없음 — ' + (isDoc ? '본문 검색 켜기 또는 ' : '') + '문서 열기로 확인)</div>';
             }
-            var jumpLabel = { doc: '📚 문서 열기', task: '📋 카드 열기', sprint: '🏃 스프린트로', issue: '🐛 이슈로', asset: '🎮 에셋 매니저로', event: '📅 캘린더로', review: '🗳 리뷰함으로', file: '🗂️ 드라이브로', bug: '🐞 리포트 보기', user: '👤 프로필 (지원 예정)' }[it.kind] || '바로가기';
+            var jumpLabel = { docWiki: '📚 문서 열기', docCanon: '📘 위키 열기', docPersonal: '🔒 개인 문서 열기', task: '📋 카드 열기', sprint: '🏃 스프린트로', issue: '🐛 이슈로', asset: '🎮 에셋 매니저로', event: '📅 캘린더로', review: '🗳 리뷰함으로', file: '🗂️ 드라이브로', bug: '🐞 리포트 보기', user: '👤 프로필 보기' }[it.kind] || '바로가기';
             box.innerHTML =
                 '<div class="xp-preview-head">' + (kindLabels[it.kind] || '') + ' · ' + _annEsc(it.title || '') + '</div>' +
                 '<div class="xp-preview-meta">' + _annEsc(it.meta || '') + '</div>' +
@@ -7149,6 +7385,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 '</div>';
         }
         function xpJump(kind, id) {
+            // [r87 #1] doc 3분할 — kind에 따라 적절한 view로
+            if (kind === 'docWiki') { switchView('docs'); setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80); return; }
+            if (kind === 'docCanon') { switchView('canon'); setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80); return; }
+            if (kind === 'docPersonal') { switchView('personal'); setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80); return; }
             // 카테고리별 바로가기 행동
             if (kind === 'doc') { switchView('docs'); setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80); return; }
             if (kind === 'task') { switchView('kanban'); setTimeout(function () { if (typeof openCardModal === 'function') openCardModal(id); }, 80); return; }
@@ -7159,9 +7399,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (kind === 'review') { openReviewInbox(); return; }
             if (kind === 'file') { switchView('drive'); return; }
             if (kind === 'bug') { switchView('bugReport'); setTimeout(function () { if (typeof brEditReport === 'function') brEditReport(id); }, 80); return; }
-            if (kind === 'user') { showToast('멤버 프로필 보기는 지원 예정', 'info'); return; }
+            if (kind === 'user') { openProfileModal(id); return; }
         }
         function xpCite(kind, id) {
+            // [r87 #1] doc 3분할 — 모두 [[doc:id]] 토큰으로 통일
+            var docKinds = ['docWiki', 'docCanon', 'docPersonal'];
+            if (docKinds.indexOf(kind) > -1) kind = 'doc';
             var tokens = { doc: '[[doc:' + id + ']]', task: '[[task:' + id + ']]', sprint: '[[sprint:' + id + ']]', issue: '[[issue:' + id + ']]', asset: '[[asset:' + id + ']]', event: '[[event:' + id + ']]', review: '[[review:' + id + ']]', user: '[[user:' + id + ']]', bug: '[[bug:' + id + ']]' };
             var tok = tokens[kind] || id;
             copyTextToClipboard(tok, '📋 인용 토큰 복사됨 — 텍스트 입력란에 붙여넣기');
@@ -11093,6 +11336,7 @@ return data;
             ['tasks', 'linked_task_id', 'text'],            // [r75] 개인 칸반: 팀↔개인 카드 양방향 동기화
             ['projects', 'participants', "jsonb default '[]'::jsonb"], // [r78] 프로젝트 참여자
             ['users', 'display_name', 'text'],              // [r78] 사용자 닉네임
+            ['users', 'status_message', 'text'],            // [r87 #4] 상태 메시지
             ['bug_reports', 'status', "text default 'new'"], // [r86 #2] 버그 처리 상태
             ['asset_folders', 'parent_id', 'text'],          // [r86 #3] 하위 폴더 지원
             ['wiki_docs', 'kind', "text default 'wiki'"],
@@ -11314,7 +11558,8 @@ return data;
                 // [v40 Day3 청크 2] 팀원 + 리뷰 요청
                 users: (usersData || []).map(u => ({
                     id: u.id, email: u.email || '', displayName: u.display_name || (u.email ? u.email.split('@')[0] : '익명'),
-                    avatarUrl: u.avatar_url || null, provider: u.provider || '', role: u.role || 'member'
+                    avatarUrl: u.avatar_url || null, provider: u.provider || '', role: u.role || 'member',
+                    statusMessage: u.status_message || '' // [r87 #4]
                 })),
                 reviews: (reviewData || []).map(_mapReviewRow),
                 canon: (canonData || []).map(_mapCanonRow),
