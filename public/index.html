@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r104 (rag.py f-string NameError 수정: r102 _enforce_user_message의 f-string 안내 텍스트에 "「{q}」", "{query}" placeholder가 그대로 있어서 Python f-string이 변수 q를 평가하려다 NameError. 사용자 보고: "❌ 오류: name 'q' is not defined". 수정: 안내문에서 {q} → escape "{{q}}" (f-string 평가 후 literal "{q}" 출력) + "「{q}」" placeholder 형식 안내를 평문 예시("예: '인덱스에서 「칸반 데이터 모델」에 대한 정보를 찾지 못했습니다.'")로 변경. 검증: _enforce_user_message('??', [...]) 호출 성공, 결과에 {q} {query} literal 안내 포함) -->
+<!-- BUILD: 2026-05-28 r105 (LLM 정형응답 옵션 제거 + 서버 게이트 강화: r104에서 추가한 평문 예시 "예: 인덱스에서 「칸반 데이터 모델」에 대한 정보를 찾지 못했습니다"를 LLM이 그대로 베껴 사용자가 "???"라고 물어도 "「칸반 데이터 모델」에 대한 정보..."라고 답하는 버그. 그리고 sim 0.74 컨텍스트에도 LLM이 정형응답 도망. 수정: A. _enforce_user_message에서 정형응답 절차(3번)와 모든 예시 문장 완전 제거 — LLM은 도착한 컨텍스트로만 답변, 모호하면 "구체적으로 어떤 부분을 알고 싶나요?" 되묻기. B. 컨텍스트 게이트 임계치 강화 — avg_sim 0.40→0.55, max_sim 0.50→0.65, AND→OR로 변경(둘 다 약하면 발동). 약한 컨텍스트는 서버가 직접 정형응답 + 사용자 query 그대로 포함. C. 결정 책임 분리 — 게이트 통과한 컨텍스트만 LLM에 전달, LLM은 그것으로 답할 책임만) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">

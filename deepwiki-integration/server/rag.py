@@ -14,10 +14,11 @@ SYSTEM_PROMPT = """당신은 TDA Dashboard 프로젝트 전용 RAG 어시스턴�
 """
 
 
-# [r97] 컨텍스트 품질 게이트 — 매칭이 너무 약하면 LLM 호출 자체를 우회.
-# LLM이 "추정으로는…" 일반 상식으로 빠지는 것을 방지.
-_GATE_AVG_SIM = 0.40
-_GATE_MAX_SIM = 0.50
+# [r97→r105] 컨텍스트 품질 게이트 — 매칭이 약하면 서버가 직접 정형응답.
+# LLM은 게이트 통과한 컨텍스트로만 답변하므로 "정형응답 옵션"을 가지지 않음 → 결정 책임 분리.
+# r97: avg=0.40, max=0.50. r105 강화: avg=0.55, max=0.65.
+_GATE_AVG_SIM = 0.55
+_GATE_MAX_SIM = 0.65
 
 
 def build_context_block(chunks: List[Dict[str, Any]]) -> str:
@@ -58,61 +59,43 @@ def _retrieval_meta(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _enforce_user_message(user_content: str, chunks: List[Dict[str, Any]]) -> str:
-    """[r97→r100] 마지막 user message 앞에 강제 지침을 prefix로 끼워넣음.
+    """[r97→r105] 마지막 user message 앞에 강제 지침을 prefix로 끼워넣음.
 
-    r97는 너무 엄격했음 — 사용자 질문 키워드의 "정확한 텍스트"가 청크에 없으면
-    LLM이 정형 응답으로 빠짐. r100에서 완화: 함수명·테이블명·필드명 같은 단서가
-    있으면 그것을 활용해 추론 답변 허용. 단 컨텍스트 외 상식은 여전히 금지.
+    r105 핵심 변경:
+    - "정형 응답" 옵션 제거 (서버 게이트가 약한 컨텍스트는 미리 잘라냄)
+    - 예시 문장 ("예: 인덱스에서 「칸반 데이터 모델」...") 제거 — LLM이 그대로 베끼는 원인
+    - LLM은 도착한 컨텍스트로만 답변. 모호하면 그것조차 솔직히 답.
     """
-    src_list = []
-    seen_sources = set()
-    for c in chunks[:6]:
-        sid = c.get("source_id") or "?"
-        if sid in seen_sources:
-            continue
-        seen_sources.add(sid)
-        src_list.append(f"`{sid}`")
-    prefix = f"""[엄격 지시 — 이 지시 위반 답변은 사용자가 거부합니다]
+    prefix = f"""[엄격 지시]
 
-당신의 답변은 위에 첨부된 「검색된 컨텍스트」 청크의 본문에 근거해야 합니다.
+답변은 위에 첨부된 「검색된 컨텍스트」 청크의 본문 텍스트에만 근거해야 합니다.
 
-## 적극적으로 활용할 단서 (있으면 반드시 인용)
-- 컨텍스트 청크 안의 **함수명·메서드명** (예: `dbUpsertCategory`, `renderBoard`)
-- 청크 안의 **테이블명·컬럼명** (예: `kanban_categories`, `sprint_id`, `zone`)
-- 청크 안의 **상수/필드명** (예: `Shelf`, `Now`, `Buried`, `intrusionCount`)
-- 청크 안의 **타입 정의/스키마 단편** (예: `payload = {{ id, project_id, ... }}`)
+## 적극적으로 활용할 단서
+- 컨텍스트의 함수명/메서드명 (예: dbUpsertCategory, renderBoard)
+- 테이블명/컬럼명 (예: kanban_categories, sprint_id, zone)
+- 상수·필드명 (예: Shelf, Now, Buried, intrusionCount)
+- 타입 정의/스키마 단편 (payload 객체, JSDoc 주석 등)
 
-이런 단서가 청크에 있으면, 사용자 질문의 정확한 단어가 없더라도 그 단서를 묶어 답하세요.
-예: 컨텍스트에 `dbUpsertCategory`와 `kanban_categories` 가 보이면, 그것이 곧 "칸반 데이터 모델"의 일부이므로 인용·요약해서 답.
+사용자 질문의 정확한 단어가 청크에 없어도, 위 단서를 묶어 추론 답변하세요.
 
 ## 절대 금지
-- "일반적으로 …는 …합니다" 형태의 일반 상식 답변
-- "추정으로는…", "보통 …는 …" 같은 일반화 표현
-- 컨텍스트에 없는 가상 SQL 예시 (예: `CREATE TABLE tasks (id INT, ...)` 같은 사전지식 기반 코드)
-- 일반 칸반 용어("To Do", "In Progress", "Completed") — 이 프로젝트는 Now/Shelf/Buried 사용
+- 일반 상식 답변 ("일반적으로 ~는 ~합니다", "추정으로는…", "보통 ~는 ~")
+- 컨텍스트에 없는 가상 SQL/코드 예시
+- 일반 칸반 용어 ("To Do", "In Progress", "Completed") — 이 프로젝트는 Now/Shelf/Buried
 - 컨텍스트에 등장하지 않은 컬럼명·함수명 만들어내기
+- 답변에 literal placeholder 출력 (예: <질문 키워드>, {{q}}, {{query}})
+- 사용자가 묻지 않은 단어/주제를 답변 본문에 임의로 끼워 넣기 (특히 첫 줄에서)
 
-## 답변 절차
+## 답변 작성
 
-1) 컨텍스트 청크들을 한 번 훑어 사용자 질문과 관련된 **단서**를 모두 모읍니다.
-2) 단서 1개 이상 있으면 → 그것을 묶어서 답변. 짧은 코드 발췌(```언어 블록)와 `[N]` 출처 인용.
-3) 단서가 전혀 없거나 청크들이 모두 무관한 내용이면 → 다음 형식으로 답하세요 (반드시 실제 사용자 키워드와 실제 파일 경로로 치환):
+1) 컨텍스트에서 사용자 질문과 직간접 관련된 모든 단서를 모음.
+2) 그 단서를 묶어 답. 짧은 코드 발췌(코드블록)와 [N] 출처 인용 활용.
+3) 사용자 질문이 모호하면(예: "??") "구체적으로 어떤 부분을 알고 싶으신가요? 예: ..." 식으로 컨텍스트 청크에서 관련 주제 1~3개를 제시하며 되묻기.
+4) 단서가 정말 적으면 있는 만큼만 솔직히 답. "추정으로 채우지 말 것".
 
-   - 첫 줄: 인덱스에서 사용자 질문의 핵심 키워드(예: 함수명·테이블명·용어)에 대한 정보를 찾지 못함을 알림.
-     예: "인덱스에서 「칸반 데이터 모델」에 대한 정보를 찾지 못했습니다."
-   - 다음에 "관련 가능성 있는 파일:" 헤더
-   - 그 아래 위 컨텍스트의 실제 파일 경로 1~3개 bullet
-   - 마지막에 "더 구체적인 키워드(예: 함수명·테이블명 원문)로 다시 질문해 주세요"
+마지막 줄: "참조: [1] <실제 파일 경로>" 형태.
 
-**절대 금지**: 답변에 literal placeholder 문자열을 출력하면 안 됨. 즉 다음과 같은 것을 그대로 적으면 안 됨:
-- "<질문 키워드>", "<keyword>", "<q>", "{{query}}", "{{q}}" 같은 꺾쇠/중괄호 placeholder
-대신 사용자의 진짜 질문 단어를 직접 적어야 함.
-
-**중요**: 정형 응답은 정말로 단서가 0개일 때만. 단서가 있는데도 정형 응답을 선택하면 위반.
-
-마지막 줄에 "참조: [1] <path>, [2] <path>" 형태로 출처 요약.
-
-이제 다음 질문에 답하세요:
+이제 사용자 질문:
 
 {user_content}"""
     return prefix
@@ -155,8 +138,9 @@ async def chat_stream(
         sims = [c.get("similarity", 0) for c in chunks]
         avg = sum(sims) / len(sims)
         mx = max(sims)
-        if avg < _GATE_AVG_SIM and mx < _GATE_MAX_SIM:
-            # 너무 약함 — LLM에 보내지 않고 정형 응답 직접 생성
+        # [r105] OR 조건으로 강화 — 둘 다 약하면 게이트 발동
+        if avg < _GATE_AVG_SIM or mx < _GATE_MAX_SIM:
+            # 너무 약함 — LLM에 보내지 않고 정형 응답 직접 생성 (사용자 query 포함)
             files = []
             seen = set()
             for c in chunks[:5]:
@@ -165,13 +149,16 @@ async def chat_stream(
                     continue
                 seen.add(sid)
                 files.append(sid)
+            # 사용자 query 안전 표시 (escape — markdown 깨짐 방지)
+            safe_q = (query or "").replace("`", "'").strip()[:80]
             msg = (
                 f"## 인덱스 검색 결과 약함\n\n"
-                f"검색된 청크들이 질문과 의미적으로 충분히 관련성이 없습니다 "
-                f"(평균 유사도 {avg:.2f}, 최대 {mx:.2f}).\n\n"
+                f"「**{safe_q}**」에 대한 검색 결과가 충분히 관련성 있지 않습니다 "
+                f"(평균 유사도 {avg:.2f}, 최대 {mx:.2f} — 게이트: 평균≥{_GATE_AVG_SIM}·최대≥{_GATE_MAX_SIM}).\n\n"
                 f"**관련 가능성 있는 파일** (직접 확인 권장):\n"
             ) + "\n".join(f"- `{f}`" for f in files) + (
-                f"\n\n더 구체적인 키워드(예: 함수명·테이블명 원문)로 다시 질문해 주세요."
+                f"\n\n💡 더 구체적인 키워드(예: 함수명·테이블명 원문, 한국어 도메인 용어)로 다시 질문해 주세요. "
+                f"또는 ⚙️ 설정 → 📋 태스크 인덱싱 / 🏃 스프린트 인덱싱이 최신인지 확인하세요."
             )
             yield {"delta": msg}
             # 출처는 그래도 노출
