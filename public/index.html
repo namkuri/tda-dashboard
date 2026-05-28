@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r73 (트렐로 카드: 카드는 [○상태원 + 제목 + P우선순위(우)]로 단순화, 카드 클릭=상세 모달(#card-modal, 기존 편집핸들러 재사용·렌더보드 후 자동동기·Esc 닫기). 카테고리 헤더=제목+카운트+⋯메뉴(zone-counts/상단+ 제거). 전체 카드 드래그, 콘텐츠 높이 자동) -->
+<!-- BUILD: 2026-05-28 r74 (#card-modal 중앙정렬 CSS 등록(스크롤 튐 수정), 카테고리 드래그=제목 자체로 통합(⠿ 아이콘 제거·cursor grab), 보드 컬럼 간격 2rem→1rem(좌측 16px 유지). HTML 임베드 Storage 이관(DRIVE_BUCKET, 인라인 폴백·캐시), 서버 상태에 DB 카드(테이블 행수+인라인HTML 경고) 추가) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -205,7 +205,7 @@
         }
 
         /* --- DESKTOP Kanban Board --- */
-        html.is-desktop #board { display: flex; flex-direction: column; gap: 2rem; width: 100%; padding: 0; }
+        html.is-desktop #board { display: flex; flex-direction: column; gap: 1rem; width: 100%; padding: 0; }
         @media (min-width: 1280px) { html.is-desktop #board { flex-direction: row; } }
         html.is-desktop .kanban-col-wrapper { transition: all 0.4s cubic-bezier(0.4,0,0.2,1); display: flex; flex-direction: column; border-radius: 12px; }
         html.is-desktop .kanban-col-normal { flex: 1; min-width: 320px; width: 100%; }
@@ -214,7 +214,7 @@
         html.is-desktop .kanban-col-minimized:hover { background: #e7e3d8; }
         /* [정렬] 카테고리별 진척률 박스를 칸반 보드 컬럼과 동일 좌우폭·수직 정렬 (보드 레이아웃 미러링) */
         /* 보드: #board(padding:16px) + .kanban-col-normal(flex:0 0 340px) + gap 2rem → 동일하게 미러 */
-        html.is-desktop #progress-container { display: flex; flex-direction: column; gap: 2rem; width: 100%; padding-left: 16px; padding-right: 16px; }
+        html.is-desktop #progress-container { display: flex; flex-direction: column; gap: 1rem; width: 100%; padding-left: 16px; padding-right: 16px; }
         @media (min-width: 1280px) { html.is-desktop #progress-container { flex-direction: row; width: max-content; } }
         html.is-desktop #progress-container > div { flex: 0 0 340px; min-width: 340px; max-width: 340px; width: 340px; }
         html.is-mobile #progress-container { display: flex; flex-direction: column; gap: 16px; width: 100%; padding-left: 16px; padding-right: 16px; }
@@ -362,8 +362,9 @@
         .card-sum .cs-counts { font-size: 11px; color: var(--c-text3); font-family: 'JetBrains Mono', monospace; }
         .col-header { border-bottom: 1px solid var(--c-border); padding: 0 2px 9px; margin-bottom: 14px; }
         .ch-left { display: flex; align-items: center; gap: 7px; min-width: 0; }
-        .ch-title { font-size: 16px; font-weight: 800; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: color .12s; }
+        .ch-title { font-size: 16px; font-weight: 800; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab; transition: color .12s; }
         .ch-title:hover { color: var(--c-accent); }
+        .ch-title:active { cursor: grabbing; }
         .ch-count { font-size: 11px; font-weight: 800; color: var(--c-text2); background: var(--ios-fill2); border-radius: 8px; padding: 1px 8px; flex-shrink: 0; }
         .ch-right { display: flex; align-items: center; gap: 4px; }
         .ch-add { width: 28px; height: 28px; border-radius: 8px; background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); font-weight: 800; font-size: 15px; cursor: pointer; line-height: 1; }
@@ -572,7 +573,7 @@
         }
 
         /* iOS 모달 중앙 정렬 강제 */
-        #project-modal, #settings-modal, #api-key-modal, #link-picker-modal, #review-create-modal, #review-inbox-modal, #canon-history-modal {
+        #project-modal, #settings-modal, #api-key-modal, #link-picker-modal, #review-create-modal, #review-inbox-modal, #canon-history-modal, #card-modal {
             display: none;
             position: fixed !important;
             inset: 0 !important;
@@ -586,7 +587,8 @@
         #link-picker-modal.modal-open,
         #review-create-modal.modal-open,
         #review-inbox-modal.modal-open,
-        #canon-history-modal.modal-open {
+        #canon-history-modal.modal-open,
+        #card-modal.modal-open {
             display: flex !important;
         }
 
@@ -5726,6 +5728,44 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 '<div class="st-row"><span>파일 수</span><span>' + (load.files || []).length + '개</span></div>' +
                 '<div class="st-row"><span>사용 용량</span><span><b>' + _driveFmt(used) + '</b> / 5 GB (' + pct.toFixed(1) + '%)</span></div>' +
                 '<div class="st-bar"><div class="st-bar-fill" style="width:' + pct + '%;"></div></div></div>';
+            // [r74] DB 사용량 (Postgres 무료 500MB) — 주요 테이블 행 수 + 인라인 HTML 임베드 경고
+            async function _statusDbStats() {
+                var out = { tables: [], inlineHtml: { count: 0, size: 0 }, docContent: 0 };
+                var ts = [
+                    { name: '문서 (wiki_docs)', t: 'wiki_docs' },
+                    { name: '카드 (kanban_tasks)', t: 'kanban_tasks' },
+                    { name: '카테고리 (kanban_categories)', t: 'kanban_categories' },
+                    { name: '스프린트 (sprints)', t: 'sprints' },
+                    { name: '리뷰 (reviews)', t: 'reviews' },
+                    { name: '활동 로그 (activity_log)', t: 'activity_log' }
+                ];
+                if (supabaseClient) {
+                    for (var i = 0; i < ts.length; i++) {
+                        try {
+                            var rr = await supabaseClient.from(ts[i].t).select('id', { count: 'exact', head: true });
+                            out.tables.push({ name: ts[i].name, count: (rr.count != null ? rr.count : '?') });
+                        } catch (e) { out.tables.push({ name: ts[i].name, count: 'N/A' }); }
+                    }
+                } else { ts.forEach(function (t) { out.tables.push({ name: t.name, count: '?' }); }); }
+                (currentData.docs || []).forEach(function (d) {
+                    if (typeof d.content === 'string') out.docContent += d.content.length;
+                    var ems = d.meta && d.meta.htmlEmbeds;
+                    if (ems) Object.keys(ems).forEach(function (eid) {
+                        var em = ems[eid];
+                        if (em && em.html != null && em.html.length > 0) { out.inlineHtml.count++; out.inlineHtml.size += em.html.length; }
+                    });
+                });
+                return out;
+            }
+            var dbStats = await _statusDbStats();
+            html += '<div class="st-card"><h3>🗃️ 데이터베이스 (Postgres · 무료 500MB)</h3>' +
+                dbStats.tables.map(function (t) { return '<div class="st-row"><span>' + _driveEsc(t.name) + '</span><span>' + (typeof t.count === 'number' ? t.count.toLocaleString() : t.count) + ' 행</span></div>'; }).join('') +
+                '<div class="st-row"><span>현 프로젝트 문서 본문 합 (클라이언트 추정)</span><span>~ ' + _driveFmt(dbStats.docContent) + '</span></div>' +
+                '<div class="st-row"><span>인라인 HTML 임베드(레거시)</span><span class="' + (dbStats.inlineHtml.count > 0 ? 'st-warn' : 'st-ok') + '">' + dbStats.inlineHtml.count + '개 · 약 ' + _driveFmt(dbStats.inlineHtml.size) + '</span></div>' +
+                (dbStats.inlineHtml.count > 0
+                    ? '<div class="st-row" style="display:block;color:var(--c-text3);font-size:11px;line-height:1.55;">⚠️ 큰 HTML이 DB에 인라인 저장돼 있어요. <b>r74부터 새 HTML 임베드는 Storage</b>로 가서 DB가 안 늘어납니다. 기존 인라인을 옮기려면 해당 문서의 임베드를 삭제 후 다시 첨부해 주세요.</div>'
+                    : '<div class="st-row" style="display:block;color:var(--c-text3);font-size:11px;">✓ HTML 임베드는 모두 Storage 사용 중(DB 영향 없음).</div>') +
+                '</div>';
             if (!bucketOk || !tableOk) {
                 html += '<div class="st-card"><h3>⚙️ 설정 (1회)</h3>' +
                     '<div class="st-row" style="display:block;color:var(--c-text2);">아래 절차로 공용 드라이브를 활성화하세요. 버킷은 대시보드에서 만들고, SQL은 복사해 실행합니다.</div>' +
@@ -9395,7 +9435,8 @@ addEventListener("resize",sendPos);
                 var iframe = document.createElement('iframe');
                 iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox');
                 iframe.setAttribute('loading', 'lazy');
-                iframe.srcdoc = _tdaEmbedSrcdoc(em.html, id);
+                iframe.srcdoc = '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:14px;color:#888">⌛ HTML 로딩…</body></html>';
+                _tdaResolveEmbedHtml(em, id).then(function (h) { iframe.srcdoc = _tdaEmbedSrcdoc(h, id); }); // [r74] Storage/인라인 자동 해석
                 body.appendChild(iframe);
                 wrap.appendChild(head); wrap.appendChild(body);
                 mount.parentNode.replaceChild(wrap, mount);
@@ -9404,7 +9445,7 @@ addEventListener("resize",sendPos);
                 function _tdaSizeEmbed(allowReload) {
                     var w = body.clientWidth || 0; if (w <= 0) return;
                     iframe.style.width = w + 'px';
-                    if (allowReload && Math.abs(w - (iframe._tdaLoadedW || 0)) > 24) { iframe._tdaLoadedW = w; iframe.srcdoc = _tdaEmbedSrcdoc(em.html, id); }
+                    if (allowReload && Math.abs(w - (iframe._tdaLoadedW || 0)) > 24) { iframe._tdaLoadedW = w; _tdaResolveEmbedHtml(em, id).then(function (h) { iframe.srcdoc = _tdaEmbedSrcdoc(h, id); }); }
                 }
                 iframe._tdaLoadedW = body.clientWidth || 0;
                 iframe._tdaResize = _tdaSizeEmbed; // [r48] 패널 토글 시 외부에서 reflow 호출용
@@ -9433,24 +9474,68 @@ addEventListener("resize",sendPos);
             bar.appendChild(close);
             var ifr = document.createElement('iframe'); ifr.className = 'tda-embed-fs-frame';
             ifr.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox');
-            ifr.srcdoc = _tdaEmbedSrcdoc(em.html, id);
+            ifr.srcdoc = '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:14px;color:#888">⌛ HTML 로딩…</body></html>';
+            _tdaResolveEmbedHtml(em, id).then(function (h) { ifr.srcdoc = _tdaEmbedSrcdoc(h, id); });
             ov.appendChild(bar); ov.appendChild(ifr);
             function onKey(e) { if (e.key === 'Escape') done(); }
             document.addEventListener('keydown', onKey);
             document.body.appendChild(ov);
         }
         // 활성 문서에 HTML 임베드 삽입 (mode: 'embed'=펼침 / 'attach'=접힘)
-        function _insertHtmlEmbed(html, title, mode) {
+        // [r74] HTML 임베드 본문 해석 — Storage 우선, 레거시 인라인(em.html) 폴백. 메모리 캐시로 반복 fetch 방지.
+        var _htmlEmbedCache = {}; // id → html string
+        async function _tdaResolveEmbedHtml(em, id) {
+            if (!em) return '';
+            // 캐시 우선
+            if (_htmlEmbedCache[id] != null) return _htmlEmbedCache[id];
+            // 레거시: 인라인 HTML이 있으면 그대로
+            if (em.html != null && em.html !== '') { _htmlEmbedCache[id] = String(em.html); return _htmlEmbedCache[id]; }
+            // Storage 경로가 있으면 다운로드
+            if (em.storagePath && supabaseClient) {
+                try {
+                    var dl = await supabaseClient.storage.from(DRIVE_BUCKET).download(em.storagePath);
+                    if (dl.error) throw dl.error;
+                    var text = await dl.data.text();
+                    _htmlEmbedCache[id] = text;
+                    return text;
+                } catch (e) {
+                    console.warn('[html-embed] Storage 다운로드 실패:', e);
+                    return '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:14px;color:#c15747">⚠️ HTML 로드 실패: ' + ((e && e.message) || e) + '</body></html>';
+                }
+            }
+            return '';
+        }
+        async function _insertHtmlEmbed(html, title, mode) {
             if (!activeDocId) { showToast('먼저 문서를 여세요.', 'alert'); return; }
             var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
             if (!doc) return;
             if (!doc.meta) doc.meta = {};
             if (!doc.meta.htmlEmbeds) doc.meta.htmlEmbeds = {};
             var id = 'he_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-            doc.meta.htmlEmbeds[id] = { html: String(html || ''), title: String(title || 'HTML'), mode: (mode === 'attach' ? 'attach' : 'embed'), at: Date.now() };
+            var htmlStr = String(html || '');
+            var size = (typeof Blob !== 'undefined') ? (new Blob([htmlStr])).size : htmlStr.length;
+            // [r74] DB 비대화 방지: HTML을 Supabase Storage('drive' 버킷)에 업로드, meta엔 경로만 저장.
+            //   Supabase 미연결/업로드 실패 시 인라인(em.html)로 폴백 — 기존 인라인 데이터도 그대로 동작.
+            var storagePath = null, stored = false;
+            if (supabaseClient && htmlStr.length > 0) {
+                storagePath = (activeProjectId || 'default') + '/htmlEmbeds/' + id + '.html';
+                try {
+                    if (size > 20480) showToast('📤 HTML 업로드 중… (' + (size / 1024).toFixed(0) + ' KB)', 'info');
+                    var blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
+                    var up = await supabaseClient.storage.from(DRIVE_BUCKET).upload(storagePath, blob, { upsert: false, contentType: 'text/html;charset=utf-8' });
+                    if (up.error) throw up.error;
+                    stored = true;
+                    _htmlEmbedCache[id] = htmlStr; // 즉시 캐시 → 첫 렌더에 fetch 불필요
+                } catch (e) { console.warn('[html-embed] Storage 업로드 실패 — 인라인으로 폴백:', e); }
+            }
+            if (stored) {
+                doc.meta.htmlEmbeds[id] = { storagePath: storagePath, title: String(title || 'HTML'), mode: (mode === 'attach' ? 'attach' : 'embed'), at: Date.now(), size: size };
+            } else {
+                doc.meta.htmlEmbeds[id] = { html: htmlStr, title: String(title || 'HTML'), mode: (mode === 'attach' ? 'attach' : 'embed'), at: Date.now(), size: size };
+            }
             insertAtCursor('<!--TDAHTML:' + id + '-->'); // handleDocInput → 저장(meta 포함)+미리보기
             if (typeof flushDocSave === 'function') flushDocSave(); // meta 즉시 동기화
-            showToast('📎 HTML ' + (mode === 'attach' ? '첨부' : '임베드') + ' 삽입됨', 'success');
+            showToast('📎 HTML ' + (mode === 'attach' ? '첨부' : '임베드') + ' 삽입됨' + (stored ? ' · Storage' : ' · 인라인(폴백)'), 'success');
         }
         // 공용 선택 팝업 — options:[{key,label,desc}] → Promise<key|null>
         function _htmlInsertChooser(title, options) {
@@ -12944,8 +13029,7 @@ ${intrLog}
                 col.innerHTML = `
                     <div class="col-header flex justify-between items-center cursor-pointer" onclick="toggleCategoryFocus('${cat.id}')" title="클릭하여 포커스 모드 전환">
                         <div class="ch-left cat-controls" onclick="event.stopPropagation()">
-                            <span class="ch-drag" title="드래그하여 컬럼 순서 변경 (이 브라우저에만 저장)" onclick="event.stopPropagation()">⠿</span>
-                            <h2 class="ch-title" onclick="toggleCategoryFocus('${cat.id}')">${cat.title}</h2>
+                            <h2 class="ch-title" onclick="toggleCategoryFocus('${cat.id}')" title="클릭: 포커스 / 드래그: 컬럼 순서 변경(이 브라우저에만 저장)">${cat.title}</h2>
                             <span class="ch-count">${catTotal}</span>
                         </div>
                         <div class="ch-right cat-controls" onclick="event.stopPropagation()">
@@ -13016,7 +13100,7 @@ ${intrLog}
             // [r50 #3] 카테고리(컬럼) 순서 드래그 — 로컬 저장만 (서버 미반영). #board 컨테이너에 1회 바인딩(자식은 매 렌더 교체돼도 인스턴스 유지)
             if (typeof Sortable !== 'undefined' && board && !board._catSortable) {
                 board._catSortable = new Sortable(board, {
-                    group: 'kanban-cols', animation: 180, handle: '.ch-drag', draggable: '.kanban-col-wrapper', ghostClass: 'sortable-ghost',
+                    group: 'kanban-cols', animation: 180, handle: '.ch-title', draggable: '.kanban-col-wrapper', ghostClass: 'sortable-ghost',
                     onEnd: function () {
                         var ids = []; board.querySelectorAll('.kanban-col-wrapper[data-catid]').forEach(function (el) { ids.push(el.getAttribute('data-catid')); });
                         _saveCatOrder(ids);
