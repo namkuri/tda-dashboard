@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r89 (Deep Wiki 프론트엔드 스텁: 사이드바 🤖 Deep Wiki 항목, 풀스크린 채팅 UI(메시지 풍선+아바타+MD 렌더+출처 인용 링크), ⚙️ 설정 모달(백엔드 URL/모델/태스크 컨텍스트/스트리밍), /health 헬스체크 + 🟢/🔴 상태 pill, SSE 스트리밍 fetch(_dwStreamChat: data: JSON 라인 파싱, delta+sources 누적), 대화 영속(localStorage 최근 40개), 백엔드 미연결 시 친절 안내 + 📘 설정 가이드 alert. Phase 2 백엔드(FastAPI+Ollama+pgvector)는 다음 라운드 deepwiki-server/ 폴더로 제공) -->
+<!-- BUILD: 2026-05-28 r90 (Deep Wiki Phase 2 백엔드 풀세트: deepwiki-integration/ 폴더에 FastAPI 서버(main/config/ollama_client/supabase_store/chunker/indexer/retriever/rag) + setup.bat/run.bat + requirements.txt + .env.example + migrations/001_doc_chunks.sql + USER_TASKS.md(체크리스트) + README.md. 프론트엔드 ⚙️ 설정에 인덱싱 섹션 추가: Git 레포 URL 입력 + 4개 트리거 버튼(🗂 코드 / 📚 문서 / 📋 태스크 / 🏃 스프린트) + SSE 진행률 스트리밍 표시(시작/clone/cleaned/progress/done/error/warn 이벤트별 다국어 메시지). dwTriggerIndex가 fetch ReadableStream으로 SSE 라인 파싱, 100% 완료 시 토스트) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4462,13 +4462,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         </div>
         <!-- Deep Wiki 설정 모달 -->
         <div id="dw-settings-modal" class="hidden fixed inset-0 z-[600]" style="background:rgba(0,0,0,.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeModal('dw-settings-modal')">
-            <div class="cal-modal-box" onclick="event.stopPropagation()">
+            <div class="cal-modal-box" onclick="event.stopPropagation()" style="width:580px;">
                 <div class="cal-modal-head"><h3>⚙️ Deep Wiki 설정</h3><button onclick="closeModal('dw-settings-modal')" class="cal-x">✕</button></div>
                 <div class="cal-modal-body">
                     <label class="cal-fld"><span>백엔드 URL (Cloudflare Tunnel)</span>
-                        <input id="dw-backend-url" type="text" placeholder="https://tda-wiki.namkuri.workers.dev">
+                        <input id="dw-backend-url" type="text" placeholder="https://random.trycloudflare.com">
                     </label>
-                    <div style="font-size:11.5px;color:var(--c-text3);line-height:1.6;">PC에서 <code>cloudflared tunnel</code>로 노출한 FastAPI 백엔드 주소를 입력하세요.<br>각 사용자가 자기 PC URL을 가질 수도, 팀 공용 URL 하나로 둘 수도 있습니다.</div>
+                    <div style="font-size:11.5px;color:var(--c-text3);line-height:1.6;">PC에서 <code>cloudflared tunnel --url http://localhost:8000</code>으로 노출한 FastAPI 백엔드 주소.<br>각 사용자가 자기 PC URL을 갖거나, 팀 공용 URL 하나로 둘 수 있습니다.</div>
                     <label class="cal-fld"><span>모델</span>
                         <select id="dw-model">
                             <option value="qwen2.5-coder:14b" selected>🧠 Qwen 2.5-Coder 14B (권장)</option>
@@ -4478,6 +4478,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </label>
                     <label class="cal-fld-inline"><input type="checkbox" id="dw-include-tasks" checked> 카드·스프린트도 컨텍스트에 포함</label>
                     <label class="cal-fld-inline"><input type="checkbox" id="dw-stream" checked> 응답 스트리밍 (SSE)</label>
+                    <!-- [r90] 인덱싱 섹션 -->
+                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--c-border);">
+                        <div style="font-size:13px;font-weight:700;color:var(--c-text);margin-bottom:8px;">🗂 인덱싱 (RAG 컨텍스트 구축)</div>
+                        <label class="cal-fld"><span>Git 레포 URL (코드 인덱싱용)</span>
+                            <input id="dw-git-url" type="text" placeholder="https://github.com/namkuri/tda-dashboard">
+                        </label>
+                        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px;">
+                            <button onclick="dwTriggerIndex('code')" class="util-btn" style="background:var(--c-accent);color:#fff;">🗂 코드 인덱싱</button>
+                            <button onclick="dwTriggerIndex('wiki')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">📚 문서 인덱싱</button>
+                            <button onclick="dwTriggerIndex('task')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">📋 태스크 인덱싱</button>
+                            <button onclick="dwTriggerIndex('sprint')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">🏃 스프린트 인덱싱</button>
+                        </div>
+                        <div id="dw-index-progress" style="margin-top:10px;font-size:12px;color:var(--c-text2);min-height:18px;"></div>
+                    </div>
                 </div>
                 <div class="cal-modal-foot">
                     <button onclick="dwHealthCheck()" class="cal-btn-cancel">🔌 연결 테스트</button>
@@ -7278,6 +7292,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             document.getElementById('dw-model').value = s.model || 'qwen2.5-coder:14b';
             document.getElementById('dw-include-tasks').checked = !!s.includeTasks;
             document.getElementById('dw-stream').checked = (s.stream !== false);
+            // [r90] Git URL 복원
+            var gitInput = document.getElementById('dw-git-url');
+            if (gitInput) {
+                try { gitInput.value = localStorage.getItem('tda_dw_git_url') || ''; } catch (e) {}
+            }
+            // 진행률 초기화
+            var pg = document.getElementById('dw-index-progress');
+            if (pg) pg.innerHTML = '';
             openModal('dw-settings-modal');
         }
         function dwSaveSettings() {
@@ -7450,6 +7472,76 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 dwRenderMessages();
             }
         }
+        // [r90] 인덱싱 트리거 — SSE 진행률 스트리밍
+        async function dwTriggerIndex(kind) {
+            var s = _dwGetSettings();
+            if (!s.backendUrl) { showToast('⚙️ 백엔드 URL 먼저 설정', 'alert'); return; }
+            var pgEl = document.getElementById('dw-index-progress');
+            if (!pgEl) return;
+            // 코드 인덱싱은 git URL 필요
+            var payload = { project_id: activeProjectId };
+            if (kind === 'code') {
+                var gitInput = document.getElementById('dw-git-url');
+                var gitUrl = (gitInput.value || '').trim();
+                if (!gitUrl) { showToast('Git 레포 URL을 입력하세요', 'alert'); gitInput.focus(); return; }
+                // localStorage에 저장
+                try { localStorage.setItem('tda_dw_git_url', gitUrl); } catch (e) {}
+                payload.git_url = gitUrl;
+                payload.branch = 'main';
+            }
+            pgEl.innerHTML = '🔄 인덱싱 시작 중...';
+            var endpoint = '/index/' + kind;
+            try {
+                var res = await fetch(s.backendUrl + endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+                var reader = res.body.getReader();
+                var decoder = new TextDecoder();
+                var buf = '';
+                while (true) {
+                    var chunk = await reader.read();
+                    if (chunk.done) break;
+                    buf += decoder.decode(chunk.value, { stream: true });
+                    var lines = buf.split('\n');
+                    buf = lines.pop() || '';
+                    lines.forEach(function (line) {
+                        if (!line.startsWith('data:')) return;
+                        var data = line.slice(5).trim();
+                        if (!data || data === '[DONE]') return;
+                        try {
+                            var ev = JSON.parse(data);
+                            if (ev.event === 'start') {
+                                pgEl.innerHTML = '🔄 시작 — 총 ' + (ev.total_files || ev.total_docs || ev.total_tasks || ev.total_sprints || '?') + '개';
+                            } else if (ev.event === 'progress') {
+                                var pct = Math.round((ev.current / ev.total) * 100);
+                                pgEl.innerHTML = '🔄 ' + ev.current + '/' + ev.total + ' (' + pct + '%) — <span style="color:var(--c-text3);">' + _annEsc((ev.file || '').slice(-40)) + '</span>';
+                            } else if (ev.event === 'clone_start') {
+                                pgEl.innerHTML = '📥 Git clone 중: ' + _annEsc(ev.repo);
+                            } else if (ev.event === 'clone_done') {
+                                pgEl.innerHTML = '✅ clone 완료, 파일 분석 시작...';
+                            } else if (ev.event === 'cleaned') {
+                                pgEl.innerHTML = '🧹 기존 청크 ' + ev.deleted + '개 삭제';
+                            } else if (ev.event === 'done') {
+                                pgEl.innerHTML = '✅ <b style="color:var(--c-accent);">완료</b> · ' + ev.chunks_inserted + '개 청크 저장됨';
+                                showToast('✅ ' + kind + ' 인덱싱 완료 (' + ev.chunks_inserted + '개 청크)', 'success');
+                            } else if (ev.event === 'error') {
+                                pgEl.innerHTML = '❌ 에러: ' + _annEsc(ev.message);
+                                showToast('❌ 인덱싱 실패: ' + ev.message, 'alert');
+                            } else if (ev.event === 'warn') {
+                                console.warn('[index]', ev.message);
+                            }
+                        } catch (e) { /* ignore */ }
+                    });
+                }
+            } catch (e) {
+                pgEl.innerHTML = '❌ 요청 실패: ' + _annEsc(e.message || e);
+                showToast('❌ 인덱싱 요청 실패: ' + (e.message || e), 'alert');
+            }
+        }
+
         function dwShowSetupGuide() {
             // 새 창/모달로 README 안내
             var guide = '🔧 Deep Wiki 백엔드 설정 (Phase 2)\n\n' +
