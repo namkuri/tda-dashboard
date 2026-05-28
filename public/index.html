@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r93 (Deep Wiki 사용성 개선 3건: ① 답변 스트리밍 가시화 — 첫 토큰 전 "🧠 생각 중..." + 도착 후 in-place 업데이트 + 토큰 카운터/경과초/깜빡 커서. 전체 리렌더 대신 마지막 봇 body만 갱신해 부드러움. ② Git 클론 실패 — Windows에서 .git 읽기전용 파일 삭제 안 됨 → _rm_readonly(stat.S_IWRITE 권한 부여) + _safe_remove_repo 2단계 cleanup. GitCommandError stderr/stdout 포함한 상세 에러 메시지. ③ 검색 임계치 0.3→0.15 완화 + 결과 3개 미만이면 임계치 무시 폴백 — "관련 문서·코드가 인덱싱돼 있지 않습니다" 오답 줄임) -->
+<!-- BUILD: 2026-05-28 r94 (Deep Wiki "모른다" 오답 해결 3건: ① 시스템 프롬프트 완화 — "컨텍스트에 없으면 모른다"를 "단서를 적극 활용해 부분답변·추정·출처 인용"으로. 파일명·함수명·필드명에서 단서 추출하도록 명시. ② /debug/search 엔드포인트 — q·project_id·source_types 파라미터로 청크/유사도 직접 확인. 인덱스 진단용. ③ 검색 진단 칩 — SSE에 {meta:{retrieved,avg_sim,max_sim,top}} 이벤트 추가. 봇 응답 상단에 "🔍 N청크 매칭 · 유사도 0.XX~0.YY" 칩(ok/mid/weak/empty 톤). 검색 임계치 0.15→0.10 추가 완화 + 폴백 시 top-K 전부 반환) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2687,6 +2687,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .dw-typing span:nth-child(2) { animation-delay: 0.2s; }
         .dw-typing span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes dw-typing-pulse { 0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); } 30% { opacity: 1; transform: scale(1.1); } }
+        /* [r94] 검색 진단 칩 — 봇 메시지 상단에 매칭 청크 수/유사도 표시 */
+        .dw-rchip { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 9999px; margin-bottom: 6px; display: inline-block; cursor: help; white-space: pre-wrap; }
+        .dw-rchip-ok { background: rgba(59,122,87,0.18); color: #2c6849; }
+        .dw-rchip-mid { background: var(--c-accent-soft); color: var(--c-accent); }
+        .dw-rchip-weak { background: rgba(180,140,40,0.18); color: #8a6a16; }
+        .dw-rchip-empty { background: rgba(210,57,61,0.16); color: #b53236; }
 
         /* [r86 #5] 탐색기 */
         #explorer-view.block { display: block; }
@@ -7365,6 +7371,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     try { bodyHtml = DOMPurify.sanitize(parseMarkdownWithTables(m.content || ''), domPurifyConfig); }
                     catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;">' + _annEsc(m.content || '') + '</pre>'; }
                 }
+                // [r94] 검색 진단 칩 — 봇 메시지 상단에 "📚 N청크 · 유사도 0.XX~0.YY" 표시
+                var metaHtml = isUser ? '' : _dwRetrievalChipHtml(m.meta);
                 var sourcesHtml = '';
                 if (m.sources && m.sources.length) {
                     sourcesHtml = '<div class="dw-msg-sources"><b>📚 참고 문서·카드:</b> ' +
@@ -7373,7 +7381,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
                 return '<div class="dw-msg ' + (isUser ? 'user' : 'bot') + '">' +
                     '<div class="dw-msg-avatar">' + avatar + '</div>' +
-                    '<div class="dw-msg-body">' + bodyHtml + sourcesHtml + '</div>' +
+                    '<div class="dw-msg-body">' + metaHtml + bodyHtml + sourcesHtml + '</div>' +
                     '</div>';
             }).join('');
             // 마지막 메시지로 스크롤
@@ -7434,7 +7442,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var res = await fetch(s.backendUrl + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     var data = await res.json();
-                    dwState.messages[botIdx] = { role: 'bot', content: data.content || '', sources: data.sources || [] };
+                    dwState.messages[botIdx] = { role: 'bot', content: data.content || '', sources: data.sources || [], meta: data.meta || null };
                 }
             } catch (e) {
                 dwState.messages[botIdx] = { role: 'bot', content: '❌ 백엔드 응답 실패\n\n```\n' + (e.message || e) + '\n```\n\n→ ⚙️ 설정에서 백엔드 URL 확인 + PC에 Ollama/FastAPI 실행 중인지 확인하세요.' };
@@ -7451,6 +7459,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var buf = '';
             var content = '';
             var sources = [];
+            var meta = null; // [r94] 검색 진단 메타 (retrieved/avg_sim/max_sim/top)
             var tokenCount = 0;
             var startTime = Date.now();
             // [r93] 첫 토큰 도착 전엔 "생각 중..." 표시
@@ -7462,12 +7471,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var lines = buf.split('\n');
                 buf = lines.pop() || '';
                 var anyDelta = false;
+                var metaArrived = false;
                 lines.forEach(function (line) {
                     if (!line.startsWith('data:')) return;
                     var data = line.slice(5).trim();
                     if (!data || data === '[DONE]') return;
                     try {
                         var ev = JSON.parse(data);
+                        if (ev.meta) { meta = ev.meta; metaArrived = true; } // [r94]
                         if (ev.delta) {
                             content += ev.delta;
                             tokenCount += 1;
@@ -7476,29 +7487,57 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         if (ev.sources) sources = ev.sources;
                     } catch (e) { /* ignore */ }
                 });
+                if (metaArrived && !anyDelta) {
+                    // [r94] 메타만 도착 — placeholder를 메타 칩+생각중으로 갱신
+                    _dwSetStreamingPlaceholder(botIdx, '🧠 생각 중...', meta);
+                }
                 if (anyDelta) {
                     // [r93] 스트리밍 중엔 in-place 텍스트 업데이트 (전체 리렌더 X) — 부드럽게
                     var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                    _dwUpdateStreamingMsg(botIdx, content, tokenCount, elapsed);
+                    _dwUpdateStreamingMsg(botIdx, content, tokenCount, elapsed, meta);
                 }
-                dwState.messages[botIdx] = { role: 'bot', content: content, sources: sources };
+                dwState.messages[botIdx] = { role: 'bot', content: content, sources: sources, meta: meta };
             }
             // 스트리밍 완료 후 최종 MD 렌더링
             dwRenderMessages();
         }
+        // [r94] 검색 진단 칩 HTML — 봇 메시지 상단에 항상 표시
+        function _dwRetrievalChipHtml(meta) {
+            if (!meta) return '';
+            var n = meta.retrieved || 0;
+            if (n === 0) {
+                return '<div class="dw-rchip dw-rchip-empty" title="검색 결과 0건 — 인덱스 비었거나 임계치 이하">'
+                    + '🔍 매칭 청크 0개 — 인덱싱 필요'
+                    + '</div>';
+            }
+            var maxS = (meta.max_sim || 0).toFixed(2);
+            var minS = (meta.min_sim || 0).toFixed(2);
+            var avgS = (meta.avg_sim || 0).toFixed(2);
+            var tone = (meta.max_sim >= 0.35) ? 'ok' : ((meta.max_sim >= 0.20) ? 'mid' : 'weak');
+            // 상위 매칭 청크 제목 (호버 시 자세히)
+            var topList = (meta.top || []).map(function (t) {
+                return (t.type || '?') + '·' + (t.title || '?') + ' (' + (t.sim || 0).toFixed(2) + ')';
+            }).join('\n');
+            return '<div class="dw-rchip dw-rchip-' + tone + '" title="' + _annEsc(topList) + '">'
+                + '🔍 ' + n + '개 청크 매칭 · 유사도 ' + minS + '~' + maxS + ' (평균 ' + avgS + ')'
+                + '</div>';
+        }
         // [r93] 마지막 봇 메시지의 body에 in-place 텍스트 업데이트 (전체 리렌더 X)
-        function _dwSetStreamingPlaceholder(botIdx, txt) {
+        // [r94] retrievalMeta 인자 추가 — 검색 진단 칩을 placeholder 위에 표시
+        function _dwSetStreamingPlaceholder(botIdx, txt, retrievalMeta) {
             var box = document.getElementById('dw-messages');
             if (!box) return;
             var bots = box.querySelectorAll('.dw-msg.bot .dw-msg-body');
             if (!bots.length) return;
             var lastBody = bots[bots.length - 1];
-            lastBody.innerHTML = '<div style="color:var(--c-text3);font-size:13px;display:flex;align-items:center;gap:6px;">' +
+            var chipHtml = _dwRetrievalChipHtml(retrievalMeta);
+            lastBody.innerHTML = chipHtml +
+                '<div style="color:var(--c-text3);font-size:13px;display:flex;align-items:center;gap:6px;">' +
                 '<span class="dw-typing"><span></span><span></span><span></span></span>' +
                 '<span>' + txt + '</span>' +
                 '</div>';
         }
-        function _dwUpdateStreamingMsg(botIdx, content, tokenCount, elapsedSec) {
+        function _dwUpdateStreamingMsg(botIdx, content, tokenCount, elapsedSec, retrievalMeta) {
             var box = document.getElementById('dw-messages');
             if (!box) return;
             var bots = box.querySelectorAll('.dw-msg.bot .dw-msg-body');
@@ -7509,13 +7548,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var safe = (content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             // newline → <br>
             safe = safe.replace(/\n/g, '<br>');
+            var chipHtml = _dwRetrievalChipHtml(retrievalMeta); // [r94] 검색 진단 칩
             // 토큰 카운터 + 경과 시간 (작게)
             var meta = '<div style="font-size:11px;color:var(--c-text3);margin-bottom:6px;display:flex;gap:10px;">' +
                 '<span>🧠 생성 중 · ' + tokenCount + ' tokens</span>' +
                 '<span>⏱ ' + elapsedSec + 's</span>' +
                 '<span style="color:var(--c-accent);animation:dw-typing-pulse 1s infinite;">●</span>' +
                 '</div>';
-            lastBody.innerHTML = meta + '<div style="white-space:pre-wrap;line-height:1.65;">' + safe + '<span style="display:inline-block;width:8px;height:14px;background:var(--c-accent);vertical-align:middle;margin-left:2px;animation:dw-typing-pulse 0.6s infinite;"></span></div>';
+            lastBody.innerHTML = chipHtml + meta + '<div style="white-space:pre-wrap;line-height:1.65;">' + safe + '<span style="display:inline-block;width:8px;height:14px;background:var(--c-accent);vertical-align:middle;margin-left:2px;animation:dw-typing-pulse 0.6s infinite;"></span></div>';
             // 자동 스크롤 — 사용자가 위로 스크롤했으면 따라가지 않음
             var nearBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) < 120;
             if (nearBottom) box.scrollTop = box.scrollHeight;

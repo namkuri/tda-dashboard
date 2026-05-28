@@ -12,6 +12,7 @@ from config import settings
 from ollama_client import get_ollama
 from supabase_store import get_store
 from rag import chat_stream
+from retriever import retrieve, SIMILARITY_THRESHOLD
 from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints
 
 
@@ -107,6 +108,7 @@ async def chat(req: ChatRequest):
         # 비스트리밍: 전체 응답을 모아서 한 번에
         content = ""
         sources = []
+        meta = None  # [r94] 검색 진단 메타
         async for event in chat_stream(
             messages=[m.model_dump() for m in req.messages],
             project_id=req.project_id,
@@ -117,7 +119,9 @@ async def chat(req: ChatRequest):
                 content += event["delta"]
             if "sources" in event:
                 sources = event["sources"]
-        return {"content": content, "sources": sources}
+            if "meta" in event:
+                meta = event["meta"]
+        return {"content": content, "sources": sources, "meta": meta}
 
 
 def _sse_indexer(gen):
@@ -159,6 +163,41 @@ async def index_task(req: IndexWikiRequest):
 async def index_sprint(req: IndexWikiRequest):
     """Supabase sprints 인덱싱."""
     return _sse_indexer(index_sprints(project_id=req.project_id))
+
+
+@app.get("/debug/search")
+async def debug_search(
+    q: str,
+    project_id: Optional[str] = None,
+    source_types: Optional[str] = None,  # 쉼표 구분 — "code,wiki,task,sprint"
+    top_k: int = 10,
+):
+    """[r94] 진단용 — 질문에 대해 어떤 청크가 어떤 유사도로 검색되는지 직접 확인.
+
+    예: /debug/search?q=칸반%20데이터%20모델&top_k=10
+        /debug/search?q=dbUpsertCategory&source_types=code
+    """
+    if not q.strip():
+        raise HTTPException(400, "q (질문) 필수")
+    src = [s.strip() for s in source_types.split(",")] if source_types else None
+    chunks = await retrieve(query=q, project_id=project_id, source_types=src, top_k=top_k)
+    return {
+        "query": q,
+        "threshold": SIMILARITY_THRESHOLD,
+        "count": len(chunks),
+        "results": [
+            {
+                "rank": i + 1,
+                "source_type": c.get("source_type"),
+                "source_id": c.get("source_id"),
+                "source_title": c.get("source_title"),
+                "similarity": round(c.get("similarity", 0), 4),
+                "content_preview": (c.get("content", "") or "")[:300],
+                "token_count": c.get("token_count"),
+            }
+            for i, c in enumerate(chunks)
+        ],
+    }
 
 
 @app.delete("/index/all")
