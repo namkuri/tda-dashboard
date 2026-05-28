@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r85 (RLS 정책 차단 해결: Supabase가 신규 테이블에 자동으로 켜놓은 row-level security가 INSERT 차단(42501 "new row violates row-level security policy") → dbMigrationSql에 'alter table X disable row level security;' 6개 추가(다른 기존 테이블과 동일 정책). dbUpsertAsset/Issue/BugReport/AssetFolder 모두 RLS 에러(42501/row-level security/RLS) 감지해 사용자에게 "RLS 정책 차단 — 서버 상태 > 🔍 점검의 최신 SQL 재실행 필요" 친절 메시지. 사용자 액션: 서버 상태 > 🔍 점검 → 📋 SQL 복사 → Supabase SQL Editor에서 재실행) -->
+<!-- BUILD: 2026-05-28 r86 (#2 버그 리포트 처리 상태(new/triaged/progress/fixed/wont/dup) — 작성 시 자동 'new', 관리자만 변경 가능, 카드에 상태 배지 + closed류는 라인스루+흐림. #3 에셋 매니저 폴더 헤더에 ＋에셋/＋폴더 버튼 2개 추가, asset_folders.parent_id 컬럼으로 하위 폴더 지원, 재귀 렌더(depth indent). #4 에셋·폴더 드래그 이동: 에셋 카드 draggable=true, 폴더 헤더 draggable=true, ondragover/ondrop 폴더 드롭존, .drag-over 하이라이트, 자기 자신의 자손에 이동 금지. #5 탐색기(도구 그룹): 11개 카테고리(전체/문서/태스크/스프린트/이슈/에셋/일정/리뷰/드라이브/버그/멤버), 좌측 카테고리 사이드바, 중앙 결과 리스트(제목+메타+스니펫), 우측 미리보기 패널(MD 렌더+바로가기/인용 버튼), 검색바(*=전체, 단어=풀텍스트). _xpBuildAll로 통합 인덱스 빌드) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2647,6 +2647,45 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-widget-resize::before { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid var(--c-text3); border-bottom: 2px solid var(--c-text3); }
         .db-widget:hover .db-widget-resize { opacity: .8; }
         .db-widget-resize:hover { opacity: 1 !important; }
+        /* [r86 #5] 탐색기 */
+        #explorer-view.block { display: block; }
+        #explorer-view { height: calc(100vh - 60px); overflow: hidden; }
+        .xp-wrap { display: flex; flex-direction: column; height: 100%; max-width: 1600px; margin: 0 auto; }
+        .xp-head { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--c-border); }
+        .xp-title { font-size: 20px; font-weight: 800; color: var(--c-text); margin: 0; flex-shrink: 0; }
+        #xp-search { flex: 1; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px 14px; font-size: 14px; outline: none; }
+        #xp-search:focus { border-color: var(--c-accent); }
+        body.dark #xp-search { background: rgba(255,250,240,0.04); }
+        .xp-stats { font-size: 12px; color: var(--c-text3); flex-shrink: 0; padding: 0 8px; }
+        .xp-body { flex: 1; display: flex; overflow: hidden; }
+        .xp-cats { width: 200px; flex-shrink: 0; padding: 12px 8px; border-right: 1px solid var(--c-border); overflow-y: auto; background: var(--ios-fill); display: flex; flex-direction: column; gap: 3px; }
+        body.dark .xp-cats { background: rgba(255,250,240,0.02); }
+        .xp-cat-btn { background: transparent; color: var(--c-text2); border: none; padding: 8px 12px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; transition: background .12s, color .12s; display: flex; align-items: center; gap: 8px; }
+        .xp-cat-btn:hover { background: var(--c-paper); color: var(--c-text); }
+        .xp-cat-btn.active { background: var(--c-accent-soft); color: var(--c-accent); font-weight: 700; }
+        .xp-cat-count { margin-left: auto; font-size: 11px; color: var(--c-text3); background: var(--c-paper); padding: 1px 7px; border-radius: 9999px; }
+        .xp-cat-btn.active .xp-cat-count { background: var(--c-accent); color: #fff; }
+        .xp-list { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+        .xp-result { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px 14px; cursor: pointer; transition: background .15s, border-color .15s; }
+        .xp-result:hover, .xp-result.selected { background: var(--ios-fill); border-color: var(--c-accent); }
+        body.dark .xp-result:hover, body.dark .xp-result.selected { background: rgba(201,100,66,0.08); }
+        .xp-r-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .xp-r-kind { font-size: 11px; color: var(--c-accent); background: var(--c-accent-soft); padding: 2px 8px; border-radius: 9999px; font-weight: 700; flex-shrink: 0; }
+        .xp-r-title { flex: 1; font-size: 14px; font-weight: 700; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .xp-r-meta { font-size: 11px; color: var(--c-text3); display: flex; gap: 10px; flex-wrap: wrap; }
+        .xp-r-snippet { font-size: 12.5px; color: var(--c-text2); margin-top: 4px; line-height: 1.5; max-height: 40px; overflow: hidden; text-overflow: ellipsis; }
+        .xp-empty { text-align: center; padding: 60px 20px; color: var(--c-text3); font-size: 13px; }
+        .xp-preview { width: 400px; flex-shrink: 0; border-left: 1px solid var(--c-border); padding: 16px; overflow-y: auto; background: var(--c-paper); display: flex; flex-direction: column; gap: 10px; }
+        .xp-preview-empty { color: var(--c-text3); font-size: 13px; padding: 40px 20px; text-align: center; }
+        .xp-preview-head { font-size: 16px; font-weight: 800; color: var(--c-text); padding-bottom: 8px; border-bottom: 1px solid var(--c-border); }
+        .xp-preview-meta { font-size: 11.5px; color: var(--c-text3); display: flex; gap: 10px; flex-wrap: wrap; }
+        .xp-preview-body { font-size: 13px; color: var(--c-text2); line-height: 1.6; max-height: 320px; overflow-y: auto; padding: 4px 0; }
+        .xp-preview-actions { display: flex; gap: 8px; margin-top: 8px; }
+        .xp-preview-actions button { padding: 8px 14px; border-radius: 7px; border: 1px solid var(--c-border); background: var(--ios-fill); color: var(--c-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+        .xp-preview-actions button.primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+        .xp-preview-actions button:hover { filter: brightness(1.08); }
+        @media (max-width: 1100px) { .xp-preview { display: none; } }
+
         /* [r84 #2/#3] DB 저장 대기/실패 다이제틱 피드백 */
         @keyframes db-shimmer {
             0%   { background-position: -120% 0; }
@@ -2738,6 +2777,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .am-asset-status.done { background: rgba(59,122,87,.16); color: #2c6849; }
         .am-asset-status.blocked { background: rgba(210,57,61,.16); color: #d2393d; }
         .am-asset-meta { font-size: 10.5px; color: var(--c-text3); margin-top: 4px; display: flex; gap: 8px; }
+        /* [r86 #4] 드래그 상태 */
+        .am-asset.dragging { opacity: 0.45; }
+        .am-folder.drag-over { background: var(--c-accent-soft) !important; border: 2px dashed var(--c-accent); }
+        .am-folder.drag-over .am-folder-head { background: var(--c-accent-soft); }
         .am-empty { text-align: center; padding: 60px 20px; color: var(--c-text3); font-size: 14px; }
 
         /* [r81 #2] 이슈 트래커 */
@@ -3337,6 +3380,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button class="cs-grp-head" onclick="toggleNavGroup('tools')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">도구</span></button>
                 <div class="cs-grp-items" data-grp="tools">
                     <!-- [r81 #3] DB 도구는 서버 상태 페이지 안으로 병합 -->
+                    <!-- [r86 #5] 탐색기 — 통합 검색 + 미리보기 -->
+                    <button class="cs-nav" data-nav="explorer" id="cs-nav-explorer" onclick="switchView('explorer')" title="탐색기 (전체 콘텐츠 통합 검색·미리보기·바로가기)"><span class="cs-ico">🔍</span><span class="cs-label">탐색기</span></button>
                     <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태 (DB 편집 포함)"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
                     <button class="cs-nav" data-nav="bugReport" id="cs-nav-bug-report" onclick="switchView('bugReport')" title="버그 리포트 (앱 이슈 제보 + 관리자 검토)"><span class="cs-ico">🐞</span><span class="cs-label">버그 리포트</span></button>
                     <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
@@ -4294,6 +4339,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <option value="request">💡 Request (개선 제안)</option>
                         </select>
                     </label>
+                    <!-- [r86 #2] 처리 상태 — 관리자만 변경 가능 -->
+                    <label class="cal-fld" id="br-e-status-wrap"><span>처리 상태 <span id="br-e-status-admin" style="color:var(--c-accent);font-weight:700;display:none;">· 👑 관리자만 변경</span></span>
+                        <select id="br-e-status">
+                            <option value="new">🆕 NEW (접수됨)</option>
+                            <option value="triaged">👀 TRIAGED (확인됨)</option>
+                            <option value="progress">🔥 IN PROGRESS (수정 중)</option>
+                            <option value="fixed">✅ FIXED (수정 완료)</option>
+                            <option value="wont">⛔ WONT FIX (보류)</option>
+                            <option value="dup">🔁 DUPLICATE (중복)</option>
+                        </select>
+                    </label>
                     <label class="cal-fld"><span>관련 화면 (선택)</span>
                         <select id="br-e-view">
                             <option value="dashboard">🏠 대시보드</option>
@@ -4328,6 +4384,23 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
         </div>
 
+        <!-- [r86 #5] 탐색기 — 통합 검색 + 미리보기 + 바로가기 -->
+        <div id="explorer-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="xp-wrap">
+                <header class="xp-head">
+                    <h2 class="xp-title">🔍 탐색기</h2>
+                    <input id="xp-search" type="text" placeholder="검색 (제목·내용 모두) — 또는 *로 전체 보기" oninput="xpRender()" autofocus>
+                    <div class="xp-stats" id="xp-stats">전체 0개</div>
+                </header>
+                <div class="xp-body">
+                    <aside class="xp-cats" id="xp-cats"></aside>
+                    <section class="xp-list" id="xp-list"></section>
+                    <aside class="xp-preview" id="xp-preview">
+                        <div class="xp-preview-empty">👈 항목을 선택하면 미리보기가 표시됩니다</div>
+                    </aside>
+                </div>
+            </div>
+        </div>
         <div id="status-view" class="hidden" onclick="event.stopPropagation()">
             <div class="drv-wrap">
                 <div class="drv-head">
@@ -6920,6 +6993,181 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         if (document.readyState !== 'loading') _bindCiteContext();
 
         // ═══════════════════════════════════════════════════════════════════
+        // [r86 #5] 탐색기 (Explorer) — 통합 검색 + 미리보기 + 바로가기
+        // 카테고리: 문서·태스크·스프린트·이슈·에셋·일정·리뷰·드라이브·버그리포트·사용자
+        // ═══════════════════════════════════════════════════════════════════
+        var xpState = { cat: 'all', selectedId: null, selectedKind: null };
+        var XP_CATS = [
+            { k: 'all', label: '🌐 전체' },
+            { k: 'doc', label: '📚 문서' },
+            { k: 'task', label: '📋 태스크' },
+            { k: 'sprint', label: '🏃 스프린트' },
+            { k: 'issue', label: '🐛 이슈' },
+            { k: 'asset', label: '🎮 에셋' },
+            { k: 'event', label: '📅 일정' },
+            { k: 'review', label: '🗳 리뷰' },
+            { k: 'file', label: '🗂️ 드라이브' },
+            { k: 'bug', label: '🐞 버그 리포트' },
+            { k: 'user', label: '👤 멤버' }
+        ];
+        function _xpBuildAll() {
+            // 카테고리별 항목 풀 (현재 프로젝트 기준, 일부는 글로벌)
+            var all = [];
+            // 문서
+            (currentData.docs || []).filter(function (d) { return d.projectId === activeProjectId && (!d.meta || !d.meta.isFolder); }).forEach(function (d) {
+                all.push({ kind: 'doc', id: d.id, title: d.title || '(제목 없음)', snippet: (d.content || '').slice(0, 200), meta: (d.kind === 'canon' ? '게임 위키' : (d.kind === 'personal' ? '개인 문서' : '문서')) + ' · ' + (d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('ko-KR') : '') });
+            });
+            // 태스크
+            (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; }).forEach(function (t) {
+                var cat = (currentData.categories || []).find(function (c) { return c.id === t.catId; });
+                all.push({ kind: 'task', id: t.id, title: t.title || '(제목 없음)', snippet: (t.desc || ''), meta: (cat ? cat.title : '') + ' · ' + (t.status || 'pending') + (t.dueDate ? ' · 📅' + t.dueDate : '') });
+            });
+            // 스프린트
+            (currentData.sprints || []).filter(function (s) { return (s.projectId || 'default') === activeProjectId; }).forEach(function (s) {
+                all.push({ kind: 'sprint', id: s.id, title: s.weekLabel || s.id, snippet: s.goal || '', meta: (s.status || 'planning') + (s.startDate ? ' · ' + s.startDate + ' ~ ' + (s.endDate || '?') : '') });
+            });
+            // 이슈
+            (currentData.issues || []).filter(function (i) { return (i.projectId || 'default') === activeProjectId; }).forEach(function (i) {
+                all.push({ kind: 'issue', id: i.id, title: i.title || '(제목 없음)', snippet: i.desc || '', meta: (i.priority || 'p2').toUpperCase() + ' · ' + (i.status || 'open') + (i.dueDate ? ' · 📅' + i.dueDate : '') });
+            });
+            // 에셋
+            (currentData.assets || []).filter(function (a) { return (a.projectId || 'default') === activeProjectId; }).forEach(function (a) {
+                var f = (currentData.assetFolders || []).find(function (x) { return x.id === a.folderId; });
+                all.push({ kind: 'asset', id: a.id, title: (AM_KIND_ICONS[a.kind] || '📦') + ' ' + (a.name || ''), snippet: a.notes || '', meta: (a.status || 'planned') + (f ? ' · 📁' + f.name : '') });
+            });
+            // 일정
+            (currentData.calEvents || []).forEach(function (e) {
+                var cal = (currentData.calendars || []).find(function (c) { return c.id === e.calId; });
+                if (cal && cal.scope === 'project' && cal.projectId !== activeProjectId) return;
+                var meId = (currentUser && currentUser.id) || null;
+                if (cal && cal.scope === 'personal' && cal.ownerUserId !== meId && !e.public) return; // 비공개 제외
+                all.push({ kind: 'event', id: e.id, title: e.title || '(제목 없음)', snippet: e.desc || '', meta: (e.start ? new Date(e.start).toLocaleString('ko-KR') : '') + (cal ? ' · ' + cal.name : '') });
+            });
+            // 리뷰
+            (currentData.reviews || []).filter(function (r) { return !r.deleted; }).forEach(function (r) {
+                all.push({ kind: 'review', id: r.id, title: r.title || r.reason || '결재', snippet: r.reason || '', meta: (r.status || 'pending') + (r.type ? ' · ' + r.type : '') });
+            });
+            // 드라이브 파일
+            ((driveState && driveState.files) || []).filter(function (f) { return f.projectId === activeProjectId && !f.deleted && f.mime !== '__folder__'; }).forEach(function (f) {
+                all.push({ kind: 'file', id: f.id, title: f.name, snippet: f.mime || '', meta: (f.uploadedByName || '') + (f.size ? ' · ' + _driveFmt(f.size) : '') });
+            });
+            // 버그 리포트 — 본인 것 또는 관리자만
+            var meIdBr = (currentUser && currentUser.id) || null;
+            (currentData.bugReports || []).filter(function (r) { return isAdminUser() || r.createdBy === meIdBr; }).forEach(function (r) {
+                all.push({ kind: 'bug', id: r.id, title: r.title || '(제목 없음)', snippet: r.desc || '', meta: (r.severity || 'medium') + ' · ' + (r.status || 'new') });
+            });
+            // 멤버
+            (currentData.users || []).forEach(function (u) {
+                all.push({ kind: 'user', id: u.id, title: u.displayName || u.email || '익명', snippet: u.email || '', meta: u.provider || '' });
+            });
+            return all;
+        }
+        function xpRender() {
+            var listEl = document.getElementById('xp-list'); if (!listEl) return;
+            var catsEl = document.getElementById('xp-cats');
+            var statsEl = document.getElementById('xp-stats');
+            var q = (document.getElementById('xp-search').value || '').toLowerCase().trim();
+            var all = _xpBuildAll();
+            // 카테고리 카운트
+            var counts = { all: 0 };
+            XP_CATS.forEach(function (c) { if (c.k !== 'all') counts[c.k] = 0; });
+            all.forEach(function (it) { counts[it.kind] = (counts[it.kind] || 0) + 1; counts.all++; });
+            // 카테고리 사이드바
+            catsEl.innerHTML = XP_CATS.map(function (c) {
+                return '<button class="xp-cat-btn' + (xpState.cat === c.k ? ' active' : '') + '" onclick="xpSetCat(\'' + c.k + '\')">' + c.label + '<span class="xp-cat-count">' + (counts[c.k] || 0) + '</span></button>';
+            }).join('');
+            // 필터
+            var items = all;
+            if (xpState.cat !== 'all') items = items.filter(function (it) { return it.kind === xpState.cat; });
+            if (q && q !== '*') {
+                items = items.filter(function (it) {
+                    return (it.title || '').toLowerCase().indexOf(q) > -1 ||
+                        (it.snippet || '').toLowerCase().indexOf(q) > -1 ||
+                        (it.meta || '').toLowerCase().indexOf(q) > -1;
+                });
+            }
+            if (statsEl) statsEl.textContent = q ? (items.length + '개 검색됨 (전체 ' + all.length + '개)') : ('전체 ' + items.length + '개');
+            if (!items.length) {
+                listEl.innerHTML = '<div class="xp-empty">' + (q ? '🔍 "' + _annEsc(q) + '"에 대한 검색 결과가 없습니다' : '📭 표시할 항목이 없습니다') + '</div>';
+                _xpRenderPreview(null);
+                return;
+            }
+            var kindLabels = { doc:'📚 문서', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
+            listEl.innerHTML = items.slice(0, 300).map(function (it) {
+                var sel = (xpState.selectedKind === it.kind && xpState.selectedId === it.id) ? ' selected' : '';
+                return '<div class="xp-result' + sel + '" onclick="xpSelect(\'' + it.kind + '\',\'' + it.id + '\')" ondblclick="xpJump(\'' + it.kind + '\',\'' + it.id + '\')">' +
+                    '<div class="xp-r-head"><span class="xp-r-kind">' + (kindLabels[it.kind] || it.kind) + '</span><span class="xp-r-title">' + _annEsc(it.title || '') + '</span></div>' +
+                    '<div class="xp-r-meta">' + _annEsc(it.meta || '') + '</div>' +
+                    (it.snippet ? '<div class="xp-r-snippet">' + _annEsc(it.snippet.slice(0, 200)) + '</div>' : '') +
+                    '</div>';
+            }).join('');
+            // 선택된 항목 미리보기 유지
+            if (xpState.selectedId) {
+                var found = items.find(function (it) { return it.kind === xpState.selectedKind && it.id === xpState.selectedId; });
+                _xpRenderPreview(found || null);
+            } else {
+                _xpRenderPreview(null);
+            }
+        }
+        function xpSetCat(k) {
+            xpState.cat = k;
+            xpRender();
+        }
+        function xpSelect(kind, id) {
+            xpState.selectedKind = kind; xpState.selectedId = id;
+            document.querySelectorAll('.xp-result').forEach(function (el) { el.classList.remove('selected'); });
+            // 다시 렌더로 선택 표시 + 미리보기
+            var items = _xpBuildAll();
+            var found = items.find(function (it) { return it.kind === kind && it.id === id; });
+            _xpRenderPreview(found || null);
+            // 클릭한 요소만 selected 클래스
+            event && event.currentTarget && event.currentTarget.classList && event.currentTarget.classList.add('selected');
+        }
+        function _xpRenderPreview(it) {
+            var box = document.getElementById('xp-preview'); if (!box) return;
+            if (!it) {
+                box.innerHTML = '<div class="xp-preview-empty">👈 항목을 선택하면 미리보기가 표시됩니다</div>';
+                return;
+            }
+            var kindLabels = { doc:'📚 문서', task:'📋 태스크', sprint:'🏃 스프린트', issue:'🐛 이슈', asset:'🎮 에셋', event:'📅 일정', review:'🗳 리뷰', file:'🗂️ 파일', bug:'🐞 버그', user:'👤 멤버' };
+            // body 렌더 — doc는 MD 렌더
+            var bodyHtml = '';
+            if (it.kind === 'doc' && it.snippet) {
+                try { bodyHtml = DOMPurify.sanitize(parseMarkdownWithTables(it.snippet), domPurifyConfig); }
+                catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;">' + _annEsc(it.snippet) + '</pre>'; }
+            } else {
+                bodyHtml = '<pre style="white-space:pre-wrap;font-family:inherit;">' + _annEsc(it.snippet || '(내용 없음)') + '</pre>';
+            }
+            var jumpLabel = { doc: '📚 문서 열기', task: '📋 카드 열기', sprint: '🏃 스프린트로', issue: '🐛 이슈로', asset: '🎮 에셋 매니저로', event: '📅 캘린더로', review: '🗳 리뷰함으로', file: '🗂️ 드라이브로', bug: '🐞 리포트 보기', user: '👤 프로필 (지원 예정)' }[it.kind] || '바로가기';
+            box.innerHTML =
+                '<div class="xp-preview-head">' + (kindLabels[it.kind] || '') + ' · ' + _annEsc(it.title || '') + '</div>' +
+                '<div class="xp-preview-meta">' + _annEsc(it.meta || '') + '</div>' +
+                '<div class="xp-preview-body">' + bodyHtml + '</div>' +
+                '<div class="xp-preview-actions">' +
+                '<button class="primary" onclick="xpJump(\'' + it.kind + '\',\'' + it.id + '\')">' + jumpLabel + '</button>' +
+                '<button onclick="xpCite(\'' + it.kind + '\',\'' + it.id + '\')" title="복사: [[kind:id]] 토큰">🔗 인용 복사</button>' +
+                '</div>';
+        }
+        function xpJump(kind, id) {
+            // 카테고리별 바로가기 행동
+            if (kind === 'doc') { switchView('docs'); setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80); return; }
+            if (kind === 'task') { switchView('kanban'); setTimeout(function () { if (typeof openCardModal === 'function') openCardModal(id); }, 80); return; }
+            if (kind === 'sprint') { switchView('sprint'); return; }
+            if (kind === 'issue') { switchView('issues'); setTimeout(function () { if (typeof issEditIssue === 'function') issEditIssue(id); }, 80); return; }
+            if (kind === 'asset') { switchView('assets'); setTimeout(function () { if (typeof amEditAsset === 'function') amEditAsset(id); }, 80); return; }
+            if (kind === 'event') { switchView('calendar'); setTimeout(function () { if (typeof calOpenEditEvent === 'function') calOpenEditEvent(id); }, 100); return; }
+            if (kind === 'review') { openReviewInbox(); return; }
+            if (kind === 'file') { switchView('drive'); return; }
+            if (kind === 'bug') { switchView('bugReport'); setTimeout(function () { if (typeof brEditReport === 'function') brEditReport(id); }, 80); return; }
+            if (kind === 'user') { showToast('멤버 프로필 보기는 지원 예정', 'info'); return; }
+        }
+        function xpCite(kind, id) {
+            var tokens = { doc: '[[doc:' + id + ']]', task: '[[task:' + id + ']]', sprint: '[[sprint:' + id + ']]', issue: '[[issue:' + id + ']]', asset: '[[asset:' + id + ']]', event: '[[event:' + id + ']]', review: '[[review:' + id + ']]', user: '[[user:' + id + ']]', bug: '[[bug:' + id + ']]' };
+            var tok = tokens[kind] || id;
+            copyTextToClipboard(tok, '📋 인용 토큰 복사됨 — 텍스트 입력란에 붙여넣기');
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
         // [r81 #4] 버그 리포트 관리자 식별 — 하드코딩 이메일 목록
         // ═══════════════════════════════════════════════════════════════════
         var TDA_ADMIN_EMAILS = ['rnk505@gmail.com'];
@@ -6944,42 +7192,140 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
             var folders = (currentData.assetFolders || []).filter(function (f) { return (f.projectId || 'default') === activeProjectId; });
             var assets = (currentData.assets || []).filter(function (a) { return (a.projectId || 'default') === activeProjectId; });
-            // 필터링
             var fs = document.getElementById('am-filter-status').value;
             var fa = document.getElementById('am-filter-assignee').value;
             var fsr = (document.getElementById('am-search').value || '').toLowerCase();
-            var filteredAssets = assets.filter(function (a) {
+            function passFilter(a) {
                 if (fs !== 'ALL' && (a.status || 'planned') !== fs) return false;
                 if (fa !== 'ALL' && a.assigneeId !== fa) return false;
                 if (fsr && (a.name || '').toLowerCase().indexOf(fsr) === -1) return false;
                 return true;
-            });
-            // 폴더에 속하지 않은 에셋은 '미분류' 가상 폴더로
-            var unassigned = filteredAssets.filter(function (a) { return !a.folderId; });
-            var html = '';
-            folders.forEach(function (f) {
-                var inFolder = filteredAssets.filter(function (a) { return a.folderId === f.id; });
-                if (!inFolder.length && fs === 'ALL' && fa === 'ALL' && !fsr) {
-                    // 빈 폴더도 표시
-                } else if (!inFolder.length) return;
+            }
+            // [r86 #3] 재귀 렌더 — 하위 폴더 지원
+            function renderFolder(f, depth) {
+                var sub = folders.filter(function (x) { return (x.parentId || null) === f.id; });
+                var inFolder = assets.filter(function (a) { return a.folderId === f.id && passFilter(a); });
+                var totalInFolder = assets.filter(function (a) { return a.folderId === f.id; }).length;
                 var collapsed = amState['col_' + f.id] ? ' collapsed' : '';
-                html += '<div class="am-folder' + collapsed + '" data-fid="' + f.id + '">' +
-                    '<div class="am-folder-head" onclick="amToggleFolder(\'' + f.id + '\')">' +
+                var pad = depth * 16;
+                var html = '<div class="am-folder' + collapsed + '" data-fid="' + f.id + '" style="margin-left:' + pad + 'px;" ondragover="amFolderDragOver(event,\'' + f.id + '\')" ondragleave="amFolderDragLeave(event)" ondrop="amFolderDrop(event,\'' + f.id + '\')">' +
+                    '<div class="am-folder-head" draggable="true" ondragstart="amDragStartFolder(event,\'' + f.id + '\')" ondragend="amDragEnd(event)" onclick="amToggleFolder(\'' + f.id + '\')">' +
                     '<span class="am-folder-caret">▼</span>' +
                     '<span style="font-size:14px;">📁</span>' +
                     '<span class="am-folder-name">' + _annEsc(f.name || '폴더') + '</span>' +
-                    '<span class="am-folder-count">' + inFolder.length + '/' + assets.filter(function (a) { return a.folderId === f.id; }).length + '</span>' +
+                    '<span class="am-folder-count">' + inFolder.length + '/' + totalInFolder + (sub.length ? ' · 📁' + sub.length : '') + '</span>' +
+                    // [r86 #3] 폴더 헤더 + 버튼 2개
+                    '<button onclick="event.stopPropagation();amAddAssetIn(\'' + f.id + '\')" title="이 폴더에 + 에셋" style="background:var(--c-accent-soft);color:var(--c-accent);border:none;cursor:pointer;font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;margin-left:4px;">＋에셋</button>' +
+                    '<button onclick="event.stopPropagation();amAddFolderIn(\'' + f.id + '\')" title="이 폴더에 + 하위 폴더" style="background:var(--ios-fill);color:var(--c-text2);border:1px solid var(--c-border);cursor:pointer;font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;">＋폴더</button>' +
                     '<button onclick="event.stopPropagation();amRenameFolder(\'' + f.id + '\')" title="이름 변경" style="background:none;border:none;cursor:pointer;color:var(--c-text3);font-size:12px;padding:2px 6px;">✏️</button>' +
                     '<button onclick="event.stopPropagation();amDeleteFolder(\'' + f.id + '\')" title="폴더 삭제" style="background:none;border:none;cursor:pointer;color:#d2393d;font-size:12px;padding:2px 6px;">🗑</button>' +
                     '</div>' +
-                    '<div class="am-folder-items">' + inFolder.map(_amAssetCardHtml).join('') + '</div>' +
+                    '<div class="am-folder-items">' + (inFolder.length ? inFolder.map(_amAssetCardHtml).join('') : '<div style="grid-column:1/-1;color:var(--c-text3);font-size:12px;padding:8px;font-style:italic;">에셋 없음 — 드래그로 이동 가능</div>') + '</div>' +
+                    (sub.length ? sub.map(function (sf) { return renderFolder(sf, depth + 1); }).join('') : '') +
                     '</div>';
-            });
-            if (unassigned.length) {
-                html += '<div class="am-folder"><div class="am-folder-head" style="cursor:default;"><span class="am-folder-caret" style="visibility:hidden;">▼</span><span style="font-size:14px;">📂</span><span class="am-folder-name">미분류</span><span class="am-folder-count">' + unassigned.length + '</span></div><div class="am-folder-items">' + unassigned.map(_amAssetCardHtml).join('') + '</div></div>';
+                return html;
             }
-            if (!html) html = '<div class="am-empty">🎮 아직 에셋이 없습니다<br><span style="font-size:12px;">상단 ＋ 에셋 / ＋ 폴더로 시작하세요</span></div>';
+            var rootFolders = folders.filter(function (f) { return !f.parentId; });
+            var unassigned = assets.filter(function (a) { return !a.folderId && passFilter(a); });
+            var html = '';
+            rootFolders.forEach(function (f) { html += renderFolder(f, 0); });
+            if (unassigned.length) {
+                html += '<div class="am-folder" ondragover="amFolderDragOver(event,null)" ondragleave="amFolderDragLeave(event)" ondrop="amFolderDrop(event,null)">' +
+                    '<div class="am-folder-head" style="cursor:default;"><span class="am-folder-caret" style="visibility:hidden;">▼</span><span style="font-size:14px;">📂</span><span class="am-folder-name">미분류</span><span class="am-folder-count">' + unassigned.length + '</span></div>' +
+                    '<div class="am-folder-items">' + unassigned.map(_amAssetCardHtml).join('') + '</div></div>';
+            }
+            if (!html) html = '<div class="am-empty" ondragover="amFolderDragOver(event,null)" ondrop="amFolderDrop(event,null)">🎮 아직 에셋이 없습니다<br><span style="font-size:12px;">상단 ＋ 에셋 / ＋ 폴더로 시작하세요</span></div>';
             grid.innerHTML = html;
+        }
+        // [r86 #3] 폴더 안에 추가 헬퍼
+        function amAddAssetIn(folderId) {
+            amState._defaultFolderId = folderId;
+            amAddAsset();
+        }
+        async function amAddFolderIn(parentId) {
+            var name = await uiPrompt({ title: '새 하위 폴더', label: '폴더 이름' });
+            if (!name || !name.trim()) return;
+            var folder = { id: 'amf-' + Date.now(), name: name.trim(), projectId: activeProjectId, parentId: parentId || null };
+            if (!currentData.assetFolders) currentData.assetFolders = [];
+            currentData.assetFolders.push(folder);
+            saveData();
+            dbUpsertAssetFolder(folder);
+            amRender();
+        }
+        // [r86 #4] 드래그 이동
+        var _amDrag = null;
+        function amDragStartAsset(e, assetId) {
+            e.stopPropagation();
+            _amDrag = { kind: 'asset', id: assetId };
+            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'asset:' + assetId); } catch (_) {}
+            if (e.target.classList) e.target.classList.add('dragging');
+        }
+        function amDragStartFolder(e, folderId) {
+            e.stopPropagation();
+            _amDrag = { kind: 'folder', id: folderId };
+            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'folder:' + folderId); } catch (_) {}
+        }
+        function amDragEnd(e) {
+            _amDrag = null;
+            if (e && e.target && e.target.classList) e.target.classList.remove('dragging');
+            document.querySelectorAll('.am-folder.drag-over').forEach(function (el) { el.classList.remove('drag-over'); });
+        }
+        function amFolderDragOver(e, folderId) {
+            if (!_amDrag) return;
+            // 자기 자신/자손에 떨어뜨리기 금지 (폴더 드래그 시)
+            if (_amDrag.kind === 'folder' && _amDrag.id === folderId) return;
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+            var folderEl = e.currentTarget;
+            if (folderEl && folderEl.classList) folderEl.classList.add('drag-over');
+        }
+        function amFolderDragLeave(e) {
+            var folderEl = e.currentTarget;
+            if (folderEl && folderEl.classList) folderEl.classList.remove('drag-over');
+        }
+        async function amFolderDrop(e, targetFolderId) {
+            e.preventDefault(); e.stopPropagation();
+            var d = _amDrag;
+            if (!d) return;
+            // cleanup
+            document.querySelectorAll('.am-folder.drag-over').forEach(function (el) { el.classList.remove('drag-over'); });
+            if (d.kind === 'asset') {
+                var a = (currentData.assets || []).find(function (x) { return x.id === d.id; });
+                if (a) {
+                    if (a.folderId === targetFolderId) { _amDrag = null; return; }
+                    a.folderId = targetFolderId;
+                    a._pending = true; a._failed = false;
+                    saveData();
+                    amRender();
+                    var res = await dbUpsertAsset(a);
+                    if (res && res.ok) { a._pending = false; }
+                    else { a._pending = false; a._failed = true; a._failReason = (res && res.error) || '저장 실패'; showToast('❌ 에셋 이동 실패: ' + a._failReason, 'alert'); }
+                    amRender();
+                }
+            } else if (d.kind === 'folder') {
+                var f = (currentData.assetFolders || []).find(function (x) { return x.id === d.id; });
+                if (f) {
+                    // 자기 자신을 자기 자신의 자손으로 이동 금지
+                    if (targetFolderId && _amIsDescendantFolder(targetFolderId, f.id)) {
+                        showToast('자기 자신의 하위 폴더로는 이동할 수 없습니다', 'alert');
+                        _amDrag = null; return;
+                    }
+                    f.parentId = targetFolderId;
+                    saveData();
+                    amRender();
+                    var rf = await dbUpsertAssetFolder(f);
+                    if (rf && !rf.ok) showToast('❌ 폴더 이동 실패: ' + (rf.error || ''), 'alert');
+                }
+            }
+            _amDrag = null;
+        }
+        function _amIsDescendantFolder(maybeChildId, ancestorId) {
+            var cur = (currentData.assetFolders || []).find(function (x) { return x.id === maybeChildId; });
+            while (cur) {
+                if (cur.id === ancestorId) return true;
+                cur = cur.parentId ? (currentData.assetFolders || []).find(function (x) { return x.id === cur.parentId; }) : null;
+            }
+            return false;
         }
         function _amAssetCardHtml(a) {
             var ico = AM_KIND_ICONS[a.kind] || '📦';
@@ -6990,7 +7336,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r84 #2/#3] DB 저장 상태 시각화
             var stateClass = a._pending ? ' db-pending' : (a._failed ? ' db-failed' : '');
             var stateTip = a._pending ? '\n💾 DB에 저장 중...' : (a._failed ? '\n❌ DB 저장 실패: ' + (a._failReason || '') : '');
-            return '<div class="am-asset' + stateClass + '" title="' + _annEsc(a.name) + stateTip + '" onclick="amEditAsset(\'' + a.id + '\')">' +
+            // [r86 #4] 드래그 가능
+            return '<div class="am-asset' + stateClass + '" draggable="true" ondragstart="amDragStartAsset(event,\'' + a.id + '\')" ondragend="amDragEnd(event)" title="' + _annEsc(a.name) + stateTip + '\n💡 폴더로 드래그해서 이동" onclick="amEditAsset(\'' + a.id + '\')">' +
                 '<div class="am-asset-head"><span class="am-asset-ico">' + ico + '</span><span class="am-asset-name">' + _annEsc(a.name || '에셋') + '</span><span class="am-asset-status ' + st + '">' + stLabel + '</span></div>' +
                 '<div class="am-asset-meta"><span>👤 ' + _annEsc(asgnName) + '</span>' + (a.fileLink ? '<span>🔗 ' + (a.fileLink.startsWith('http') ? '외부' : '드라이브') + '</span>' : '') + (a._failed ? '<span style="color:#d2393d;">⚠ 미저장</span>' : '') + '</div>' +
                 '</div>';
@@ -7043,6 +7390,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var folderSel = document.getElementById('am-e-folder');
             var folders = (currentData.assetFolders || []).filter(function (f) { return (f.projectId || 'default') === activeProjectId; });
             folderSel.innerHTML = '<option value="">(미분류)</option>' + folders.map(function (f) { return '<option value="' + f.id + '">' + _annEsc(f.name) + '</option>'; }).join('');
+            // [r86 #3] 폴더 헤더의 ＋에셋에서 호출된 경우 해당 폴더 기본 선택
+            if (amState._defaultFolderId) { folderSel.value = amState._defaultFolderId; amState._defaultFolderId = null; }
             // 담당자 옵션
             var asgnSel = document.getElementById('am-e-assignee');
             asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
@@ -7159,7 +7508,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         async function dbUpsertAssetFolder(f) {
             if (!supabaseClient) return { ok: false, error: '오프라인' };
             try {
-                const { error } = await supabaseClient.from('asset_folders').upsert({ id: f.id, project_id: f.projectId, name: f.name });
+                // [r86 #3] parent_id 컬럼이 없으면 자동 폴백
+                var afPayload = { id: f.id, project_id: f.projectId, name: f.name, parent_id: f.parentId || null };
+                var ar = await supabaseClient.from('asset_folders').upsert(afPayload);
+                if (ar.error && /parent_id/.test(ar.error.message || '') && /column|does not exist/i.test(ar.error.message || '')) {
+                    delete afPayload.parent_id;
+                    ar = await supabaseClient.from('asset_folders').upsert(afPayload);
+                }
+                var error = ar.error;
+                // (이전 코드의 error 처리 흐름 유지를 위한 더미 const)
+                const _placeholder = error;
                 if (error) {
                     var em2 = error.message || '';
                     if (/relation .* does not exist|42P01/i.test(em2)) {
@@ -7379,8 +7737,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 // [r84 #2/#3] DB 저장 상태
                 var brClass = r._pending ? ' db-pending' : (r._failed ? ' db-failed' : '');
                 var brTip = r._pending ? 'DB에 저장 중...' : (r._failed ? '❌ DB 저장 실패: ' + (r._failReason || '') : '');
-                return '<div class="br-card' + brClass + '" title="' + _annEsc(brTip) + '" onclick="brEditReport(\'' + r.id + '\')">' +
-                    '<div class="br-c-head"><span class="br-c-title">' + _annEsc(r.title || '(제목 없음)') + (r._failed ? ' <span style="color:#d2393d;font-size:11px;">⚠ 미저장</span>' : '') + '</span><span class="br-c-sev ' + sev + '">' + sevLabel + '</span></div>' +
+                // [r86 #2] 처리 상태 배지
+                var st = r.status || 'new';
+                var stLabel = { 'new': '🆕 NEW', 'triaged': '👀 TRIAGED', 'progress': '🔥 진행', 'fixed': '✅ FIXED', 'wont': '⛔ WONT', 'dup': '🔁 DUP' }[st] || st;
+                var stColor = { 'new': '#d2393d', 'triaged': '#d49a1c', 'progress': '#f97316', 'fixed': '#2c6849', 'wont': 'var(--c-text3)', 'dup': 'var(--c-text3)' }[st] || 'var(--c-text3)';
+                var closedCls = (st === 'fixed' || st === 'wont' || st === 'dup') ? ' style="opacity:.65;"' : '';
+                return '<div class="br-card' + brClass + '" title="' + _annEsc(brTip) + '" onclick="brEditReport(\'' + r.id + '\')"' + closedCls + '>' +
+                    '<div class="br-c-head">' +
+                    '<span class="br-c-title"' + (st === 'fixed' || st === 'wont' || st === 'dup' ? ' style="text-decoration:line-through;"' : '') + '>' + _annEsc(r.title || '(제목 없음)') + (r._failed ? ' <span style="color:#d2393d;font-size:11px;">⚠ 미저장</span>' : '') + '</span>' +
+                    '<span class="br-c-sev" style="background:' + stColor + '22;color:' + stColor + ';">' + stLabel + '</span>' +
+                    '<span class="br-c-sev ' + sev + '">' + sevLabel + '</span>' +
+                    '</div>' +
                     '<div class="br-c-meta"><span>👤 ' + _annEsc(authorName) + '</span><span>🕒 ' + when + '</span>' + (r.view ? '<span>📍 ' + _annEsc(r.view) + '</span>' : '') + '</div>' +
                     (r.desc ? '<div class="br-c-desc">' + _annEsc((r.desc || '').slice(0, 200)) + '</div>' : '') +
                     '</div>';
@@ -7401,6 +7768,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 viewSel.value = match ? defaultView : 'other';
             }
             document.getElementById('br-e-env').value = (navigator.userAgent || '').slice(0, 120);
+            // [r86 #2] 신규 리포트는 status=new, 비관리자는 status 비활성
+            var stSel = document.getElementById('br-e-status');
+            stSel.value = 'new';
+            stSel.disabled = !isAdminUser();
+            document.getElementById('br-e-status-admin').style.display = isAdminUser() ? 'inline' : 'none';
             document.getElementById('br-e-del').classList.add('hidden');
             openModal('br-edit-modal');
             setTimeout(function () { document.getElementById('br-e-title').focus(); }, 30);
@@ -7424,6 +7796,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 viewSel2.value = hasOpt ? savedView : 'other';
             }
             document.getElementById('br-e-env').value = r.env || '';
+            // [r86 #2] 처리 상태 — 관리자만 변경 가능
+            var stSel2 = document.getElementById('br-e-status');
+            stSel2.value = r.status || 'new';
+            stSel2.disabled = !isAdminUser();
+            document.getElementById('br-e-status-admin').style.display = isAdminUser() ? 'inline' : 'none';
             document.getElementById('br-e-del').classList.remove('hidden');
             openModal('br-edit-modal');
         }
@@ -7445,6 +7822,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             rep.severity = document.getElementById('br-e-severity').value;
             rep.view = document.getElementById('br-e-view').value;
             rep.env = document.getElementById('br-e-env').value;
+            // [r86 #2] 처리 상태 — 관리자만 변경 가능, 아닐 경우 기존 값 유지
+            if (isAdminUser()) rep.status = document.getElementById('br-e-status').value;
+            else if (!rep.status) rep.status = 'new';
             rep.updatedAt = Date.now();
             // [r84 #2] _pending 마킹
             rep._pending = true; rep._failed = false;
@@ -7476,13 +7856,21 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         async function dbUpsertBugReport(r) {
             if (!supabaseClient) return { ok: false, error: '오프라인' };
             try {
-                const { error } = await supabaseClient.from('bug_reports').upsert({
+                // [r86 #2] status 필드 (테이블 없으면 resilient drop)
+                var brPayload = {
                     id: r.id, title: r.title, description: r.desc || '',
                     severity: r.severity || 'medium', view: r.view || '', env: r.env || '',
+                    status: r.status || 'new',
                     created_by: r.createdBy || null,
                     created_at: r.createdAt ? new Date(r.createdAt).toISOString() : null,
                     updated_at: r.updatedAt ? new Date(r.updatedAt).toISOString() : null
-                });
+                };
+                var { error } = await supabaseClient.from('bug_reports').upsert(brPayload);
+                if (error && /status/.test(error.message || '') && /column|does not exist/i.test(error.message || '')) {
+                    delete brPayload.status;
+                    ({ error } = await supabaseClient.from('bug_reports').upsert(brPayload));
+                    if (!error) console.warn('[dbUpsertBugReport] bug_reports.status 컬럼 없음 — 제외 저장. SQL 재실행 필요');
+                }
                 if (error) {
                     var em = error.message || '';
                     if (/relation .* does not exist|42P01/i.test(em)) {
@@ -9692,6 +10080,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var _isvw = document.getElementById('issues-view'); if (_isvw) { _isvw.classList.toggle('hidden', viewName !== 'issues'); _isvw.classList.toggle('block', viewName === 'issues'); }
             var _csBr = document.getElementById('cs-nav-bug-report'); if (_csBr) _csBr.classList.toggle('active', viewName === 'bugReport');
             var _brvw = document.getElementById('bugReport-view'); if (_brvw) { _brvw.classList.toggle('hidden', viewName !== 'bugReport'); _brvw.classList.toggle('block', viewName === 'bugReport'); }
+            // [r86 #5] 탐색기
+            var _csXp = document.getElementById('cs-nav-explorer'); if (_csXp) _csXp.classList.toggle('active', viewName === 'explorer');
+            var _xpvw = document.getElementById('explorer-view'); if (_xpvw) { _xpvw.classList.toggle('hidden', viewName !== 'explorer'); _xpvw.classList.toggle('block', viewName === 'explorer'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -9848,6 +10239,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var _dvbr = document.getElementById('docs-view'); if (_dvbr) { _dvbr.classList.add('hidden'); _dvbr.classList.remove('flex-show'); }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 if (typeof brRender === 'function') brRender();
+            } else if (viewName === 'explorer') {
+                // [r86 #5] 탐색기
+                var _kvxp = document.getElementById('kanban-view'); if (_kvxp) { _kvxp.classList.add('hidden'); _kvxp.classList.remove('block'); }
+                var _dvxp = document.getElementById('docs-view'); if (_dvxp) { _dvxp.classList.add('hidden'); _dvxp.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                if (typeof xpRender === 'function') xpRender();
+                setTimeout(function () { var s = document.getElementById('xp-search'); if (s) s.focus(); }, 50);
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
@@ -10695,6 +11093,8 @@ return data;
             ['tasks', 'linked_task_id', 'text'],            // [r75] 개인 칸반: 팀↔개인 카드 양방향 동기화
             ['projects', 'participants', "jsonb default '[]'::jsonb"], // [r78] 프로젝트 참여자
             ['users', 'display_name', 'text'],              // [r78] 사용자 닉네임
+            ['bug_reports', 'status', "text default 'new'"], // [r86 #2] 버그 처리 상태
+            ['asset_folders', 'parent_id', 'text'],          // [r86 #3] 하위 폴더 지원
             ['wiki_docs', 'kind', "text default 'wiki'"],
             ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"]
         ];
@@ -10942,7 +11342,8 @@ return data;
                 })),
                 // [r83 #1] 에셋 매니저
                 assetFolders: (amFolderData || []).map(f => ({
-                    id: f.id, projectId: f.project_id || 'default', name: f.name || ''
+                    id: f.id, projectId: f.project_id || 'default', name: f.name || '',
+                    parentId: f.parent_id || null // [r86 #3] 하위 폴더 지원
                 })),
                 assets: (amAssetData || []).map(a => ({
                     id: a.id, projectId: a.project_id || 'default',
@@ -10957,6 +11358,7 @@ return data;
                 bugReports: (brData || []).map(r => ({
                     id: r.id, title: r.title || '', desc: r.description || '',
                     severity: r.severity || 'medium', view: r.view || '', env: r.env || '',
+                    status: r.status || 'new', // [r86 #2]
                     createdBy: r.created_by || null,
                     createdAt: r.created_at ? new Date(r.created_at).getTime() : null,
                     updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : null
