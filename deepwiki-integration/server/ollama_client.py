@@ -1,7 +1,78 @@
 """Ollama API 래퍼 — 임베딩 + LLM 추론 (스트리밍 포함)."""
 import httpx
-from typing import AsyncIterator, List
+import json
+import re
+from typing import AsyncIterator, List, Dict, Any
 from config import settings
+
+
+# [r109] Qwen이 tool_calls 필드 대신 content에 JSON으로 도구 호출을 적어올 때 추출.
+# 패턴 1: ```json { "name": ..., "arguments": ... } ```
+# 패턴 2: raw JSON { "name": ..., "arguments": ... }
+# 패턴 3: 배열 [ {...}, {...} ]
+# 패턴 4: <tool_call>{...}</tool_call> (Qwen native 형식)
+_JSON_BLOCK_RE = re.compile(r"```(?:json|tool_call)?\s*(\{.*?\}|\[.*?\])\s*```", re.DOTALL)
+_TOOL_CALL_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+
+
+def _parse_tool_calls_from_content(content: str) -> List[Dict[str, Any]]:
+    """content에서 도구 호출 JSON 추출 → OpenAI tool_calls 형식 변환.
+
+    반환: [{"function": {"name": "...", "arguments": {...}}, ...]
+    """
+    if not content or not content.strip():
+        return []
+    candidates: List[str] = []
+    text = content.strip()
+
+    # <tool_call> 태그 (Qwen native)
+    for m in _TOOL_CALL_TAG_RE.finditer(text):
+        candidates.append(m.group(1))
+
+    # ```json 또는 ```tool_call 블록
+    for m in _JSON_BLOCK_RE.finditer(text):
+        candidates.append(m.group(1))
+
+    # 텍스트 전체가 JSON으로 시작/끝나면 그대로 시도
+    if text.startswith("{") and text.endswith("}"):
+        candidates.append(text)
+    if text.startswith("[") and text.endswith("]"):
+        candidates.append(text)
+
+    # 첫/마지막 { } 사이 substring (fallback — 텍스트 내 JSON 한 덩어리)
+    if not candidates:
+        s, e = text.find("{"), text.rfind("}")
+        if s >= 0 and e > s:
+            candidates.append(text[s:e + 1])
+
+    out: List[Dict[str, Any]] = []
+    seen = set()
+    for c in candidates:
+        try:
+            obj = json.loads(c)
+        except Exception:
+            continue
+        items = obj if isinstance(obj, list) else [obj]
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = it.get("name") or it.get("function") or it.get("tool")
+            if isinstance(name, dict):  # {"function": {"name": ...}} 형태
+                name = name.get("name")
+            if not name or not isinstance(name, str):
+                continue
+            args = it.get("arguments") or it.get("parameters") or it.get("args") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {"_raw": args}
+            sig = (name, json.dumps(args, sort_keys=True, ensure_ascii=False))
+            if sig in seen:
+                continue
+            seen.add(sig)
+            out.append({"function": {"name": name, "arguments": args}})
+    return out
 
 
 class OllamaClient:
@@ -102,14 +173,12 @@ class OllamaClient:
         model: str = None,
         temperature: float = 0.2,
     ) -> dict:
-        """[r108] Tool calling 지원 1회 호출 (비스트리밍).
+        """[r108→r109] Tool calling 1회 호출 (비스트리밍) + content fallback.
 
         Returns: { "role": "assistant", "content": "...", "tool_calls": [...] }
-            tool_calls 가 있으면 호출자는 실행 후 새 message로 다시 chat_with_tools 호출.
-            tool_calls 가 비어있으면 content 가 최종 답변.
 
-        Ollama API spec: https://github.com/ollama/ollama/blob/main/docs/api.md
-        Qwen 2.5 Coder는 OpenAI 호환 tool_calls 지원.
+        Qwen 2.5 Coder + Ollama는 가끔 tool_calls 필드 대신 content에 JSON
+        텍스트로 도구 호출을 적어옴. r109에서 그 케이스 fallback 파싱.
         """
         import json
         model = model or settings.LLM_MODEL
@@ -128,10 +197,18 @@ class OllamaClient:
         r.raise_for_status()
         data = r.json()
         msg = data.get("message", {}) or {}
+        content = msg.get("content", "") or ""
+        tool_calls = msg.get("tool_calls", []) or []
+        # [r109] tool_calls 비어있고 content에 JSON 도구 호출 있으면 fallback 파싱
+        if not tool_calls and content:
+            parsed = _parse_tool_calls_from_content(content)
+            if parsed:
+                tool_calls = parsed
+                content = ""  # content는 도구 호출 표시였으므로 비움
         return {
             "role": msg.get("role", "assistant"),
-            "content": msg.get("content", "") or "",
-            "tool_calls": msg.get("tool_calls", []) or [],
+            "content": content,
+            "tool_calls": tool_calls,
         }
 
     async def chat_stream_final(

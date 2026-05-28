@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r108 (Tool Use 패러다임 전환 — 진짜 Agentic RAG: r93~r107 14라운드 동안 단순 RAG 안에서 라이브 데이터 질문("진행중인 스프린트") 풀려고 휴리스틱·매핑 사전·임계치 조정만 했는데 본질 한계. 임베딩 의미공간과 실제 DB 스냅샷이 다른 차원이라 검색으로 안 잡힘. 해결: LLM이 능동적으로 도구(get_active_sprint, list_tasks, search_vector) 호출하는 Agentic 패턴. ① tools.py — Supabase 직접 조회 도구 3개 + OpenAI 호환 스키마 ② ollama_client.py chat_with_tools — Qwen tool_calls 지원 ③ agent.py — 도구 호출 루프(최대 5라운드) + 새 시스템 프롬프트, 도구 결과를 tool 메시지로 LLM에 재첨부 ④ main.py /chat을 agent.run으로 연결, legacy RAG는 model="legacy"로 호환 유지. 이제 사용자 "진행중인 스프린트" → LLM이 get_active_sprint(project_id) 직접 호출 → DB에서 W22 가져옴 → 실제 메타로 답변) -->
+<!-- BUILD: 2026-05-28 r109 (Tool Use fallback — Qwen content JSON 파싱: r108 직후 사용자 테스트에서 LLM이 도구 호출 결정은 정확히 했지만(`{"name":"get_active_sprint","arguments":{"project_id":"..."}}`) Ollama가 message.tool_calls 필드 대신 message.content에 JSON 텍스트로 반환. agent.py가 tool_calls만 보니까 파싱 실패하고 JSON 그대로 출력. 수정: ollama_client.py에 _parse_tool_calls_from_content fallback 추가 — content에서 raw JSON / ```json 블록 / <tool_call> 태그 / 배열 형태 모두 추출해 OpenAI tool_calls 형식으로 변환. tool_calls 필드 비어있을 때만 fallback 동작. 검증: 사용자 실제 케이스 포함 5케이스 모두 정확히 파싱) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
