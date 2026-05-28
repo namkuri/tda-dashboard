@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r80 (#1 대시보드 배치 localStorage 영속 버그: 로그인 전/후 storage key 불일치 → setUserFromAuth에서 dbState.widgets 리셋 + guest→user 마이그레이션. #2 위젯 그리드 세로축 확장: w/h 별도 저장, w-N/h-N CSS, 모서리 드래그가 양축 변경(dx/unitW·dy/unitH), 우클릭 메뉴에 가로/세로 1~4칸 각각 선택. #3 메모 MD 편집/렌더: 모달에 ✏️편집/👁미리보기 탭, parseMarkdownWithTables + DOMPurify로 렌더, 600ms 디바운스 자동 저장. 다크웜 배경: textarea와 메모 카드에 rgba(255,250,240,.04) 적용. #4 메모 리스트: w.memos=[{id,content,author,createdAt,updatedAt}], + 버튼으로 추가, 카드 클릭 → 모달 편집, 호버 시 ✕ 삭제 버튼, 레거시 단일 memo 자동 마이그레이션) -->
+<!-- BUILD: 2026-05-28 r81 (#1 에셋 매니저(자료>문서 밑): 폴더+에셋, kind(11종), status(planned/progress/done/blocked), 담당자, 드라이브 파일 연결, 필터·검색. #2 이슈 트래커(운영>위키 밑): 우선순위(P0-P3)·상태(open/progress/review/closed/wont)·담당자·납기·대상, P/납기 정렬, 닫힘 자동 라인스루. #3 DB도구→서버상태로 병합: 사이드바 dbtool 제거, 서버 상태 페이지 상단에 🗄️ DB 편집 버튼. #4 버그 리포트(도구>서버상태 옆): TDA_ADMIN_EMAILS=['rnk505@gmail.com'] 하드코딩, 작성자+관리자만 열람, severity 5단계, 현재 화면·UA 자동 캡처. #5 대시보드 그리드 3+칸 표시 버그: 미디어쿼리가 옛 .size-N에만 적용되던 문제 → .w-3/.w-4도 함께 클램프. #6 사이드바 행간 80%로 축소(.cs-nav padding 6px→4px, font-size 13→12.5px) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -593,7 +593,10 @@
         #cal-cal-modal.modal-open,
         #db-widget-modal.modal-open,
         #profile-modal.modal-open,
-        #project-participants-modal.modal-open {
+        #project-participants-modal.modal-open,
+        #am-edit-modal.modal-open,
+        #iss-edit-modal.modal-open,
+        #br-edit-modal.modal-open {
             display: flex !important;
         }
 
@@ -1926,7 +1929,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .cs-project:hover { background: var(--c-accent-soft); }
         .cs-project .cs-dot { width: 24px; height: 24px; border-radius: 7px; background: var(--c-accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; }
         .cs-brand-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cs-nav { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--c-text2); cursor: pointer; border: none; background: none; text-align: left; width: 100%; transition: background .12s, color .12s; }
+        .cs-nav { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 7px; font-size: 12.5px; font-weight: 600; color: var(--c-text2); cursor: pointer; border: none; background: none; text-align: left; width: 100%; transition: background .12s, color .12s; line-height: 1.4; } /* [r81 #6] 행간 80% 축소 */
         .cs-nav:hover { background: rgba(60,54,42,0.06); color: var(--c-text); }
         body.dark .cs-nav:hover { background: rgba(255,250,240,0.06); }
         .cs-nav.active { background: var(--c-accent-soft); color: var(--c-accent); }
@@ -1934,7 +1937,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .cs-section { font-size: 10.5px; font-weight: 700; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 10px 3px; }
         /* [r55] 사이드바 대분류 그룹 (얇은 폰트 헤더 · 클릭 접기/펴기 · 내부 드래그 순서변경) */
         .cs-group { display: flex; flex-direction: column; }
-        .cs-grp-head { display: flex; align-items: center; gap: 6px; width: 100%; border: none; background: none; cursor: pointer; padding: 9px 10px 3px; font-size: 10.5px; font-weight: 300; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.08em; text-align: left; }
+        .cs-grp-head { display: flex; align-items: center; gap: 6px; width: 100%; border: none; background: none; cursor: pointer; padding: 7px 10px 2px; font-size: 10px; font-weight: 300; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.08em; text-align: left; } /* [r81 #6] 80% 축소 */
         .cs-grp-head:hover { color: var(--c-text2); }
         .cs-grp-caret { font-size: 8px; transition: transform .15s; opacity: .6; display: inline-block; }
         .cs-group.collapsed .cs-grp-caret { transform: rotate(-90deg); }
@@ -2644,6 +2647,81 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-widget-resize::before { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid var(--c-text3); border-bottom: 2px solid var(--c-text3); }
         .db-widget:hover .db-widget-resize { opacity: .8; }
         .db-widget-resize:hover { opacity: 1 !important; }
+        /* [r81 #1] 에셋 매니저 */
+        #assets-view.block { display: block; }
+        #assets-view { height: calc(100vh - 60px); overflow-y: auto; }
+        .am-wrap { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
+        .am-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+        .am-title { font-size: 22px; font-weight: 800; color: var(--c-text); margin: 0; }
+        .am-sub { font-size: 12.5px; color: var(--c-text3); margin-top: 4px; }
+        .am-toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+        .am-grid { display: flex; flex-direction: column; gap: 14px; }
+        .am-folder { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 12px 14px; }
+        .am-folder-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--c-border); margin-bottom: 10px; cursor: pointer; }
+        .am-folder-caret { font-size: 10px; color: var(--c-text3); transition: transform .15s; }
+        .am-folder.collapsed .am-folder-caret { transform: rotate(-90deg); }
+        .am-folder.collapsed .am-folder-items { display: none; }
+        .am-folder-name { font-size: 14px; font-weight: 700; color: var(--c-text); flex: 1; }
+        .am-folder-count { font-size: 11px; color: var(--c-text3); padding: 2px 8px; background: var(--ios-fill); border-radius: 9999px; }
+        .am-folder-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+        .am-asset { background: var(--ios-fill); border: 1px solid var(--c-border); border-radius: 7px; padding: 9px 11px; cursor: pointer; transition: background .15s, border-color .15s; }
+        .am-asset:hover { background: var(--c-paper); border-color: var(--c-accent); }
+        .am-asset-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .am-asset-ico { font-size: 14px; flex-shrink: 0; }
+        .am-asset-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .am-asset-status { font-size: 10px; padding: 2px 6px; border-radius: 9999px; font-weight: 700; flex-shrink: 0; }
+        .am-asset-status.planned { background: var(--ios-fill2); color: var(--c-text3); }
+        .am-asset-status.progress { background: rgba(212,154,28,.16); color: #b08510; }
+        .am-asset-status.done { background: rgba(59,122,87,.16); color: #2c6849; }
+        .am-asset-status.blocked { background: rgba(210,57,61,.16); color: #d2393d; }
+        .am-asset-meta { font-size: 10.5px; color: var(--c-text3); margin-top: 4px; display: flex; gap: 8px; }
+        .am-empty { text-align: center; padding: 60px 20px; color: var(--c-text3); font-size: 14px; }
+
+        /* [r81 #2] 이슈 트래커 */
+        #issues-view.block { display: block; }
+        #issues-view { height: calc(100vh - 60px); overflow-y: auto; }
+        .iss-wrap { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
+        .iss-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+        .iss-title { font-size: 22px; font-weight: 800; color: var(--c-text); margin: 0; }
+        .iss-sub { font-size: 12.5px; color: var(--c-text3); margin-top: 4px; }
+        .iss-toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+        .iss-list { display: flex; flex-direction: column; gap: 6px; }
+        .iss-card { background: var(--c-card); border: 1px solid var(--c-border); border-left: 4px solid var(--c-text3); border-radius: 8px; padding: 10px 14px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; align-items: center; gap: 12px; }
+        .iss-card:hover { background: var(--ios-fill); }
+        .iss-card.priority-p0 { border-left-color: #d2393d; }
+        .iss-card.priority-p1 { border-left-color: #f97316; }
+        .iss-card.priority-p2 { border-left-color: #d49a1c; }
+        .iss-card.priority-p3 { border-left-color: var(--c-text3); }
+        .iss-card.status-closed { opacity: 0.55; }
+        .iss-card.status-closed .iss-c-title { text-decoration: line-through; }
+        .iss-c-priority { font-size: 11px; font-weight: 800; flex-shrink: 0; min-width: 30px; }
+        .iss-c-status { font-size: 10.5px; padding: 2px 8px; border-radius: 9999px; font-weight: 700; flex-shrink: 0; background: var(--ios-fill); color: var(--c-text2); }
+        .iss-c-title { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .iss-c-meta { font-size: 11px; color: var(--c-text3); display: flex; gap: 10px; flex-shrink: 0; }
+        .iss-empty { text-align: center; padding: 60px 20px; color: var(--c-text3); font-size: 14px; }
+
+        /* [r81 #4] 버그 리포트 */
+        #bugReport-view.block { display: block; }
+        #bugReport-view { height: calc(100vh - 60px); overflow-y: auto; }
+        .br-wrap { padding: 20px 24px 60px; max-width: 1000px; margin: 0 auto; }
+        .br-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+        .br-title { font-size: 22px; font-weight: 800; color: var(--c-text); margin: 0; }
+        .br-sub { font-size: 12.5px; color: var(--c-text3); margin-top: 4px; }
+        .br-list { display: flex; flex-direction: column; gap: 8px; }
+        .br-card { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 8px; padding: 12px 16px; cursor: pointer; transition: background .15s; }
+        .br-card:hover { background: var(--ios-fill); }
+        .br-c-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .br-c-title { flex: 1; font-size: 14px; font-weight: 700; color: var(--c-text); }
+        .br-c-sev { font-size: 10.5px; padding: 2px 8px; border-radius: 9999px; font-weight: 700; flex-shrink: 0; }
+        .br-c-sev.critical { background: rgba(210,57,61,.18); color: #d2393d; }
+        .br-c-sev.high { background: rgba(249,115,22,.18); color: #c2410c; }
+        .br-c-sev.medium { background: rgba(212,154,28,.18); color: #b08510; }
+        .br-c-sev.low { background: var(--ios-fill); color: var(--c-text3); }
+        .br-c-sev.request { background: rgba(125,103,178,.18); color: #6d4ba7; }
+        .br-c-meta { font-size: 11px; color: var(--c-text3); display: flex; gap: 10px; flex-wrap: wrap; }
+        .br-c-desc { font-size: 12.5px; color: var(--c-text2); margin-top: 6px; line-height: 1.5; max-height: 60px; overflow: hidden; text-overflow: ellipsis; }
+        .br-empty { text-align: center; padding: 60px 20px; color: var(--c-text3); font-size: 14px; }
+
         /* [r80] 메모 위젯 — 리스트 + MD 편집 모달 */
         .db-memo { width: 100%; height: 100%; min-height: 140px; background: var(--ios-fill); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 6px; outline: none; resize: none; font-family: inherit; font-size: 13px; line-height: 1.55; padding: 8px 10px; box-sizing: border-box; }
         .db-memo:focus { border-color: var(--c-accent); background: var(--c-paper); }
@@ -2718,8 +2796,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .db-empty-sub { font-size: 13px; color: var(--c-text3); margin-bottom: 20px; }
         .db-empty-cta { padding: 10px 22px; background: var(--c-accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
         .db-empty-cta:hover { filter: brightness(1.08); }
-        @media (max-width: 1024px) { .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .db-widget.size-3, .db-widget.size-4 { grid-column: span 2; } }
-        @media (max-width: 640px) { .db-grid { grid-template-columns: 1fr; } .db-widget.size-2, .db-widget.size-3, .db-widget.size-4 { grid-column: span 1; } }
+        @media (max-width: 1024px) {
+            .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            /* [r81 #5] w-3/w-4도 함께 클램프(2열)로 - 옛 size-N만 처리하던 버그 수정 */
+            .db-widget.size-3, .db-widget.size-4,
+            .db-widget.w-3, .db-widget.w-4 { grid-column: span 2; }
+        }
+        @media (max-width: 640px) {
+            .db-grid { grid-template-columns: 1fr; }
+            .db-widget.size-2, .db-widget.size-3, .db-widget.size-4,
+            .db-widget.w-2, .db-widget.w-3, .db-widget.w-4 { grid-column: span 1; }
+        }
 
         /* [r76] 캘린더 — Google Calendar 클론 */
         #calendar-view.block { display: block; }
@@ -3156,6 +3243,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
                     <button class="cs-nav" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
+                    <!-- [r81 #2] 이슈 트래커 -->
+                    <button class="cs-nav" data-nav="issues" id="cs-nav-issues" onclick="switchView('issues')" title="이슈 트래커 (등록·담당자·우선순위·납기·상태)"><span class="cs-ico">🐛</span><span class="cs-label">이슈 트래커</span></button>
                     <button class="cs-nav" data-nav="calendar" id="cs-nav-calendar" onclick="switchView('calendar')" title="캘린더 (개인·팀·프로젝트 일정)"><span class="cs-ico">📅</span><span class="cs-label">캘린더</span></button>
                     <button class="cs-nav" data-nav="review" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
                     <button class="cs-nav" data-nav="comment" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
@@ -3165,6 +3254,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button class="cs-grp-head" onclick="toggleNavGroup('data')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">자료</span></button>
                 <div class="cs-grp-items" data-grp="data">
                     <button class="cs-nav" data-nav="docs" id="cs-nav-docs" onclick="switchView('docs')" title="문서"><span class="cs-ico">📚</span><span class="cs-label">문서</span></button>
+                    <!-- [r81 #1] 에셋 매니저 — 문서 밑 -->
+                    <button class="cs-nav" data-nav="assets" id="cs-nav-assets" onclick="switchView('assets')" title="에셋 매니저 (유니티 타겟 에셋 트리·상태·연결)"><span class="cs-ico">🎮</span><span class="cs-label">에셋 매니저</span></button>
                     <button class="cs-nav" data-nav="personal" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
                     <button class="cs-nav" data-nav="graph" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
                 </div>
@@ -3182,8 +3273,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="cs-group" data-grp="tools">
                 <button class="cs-grp-head" onclick="toggleNavGroup('tools')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">도구</span></button>
                 <div class="cs-grp-items" data-grp="tools">
-                    <button class="cs-nav" data-nav="dbtool" onclick="toggleJsonSidebar()" title="DB 도구"><span class="cs-ico">🗄️</span><span class="cs-label">DB 도구</span></button>
-                    <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
+                    <!-- [r81 #3] DB 도구는 서버 상태 페이지 안으로 병합 -->
+                    <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태 (DB 편집 포함)"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
+                    <button class="cs-nav" data-nav="bugReport" id="cs-nav-bug-report" onclick="switchView('bugReport')" title="버그 리포트 (앱 이슈 제보 + 관리자 검토)"><span class="cs-ico">🐞</span><span class="cs-label">버그 리포트</span></button>
                     <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
                     <button class="cs-nav" data-nav="settings" onclick="toggleSettings()" title="화면 설정 (테마 포함)"><span class="cs-ico">⚙️</span><span class="cs-label">화면 설정</span></button>
                 </div>
@@ -3957,6 +4049,201 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div id="drv-list" class="drv-list"></div>
             </div>
         </div>
+        <!-- [r81 #1] 에셋 매니저 — 유니티 타겟 에셋 트리·상태 -->
+        <div id="assets-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="am-wrap">
+                <header class="am-head">
+                    <div>
+                        <h2 class="am-title">🎮 에셋 매니저</h2>
+                        <div class="am-sub">유니티 프로젝트에 구현해야 할 타겟 에셋 트리·상태·담당자</div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="util-btn bg-blue-600 shadow-sm" onclick="amAddFolder()">＋ 폴더</button>
+                        <button class="util-btn" style="background:var(--c-accent);color:#fff;" onclick="amAddAsset()">＋ 에셋</button>
+                    </div>
+                </header>
+                <div class="am-toolbar">
+                    <select id="am-filter-status" class="filter-select border rounded p-1" onchange="amRender()">
+                        <option value="ALL">모든 상태</option>
+                        <option value="planned">📋 계획</option>
+                        <option value="progress">🔥 진행</option>
+                        <option value="done">✅ 완료</option>
+                        <option value="blocked">⛔ 보류</option>
+                    </select>
+                    <select id="am-filter-assignee" class="filter-select border rounded p-1" onchange="amRender()">
+                        <option value="ALL">모든 담당자</option>
+                    </select>
+                    <input id="am-search" type="text" placeholder="🔍 에셋 검색..." oninput="amRender()" class="filter-select border rounded p-1" style="flex:1;min-width:120px;">
+                </div>
+                <div id="am-grid" class="am-grid"></div>
+            </div>
+        </div>
+        <!-- 에셋 추가/편집 모달 -->
+        <div id="am-edit-modal" class="hidden fixed inset-0 z-[600]" style="background:rgba(0,0,0,.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeModal('am-edit-modal')">
+            <div class="cal-modal-box" onclick="event.stopPropagation()">
+                <div class="cal-modal-head"><h3 id="am-edit-title">새 에셋</h3><button onclick="closeModal('am-edit-modal')" class="cal-x">✕</button></div>
+                <div class="cal-modal-body">
+                    <label class="cal-fld"><span>이름</span><input id="am-e-name" type="text" placeholder="예: PlayerCharacter.prefab"></label>
+                    <label class="cal-fld"><span>유형</span>
+                        <select id="am-e-kind">
+                            <option value="prefab">🧩 Prefab</option>
+                            <option value="scene">🎬 Scene</option>
+                            <option value="material">🎨 Material</option>
+                            <option value="texture">🖼️ Texture</option>
+                            <option value="model">🗿 3D Model</option>
+                            <option value="audio">🔊 Audio</option>
+                            <option value="script">📝 Script</option>
+                            <option value="animation">🎞️ Animation</option>
+                            <option value="vfx">✨ VFX</option>
+                            <option value="ui">🖼️ UI</option>
+                            <option value="other">📦 기타</option>
+                        </select>
+                    </label>
+                    <label class="cal-fld"><span>폴더</span><select id="am-e-folder"></select></label>
+                    <label class="cal-fld"><span>상태</span>
+                        <select id="am-e-status">
+                            <option value="planned">📋 계획</option>
+                            <option value="progress">🔥 진행</option>
+                            <option value="done">✅ 완료</option>
+                            <option value="blocked">⛔ 보류</option>
+                        </select>
+                    </label>
+                    <label class="cal-fld"><span>담당자</span><select id="am-e-assignee"></select></label>
+                    <label class="cal-fld"><span>설명/메모</span><textarea id="am-e-notes" rows="3" placeholder="구현 메모, 요구사항, 참고 링크 등"></textarea></label>
+                    <label class="cal-fld"><span>파일 연결 (선택)</span>
+                        <div style="display:flex;gap:6px;">
+                            <input id="am-e-file" type="text" placeholder="공용 드라이브 파일 ID 또는 외부 URL" style="flex:1;">
+                            <button onclick="amPickDriveFile()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);">🗂️ 드라이브</button>
+                        </div>
+                    </label>
+                </div>
+                <div class="cal-modal-foot">
+                    <button onclick="amDeleteAsset()" id="am-e-del" class="cal-btn-danger">삭제</button>
+                    <div style="flex:1;"></div>
+                    <button onclick="closeModal('am-edit-modal')" class="cal-btn-cancel">취소</button>
+                    <button onclick="amSaveAsset()" class="cal-btn-save">저장</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- [r81 #2] 이슈 트래커 -->
+        <div id="issues-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="iss-wrap">
+                <header class="iss-head">
+                    <div>
+                        <h2 class="iss-title">🐛 이슈 트래커</h2>
+                        <div class="iss-sub">프로젝트 이슈 등록·담당·우선순위·납기·상태</div>
+                    </div>
+                    <button class="util-btn" style="background:var(--c-accent);color:#fff;" onclick="issAddIssue()">＋ 새 이슈</button>
+                </header>
+                <div class="iss-toolbar">
+                    <select id="iss-filter-status" class="filter-select border rounded p-1" onchange="issRender()">
+                        <option value="open">🔓 열린 이슈만</option>
+                        <option value="ALL">모든 상태</option>
+                        <option value="open-only">📋 OPEN</option>
+                        <option value="progress">🔥 진행 중</option>
+                        <option value="review">👀 리뷰</option>
+                        <option value="closed">✅ 종료</option>
+                        <option value="wont">⛔ 보류</option>
+                    </select>
+                    <select id="iss-filter-priority" class="filter-select border rounded p-1" onchange="issRender()">
+                        <option value="ALL">모든 우선순위</option>
+                        <option value="p0">🔴 P0 (긴급)</option>
+                        <option value="p1">🟠 P1 (높음)</option>
+                        <option value="p2">🟡 P2 (보통)</option>
+                        <option value="p3">⚪ P3 (낮음)</option>
+                    </select>
+                    <select id="iss-filter-assignee" class="filter-select border rounded p-1" onchange="issRender()">
+                        <option value="ALL">모든 담당자</option>
+                    </select>
+                    <input id="iss-search" type="text" placeholder="🔍 검색 (제목·설명)" oninput="issRender()" class="filter-select border rounded p-1" style="flex:1;min-width:120px;">
+                </div>
+                <div id="iss-list" class="iss-list"></div>
+            </div>
+        </div>
+        <!-- 이슈 편집 모달 -->
+        <div id="iss-edit-modal" class="hidden fixed inset-0 z-[600]" style="background:rgba(0,0,0,.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeModal('iss-edit-modal')">
+            <div class="cal-modal-box" onclick="event.stopPropagation()" style="width:560px;">
+                <div class="cal-modal-head"><h3 id="iss-edit-title">새 이슈</h3><button onclick="closeModal('iss-edit-modal')" class="cal-x">✕</button></div>
+                <div class="cal-modal-body">
+                    <label class="cal-fld"><span>제목</span><input id="iss-e-title" type="text" placeholder="이슈 제목"></label>
+                    <label class="cal-fld"><span>설명</span><textarea id="iss-e-desc" rows="4" placeholder="재현 단계, 기대 동작, 실제 동작 등"></textarea></label>
+                    <div class="cal-row">
+                        <label class="cal-fld cal-fld-half"><span>우선순위</span>
+                            <select id="iss-e-priority">
+                                <option value="p0">🔴 P0 (긴급)</option>
+                                <option value="p1">🟠 P1 (높음)</option>
+                                <option value="p2" selected>🟡 P2 (보통)</option>
+                                <option value="p3">⚪ P3 (낮음)</option>
+                            </select>
+                        </label>
+                        <label class="cal-fld cal-fld-half"><span>상태</span>
+                            <select id="iss-e-status">
+                                <option value="open">📋 OPEN</option>
+                                <option value="progress">🔥 진행 중</option>
+                                <option value="review">👀 리뷰</option>
+                                <option value="closed">✅ 종료</option>
+                                <option value="wont">⛔ 보류</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="cal-row">
+                        <label class="cal-fld cal-fld-half"><span>담당자</span><select id="iss-e-assignee"></select></label>
+                        <label class="cal-fld cal-fld-half"><span>납기</span><input id="iss-e-due" type="date"></label>
+                    </div>
+                    <label class="cal-fld"><span>대상 (선택)</span><input id="iss-e-target" type="text" placeholder="예: 카드 ID, 문서 ID, 에셋명, 기능명"></label>
+                </div>
+                <div class="cal-modal-foot">
+                    <button onclick="issDeleteIssue()" id="iss-e-del" class="cal-btn-danger">삭제</button>
+                    <div style="flex:1;"></div>
+                    <button onclick="closeModal('iss-edit-modal')" class="cal-btn-cancel">취소</button>
+                    <button onclick="issSaveIssue()" class="cal-btn-save">저장</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- [r81 #4] 버그 리포트 -->
+        <div id="bugReport-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="br-wrap">
+                <header class="br-head">
+                    <div>
+                        <h2 class="br-title">🐞 버그 리포트</h2>
+                        <div class="br-sub">대시보드 앱 자체의 버그/요청 — 작성자와 관리자만 열람 가능</div>
+                    </div>
+                    <button class="util-btn" style="background:var(--c-accent);color:#fff;" onclick="brAddReport()">＋ 새 리포트</button>
+                </header>
+                <div id="br-admin-banner" style="display:none;padding:10px 14px;background:var(--c-accent-soft);color:var(--c-accent);border-radius:8px;font-size:12.5px;font-weight:700;margin-bottom:12px;">👑 관리자 모드 — 모든 리포트가 보입니다</div>
+                <div id="br-list" class="br-list"></div>
+            </div>
+        </div>
+        <!-- 버그 리포트 작성 모달 -->
+        <div id="br-edit-modal" class="hidden fixed inset-0 z-[600]" style="background:rgba(0,0,0,.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeModal('br-edit-modal')">
+            <div class="cal-modal-box" onclick="event.stopPropagation()" style="width:560px;">
+                <div class="cal-modal-head"><h3 id="br-edit-title">버그 리포트 작성</h3><button onclick="closeModal('br-edit-modal')" class="cal-x">✕</button></div>
+                <div class="cal-modal-body">
+                    <label class="cal-fld"><span>제목</span><input id="br-e-title" type="text" placeholder="간단한 제목 (예: 칸반 드래그 후 카드 사라짐)"></label>
+                    <label class="cal-fld"><span>심각도</span>
+                        <select id="br-e-severity">
+                            <option value="critical">🔴 Critical (앱 사용 불가)</option>
+                            <option value="high">🟠 High (주요 기능 오류)</option>
+                            <option value="medium" selected>🟡 Medium (불편 정도)</option>
+                            <option value="low">⚪ Low (사소·UI)</option>
+                            <option value="request">💡 Request (개선 제안)</option>
+                        </select>
+                    </label>
+                    <label class="cal-fld"><span>현재 화면</span><input id="br-e-view" type="text" readonly></label>
+                    <label class="cal-fld"><span>재현 단계 + 기대/실제 동작</span><textarea id="br-e-desc" rows="6" placeholder="1. ___ 페이지에서&#10;2. ___ 버튼을 누르면&#10;3. ___ 가 일어남 (기대: ___)"></textarea></label>
+                    <label class="cal-fld"><span>브라우저/OS (자동)</span><input id="br-e-env" type="text" readonly></label>
+                </div>
+                <div class="cal-modal-foot">
+                    <button onclick="brDeleteReport()" id="br-e-del" class="cal-btn-danger">삭제</button>
+                    <div style="flex:1;"></div>
+                    <button onclick="closeModal('br-edit-modal')" class="cal-btn-cancel">취소</button>
+                    <button onclick="brSaveReport()" class="cal-btn-save">제출</button>
+                </div>
+            </div>
+        </div>
+
         <div id="status-view" class="hidden" onclick="event.stopPropagation()">
             <div class="drv-wrap">
                 <div class="drv-head">
@@ -3966,6 +4253,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </div>
                     <button class="drv-upload" onclick="renderStatusView()">↻ 새로고침</button>
                 </div>
+                <div id="status-topbar" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"></div>
                 <div id="status-body" class="status-body"></div>
             </div>
         </div>
@@ -6200,6 +6488,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         async function renderStatusView() {
             var body = document.getElementById('status-body'); if (!body) return;
             body.innerHTML = '<div class="st-card">점검 중…</div>';
+            // [r81 #3] 상단에 DB 편집 버튼 (DB 도구 통합)
+            var topBar = document.getElementById('status-topbar');
+            if (topBar) topBar.innerHTML = '<button class="util-btn" style="background:var(--c-accent);color:#fff;" onclick="toggleJsonSidebar()">🗄️ DB 편집 (JSON · 고급)</button>';
             var connected = !!supabaseClient;
             var bucketOk = await _driveProbeBucket();
             var load = await dbLoadDriveFiles();
@@ -6359,6 +6650,502 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         //   localStorage 키: tda_dashboard_{projectId}_{userId}
         //   widgets: [{ id, type:'category'|'sprint'|'upcoming'|'myTasks'|'reviewQueue', size:1-4, catId? }]
         // ═══════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════
+        // [r81 #4] 버그 리포트 관리자 식별 — 하드코딩 이메일 목록
+        // ═══════════════════════════════════════════════════════════════════
+        var TDA_ADMIN_EMAILS = ['rnk505@gmail.com'];
+        function isAdminUser() {
+            if (!currentUser) return false;
+            return TDA_ADMIN_EMAILS.indexOf((myEmail || '').toLowerCase()) > -1;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // [r81 #1] 에셋 매니저 — Unity 타겟 에셋 트리·상태·담당자
+        // 데이터 모델: currentData.assets, currentData.assetFolders
+        // ═══════════════════════════════════════════════════════════════════
+        var AM_KIND_ICONS = { prefab: '🧩', scene: '🎬', material: '🎨', texture: '🖼️', model: '🗿', audio: '🔊', script: '📝', animation: '🎞️', vfx: '✨', ui: '🖼️', other: '📦' };
+        var amState = { editingId: null };
+        function amRender() {
+            var grid = document.getElementById('am-grid'); if (!grid) return;
+            // 필터 옵션 채우기 (담당자)
+            var members = (currentData.users || []);
+            var asSel = document.getElementById('am-filter-assignee');
+            if (asSel && asSel.options.length <= 1) {
+                asSel.innerHTML = '<option value="ALL">모든 담당자</option>' + members.map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
+            }
+            var folders = (currentData.assetFolders || []).filter(function (f) { return (f.projectId || 'default') === activeProjectId; });
+            var assets = (currentData.assets || []).filter(function (a) { return (a.projectId || 'default') === activeProjectId; });
+            // 필터링
+            var fs = document.getElementById('am-filter-status').value;
+            var fa = document.getElementById('am-filter-assignee').value;
+            var fsr = (document.getElementById('am-search').value || '').toLowerCase();
+            var filteredAssets = assets.filter(function (a) {
+                if (fs !== 'ALL' && (a.status || 'planned') !== fs) return false;
+                if (fa !== 'ALL' && a.assigneeId !== fa) return false;
+                if (fsr && (a.name || '').toLowerCase().indexOf(fsr) === -1) return false;
+                return true;
+            });
+            // 폴더에 속하지 않은 에셋은 '미분류' 가상 폴더로
+            var unassigned = filteredAssets.filter(function (a) { return !a.folderId; });
+            var html = '';
+            folders.forEach(function (f) {
+                var inFolder = filteredAssets.filter(function (a) { return a.folderId === f.id; });
+                if (!inFolder.length && fs === 'ALL' && fa === 'ALL' && !fsr) {
+                    // 빈 폴더도 표시
+                } else if (!inFolder.length) return;
+                var collapsed = amState['col_' + f.id] ? ' collapsed' : '';
+                html += '<div class="am-folder' + collapsed + '" data-fid="' + f.id + '">' +
+                    '<div class="am-folder-head" onclick="amToggleFolder(\'' + f.id + '\')">' +
+                    '<span class="am-folder-caret">▼</span>' +
+                    '<span style="font-size:14px;">📁</span>' +
+                    '<span class="am-folder-name">' + _annEsc(f.name || '폴더') + '</span>' +
+                    '<span class="am-folder-count">' + inFolder.length + '/' + assets.filter(function (a) { return a.folderId === f.id; }).length + '</span>' +
+                    '<button onclick="event.stopPropagation();amRenameFolder(\'' + f.id + '\')" title="이름 변경" style="background:none;border:none;cursor:pointer;color:var(--c-text3);font-size:12px;padding:2px 6px;">✏️</button>' +
+                    '<button onclick="event.stopPropagation();amDeleteFolder(\'' + f.id + '\')" title="폴더 삭제" style="background:none;border:none;cursor:pointer;color:#d2393d;font-size:12px;padding:2px 6px;">🗑</button>' +
+                    '</div>' +
+                    '<div class="am-folder-items">' + inFolder.map(_amAssetCardHtml).join('') + '</div>' +
+                    '</div>';
+            });
+            if (unassigned.length) {
+                html += '<div class="am-folder"><div class="am-folder-head" style="cursor:default;"><span class="am-folder-caret" style="visibility:hidden;">▼</span><span style="font-size:14px;">📂</span><span class="am-folder-name">미분류</span><span class="am-folder-count">' + unassigned.length + '</span></div><div class="am-folder-items">' + unassigned.map(_amAssetCardHtml).join('') + '</div></div>';
+            }
+            if (!html) html = '<div class="am-empty">🎮 아직 에셋이 없습니다<br><span style="font-size:12px;">상단 ＋ 에셋 / ＋ 폴더로 시작하세요</span></div>';
+            grid.innerHTML = html;
+        }
+        function _amAssetCardHtml(a) {
+            var ico = AM_KIND_ICONS[a.kind] || '📦';
+            var st = a.status || 'planned';
+            var stLabel = { planned: '📋 계획', progress: '🔥 진행', done: '✅ 완료', blocked: '⛔ 보류' }[st] || st;
+            var asgn = (currentData.users || []).find(function (m) { return m.id === a.assigneeId; });
+            var asgnName = asgn ? (asgn.displayName || asgn.email) : '미지정';
+            return '<div class="am-asset" onclick="amEditAsset(\'' + a.id + '\')">' +
+                '<div class="am-asset-head"><span class="am-asset-ico">' + ico + '</span><span class="am-asset-name">' + _annEsc(a.name || '에셋') + '</span><span class="am-asset-status ' + st + '">' + stLabel + '</span></div>' +
+                '<div class="am-asset-meta"><span>👤 ' + _annEsc(asgnName) + '</span>' + (a.fileLink ? '<span>🔗 ' + (a.fileLink.startsWith('http') ? '외부' : '드라이브') + '</span>' : '') + '</div>' +
+                '</div>';
+        }
+        function amToggleFolder(fid) {
+            amState['col_' + fid] = !amState['col_' + fid];
+            amRender();
+        }
+        async function amAddFolder() {
+            var name = await uiPrompt({ title: '새 에셋 폴더', label: '폴더 이름 (예: Characters, Levels, UI)' });
+            if (!name || !name.trim()) return;
+            var folder = { id: 'amf-' + Date.now(), name: name.trim(), projectId: activeProjectId };
+            if (!currentData.assetFolders) currentData.assetFolders = [];
+            currentData.assetFolders.push(folder);
+            saveData();
+            dbUpsertAssetFolder(folder);
+            amRender();
+        }
+        async function amRenameFolder(fid) {
+            var f = (currentData.assetFolders || []).find(function (x) { return x.id === fid; });
+            if (!f) return;
+            var name = await uiPrompt({ title: '폴더 이름 변경', label: '새 이름', value: f.name || '' });
+            if (!name || !name.trim()) return;
+            f.name = name.trim();
+            saveData();
+            dbUpsertAssetFolder(f);
+            amRender();
+        }
+        async function amDeleteFolder(fid) {
+            var f = (currentData.assetFolders || []).find(function (x) { return x.id === fid; });
+            if (!f) return;
+            var count = (currentData.assets || []).filter(function (a) { return a.folderId === fid; }).length;
+            if (!(await uiConfirm({ title: '폴더 삭제', message: '폴더 "' + f.name + '"을 삭제할까요?' + (count ? '\n에셋 ' + count + '개는 미분류로 이동됩니다.' : ''), confirmText: '삭제', danger: true }))) return;
+            // 에셋의 folderId 해제
+            (currentData.assets || []).forEach(function (a) { if (a.folderId === fid) { a.folderId = null; dbUpsertAsset(a); } });
+            currentData.assetFolders = (currentData.assetFolders || []).filter(function (x) { return x.id !== fid; });
+            saveData();
+            dbDeleteAssetFolder(fid);
+            amRender();
+        }
+        function amAddAsset() {
+            amState.editingId = null;
+            document.getElementById('am-edit-title').textContent = '새 에셋';
+            document.getElementById('am-e-name').value = '';
+            document.getElementById('am-e-kind').value = 'prefab';
+            document.getElementById('am-e-status').value = 'planned';
+            document.getElementById('am-e-notes').value = '';
+            document.getElementById('am-e-file').value = '';
+            // 폴더 옵션
+            var folderSel = document.getElementById('am-e-folder');
+            var folders = (currentData.assetFolders || []).filter(function (f) { return (f.projectId || 'default') === activeProjectId; });
+            folderSel.innerHTML = '<option value="">(미분류)</option>' + folders.map(function (f) { return '<option value="' + f.id + '">' + _annEsc(f.name) + '</option>'; }).join('');
+            // 담당자 옵션
+            var asgnSel = document.getElementById('am-e-assignee');
+            asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
+            document.getElementById('am-e-del').classList.add('hidden');
+            openModal('am-edit-modal');
+            setTimeout(function () { document.getElementById('am-e-name').focus(); }, 30);
+        }
+        function amEditAsset(id) {
+            var a = (currentData.assets || []).find(function (x) { return x.id === id; });
+            if (!a) return;
+            amState.editingId = id;
+            document.getElementById('am-edit-title').textContent = '에셋 편집';
+            document.getElementById('am-e-name').value = a.name || '';
+            document.getElementById('am-e-kind').value = a.kind || 'prefab';
+            document.getElementById('am-e-status').value = a.status || 'planned';
+            document.getElementById('am-e-notes').value = a.notes || '';
+            document.getElementById('am-e-file').value = a.fileLink || '';
+            // 폴더/담당자 옵션 재채움
+            var folderSel = document.getElementById('am-e-folder');
+            var folders = (currentData.assetFolders || []).filter(function (f) { return (f.projectId || 'default') === activeProjectId; });
+            folderSel.innerHTML = '<option value="">(미분류)</option>' + folders.map(function (f) { return '<option value="' + f.id + '">' + _annEsc(f.name) + '</option>'; }).join('');
+            folderSel.value = a.folderId || '';
+            var asgnSel = document.getElementById('am-e-assignee');
+            asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
+            asgnSel.value = a.assigneeId || '';
+            document.getElementById('am-e-del').classList.remove('hidden');
+            openModal('am-edit-modal');
+        }
+        async function amSaveAsset() {
+            var name = document.getElementById('am-e-name').value.trim();
+            if (!name) { showToast('이름을 입력하세요', 'alert'); return; }
+            var asset;
+            if (amState.editingId) {
+                asset = (currentData.assets || []).find(function (x) { return x.id === amState.editingId; });
+                if (!asset) return;
+            } else {
+                asset = { id: 'asset-' + Date.now(), projectId: activeProjectId, createdAt: Date.now(), createdBy: (currentUser && currentUser.id) || null };
+                if (!currentData.assets) currentData.assets = [];
+                currentData.assets.push(asset);
+            }
+            asset.name = name;
+            asset.kind = document.getElementById('am-e-kind').value;
+            asset.folderId = document.getElementById('am-e-folder').value || null;
+            asset.status = document.getElementById('am-e-status').value;
+            asset.assigneeId = document.getElementById('am-e-assignee').value || null;
+            asset.notes = document.getElementById('am-e-notes').value;
+            asset.fileLink = document.getElementById('am-e-file').value;
+            asset.updatedAt = Date.now();
+            saveData();
+            await dbUpsertAsset(asset);
+            closeModal('am-edit-modal');
+            amRender();
+            showToast(amState.editingId ? '✅ 에셋 저장됨' : '✅ 에셋 추가됨', 'success');
+        }
+        async function amDeleteAsset() {
+            if (!amState.editingId) return;
+            if (!(await uiConfirm({ title: '에셋 삭제', message: '이 에셋을 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            var id = amState.editingId;
+            currentData.assets = (currentData.assets || []).filter(function (a) { return a.id !== id; });
+            saveData();
+            await dbDeleteAsset(id);
+            closeModal('am-edit-modal');
+            amRender();
+        }
+        function amPickDriveFile() {
+            // 드라이브에서 파일 선택 (간단: prompt로 파일 ID 입력)
+            uiPrompt({ title: '드라이브 파일 연결', label: '드라이브 파일 ID 또는 URL을 입력하세요', value: document.getElementById('am-e-file').value || '' }).then(function (v) {
+                if (v) document.getElementById('am-e-file').value = v;
+            });
+        }
+        // DB 함수 (테이블 없으면 자동 폴백)
+        async function dbUpsertAsset(a) {
+            if (!supabaseClient) return;
+            try {
+                const { error } = await supabaseClient.from('assets').upsert({
+                    id: a.id, project_id: a.projectId, name: a.name, kind: a.kind || 'other',
+                    folder_id: a.folderId || null, status: a.status || 'planned',
+                    assignee_id: a.assigneeId || null, notes: a.notes || '', file_link: a.fileLink || '',
+                    created_by: a.createdBy || null, created_at: a.createdAt ? new Date(a.createdAt).toISOString() : null,
+                    updated_at: a.updatedAt ? new Date(a.updatedAt).toISOString() : null
+                });
+                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
+                    console.warn('[dbUpsertAsset] assets 테이블 없음 — SQL 필요. 서버 상태 > DB 마이그레이션 SQL 참조');
+                    return;
+                }
+                if (error) console.error('[dbUpsertAsset]', error);
+            } catch (e) { console.warn('[dbUpsertAsset]', e); }
+        }
+        async function dbDeleteAsset(id) {
+            if (!supabaseClient) return;
+            try { await supabaseClient.from('assets').delete().eq('id', id); } catch (e) {}
+        }
+        async function dbUpsertAssetFolder(f) {
+            if (!supabaseClient) return;
+            try {
+                const { error } = await supabaseClient.from('asset_folders').upsert({ id: f.id, project_id: f.projectId, name: f.name });
+                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
+                    console.warn('[dbUpsertAssetFolder] asset_folders 테이블 없음');
+                    return;
+                }
+            } catch (e) { console.warn('[dbUpsertAssetFolder]', e); }
+        }
+        async function dbDeleteAssetFolder(id) {
+            if (!supabaseClient) return;
+            try { await supabaseClient.from('asset_folders').delete().eq('id', id); } catch (e) {}
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // [r81 #2] 이슈 트래커
+        // 데이터 모델: currentData.issues = [{id, projectId, title, desc, priority, status, assigneeId, dueDate, target, createdBy, createdAt, updatedAt}]
+        // ═══════════════════════════════════════════════════════════════════
+        var issState = { editingId: null };
+        function issRender() {
+            var list = document.getElementById('iss-list'); if (!list) return;
+            // 담당자 옵션 채우기
+            var members = (currentData.users || []);
+            var asSel = document.getElementById('iss-filter-assignee');
+            if (asSel && asSel.options.length <= 1) {
+                asSel.innerHTML = '<option value="ALL">모든 담당자</option>' + members.map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
+            }
+            var fs = document.getElementById('iss-filter-status').value;
+            var fp = document.getElementById('iss-filter-priority').value;
+            var fa = document.getElementById('iss-filter-assignee').value;
+            var fsr = (document.getElementById('iss-search').value || '').toLowerCase();
+            var issues = (currentData.issues || []).filter(function (i) { return (i.projectId || 'default') === activeProjectId; });
+            var filtered = issues.filter(function (i) {
+                if (fs === 'open' && (i.status === 'closed' || i.status === 'wont')) return false;
+                if (fs !== 'ALL' && fs !== 'open') {
+                    if (fs === 'open-only' && i.status !== 'open') return false;
+                    if (fs !== 'open-only' && i.status !== fs) return false;
+                }
+                if (fp !== 'ALL' && i.priority !== fp) return false;
+                if (fa !== 'ALL' && i.assigneeId !== fa) return false;
+                if (fsr && (i.title || '').toLowerCase().indexOf(fsr) === -1 && (i.desc || '').toLowerCase().indexOf(fsr) === -1) return false;
+                return true;
+            });
+            // 정렬: priority desc, dueDate asc
+            var pOrder = { p0: 0, p1: 1, p2: 2, p3: 3 };
+            filtered.sort(function (a, b) {
+                var pa = pOrder[a.priority] || 9, pb = pOrder[b.priority] || 9;
+                if (pa !== pb) return pa - pb;
+                var da = a.dueDate || 'zzz', db = b.dueDate || 'zzz';
+                return da.localeCompare(db);
+            });
+            if (!filtered.length) {
+                list.innerHTML = '<div class="iss-empty">🐛 이슈가 없습니다<br><span style="font-size:12px;">＋ 새 이슈로 등록하세요</span></div>';
+                return;
+            }
+            list.innerHTML = filtered.map(function (i) {
+                var p = i.priority || 'p2';
+                var st = i.status || 'open';
+                var stLabel = { open: '📋 OPEN', progress: '🔥 진행', review: '👀 리뷰', closed: '✅ 종료', wont: '⛔ 보류' }[st] || st;
+                var asgn = (currentData.users || []).find(function (m) { return m.id === i.assigneeId; });
+                var asgnName = asgn ? (asgn.displayName || asgn.email) : '미지정';
+                var dueLabel = '';
+                if (i.dueDate) {
+                    var dd = new Date(i.dueDate); var now = new Date(); now.setHours(0, 0, 0, 0);
+                    var overdue = dd < now && st !== 'closed';
+                    dueLabel = '<span style="color:' + (overdue ? '#d2393d' : 'var(--c-text3)') + ';">📅 ' + i.dueDate + (overdue ? ' ⚠' : '') + '</span>';
+                }
+                return '<div class="iss-card priority-' + p + ' status-' + st + '" onclick="issEditIssue(\'' + i.id + '\')">' +
+                    '<span class="iss-c-priority" style="color:' + ({ p0: '#d2393d', p1: '#f97316', p2: '#d49a1c', p3: 'var(--c-text3)' }[p]) + ';">' + p.toUpperCase() + '</span>' +
+                    '<span class="iss-c-status">' + stLabel + '</span>' +
+                    '<span class="iss-c-title">' + _annEsc(i.title || '(제목 없음)') + '</span>' +
+                    '<span class="iss-c-meta">' + dueLabel + '<span>👤 ' + _annEsc(asgnName) + '</span>' + (i.target ? '<span>🎯 ' + _annEsc(i.target) + '</span>' : '') + '</span>' +
+                    '</div>';
+            }).join('');
+        }
+        function issAddIssue() {
+            issState.editingId = null;
+            document.getElementById('iss-edit-title').textContent = '새 이슈';
+            document.getElementById('iss-e-title').value = '';
+            document.getElementById('iss-e-desc').value = '';
+            document.getElementById('iss-e-priority').value = 'p2';
+            document.getElementById('iss-e-status').value = 'open';
+            document.getElementById('iss-e-due').value = '';
+            document.getElementById('iss-e-target').value = '';
+            var asgnSel = document.getElementById('iss-e-assignee');
+            asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
+            document.getElementById('iss-e-del').classList.add('hidden');
+            openModal('iss-edit-modal');
+            setTimeout(function () { document.getElementById('iss-e-title').focus(); }, 30);
+        }
+        function issEditIssue(id) {
+            var i = (currentData.issues || []).find(function (x) { return x.id === id; });
+            if (!i) return;
+            issState.editingId = id;
+            document.getElementById('iss-edit-title').textContent = '이슈 편집';
+            document.getElementById('iss-e-title').value = i.title || '';
+            document.getElementById('iss-e-desc').value = i.desc || '';
+            document.getElementById('iss-e-priority').value = i.priority || 'p2';
+            document.getElementById('iss-e-status').value = i.status || 'open';
+            document.getElementById('iss-e-due').value = i.dueDate || '';
+            document.getElementById('iss-e-target').value = i.target || '';
+            var asgnSel = document.getElementById('iss-e-assignee');
+            asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
+            asgnSel.value = i.assigneeId || '';
+            document.getElementById('iss-e-del').classList.remove('hidden');
+            openModal('iss-edit-modal');
+        }
+        async function issSaveIssue() {
+            var title = document.getElementById('iss-e-title').value.trim();
+            if (!title) { showToast('제목을 입력하세요', 'alert'); return; }
+            var iss;
+            if (issState.editingId) {
+                iss = (currentData.issues || []).find(function (x) { return x.id === issState.editingId; });
+                if (!iss) return;
+            } else {
+                iss = { id: 'iss-' + Date.now(), projectId: activeProjectId, createdAt: Date.now(), createdBy: (currentUser && currentUser.id) || null };
+                if (!currentData.issues) currentData.issues = [];
+                currentData.issues.push(iss);
+            }
+            iss.title = title;
+            iss.desc = document.getElementById('iss-e-desc').value;
+            iss.priority = document.getElementById('iss-e-priority').value;
+            iss.status = document.getElementById('iss-e-status').value;
+            iss.assigneeId = document.getElementById('iss-e-assignee').value || null;
+            iss.dueDate = document.getElementById('iss-e-due').value || null;
+            iss.target = document.getElementById('iss-e-target').value;
+            iss.updatedAt = Date.now();
+            saveData();
+            await dbUpsertIssue(iss);
+            closeModal('iss-edit-modal');
+            issRender();
+            showToast(issState.editingId ? '✅ 이슈 저장됨' : '✅ 이슈 등록됨', 'success');
+        }
+        async function issDeleteIssue() {
+            if (!issState.editingId) return;
+            if (!(await uiConfirm({ title: '이슈 삭제', message: '이 이슈를 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            var id = issState.editingId;
+            currentData.issues = (currentData.issues || []).filter(function (i) { return i.id !== id; });
+            saveData();
+            await dbDeleteIssue(id);
+            closeModal('iss-edit-modal');
+            issRender();
+        }
+        async function dbUpsertIssue(i) {
+            if (!supabaseClient) return;
+            try {
+                const { error } = await supabaseClient.from('issues').upsert({
+                    id: i.id, project_id: i.projectId, title: i.title, description: i.desc || '',
+                    priority: i.priority || 'p2', status: i.status || 'open',
+                    assignee_id: i.assigneeId || null, due_date: i.dueDate || null, target: i.target || '',
+                    created_by: i.createdBy || null,
+                    created_at: i.createdAt ? new Date(i.createdAt).toISOString() : null,
+                    updated_at: i.updatedAt ? new Date(i.updatedAt).toISOString() : null
+                });
+                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
+                    console.warn('[dbUpsertIssue] issues 테이블 없음 — SQL 필요');
+                    return;
+                }
+                if (error) console.error('[dbUpsertIssue]', error);
+            } catch (e) { console.warn('[dbUpsertIssue]', e); }
+        }
+        async function dbDeleteIssue(id) {
+            if (!supabaseClient) return;
+            try { await supabaseClient.from('issues').delete().eq('id', id); } catch (e) {}
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // [r81 #4] 버그 리포트 — 작성자 + 관리자만 열람
+        // ═══════════════════════════════════════════════════════════════════
+        var brState = { editingId: null };
+        function brRender() {
+            var list = document.getElementById('br-list'); if (!list) return;
+            var adminBanner = document.getElementById('br-admin-banner');
+            var isAdmin = isAdminUser();
+            if (adminBanner) adminBanner.style.display = isAdmin ? 'block' : 'none';
+            var meId = (currentUser && currentUser.id) || null;
+            var reports = (currentData.bugReports || []).filter(function (r) {
+                if (isAdmin) return true;
+                return r.createdBy === meId;
+            });
+            reports.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+            if (!reports.length) {
+                list.innerHTML = '<div class="br-empty">🐞 아직 리포트가 없습니다<br><span style="font-size:12px;">＋ 새 리포트로 버그·요청을 제출하세요</span></div>';
+                return;
+            }
+            list.innerHTML = reports.map(function (r) {
+                var sev = r.severity || 'medium';
+                var sevLabel = { critical: '🔴 Critical', high: '🟠 High', medium: '🟡 Medium', low: '⚪ Low', request: '💡 Request' }[sev] || sev;
+                var authorName = _dbUserName(r.createdBy) || '익명';
+                var when = r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : '';
+                return '<div class="br-card" onclick="brEditReport(\'' + r.id + '\')">' +
+                    '<div class="br-c-head"><span class="br-c-title">' + _annEsc(r.title || '(제목 없음)') + '</span><span class="br-c-sev ' + sev + '">' + sevLabel + '</span></div>' +
+                    '<div class="br-c-meta"><span>👤 ' + _annEsc(authorName) + '</span><span>🕒 ' + when + '</span>' + (r.view ? '<span>📍 ' + _annEsc(r.view) + '</span>' : '') + '</div>' +
+                    (r.desc ? '<div class="br-c-desc">' + _annEsc((r.desc || '').slice(0, 200)) + '</div>' : '') +
+                    '</div>';
+            }).join('');
+        }
+        function brAddReport() {
+            brState.editingId = null;
+            document.getElementById('br-edit-title').textContent = '버그 리포트 작성';
+            document.getElementById('br-e-title').value = '';
+            document.getElementById('br-e-desc').value = '';
+            document.getElementById('br-e-severity').value = 'medium';
+            // 자동: 현재 화면, 환경
+            document.getElementById('br-e-view').value = (currentView || '?') + ' (현재 화면)';
+            document.getElementById('br-e-env').value = (navigator.userAgent || '').slice(0, 120);
+            document.getElementById('br-e-del').classList.add('hidden');
+            openModal('br-edit-modal');
+            setTimeout(function () { document.getElementById('br-e-title').focus(); }, 30);
+        }
+        function brEditReport(id) {
+            var r = (currentData.bugReports || []).find(function (x) { return x.id === id; });
+            if (!r) return;
+            // 권한 체크
+            var meId = (currentUser && currentUser.id) || null;
+            if (r.createdBy !== meId && !isAdminUser()) { showToast('읽기 권한 없음', 'alert'); return; }
+            brState.editingId = id;
+            document.getElementById('br-edit-title').textContent = '버그 리포트';
+            document.getElementById('br-e-title').value = r.title || '';
+            document.getElementById('br-e-desc').value = r.desc || '';
+            document.getElementById('br-e-severity').value = r.severity || 'medium';
+            document.getElementById('br-e-view').value = r.view || '';
+            document.getElementById('br-e-env').value = r.env || '';
+            document.getElementById('br-e-del').classList.remove('hidden');
+            openModal('br-edit-modal');
+        }
+        async function brSaveReport() {
+            var title = document.getElementById('br-e-title').value.trim();
+            if (!title) { showToast('제목을 입력하세요', 'alert'); return; }
+            var rep;
+            if (brState.editingId) {
+                rep = (currentData.bugReports || []).find(function (x) { return x.id === brState.editingId; });
+                if (!rep) return;
+            } else {
+                rep = { id: 'br-' + Date.now(), createdAt: Date.now(), createdBy: (currentUser && currentUser.id) || null };
+                if (!currentData.bugReports) currentData.bugReports = [];
+                currentData.bugReports.push(rep);
+            }
+            rep.title = title;
+            rep.desc = document.getElementById('br-e-desc').value;
+            rep.severity = document.getElementById('br-e-severity').value;
+            rep.view = document.getElementById('br-e-view').value;
+            rep.env = document.getElementById('br-e-env').value;
+            rep.updatedAt = Date.now();
+            saveData();
+            await dbUpsertBugReport(rep);
+            closeModal('br-edit-modal');
+            brRender();
+            showToast(brState.editingId ? '✅ 리포트 저장됨' : '🐞 리포트 제출됨 — 관리자에게 전달', 'success');
+        }
+        async function brDeleteReport() {
+            if (!brState.editingId) return;
+            if (!(await uiConfirm({ title: '리포트 삭제', message: '이 리포트를 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            var id = brState.editingId;
+            currentData.bugReports = (currentData.bugReports || []).filter(function (r) { return r.id !== id; });
+            saveData();
+            await dbDeleteBugReport(id);
+            closeModal('br-edit-modal');
+            brRender();
+        }
+        async function dbUpsertBugReport(r) {
+            if (!supabaseClient) return;
+            try {
+                const { error } = await supabaseClient.from('bug_reports').upsert({
+                    id: r.id, title: r.title, description: r.desc || '',
+                    severity: r.severity || 'medium', view: r.view || '', env: r.env || '',
+                    created_by: r.createdBy || null,
+                    created_at: r.createdAt ? new Date(r.createdAt).toISOString() : null,
+                    updated_at: r.updatedAt ? new Date(r.updatedAt).toISOString() : null
+                });
+                if (error && /relation .* does not exist|42P01/i.test(error.message || '')) {
+                    console.warn('[dbUpsertBugReport] bug_reports 테이블 없음');
+                    return;
+                }
+                if (error) console.error('[dbUpsertBugReport]', error);
+            } catch (e) { console.warn('[dbUpsertBugReport]', e); }
+        }
+        async function dbDeleteBugReport(id) {
+            if (!supabaseClient) return;
+            try { await supabaseClient.from('bug_reports').delete().eq('id', id); } catch (e) {}
+        }
+
         var dbState = { editMode: false, widgets: null, recentDocs: null, loadedKey: null };
         function _dbStorageKey() {
             return 'tda_dashboard_' + (activeProjectId || 'default') + '_' + ((currentUser && currentUser.id) || 'guest');
@@ -8531,6 +9318,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r77] 대시보드 토글
             var _csDb = document.getElementById('cs-nav-dashboard'); if (_csDb) _csDb.classList.toggle('active', viewName === 'dashboard');
             var _dbvw = document.getElementById('dashboard-view'); if (_dbvw) { _dbvw.classList.toggle('hidden', viewName !== 'dashboard'); _dbvw.classList.toggle('block', viewName === 'dashboard'); }
+            // [r81] 에셋 매니저 / 이슈 트래커 / 버그 리포트 토글
+            var _csAm = document.getElementById('cs-nav-assets'); if (_csAm) _csAm.classList.toggle('active', viewName === 'assets');
+            var _amvw = document.getElementById('assets-view'); if (_amvw) { _amvw.classList.toggle('hidden', viewName !== 'assets'); _amvw.classList.toggle('block', viewName === 'assets'); }
+            var _csIs = document.getElementById('cs-nav-issues'); if (_csIs) _csIs.classList.toggle('active', viewName === 'issues');
+            var _isvw = document.getElementById('issues-view'); if (_isvw) { _isvw.classList.toggle('hidden', viewName !== 'issues'); _isvw.classList.toggle('block', viewName === 'issues'); }
+            var _csBr = document.getElementById('cs-nav-bug-report'); if (_csBr) _csBr.classList.toggle('active', viewName === 'bugReport');
+            var _brvw = document.getElementById('bugReport-view'); if (_brvw) { _brvw.classList.toggle('hidden', viewName !== 'bugReport'); _brvw.classList.toggle('block', viewName === 'bugReport'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -8669,6 +9463,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (typeof dbRender === 'function') dbRender();
                 // [r78] 대시보드 떠날 때 방문 시각 기록 → 다음 진입 시 안읽은 코멘트 갱신
                 if (typeof _dbMarkVisit === 'function') setTimeout(_dbMarkVisit, 800);
+            } else if (viewName === 'assets') {
+                // [r81 #1] 에셋 매니저
+                var _kvam = document.getElementById('kanban-view'); if (_kvam) { _kvam.classList.add('hidden'); _kvam.classList.remove('block'); }
+                var _dvam = document.getElementById('docs-view'); if (_dvam) { _dvam.classList.add('hidden'); _dvam.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                if (typeof amRender === 'function') amRender();
+            } else if (viewName === 'issues') {
+                // [r81 #2] 이슈 트래커
+                var _kvis = document.getElementById('kanban-view'); if (_kvis) { _kvis.classList.add('hidden'); _kvis.classList.remove('block'); }
+                var _dvis = document.getElementById('docs-view'); if (_dvis) { _dvis.classList.add('hidden'); _dvis.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                if (typeof issRender === 'function') issRender();
+            } else if (viewName === 'bugReport') {
+                // [r81 #4] 버그 리포트
+                var _kvbr = document.getElementById('kanban-view'); if (_kvbr) { _kvbr.classList.add('hidden'); _kvbr.classList.remove('block'); }
+                var _dvbr = document.getElementById('docs-view'); if (_dvbr) { _dvbr.classList.add('hidden'); _dvbr.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                if (typeof brRender === 'function') brRender();
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
