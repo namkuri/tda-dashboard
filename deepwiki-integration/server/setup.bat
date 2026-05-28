@@ -1,92 +1,148 @@
 @echo off
-chcp 65001 >nul
-setlocal
+REM ASCII-only output to avoid CP949/UTF-8 mojibake on Korean Windows
+setlocal EnableDelayedExpansion
 
 echo.
-echo ═══════════════════════════════════════════════════
-echo  🤖 TDA Deep Wiki 백엔드 설치
-echo ═══════════════════════════════════════════════════
+echo ============================================================
+echo  TDA Deep Wiki Backend - SETUP
+echo ============================================================
 echo.
 
-REM Python 버전 체크
+REM ---------- Step 1: Check Python ----------
 where python >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python이 설치되지 않았습니다.
-    echo         https://www.python.org/downloads/ 에서 Python 3.11+ 설치 ^(Add to PATH 체크^)
-    pause
-    exit /b 1
+    echo [FAIL] Python is not installed or not in PATH.
+    echo        Install Python 3.11 or 3.12 from https://www.python.org/downloads/
+    echo        IMPORTANT: Check "Add Python to PATH" during installation.
+    goto :error
 )
 
-python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)"
-if errorlevel 1 (
-    echo [ERROR] Python 3.11 이상이 필요합니다.
-    python --version
-    pause
-    exit /b 1
-)
-
-echo [OK] Python 버전 확인
+echo [..] Checking Python version...
 python --version
+python -c "import sys; sys.exit(0 if sys.version_info >= (3,11) and sys.version_info < (3,14) else 1)"
+if errorlevel 1 (
+    echo [FAIL] Python 3.11 or 3.12 is required ^(3.13 may have dependency issues^).
+    echo        Current version above. Install 3.11 or 3.12 from python.org.
+    goto :error
+)
+echo [OK] Python version OK
 echo.
 
-REM 가상환경 생성
-if not exist .venv (
-    echo [..] 가상환경 생성 중...
-    python -m venv .venv
-    if errorlevel 1 (
-        echo [ERROR] venv 생성 실패
-        pause
-        exit /b 1
-    )
+REM ---------- Step 2: Create venv ----------
+if exist .venv (
+    echo [..] Removing existing .venv folder ^(clean install^)...
+    rmdir /s /q .venv
 )
+echo [..] Creating virtual environment ^(.venv^)...
+python -m venv .venv
+if errorlevel 1 (
+    echo [FAIL] Failed to create virtual environment.
+    goto :error
+)
+echo [OK] .venv created
+echo.
 
-REM 가상환경 활성화 + pip 업그레이드
+REM ---------- Step 3: Activate venv ----------
 call .venv\Scripts\activate.bat
-echo [..] pip 업그레이드 중...
-python -m pip install --upgrade pip --quiet
+if errorlevel 1 (
+    echo [FAIL] Could not activate virtual environment.
+    goto :error
+)
+echo [OK] venv activated
+echo.
 
-REM 의존성 설치
-echo [..] 의존성 설치 중... ^(2~3분 소요^)
+REM ---------- Step 4: Upgrade pip ----------
+echo [..] Upgrading pip...
+python -m pip install --upgrade pip --quiet
+if errorlevel 1 (
+    echo [FAIL] pip upgrade failed.
+    goto :error
+)
+echo [OK] pip upgraded
+echo.
+
+REM ---------- Step 5: Install dependencies ----------
+echo [..] Installing dependencies ^(2-5 minutes^)...
 pip install -r requirements.txt
 if errorlevel 1 (
-    echo [ERROR] 의존성 설치 실패
-    pause
-    exit /b 1
-)
-
-REM .env 확인
-if not exist .env (
     echo.
-    echo [WARNING] .env 파일이 없습니다.
-    echo           .env.example을 복사해서 .env로 만들고 키를 입력하세요:
-    echo             copy .env.example .env
-    echo             notepad .env
-    echo.
+    echo [FAIL] Dependency installation failed.
+    echo        Common causes:
+    echo          - Network issue: try again
+    echo          - Python 3.13 incompatibility: install 3.11 or 3.12
+    echo          - Missing C++ build tools: install Visual Studio Build Tools
+    goto :error
 )
-
-REM Ollama 체크
+echo [OK] Dependencies installed
 echo.
-echo [..] Ollama 연결 확인...
-curl -s http://localhost:11434/api/tags >nul 2>&1
+
+REM ---------- Step 6: Verify uvicorn ----------
+echo [..] Verifying uvicorn installation...
+python -c "import uvicorn; print('uvicorn', uvicorn.__version__)"
 if errorlevel 1 (
-    echo [WARNING] Ollama가 실행 중이지 않습니다.
-    echo           https://ollama.com/download 설치 후 시스템 트레이에서 실행
-) else (
-    echo [OK] Ollama 연결 ^(localhost:11434^)
+    echo [FAIL] uvicorn is not importable. Setup did NOT complete correctly.
+    goto :error
+)
+echo [OK] uvicorn is importable
+echo.
+
+REM ---------- Step 7: Verify supabase ----------
+echo [..] Verifying supabase client...
+python -c "from supabase import create_client; print('supabase OK')"
+if errorlevel 1 (
+    echo [FAIL] supabase client not importable.
+    goto :error
+)
+echo [OK] supabase client OK
+echo.
+
+REM ---------- Step 8: Create repos folder ----------
+if not exist repos mkdir repos
+echo [OK] repos\ folder ready
+echo.
+
+REM ---------- Step 9: Check .env ----------
+if not exist .env (
+    echo [WARN] .env file is missing.
+    echo        1. copy .env.example .env
+    echo        2. notepad .env
+    echo        3. Fill in SUPABASE_URL and SUPABASE_SERVICE_KEY
+    echo.
 )
 
-REM repos 폴더 생성
-if not exist repos mkdir repos
+REM ---------- Step 10: Check Ollama ----------
+echo [..] Checking Ollama at localhost:11434...
+curl -s -o nul -w "%%{http_code}" http://localhost:11434/api/tags > _ollama_check.tmp 2>nul
+set /p OLLAMA_STATUS=<_ollama_check.tmp
+del _ollama_check.tmp >nul 2>&1
+if "%OLLAMA_STATUS%"=="200" (
+    echo [OK] Ollama is running
+) else (
+    echo [WARN] Ollama is not responding ^(status: %OLLAMA_STATUS%^).
+    echo        Install: https://ollama.com/download
+    echo        After install, Ollama runs automatically in system tray.
+    echo        Also run: ollama pull qwen2.5-coder:14b
+    echo                  ollama pull nomic-embed-text
+)
+echo.
 
+echo ============================================================
+echo  [DONE] Setup completed successfully
+echo ============================================================
 echo.
-echo ═══════════════════════════════════════════════════
-echo  [DONE] 설치 완료
-echo ═══════════════════════════════════════════════════
-echo.
-echo 다음 단계:
-echo   1. .env 파일이 없으면 .env.example 복사 후 키 입력
-echo   2. Ollama 모델 pull: ollama pull qwen2.5-coder:14b
-echo                        ollama pull nomic-embed-text
-echo   3. run.bat 실행
+echo Next steps:
+echo   1. If .env is missing: copy .env.example .env  and edit it
+echo   2. If Ollama warn: install Ollama + pull models
+echo   3. Run: run.bat
 echo.
 pause
+exit /b 0
+
+:error
+echo.
+echo ============================================================
+echo  [ABORT] Setup failed. Fix the issue above and rerun.
+echo ============================================================
+echo.
+pause
+exit /b 1

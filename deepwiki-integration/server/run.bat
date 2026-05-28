@@ -1,36 +1,67 @@
 @echo off
-chcp 65001 >nul
+REM ASCII-only output
 setlocal
 
 echo.
-echo ═══════════════════════════════════════════════════
-echo  🤖 TDA Deep Wiki 백엔드 시작
-echo ═══════════════════════════════════════════════════
+echo ============================================================
+echo  TDA Deep Wiki Backend - RUN
+echo ============================================================
 echo.
 
-REM 가상환경 활성화
-if not exist .venv (
-    echo ❌ 가상환경이 없습니다. setup.bat을 먼저 실행하세요.
-    pause
-    exit /b 1
+REM ---------- Check venv exists ----------
+if not exist .venv\Scripts\python.exe (
+    echo [FAIL] Virtual environment not found ^(.venv\Scripts\python.exe missing^).
+    echo        Run setup.bat first.
+    goto :error
 )
 
-call .venv\Scripts\activate.bat
-
-REM .env 체크
+REM ---------- Check .env exists ----------
 if not exist .env (
-    echo ❌ .env 파일이 없습니다.
-    echo    copy .env.example .env
-    echo    notepad .env
-    pause
-    exit /b 1
+    echo [FAIL] .env file is missing.
+    echo        1. copy .env.example .env
+    echo        2. notepad .env
+    echo        3. Fill in SUPABASE_URL and SUPABASE_SERVICE_KEY
+    goto :error
 )
 
-REM FastAPI 서버 시작 (auto-reload는 개발 시에만 — 운영은 빼는 게 좋음)
-echo 🚀 서버 시작 중...
-echo    http://localhost:8000/health 에서 상태 확인 가능
-echo    Ctrl+C로 종료
+REM ---------- Activate venv ----------
+call .venv\Scripts\activate.bat
+if errorlevel 1 (
+    echo [FAIL] Could not activate venv.
+    goto :error
+)
+
+REM ---------- Verify uvicorn ----------
+python -c "import uvicorn" 2>nul
+if errorlevel 1 (
+    echo [FAIL] uvicorn is not installed in the venv.
+    echo        The setup.bat did not complete successfully.
+    echo        Run: setup.bat   ^(it will re-create the venv^)
+    goto :error
+)
+
+REM ---------- Start server ----------
+echo [OK] venv and uvicorn ready
+echo.
+echo Server starting on http://localhost:8000
+echo Visit http://localhost:8000/health to verify
+echo Press Ctrl+C to stop
+echo.
+echo ============================================================
 echo.
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
+REM On exit
+echo.
+echo Server stopped.
 pause
+exit /b 0
+
+:error
+echo.
+echo ============================================================
+echo  [ABORT] Cannot start server. Fix the issue above.
+echo ============================================================
+echo.
+pause
+exit /b 1
