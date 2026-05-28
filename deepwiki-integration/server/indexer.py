@@ -269,8 +269,8 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
     ollama = get_ollama()
     store = get_store()
 
-    # wiki_docs 가져오기
-    q = store.client.table("wiki_docs").select("id,title,content,kind,project_id,meta")
+    # [r103] select("*")로 안전 — 스키마에 없는 컬럼은 무시
+    q = store.client.table("wiki_docs").select("*")
     if project_id:
         q = q.eq("project_id", project_id)
     res = q.execute()
@@ -340,17 +340,16 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
 async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
     """Supabase tasks → 청크 → 임베딩.
 
-    [r102] 상태·날짜·존·담당자 등 라이브 메타 정보도 content에 포함.
-    "진행중인 태스크", "마감 임박" 같은 동적 질문에 답할 수 있게.
+    [r102→r103] 라이브 메타(상태·존·담당자 등) content에 포함.
+    r103: select("*")로 모든 컬럼 안전 조회 — 스키마에 없는 컬럼은 무시.
+    실제 컬럼: dev_name(legacy), assignees(jsonb 배열), due_date,
+              is_starred, carryover_count, zone, sprint_id, etc.
     """
     ollama = get_ollama()
     store = get_store()
 
-    # [r102] 더 많은 컬럼 조회 — 상태/존/날짜/담당자
-    q = store.client.table("tasks").select(
-        "id,title,description,details,project_id,cat_id,status,zone,priority,"
-        "sprint_id,due_date,assignee_id,is_starred,carryover_count"
-    )
+    # [r103] select("*")로 안전하게 — 어떤 컬럼이 있든 에러 안 남
+    q = store.client.table("tasks").select("*")
     if project_id:
         q = q.eq("project_id", project_id)
     res = q.execute()
@@ -392,12 +391,24 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
             meta_lines.append(f"- 스프린트 ID: {t['sprint_id']}")
         if t.get("due_date"):
             meta_lines.append(f"- 마감일 (due_date): {t['due_date']}")
-        if t.get("assignee_id"):
-            meta_lines.append(f"- 담당자 ID: {t['assignee_id']}")
+        # [r103] 실제 컬럼명 — assignees(jsonb 배열), dev_name(legacy 담당자 이름)
+        assignees = t.get("assignees") or []
+        if isinstance(assignees, list) and assignees:
+            meta_lines.append(f"- 담당자 (assignees): {len(assignees)}명 ({', '.join(str(a) for a in assignees[:3])})")
+        if t.get("dev_name"):
+            meta_lines.append(f"- 개발자 이름 (dev_name): {t['dev_name']}")
+        if t.get("cat_id"):
+            meta_lines.append(f"- 카테고리 ID (cat_id): {t['cat_id']}")
+        if t.get("cat_badge"):
+            meta_lines.append(f"- 카테고리 뱃지: {t['cat_badge']}")
         if t.get("is_starred"):
             meta_lines.append("- ⭐ 별표 (starred)")
         if t.get("carryover_count"):
-            meta_lines.append(f"- 이월 횟수: {t['carryover_count']}")
+            meta_lines.append(f"- 이월 횟수 (carryoverCount): {t['carryover_count']}")
+        if t.get("bury_reason"):
+            meta_lines.append(f"- Bury 사유: {t['bury_reason']}")
+        if t.get("done_at"):
+            meta_lines.append(f"- 완료 시각: {t['done_at']}")
         meta_block = "\n".join(meta_lines)
         full_text = f"# {title}\n\n{meta_block}\n\n## 본문\n{body}"
         # [r95] 기본 템플릿 태스크 ("새로운 태스크 (New Task)" + "요약 설명을 입력하세요") 스킵
@@ -438,17 +449,16 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
 async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
     """Supabase sprints (goal/checklists + status + dates + participants) → 임베딩.
 
-    [r102] 상태(active/closed/planned)·날짜·끼어들기·참여자 등 라이브 메타도 함께.
-    "진행중인 스프린트", "끼어들기 카운트" 같은 동적 질문에 답할 수 있게.
+    [r102→r103] 라이브 메타 포함. r103: select("*")로 안전 조회.
+    실제 컬럼: status, intrusion_count, intrusion_log, carryover_from_previous,
+              milestone_criteria, start_date, end_date, closed_at, history,
+              participants, section_order, attachments, checklists.
     """
     ollama = get_ollama()
     store = get_store()
 
-    # [r102] 상태·날짜·끼어들기·참여자 컬럼 추가 조회
-    q = store.client.table("sprints").select(
-        "id,week_label,goal,checklists,project_id,status,start_date,end_date,"
-        "intrusion_count,intrusion_log,carryover_from_previous,participants,closed_at"
-    )
+    # [r103] select("*")로 안전 — 스키마에 없는 컬럼은 자동 무시
+    q = store.client.table("sprints").select("*")
     if project_id:
         q = q.eq("project_id", project_id)
     res = q.execute()
