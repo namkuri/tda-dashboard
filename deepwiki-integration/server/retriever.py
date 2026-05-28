@@ -132,29 +132,43 @@ async def retrieve(
 ) -> List[Dict[str, Any]]:
     """질문 → 임베딩 + 영문/한국어 키워드 LIKE → 병합 → 다양성 → top_k.
 
-    [r97/r101/r102] 하이브리드 검색:
-    - 임베딩 벡터 검색 (의미 매칭)
-    - 쿼리에 영문 식별자가 있으면 LIKE 정확 매칭도 병행
-    - 한국어 매핑 키도 LIKE 검색에 포함 (sprint 등 한국어 청크 잡기)
-    - LIKE 매칭은 sim +0.20 부스트로 상위 강제
-
-    [r106] source_type 다양성 보장:
-    - top_k 안에 sprint·task·wiki 각 최소 1~2개씩 강제 포함 (있다면)
-    - code 한 종류가 결과 전체를 점유하지 않도록
+    [r107] source_type별 분리 검색:
+    - 한 번에 source_types 다 합쳐서 top-N 가져오면 code(많은 청크)가 결과
+      점유해서 sprint/task 후보가 안 들어옴.
+    - sprint:8, task:10, wiki:8, code:30 으로 type별 따로 가져와 union.
+    - 다양성 쿼터가 동작할 후보 풀을 보장.
     """
     top_k = top_k or settings.TOP_K
     ollama = get_ollama()
     store = get_store()
 
-    # 1. 벡터 임베딩 검색
+    # 1. 벡터 임베딩 검색 — [r107] source_type별로 분리 호출
     embedding = await ollama.embed(query)
-    fetch_count = max(top_k * 5, 40)  # [r106] 더 많이 뽑아서 다양성 위한 후보 확보
-    vec_results = store.search(
-        query_embedding=embedding,
-        project_id=project_id,
-        source_types=source_types,
-        top_k=fetch_count,
-    )
+    requested = set(source_types) if source_types else {"code", "wiki", "sprint", "task"}
+    # type별 fetch 수 — 작은 type(sprint/task)도 top 풀에 충분히 들어가게
+    per_type_fetch = {"sprint": 8, "task": 10, "wiki": 8, "code": 30}
+    vec_results: List[Dict[str, Any]] = []
+    seen_ids = set()
+    for stype, take in per_type_fetch.items():
+        if stype not in requested:
+            continue
+        try:
+            r = store.search(
+                query_embedding=embedding,
+                project_id=project_id,
+                source_types=[stype],
+                top_k=take,
+            )
+        except Exception as e:
+            print(f"[retriever] vec search failed for type={stype}: {e}")
+            continue
+        for c in (r or []):
+            cid = c.get("id")
+            if cid in seen_ids:
+                continue
+            seen_ids.add(cid)
+            vec_results.append(c)
+    fetch_count = sum(per_type_fetch.values())  # 다음 단계 LIKE 비교용
 
     # 2. [r97] 영문 식별자 + [r102] 한국어 매핑 키 LIKE 검색
     identifiers = _extract_identifiers(query)
@@ -174,7 +188,13 @@ async def retrieve(
         return []
 
     # 4. 임계치 필터 + 폴백
-    filtered = [r for r in merged if r.get("similarity", 0) >= SIMILARITY_THRESHOLD]
+    # [r107] sprint/task 같이 적게 인덱싱된 type은 임계치 미달이라도 후보로 유지 —
+    # 다양성 쿼터가 채택할 수 있게.
+    filtered = [
+        r for r in merged
+        if r.get("similarity", 0) >= SIMILARITY_THRESHOLD
+        or r.get("source_type") in ("sprint", "task", "wiki")
+    ]
     if len(filtered) < 3:
         filtered = merged
 
