@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r76 (#1 개인 칸반 미러 카드 누락 버그: renderBoard sprint 필터가 personal 모드에서 sprintId=null 카드를 거름 → personal에선 sprint 필터 스킵 + addNewTask가 개인 카테고리에선 sprintId=null로 생성. #2 캘린더 Google Calendar 클론 풀구현: 좌측 캘린더 목록(체크박스 가시성 토글), 월/주 뷰, +새 일정 모달(시작/종료/캘린더/설명/공개), 드래그 이동, 우클릭 색상·삭제, 비공개 일정은 타인에게 "비공개" 표시, calendars/calendar_events 테이블 자동 SQL 안내. #3 HTML Storage 업로드는 r74에서 이미 동작 확인) -->
+<!-- BUILD: 2026-05-28 r77 (#1·3 사이드바 IA: 캘린더를 프로젝트 위키 밑으로 + 그래프 뷰를 저장소 최하단으로. #2 대시보드 카테고리 신설: 운영 그룹 최상위 🏠대시보드, 카테고리 프리뷰/활성 스프린트/다가오는 일정/내 할 일/결재 대기 위젯, 1~4칸 크기 조절, +위젯 추가, ✏️ 편집 모드(±/✕). 위젯 설정은 localStorage 영속. #4 캘린더 드래그/색상 변경 즉시 렌더(await 제거→백그라운드 DB 저장)로 1초 딜레이 제거. #5 일정 우클릭 메뉴는 mousedown capture 단계 등록 → calendar-view onclick stopPropagation 우회로 외부 클릭 시 즉시 닫힘) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -590,7 +590,8 @@
         #canon-history-modal.modal-open,
         #card-modal.modal-open,
         #cal-event-modal.modal-open,
-        #cal-cal-modal.modal-open {
+        #cal-cal-modal.modal-open,
+        #db-widget-modal.modal-open {
             display: flex !important;
         }
 
@@ -2586,6 +2587,55 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* [게임위키 #9] 승인(Official) 파란 체크 딱지 */
         .official-check { color: #fff; background: #2563eb; font-size: 9px; font-weight: 900; line-height: 1; border-radius: 50%; min-width: 15px; height: 15px; padding: 0 2px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: 3px; vertical-align: middle; }
 
+        /* [r77] 대시보드 — 커스터마이즈 그리드 */
+        #dashboard-view.block { display: block; }
+        .db-wrap { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+        .db-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+        .db-title { font-size: 24px; font-weight: 800; color: var(--c-text); margin: 0; flex: 1; }
+        .db-actions { display: flex; gap: 8px; }
+        .db-btn { padding: 8px 14px; background: var(--c-accent); color: #fff; border: none; border-radius: 7px; font-size: 13px; font-weight: 700; cursor: pointer; transition: filter .15s; }
+        .db-btn:hover { filter: brightness(1.08); }
+        .db-btn-toggle { padding: 8px 14px; background: transparent; color: var(--c-text); border: 1px solid var(--c-border); border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+        .db-btn-toggle:hover { background: var(--ios-fill); }
+        .db-btn-toggle.active { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+        .db-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+        .db-widget { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; padding: 14px 16px; position: relative; min-height: 200px; display: flex; flex-direction: column; transition: box-shadow .15s, transform .15s; }
+        .db-widget:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+        .db-widget.size-1 { grid-column: span 1; }
+        .db-widget.size-2 { grid-column: span 2; }
+        .db-widget.size-3 { grid-column: span 3; }
+        .db-widget.size-4 { grid-column: span 4; }
+        .db-widget-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--c-border); }
+        .db-widget-title { font-size: 14px; font-weight: 700; color: var(--c-text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .db-widget-sub { font-size: 10.5px; color: var(--c-text3); font-weight: 600; }
+        .db-widget-body { flex: 1; overflow: hidden; }
+        .db-widget-row { font-size: 12.5px; color: var(--c-text2); padding: 4px 0; display: flex; align-items: center; gap: 6px; line-height: 1.4; }
+        .db-widget-row .db-r-status { font-size: 11px; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; font-weight: 700; }
+        .db-widget-row .db-r-pending { background: var(--ios-fill2); color: var(--c-text3); }
+        .db-widget-row .db-r-progress { background: rgba(212,154,28,.16); color: #b08510; }
+        .db-widget-row .db-r-completed { background: rgba(59,122,87,.16); color: #2c6849; text-decoration: line-through; opacity: .7; }
+        .db-widget-row .db-r-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .db-widget-progress { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--c-text3); }
+        .db-widget-progress-bar { flex: 1; height: 5px; background: var(--ios-fill); border-radius: 3px; overflow: hidden; }
+        .db-widget-progress-bar > div { height: 100%; background: var(--c-accent); transition: width .3s; }
+        .db-widget-empty { font-size: 12px; color: var(--c-text3); padding: 20px 0; text-align: center; font-style: italic; }
+        .db-widget-actions { position: absolute; top: 6px; right: 6px; display: none; gap: 4px; }
+        body.db-edit .db-widget-actions { display: flex; }
+        body.db-edit .db-widget { border-style: dashed; }
+        body.db-edit .db-widget::before { content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none; }
+        .db-w-act { width: 24px; height: 24px; background: var(--c-paper); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+        .db-w-act:hover { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+        .db-w-act.danger:hover { background: #d2393d; color: #fff; border-color: #d2393d; }
+        .db-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; text-align: center; }
+        .db-empty.hidden { display: none; }
+        .db-empty-emoji { font-size: 56px; margin-bottom: 16px; }
+        .db-empty-title { font-size: 18px; font-weight: 700; color: var(--c-text); margin-bottom: 6px; }
+        .db-empty-sub { font-size: 13px; color: var(--c-text3); margin-bottom: 20px; }
+        .db-empty-cta { padding: 10px 22px; background: var(--c-accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+        .db-empty-cta:hover { filter: brightness(1.08); }
+        @media (max-width: 1024px) { .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .db-widget.size-3, .db-widget.size-4 { grid-column: span 2; } }
+        @media (max-width: 640px) { .db-grid { grid-template-columns: 1fr; } .db-widget.size-2, .db-widget.size-3, .db-widget.size-4 { grid-column: span 1; } }
+
         /* [r76] 캘린더 — Google Calendar 클론 */
         #calendar-view.block { display: block; }
         .cal-wrap { display: flex; height: calc(100vh - 60px); background: var(--c-paper); }
@@ -3016,10 +3066,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="cs-group" data-grp="ops">
                 <button class="cs-grp-head" onclick="toggleNavGroup('ops')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">운영</span></button>
                 <div class="cs-grp-items" data-grp="ops">
+                    <!-- [r77] 대시보드 최상위 + 캘린더는 프로젝트 위키 밑 -->
+                    <button class="cs-nav" data-nav="dashboard" id="cs-nav-dashboard" onclick="switchView('dashboard')" title="대시보드 (커스터마이즈 가능한 카테고리 프리뷰)"><span class="cs-ico">🏠</span><span class="cs-label">대시보드</span></button>
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
                     <button class="cs-nav active" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
-                    <button class="cs-nav" data-nav="calendar" id="cs-nav-calendar" onclick="switchView('calendar')" title="캘린더 (개인·팀·프로젝트 일정)"><span class="cs-ico">📅</span><span class="cs-label">캘린더</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
+                    <button class="cs-nav" data-nav="calendar" id="cs-nav-calendar" onclick="switchView('calendar')" title="캘린더 (개인·팀·프로젝트 일정)"><span class="cs-ico">📅</span><span class="cs-label">캘린더</span></button>
                     <button class="cs-nav" data-nav="review" id="cs-nav-review" onclick="openReviewInbox()" title="리뷰함"><span class="cs-ico">🗳</span><span class="cs-label">리뷰함</span><span class="cs-badge" id="cs-review-badge">0</span></button>
                     <button class="cs-nav" data-nav="comment" onclick="toggleCommentsSidebar()" title="코멘트"><span class="cs-ico">💬</span><span class="cs-label">코멘트</span></button>
                 </div>
@@ -3035,10 +3087,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="cs-group" data-grp="store">
                 <button class="cs-grp-head" onclick="toggleNavGroup('store')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">저장소</span></button>
                 <div class="cs-grp-items" data-grp="store">
+                    <!-- [r77] 그래프 뷰는 저장소 최하단으로 이동 -->
                     <button class="cs-nav" data-nav="drive" id="cs-nav-drive" onclick="switchView('drive')" title="공용 드라이브"><span class="cs-ico">🗂️</span><span class="cs-label">공용 드라이브</span></button>
                     <button class="cs-nav" data-nav="history" id="cs-nav-history" onclick="switchView('history')" title="히스토리 (활동 기록)"><span class="cs-ico">🗓️</span><span class="cs-label">히스토리</span></button>
-                    <button class="cs-nav" data-nav="gview" id="cs-nav-gview" onclick="switchView('gview')" title="그래프 뷰 (전역 지식 그래프)"><span class="cs-ico">🕸️</span><span class="cs-label">그래프 뷰</span></button>
                     <button class="cs-nav" data-nav="git" id="cs-nav-git" onclick="switchView('git')" title="Git"><span class="cs-ico">📦</span><span class="cs-label">Git</span></button>
+                    <button class="cs-nav" data-nav="gview" id="cs-nav-gview" onclick="switchView('gview')" title="그래프 뷰 (전역 지식 그래프)"><span class="cs-ico">🕸️</span><span class="cs-label">그래프 뷰</span></button>
                 </div>
             </div>
             <div class="cs-group" data-grp="tools">
@@ -3165,6 +3218,59 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         <!-- [r49] 히스토리(활동 기록) 페이지 -->
         <div id="history-view" class="hidden" onclick="event.stopPropagation()"></div>
+
+        <!-- [r77] 대시보드 — 커스터마이즈 가능한 카테고리 프리뷰 그리드 -->
+        <div id="dashboard-view" class="hidden" onclick="event.stopPropagation()">
+            <div class="db-wrap">
+                <header class="db-head">
+                    <h2 class="db-title">🏠 대시보드</h2>
+                    <div class="db-actions">
+                        <button class="db-btn" onclick="dbOpenAddWidget()" title="새 위젯 추가">＋ 위젯 추가</button>
+                        <button id="db-edit-btn" class="db-btn-toggle" onclick="dbToggleEditMode()" title="편집 모드(크기 조절·삭제)">✏️ 편집</button>
+                    </div>
+                </header>
+                <div id="db-grid" class="db-grid"></div>
+                <div id="db-empty" class="db-empty hidden">
+                    <div class="db-empty-emoji">🏠</div>
+                    <div class="db-empty-title">대시보드가 비어있어요</div>
+                    <div class="db-empty-sub">상단 <b>＋ 위젯 추가</b>로 카테고리 프리뷰를 배치하세요.</div>
+                    <button class="db-empty-cta" onclick="dbOpenAddWidget()">＋ 첫 위젯 추가</button>
+                </div>
+            </div>
+        </div>
+        <!-- 위젯 추가 모달 -->
+        <div id="db-widget-modal" class="hidden fixed inset-0 z-[600]" style="background:rgba(0,0,0,.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeModal('db-widget-modal')">
+            <div class="cal-modal-box" onclick="event.stopPropagation()">
+                <div class="cal-modal-head"><h3>새 위젯</h3><button onclick="closeModal('db-widget-modal')" class="cal-x">✕</button></div>
+                <div class="cal-modal-body">
+                    <label class="cal-fld"><span>위젯 종류</span>
+                        <select id="db-w-type" onchange="dbWidgetTypeChange()">
+                            <option value="category">📋 칸반 카테고리 프리뷰</option>
+                            <option value="sprint">🏃 활성 스프린트 요약</option>
+                            <option value="upcoming">📅 다가오는 일정</option>
+                            <option value="myTasks">⭐ 내 할 일</option>
+                            <option value="reviewQueue">🗳 결재 대기</option>
+                        </select>
+                    </label>
+                    <label class="cal-fld" id="db-w-cat-wrap"><span>카테고리 선택</span>
+                        <select id="db-w-cat"></select>
+                    </label>
+                    <label class="cal-fld"><span>크기</span>
+                        <select id="db-w-size">
+                            <option value="1">소 (1 칸)</option>
+                            <option value="2" selected>중 (2 칸)</option>
+                            <option value="3">대 (3 칸)</option>
+                            <option value="4">와이드 (4 칸)</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="cal-modal-foot">
+                    <div style="flex:1;"></div>
+                    <button onclick="closeModal('db-widget-modal')" class="cal-btn-cancel">취소</button>
+                    <button onclick="dbSaveWidget()" class="cal-btn-save">추가</button>
+                </div>
+            </div>
+        </div>
 
         <!-- [r76] 캘린더 — Google Calendar 클론 (월 그리드 + 캘린더 토글 사이드바 + 드래그 이동 + 우클릭) -->
         <div id="calendar-view" class="hidden" onclick="event.stopPropagation()">
@@ -5992,6 +6098,200 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             return ev;
         }
         // ═══════════════════════════════════════════════════════════════════
+        // [r77] 대시보드 — 커스터마이즈 가능한 카테고리 프리뷰 그리드
+        //   localStorage 키: tda_dashboard_{projectId}_{userId}
+        //   widgets: [{ id, type:'category'|'sprint'|'upcoming'|'myTasks'|'reviewQueue', size:1-4, catId? }]
+        // ═══════════════════════════════════════════════════════════════════
+        var dbState = { editMode: false, widgets: null };
+        function _dbStorageKey() {
+            return 'tda_dashboard_' + (activeProjectId || 'default') + '_' + ((currentUser && currentUser.id) || 'guest');
+        }
+        function _dbLoadWidgets() {
+            try {
+                var raw = localStorage.getItem(_dbStorageKey());
+                if (raw) return JSON.parse(raw);
+            } catch (e) {}
+            // 기본 위젯: 활성 스프린트 + 내 할 일
+            return [
+                { id: 'w-' + Date.now() + '-1', type: 'sprint', size: 2 },
+                { id: 'w-' + Date.now() + '-2', type: 'myTasks', size: 2 },
+                { id: 'w-' + Date.now() + '-3', type: 'upcoming', size: 2 },
+                { id: 'w-' + Date.now() + '-4', type: 'reviewQueue', size: 2 }
+            ];
+        }
+        function _dbSaveWidgets() {
+            try { localStorage.setItem(_dbStorageKey(), JSON.stringify(dbState.widgets || [])); } catch (e) {}
+        }
+        function dbRender() {
+            if (!dbState.widgets) dbState.widgets = _dbLoadWidgets();
+            var grid = document.getElementById('db-grid'); if (!grid) return;
+            var empty = document.getElementById('db-empty');
+            if (!dbState.widgets.length) {
+                grid.innerHTML = '';
+                if (empty) empty.classList.remove('hidden');
+                return;
+            }
+            if (empty) empty.classList.add('hidden');
+            grid.innerHTML = dbState.widgets.map(function (w) { return _dbRenderWidget(w); }).join('');
+        }
+        function _dbRenderWidget(w) {
+            var body = '', head = '', sub = '';
+            if (w.type === 'category') {
+                var cat = (currentData.categories || []).find(function (c) { return c.id === w.catId; });
+                if (!cat) return ''; // 카테고리 삭제된 경우 위젯도 무시
+                head = (cat.title || '카테고리') + ' <span class="db-widget-sub">· ' + (cat.subtitle || '') + '</span>';
+                var tasks = (currentData.tasks || []).filter(function (t) { return t.catId === w.catId && (t.zone || 'shelf') !== 'buried'; });
+                var done = tasks.filter(function (t) { return t.status === 'completed'; }).length;
+                var pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+                var show = tasks.slice(0, w.size * 3);
+                body = show.map(function (t) {
+                    var st = t.status === 'completed' ? 'completed' : t.status === 'progress' ? 'progress' : 'pending';
+                    var stLabel = st === 'completed' ? '✓' : st === 'progress' ? '◐' : '○';
+                    return '<div class="db-widget-row"><span class="db-r-status db-r-' + st + '">' + stLabel + '</span><span class="db-r-title">' + _annEsc(t.title || '(제목 없음)') + '</span></div>';
+                }).join('');
+                if (!show.length) body = '<div class="db-widget-empty">아직 할 일이 없습니다</div>';
+                body += '<div class="db-widget-progress"><span>' + done + '/' + tasks.length + ' 완료</span><div class="db-widget-progress-bar"><div style="width:' + pct + '%;"></div></div><span>' + pct + '%</span></div>';
+            } else if (w.type === 'sprint') {
+                var sp = (typeof getActiveSprint === 'function') ? getActiveSprint() : null;
+                head = '🏃 활성 스프린트';
+                if (sp) {
+                    sub = '<span class="db-widget-sub">· ' + _annEsc(sp.weekLabel || '') + '</span>';
+                    head = '🏃 ' + _annEsc(sp.weekLabel || '활성 스프린트');
+                    var spTasks = (currentData.tasks || []).filter(function (t) { return t.sprintId === sp.id; });
+                    var spDone = spTasks.filter(function (t) { return t.status === 'completed'; }).length;
+                    var spPct = spTasks.length ? Math.round(spDone / spTasks.length * 100) : 0;
+                    body = '<div class="db-widget-row" style="margin-bottom:6px;color:var(--c-text);"><b>목표:</b>&nbsp;' + _annEsc(sp.goal || '(목표 미설정)') + '</div>';
+                    var show = spTasks.slice(0, w.size * 2);
+                    body += show.map(function (t) {
+                        var st = t.status === 'completed' ? 'completed' : t.status === 'progress' ? 'progress' : 'pending';
+                        var stLabel = st === 'completed' ? '✓' : st === 'progress' ? '◐' : '○';
+                        return '<div class="db-widget-row"><span class="db-r-status db-r-' + st + '">' + stLabel + '</span><span class="db-r-title">' + _annEsc(t.title || '(제목 없음)') + '</span></div>';
+                    }).join('');
+                    body += '<div class="db-widget-progress"><span>' + spDone + '/' + spTasks.length + ' 완료</span><div class="db-widget-progress-bar"><div style="width:' + spPct + '%;"></div></div><span>' + spPct + '%</span></div>';
+                } else {
+                    body = '<div class="db-widget-empty">활성 스프린트가 없습니다</div>';
+                }
+            } else if (w.type === 'upcoming') {
+                head = '📅 다가오는 일정';
+                var now = Date.now();
+                var upcoming = (currentData.calEvents || [])
+                    .filter(function (ev) { return ev.start && new Date(ev.start).getTime() >= now; })
+                    .filter(function (ev) {
+                        // 본인 캘린더 + 팀 캘린더 + 현재 프로젝트 캘린더만
+                        var cal = (currentData.calendars || []).find(function (c) { return c.id === ev.calId; });
+                        if (!cal) return false;
+                        var meId = (currentUser && currentUser.id) || null;
+                        if (cal.scope === 'personal') return cal.ownerUserId === meId;
+                        if (cal.scope === 'project') return cal.projectId === activeProjectId;
+                        return true;
+                    })
+                    .sort(function (a, b) { return new Date(a.start) - new Date(b.start); })
+                    .slice(0, w.size * 3);
+                if (!upcoming.length) body = '<div class="db-widget-empty">예정된 일정이 없습니다</div>';
+                else body = upcoming.map(function (ev) {
+                    var cal = (currentData.calendars || []).find(function (c) { return c.id === ev.calId; });
+                    var color = (cal && cal.color) || '#999';
+                    var d = new Date(ev.start);
+                    var when = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes());
+                    var meId = (currentUser && currentUser.id) || null;
+                    var isPriv = (cal && cal.scope === 'personal' && cal.ownerUserId !== meId && !ev.public);
+                    return '<div class="db-widget-row" onclick="event.stopPropagation();switchView(\'calendar\')" style="cursor:pointer;"><span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span><span class="db-r-status" style="background:transparent;color:var(--c-text3);font-size:10.5px;padding:0;">' + when + '</span><span class="db-r-title">' + _annEsc(isPriv ? '비공개' : (ev.title || '(제목 없음)')) + '</span></div>';
+                }).join('');
+            } else if (w.type === 'myTasks') {
+                head = '⭐ 내 할 일';
+                var meId = (currentUser && currentUser.id) || null;
+                var myTasks = (currentData.tasks || [])
+                    .filter(function (t) { return (t.projectId || 'default') === activeProjectId && (t.zone || 'shelf') !== 'buried' && t.status !== 'completed'; })
+                    .filter(function (t) { return (t.assigneeId === meId) || (t.assignees && t.assignees.indexOf(meId) > -1) || t.isStarred; })
+                    .slice(0, w.size * 4);
+                if (!myTasks.length) body = '<div class="db-widget-empty">담당하거나 즐겨찾기한 진행 카드가 없습니다</div>';
+                else body = myTasks.map(function (t) {
+                    var st = t.status === 'progress' ? 'progress' : 'pending';
+                    var stLabel = st === 'progress' ? '◐' : '○';
+                    return '<div class="db-widget-row" onclick="event.stopPropagation();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + t.id + '\')},80)" style="cursor:pointer;"><span class="db-r-status db-r-' + st + '">' + stLabel + '</span><span class="db-r-title">' + (t.isStarred ? '⭐ ' : '') + _annEsc(t.title || '(제목 없음)') + '</span></div>';
+                }).join('');
+            } else if (w.type === 'reviewQueue') {
+                head = '🗳 결재 대기';
+                var meId2 = (currentUser && currentUser.id) || null;
+                var myReviews = (currentData.reviews || [])
+                    .filter(function (r) { return r.status === 'pending' && !r.deleted; })
+                    .filter(function (r) {
+                        // 본인이 결재자에 포함된 것
+                        var rule = r.rule || {};
+                        var voters = rule.voters || [];
+                        if (!voters.length) return r.proposerId !== meId2; // voters 없으면 전체
+                        return voters.indexOf(meId2) > -1;
+                    })
+                    .slice(0, w.size * 3);
+                if (!myReviews.length) body = '<div class="db-widget-empty">대기 중인 결재가 없습니다</div>';
+                else body = myReviews.map(function (r) {
+                    return '<div class="db-widget-row" onclick="event.stopPropagation();openReviewInbox()" style="cursor:pointer;"><span class="db-r-status" style="background:var(--ios-fill2);color:var(--c-text2);">📌</span><span class="db-r-title">' + _annEsc(r.title || r.reason || '결재 요청') + '</span></div>';
+                }).join('');
+            }
+            return '<div class="db-widget size-' + (w.size || 2) + '" data-wid="' + w.id + '">' +
+                '<div class="db-widget-actions">' +
+                '<button class="db-w-act" onclick="dbResizeWidget(\'' + w.id + '\',-1)" title="축소">−</button>' +
+                '<button class="db-w-act" onclick="dbResizeWidget(\'' + w.id + '\',1)" title="확대">+</button>' +
+                '<button class="db-w-act danger" onclick="dbDeleteWidget(\'' + w.id + '\')" title="삭제">✕</button>' +
+                '</div>' +
+                '<div class="db-widget-head"><div class="db-widget-title">' + head + '</div>' + sub + '</div>' +
+                '<div class="db-widget-body">' + body + '</div>' +
+                '</div>';
+        }
+        function dbToggleEditMode() {
+            dbState.editMode = !dbState.editMode;
+            document.body.classList.toggle('db-edit', dbState.editMode);
+            var btn = document.getElementById('db-edit-btn');
+            if (btn) { btn.classList.toggle('active', dbState.editMode); btn.innerHTML = dbState.editMode ? '✓ 완료' : '✏️ 편집'; }
+            if (typeof showToast === 'function') showToast(dbState.editMode ? '✏️ 편집 모드 — 크기 조절(±) · 삭제(✕)' : '✓ 편집 완료', 'info');
+        }
+        function dbResizeWidget(wid, delta) {
+            var w = (dbState.widgets || []).find(function (x) { return x.id === wid; });
+            if (!w) return;
+            w.size = Math.max(1, Math.min(4, (w.size || 2) + delta));
+            _dbSaveWidgets();
+            dbRender();
+        }
+        async function dbDeleteWidget(wid) {
+            if (!(await uiConfirm({ title: '위젯 삭제', message: '이 위젯을 대시보드에서 제거할까요?', confirmText: '삭제', danger: true }))) return;
+            dbState.widgets = (dbState.widgets || []).filter(function (x) { return x.id !== wid; });
+            _dbSaveWidgets();
+            dbRender();
+        }
+        function dbOpenAddWidget() {
+            // 카테고리 옵션 채우기
+            var sel = document.getElementById('db-w-cat');
+            var cats = (currentData.categories || []).filter(function (c) { return (c.projectId || 'default') === activeProjectId && !c.ownerUserId; });
+            sel.innerHTML = cats.length
+                ? cats.map(function (c) { return '<option value="' + c.id + '">' + _annEsc(c.title || '카테고리') + '</option>'; }).join('')
+                : '<option value="">(현 프로젝트에 카테고리 없음)</option>';
+            document.getElementById('db-w-type').value = 'category';
+            document.getElementById('db-w-size').value = '2';
+            dbWidgetTypeChange();
+            openModal('db-widget-modal');
+        }
+        function dbWidgetTypeChange() {
+            var t = document.getElementById('db-w-type').value;
+            var w = document.getElementById('db-w-cat-wrap');
+            if (w) w.style.display = (t === 'category') ? '' : 'none';
+        }
+        function dbSaveWidget() {
+            var type = document.getElementById('db-w-type').value;
+            var size = parseInt(document.getElementById('db-w-size').value, 10) || 2;
+            var w = { id: 'w-' + Date.now(), type: type, size: size };
+            if (type === 'category') {
+                w.catId = document.getElementById('db-w-cat').value;
+                if (!w.catId) { showToast('카테고리를 선택하세요', 'alert'); return; }
+            }
+            if (!dbState.widgets) dbState.widgets = [];
+            dbState.widgets.push(w);
+            _dbSaveWidgets();
+            closeModal('db-widget-modal');
+            dbRender();
+            showToast('✅ 위젯 추가됨', 'success');
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
         // [r76] 캘린더 (Google Calendar 클론)
         // 데이터 모델:
         //   currentData.calendars = [{ id, name, scope:'personal'|'team'|'project', projectId, ownerUserId, color, visible? }]
@@ -6321,11 +6621,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (!currentData.calEvents) currentData.calEvents = [];
                 currentData.calEvents.push(ev);
             }
+            // [r77] 즉시 렌더 + 백그라운드 DB 저장
             saveData();
-            await dbUpsertCalEvent(ev);
             closeModal('cal-event-modal');
             calRender();
             showToast(_calEditingId ? '✅ 일정 저장됨' : '✅ 일정 추가됨', 'success');
+            dbUpsertCalEvent(ev);
         }
         async function calDeleteEvent() {
             if (!_calEditingId) return;
@@ -6386,7 +6687,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function calDayDragLeave(e) {
             var day = e.currentTarget; if (day && day.classList) day.classList.remove('drag-over');
         }
-        async function calDayDrop(e, dateKey) {
+        function calDayDrop(e, dateKey) {
             e.preventDefault();
             e.stopPropagation();
             var id = calState.dragId || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
@@ -6403,10 +6704,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var diff = oldEnd - oldStart;
                 ev.end = new Date(newStart.getTime() + diff).toISOString();
             }
+            // [r77] 즉시 렌더 (DB 저장은 백그라운드 — 1초 딜레이 제거)
             saveData();
-            await dbUpsertCalEvent(ev);
             calRender();
             showToast('📅 일정 이동됨', 'info');
+            dbUpsertCalEvent(ev); // 백그라운드 fire-and-forget
         }
         // 우클릭 — 일정
         function calEvCtx(e, id) {
@@ -6434,14 +6736,29 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var y = Math.min(e.clientY, window.innerHeight - 240);
             ctx.style.left = x + 'px'; ctx.style.top = y + 'px';
             ctx.classList.remove('hidden');
+            // [r77] capture 단계로 등록 — calendar-view의 onclick stopPropagation을 우회
             setTimeout(function () {
-                document.addEventListener('click', calHideEvCtx, { once: true });
+                document.addEventListener('mousedown', _calCtxOutsideClose, true);
                 document.addEventListener('keydown', calHideEvCtx, { once: true });
                 document.addEventListener('wheel', calHideEvCtx, { once: true, passive: true });
+                window.addEventListener('blur', calHideEvCtx, { once: true });
+                window.addEventListener('resize', calHideEvCtx, { once: true });
             }, 10);
+        }
+        function _calCtxOutsideClose(e) {
+            var ctx = document.getElementById('cal-ev-ctx');
+            if (!ctx) return;
+            // 메뉴 안쪽 클릭이면 그대로 두고 onclick으로 처리되게(closeModal handler가 calHideEvCtx 호출함)
+            if (ctx.contains(e.target)) return;
+            calHideEvCtx();
         }
         function calHideEvCtx() {
             var ctx = document.getElementById('cal-ev-ctx'); if (ctx) ctx.classList.add('hidden');
+            document.removeEventListener('mousedown', _calCtxOutsideClose, true);
+            document.removeEventListener('keydown', calHideEvCtx);
+            document.removeEventListener('wheel', calHideEvCtx);
+            window.removeEventListener('blur', calHideEvCtx);
+            window.removeEventListener('resize', calHideEvCtx);
         }
         // 우클릭 — 캘린더(사이드바)
         function calCalCtx(e, calId) {
@@ -6462,15 +6779,21 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var y = Math.min(e.clientY, window.innerHeight - 240);
             ctx.style.left = x + 'px'; ctx.style.top = y + 'px';
             ctx.classList.remove('hidden');
-            setTimeout(function () { document.addEventListener('click', calHideEvCtx, { once: true }); }, 10);
+            // [r77] capture로 등록 → 외부 클릭 시 즉시 닫힘 (calendar-view onclick stopPropagation 우회)
+            setTimeout(function () {
+                document.addEventListener('mousedown', _calCtxOutsideClose, true);
+                document.addEventListener('keydown', calHideEvCtx, { once: true });
+                document.addEventListener('wheel', calHideEvCtx, { once: true, passive: true });
+            }, 10);
         }
-        async function calChangeColor(calId, color) {
+        function calChangeColor(calId, color) {
             var cal = (currentData.calendars || []).find(function (c) { return c.id === calId; });
             if (!cal) return;
             cal.color = color;
+            // [r77] 즉시 렌더 — DB 저장은 백그라운드 (UI 응답 즉시화)
             saveData();
-            await dbUpsertCalendar(cal);
             calRender();
+            dbUpsertCalendar(cal); // 백그라운드
         }
         async function calDeleteCalendar(calId) {
             if (!(await uiConfirm({ title: '캘린더 삭제', message: '이 캘린더와 해당 캘린더의 모든 일정이 삭제됩니다. 계속할까요?', confirmText: '삭제', danger: true }))) return;
@@ -7163,6 +7486,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r75] 캘린더 토글
             var _csCal = document.getElementById('cs-nav-calendar'); if (_csCal) _csCal.classList.toggle('active', viewName === 'calendar');
             var _calvw = document.getElementById('calendar-view'); if (_calvw) { _calvw.classList.toggle('hidden', viewName !== 'calendar'); _calvw.classList.toggle('block', viewName === 'calendar'); }
+            // [r77] 대시보드 토글
+            var _csDb = document.getElementById('cs-nav-dashboard'); if (_csDb) _csDb.classList.toggle('active', viewName === 'dashboard');
+            var _dbvw = document.getElementById('dashboard-view'); if (_dbvw) { _dbvw.classList.toggle('hidden', viewName !== 'dashboard'); _dbvw.classList.toggle('block', viewName === 'dashboard'); }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
             const previewBtn = document.getElementById('btn-toggle-preview');
@@ -7292,6 +7618,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gpcal = document.getElementById('gif-picker'); if (_gpcal) _gpcal.style.display = 'none';
                 if (typeof calRender === 'function') calRender();
+            } else if (viewName === 'dashboard') {
+                // [r77] 대시보드 — 커스터마이즈 위젯 그리드
+                var _kvdb = document.getElementById('kanban-view'); if (_kvdb) { _kvdb.classList.add('hidden'); _kvdb.classList.remove('block'); }
+                var _dvdb = document.getElementById('docs-view'); if (_dvdb) { _dvdb.classList.add('hidden'); _dvdb.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpdb = document.getElementById('gif-picker'); if (_gpdb) _gpdb.style.display = 'none';
+                if (typeof dbRender === 'function') dbRender();
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
