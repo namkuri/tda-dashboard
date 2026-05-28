@@ -9,8 +9,11 @@ from config import settings
 # [r93→r94] 유사도 임계치 — nomic-embed-text는 cosine sim이 보통 0.2~0.7 범위.
 SIMILARITY_THRESHOLD = 0.10
 
-# [r96] 같은 source_id에서 가져올 최대 청크 수 — 한 큰 파일이 결과 전체를 점유하는 문제 해결.
-MAX_CHUNKS_PER_SOURCE = 2
+# [r96→r100] 같은 source_id에서 가져올 최대 청크 수.
+# r96에 2로 시작했으나 public/index.html(1777청크) 같은 큰 파일에서 2개만 뽑히면
+# 핵심 부분(dbUpsertCategory 등)이 결과에 못 들어가는 문제. r100에 4로 완화.
+# 한 파일이 결과를 점유해도 8/10 = 40%까지만 허용 → 여전히 다른 파일 6개 들어감.
+MAX_CHUNKS_PER_SOURCE = 4
 
 # [r97] 하이브리드 검색 — 쿼리에서 영문 식별자 패턴 추출용 정규식
 # camelCase(dbUpsertCategory), snake_case(kanban_categories), PascalCase(MyClass),

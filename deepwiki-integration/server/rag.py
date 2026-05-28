@@ -58,44 +58,58 @@ def _retrieval_meta(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _enforce_user_message(user_content: str, chunks: List[Dict[str, Any]]) -> str:
-    """[r97] 마지막 user message 앞에 강제 지침을 prefix로 끼워넣음.
+    """[r97→r100] 마지막 user message 앞에 강제 지침을 prefix로 끼워넣음.
 
-    Qwen 2.5 Coder는 system prompt를 약하게 따르고 user message는 강하게 따르는 특성.
-    "절대 일반 상식 답변 금지"를 user 쪽으로 옮겨서 LLM이 무시 못하게.
+    r97는 너무 엄격했음 — 사용자 질문 키워드의 "정확한 텍스트"가 청크에 없으면
+    LLM이 정형 응답으로 빠짐. r100에서 완화: 함수명·테이블명·필드명 같은 단서가
+    있으면 그것을 활용해 추론 답변 허용. 단 컨텍스트 외 상식은 여전히 금지.
     """
     src_list = []
     seen_sources = set()
-    for c in chunks[:5]:
+    for c in chunks[:6]:
         sid = c.get("source_id") or "?"
         if sid in seen_sources:
             continue
         seen_sources.add(sid)
         src_list.append(f"`{sid}`")
-    src_str = ", ".join(src_list) if src_list else "(없음)"
     prefix = f"""[엄격 지시 — 이 지시 위반 답변은 사용자가 거부합니다]
 
-위에 첨부된 「검색된 컨텍스트」 청크들의 본문 텍스트만 사용해서 답하세요.
+당신의 답변은 위에 첨부된 「검색된 컨텍스트」 청크의 본문에 근거해야 합니다.
 
-금지 사항:
+## 적극적으로 활용할 단서 (있으면 반드시 인용)
+- 컨텍스트 청크 안의 **함수명·메서드명** (예: `dbUpsertCategory`, `renderBoard`)
+- 청크 안의 **테이블명·컬럼명** (예: `kanban_categories`, `sprint_id`, `zone`)
+- 청크 안의 **상수/필드명** (예: `Shelf`, `Now`, `Buried`, `intrusionCount`)
+- 청크 안의 **타입 정의/스키마 단편** (예: `payload = {{ id, project_id, ... }}`)
+
+이런 단서가 청크에 있으면, 사용자 질문의 정확한 단어가 없더라도 그 단서를 묶어 답하세요.
+예: 컨텍스트에 `dbUpsertCategory`와 `kanban_categories` 가 보이면, 그것이 곧 "칸반 데이터 모델"의 일부이므로 인용·요약해서 답.
+
+## 절대 금지
 - "일반적으로 …는 …합니다" 형태의 일반 상식 답변
 - "추정으로는…", "보통 …는 …" 같은 일반화 표현
-- 컨텍스트에 없는 코드 예시(예: `CREATE TABLE tasks (...)` 처럼 모델 사전지식으로 만든 SQL)
-- "To Do", "In Progress", "Completed" 같은 일반 칸반 용어로 답하는 것 (이 프로젝트는 Now/Shelf/Buried 사용)
+- 컨텍스트에 없는 가상 SQL 예시 (예: `CREATE TABLE tasks (id INT, ...)` 같은 사전지식 기반 코드)
+- 일반 칸반 용어("To Do", "In Progress", "Completed") — 이 프로젝트는 Now/Shelf/Buried 사용
+- 컨텍스트에 등장하지 않은 컬럼명·함수명 만들어내기
 
-답변 절차:
-1) 컨텍스트 청크들을 훑어보고 사용자 질문 키워드와 직접 일치하는 부분을 찾습니다.
-2) 일치하는 부분이 있으면 그 텍스트를 짧게 발췌(```코드 블록 또는 인용)하고 `[N]`으로 출처 표시.
-3) 일치하는 부분이 없거나 부족하면 정확히 다음 형식으로 답하세요:
+## 답변 절차
+
+1) 컨텍스트 청크들을 한 번 훑어 사용자 질문과 관련된 **단서**를 모두 모읍니다.
+2) 단서 1개 이상 있으면 → 그것을 묶어서 답변. 짧은 코드 발췌(```언어 블록)와 `[N]` 출처 인용.
+3) 단서가 전혀 없거나 청크들이 모두 무관한 내용이면 → 다음 정형 응답:
 
 ```
-인덱스에서 「<질문 키워드>」에 대한 직접 정보를 찾지 못했습니다.
+인덱스에서 「<질문 키워드>」에 대한 정보를 찾지 못했습니다.
 
-검색된 컨텍스트의 출처 파일들:
+관련 가능성 있는 파일 (직접 확인 권장):
 - {src_list[0] if src_list else '(없음)'}
-- ...
 
-해당 파일을 직접 열어 확인하거나, 더 구체적인 키워드(예: 함수명·테이블명 원문)로 다시 질문해 주세요.
+더 구체적인 키워드(예: 함수명·테이블명 원문)로 다시 질문해 주세요.
 ```
+
+**중요**: 정형 응답은 정말로 단서가 0개일 때만. 단서가 있는데도 정형 응답을 선택하면 위반.
+
+마지막 줄에 "참조: [1] <path>, [2] <path>" 형태로 출처 요약.
 
 이제 다음 질문에 답하세요:
 

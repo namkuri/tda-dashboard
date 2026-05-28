@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     # 인덱싱
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50
-    TOP_K: int = 8
+    # [r100] top-K 8→10 — 다양성 dedup(MAX_CHUNKS_PER_SOURCE=4) 강화에 맞춤
+    TOP_K: int = 10
     GIT_CLONE_DIR: str = "./repos"
     # [r98] 500KB → 4MB 상향 — public/index.html 같은 단일 거대 파일(1.84MB)을
     # 인덱싱 대상에 포함하기 위함. .env에서 오버라이드 가능.
