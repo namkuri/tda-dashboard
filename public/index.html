@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r96 (Deep Wiki 검색 품질 3건: r95 후 진단 결과 — ① 같은 큰 파일(60K토큰 보고서)이 top-10을 7개 점유하는 다양성 결핍 ② public/index.html 같은 거대 단일 파일이 \n\n\n 폴백으로 균등 토큰 분할되어 dbUpsertCategory 같은 식별자 매칭 약함 ③ LLM이 컨텍스트 무시하고 "추정으로는 일반적으로..."로 일반 상식 답변. 수정: A. chunker.py — function/async function/class/def/## 마크다운 헤더/대형 주석 헤더 시그니처 기반 의미 분할(_split_by_signatures). 검증: 6개 함수 → 6개 청크 깔끔 분리. B. retriever.py — _dedup_by_source: source_id별 청크 최대 2개. top_k×3 가져와서 dedup 후 top_k 자르기. C. rag.py — 시스템 프롬프트 전면 재작성: 일반 상식 답변 절대 금지, 컨텍스트 청크 직접 인용 강제, 정보 없으면 "관련 파일: [경로]를 직접 열어보세요"로 정형 답변) -->
+<!-- BUILD: 2026-05-28 r97 (Deep Wiki RAG 품질 4건: r96 후 진단 — ① public/index.html이 결과에서 사라짐(영문 식별자 검색이 한국어 짧은 텍스트 false-positive에 밀림) ② LLM이 system 무시하고 "추정으로는…" 일반 상식 답변 ③ 사용자가 인덱싱 상태 확인 어려움. 수정: A. retriever.py — 하이브리드 검색(_extract_identifiers + _like_search): camelCase/snake_case/PascalCase 영문 식별자 자동 추출, ilike '%ident%' 정확 매칭 결과를 sim +0.20 부스트로 임베딩과 병합. STOPWORDS로 일반 영단어 제외. B. rag.py — _enforce_user_message: 마지막 user message 앞에 강제 지침 prefix("일반 상식 답변 금지, 컨텍스트 외 답변 거부"). Qwen이 system은 약하게/user는 강하게 따르는 특성 활용. C. rag.py — 컨텍스트 품질 게이트: 평균 sim<0.40 AND 최대 sim<0.50 이면 LLM 호출 우회하고 직접 "인덱스 약함 + 관련 파일 리스트" 정형 응답. D. /health?verbose=true — supabase_store.top_sources: source_id별 청크 수 상위 15개 진단 정보 노출, public/index.html 등 인덱싱 상태 즉시 확인) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">

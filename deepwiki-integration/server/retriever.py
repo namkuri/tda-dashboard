@@ -1,4 +1,5 @@
-"""Retriever — 질문 임베딩 + pgvector top-k 검색."""
+"""Retriever — 질문 임베딩 + pgvector top-k 검색 + 영문 식별자 LIKE 보강."""
+import re
 from typing import List, Optional, Dict, Any
 from ollama_client import get_ollama
 from supabase_store import get_store
@@ -6,13 +7,37 @@ from config import settings
 
 
 # [r93→r94] 유사도 임계치 — nomic-embed-text는 cosine sim이 보통 0.2~0.7 범위.
-# 짧은 한국어 질문 → 긴 영문 코드 청크 사이 유사도가 낮게 측정되는 경향.
-# r93에 0.15로 완화, r94에 0.10으로 추가 완화 + "필터링 후 적으면 폴백" 로직 유지.
 SIMILARITY_THRESHOLD = 0.10
 
 # [r96] 같은 source_id에서 가져올 최대 청크 수 — 한 큰 파일이 결과 전체를 점유하는 문제 해결.
-# 예: 60K 토큰 보고서 1개 파일이 top-10을 7개 채워서 다른 파일이 안 보이는 현상 방지.
 MAX_CHUNKS_PER_SOURCE = 2
+
+# [r97] 하이브리드 검색 — 쿼리에서 영문 식별자 패턴 추출용 정규식
+# camelCase(dbUpsertCategory), snake_case(kanban_categories), PascalCase(MyClass),
+# CONSTANT_CASE(SIMILARITY_THRESHOLD) 모두 포함. 최소 4자 이상.
+_IDENTIFIER_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9_]{3,}\b")
+# 무시할 일반 영단어 (한국어 쿼리에 섞일 수 있는 짧은 영문)
+_STOPWORDS = {"this", "that", "with", "from", "have", "what", "when", "where", "which", "would", "could",
+              "should", "about", "into", "data", "code", "file", "function", "class", "type", "name",
+              "task", "tasks", "user", "users", "true", "false", "null", "none", "self", "table"}
+# LIKE 검색 시 임베딩 sim에 더해줄 보너스 (LIKE 매칭은 정확하므로 강한 부스트)
+_LIKE_BOOST = 0.20
+
+
+def _extract_identifiers(query: str) -> List[str]:
+    """쿼리에서 영문 식별자 추출 (camelCase/snake_case/PascalCase, 4자+, stopwords 제외)."""
+    matches = _IDENTIFIER_RE.findall(query or "")
+    seen = set()
+    out = []
+    for m in matches:
+        lower = m.lower()
+        if lower in _STOPWORDS:
+            continue
+        if m in seen:
+            continue
+        seen.add(m)
+        out.append(m)
+    return out
 
 
 async def retrieve(
@@ -21,47 +46,130 @@ async def retrieve(
     source_types: Optional[List[str]] = None,
     top_k: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """질문 → 임베딩 → 유사도 검색 → 다양성 dedup.
+    """질문 → 임베딩 + 영문 식별자 LIKE → 병합 → 다양성 dedup.
 
-    Returns: 상위 K개 청크 [{source_type, source_id, source_title, content, similarity}, ...]
-
-    1) 임계치 이상 결과만 필터
-    2) source_id별 최대 N개 청크만 유지 (다양성)
-    3) 결과가 너무 적으면 임계치 무시 폴백
+    [r97] 하이브리드 검색:
+    - 임베딩 벡터 검색 (의미 매칭)
+    - 쿼리에 영문 식별자가 있으면 LIKE 정확 매칭도 병행
+    - LIKE 매칭은 sim +0.20 부스트로 상위 강제
     """
     top_k = top_k or settings.TOP_K
     ollama = get_ollama()
     store = get_store()
+
+    # 1. 벡터 임베딩 검색
     embedding = await ollama.embed(query)
-    # [r96] dedup 위해 더 많이 가져온 뒤 줄임 — top_k × 3
     fetch_count = max(top_k * 3, 24)
-    results = store.search(
+    vec_results = store.search(
         query_embedding=embedding,
         project_id=project_id,
         source_types=source_types,
         top_k=fetch_count,
     )
-    if not results:
+
+    # 2. [r97] 영문 식별자 LIKE 검색 — 정확 키워드 매칭 보강
+    identifiers = _extract_identifiers(query)
+    like_results = []
+    if identifiers:
+        like_results = _like_search(
+            store=store,
+            identifiers=identifiers,
+            project_id=project_id,
+            source_types=source_types,
+            limit=fetch_count,
+        )
+
+    # 3. 병합 — like_results는 sim에 _LIKE_BOOST 적용, 중복은 max(sim)
+    merged = _merge_results(vec_results, like_results)
+
+    if not merged:
         return []
 
-    # 1차: 임계치 필터
-    filtered = [r for r in results if r.get("similarity", 0) >= SIMILARITY_THRESHOLD]
-    # 폴백: 너무 적으면 원본 상위 전부
+    # 4. 임계치 필터 + 폴백
+    filtered = [r for r in merged if r.get("similarity", 0) >= SIMILARITY_THRESHOLD]
     if len(filtered) < 3:
-        filtered = results
+        filtered = merged
 
-    # 2차: source_id별 최대 N개 청크만 유지 (다양성)
+    # 5. source_id별 dedup
     diversified = _dedup_by_source(filtered, max_per_source=MAX_CHUNKS_PER_SOURCE)
 
-    # 3차: 최종 top_k 자르기
+    # 6. 최종 top_k
     return diversified[:top_k]
 
 
-def _dedup_by_source(chunks: List[Dict[str, Any]], max_per_source: int = 2) -> List[Dict[str, Any]]:
-    """[r96] 같은 source_id의 청크를 max_per_source개까지만 유지.
+def _like_search(
+    store,
+    identifiers: List[str],
+    project_id: Optional[str],
+    source_types: Optional[List[str]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """[r97] doc_chunks.content에 식별자가 정확히 들어간 청크를 LIKE로 검색.
 
-    입력 순서(유사도 내림차순)를 보존 — 각 source의 최상위 청크들이 살아남음.
+    각 식별자에 대해 ilike '%ident%' 매칭. 결과를 식별자별로 모은 뒤 중복 제거.
+    similarity는 LIKE 매칭이므로 0.5(보수적 기본값)에 부스트 합산 — _merge_results에서 처리.
     """
+    out_by_id: Dict[str, Dict[str, Any]] = {}
+    for ident in identifiers[:5]:  # 식별자 최대 5개까지만 — 폭주 방지
+        try:
+            q = store.client.table("doc_chunks").select(
+                "id,project_id,source_type,source_id,source_path,source_title,content,token_count"
+            )
+            if project_id:
+                q = q.eq("project_id", project_id)
+            if source_types:
+                q = q.in_("source_type", source_types)
+            # PostgREST의 ilike — content 내 식별자 포함
+            q = q.ilike("content", f"%{ident}%").limit(limit)
+            res = q.execute()
+            for row in (res.data or []):
+                cid = row["id"]
+                if cid in out_by_id:
+                    continue
+                # LIKE 매칭 청크는 sim 기본값을 0.5로 설정 (의미 매칭과 비교 가능하게)
+                # 추후 _merge_results에서 부스트 적용
+                row["similarity"] = 0.50
+                row["_match_kind"] = "like"
+                row["_match_ident"] = ident
+                out_by_id[cid] = row
+        except Exception as e:
+            # LIKE 실패는 치명적 아님 — 임베딩 결과만으로 진행
+            print(f"[retriever] LIKE search failed for '{ident}': {e}")
+    return list(out_by_id.values())
+
+
+def _merge_results(
+    vec_results: List[Dict[str, Any]],
+    like_results: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """[r97] 벡터 검색 결과 + LIKE 검색 결과 병합.
+
+    같은 청크 id가 양쪽에 있으면 sim = max(vec_sim + LIKE_BOOST, like_default).
+    LIKE 매칭만 있는 청크는 sim 0.50 + LIKE_BOOST = 0.70.
+    벡터 매칭만 있는 청크는 그대로.
+    """
+    by_id: Dict[Any, Dict[str, Any]] = {}
+    for r in vec_results:
+        by_id[r["id"]] = dict(r)
+    for r in like_results:
+        cid = r["id"]
+        if cid in by_id:
+            # 양쪽 매칭 — 벡터 sim에 부스트 추가
+            existing = by_id[cid]
+            existing["similarity"] = min(1.0, existing.get("similarity", 0) + _LIKE_BOOST)
+            existing["_match_kind"] = "vec+like"
+            existing["_match_ident"] = r.get("_match_ident")
+        else:
+            # LIKE만 매칭 — 기본 sim에 부스트
+            rr = dict(r)
+            rr["similarity"] = min(1.0, rr.get("similarity", 0.50) + _LIKE_BOOST)
+            by_id[cid] = rr
+    # 유사도 내림차순 정렬
+    return sorted(by_id.values(), key=lambda x: x.get("similarity", 0), reverse=True)
+
+
+def _dedup_by_source(chunks: List[Dict[str, Any]], max_per_source: int = 2) -> List[Dict[str, Any]]:
+    """[r96] 같은 source_id의 청크를 max_per_source개까지만 유지."""
     counts: Dict[str, int] = {}
     out: List[Dict[str, Any]] = []
     for c in chunks:

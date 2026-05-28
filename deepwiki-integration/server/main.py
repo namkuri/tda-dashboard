@@ -63,15 +63,19 @@ class IndexWikiRequest(BaseModel):
 # ─────────────────────────────────────────────
 
 @app.get("/health")
-async def health():
-    """서버 + 의존 서비스 상태."""
+async def health(verbose: bool = False):
+    """서버 + 의존 서비스 상태.
+
+    [r97] ?verbose=true 시 source_id별 청크 수 상위 15개 진단 정보 포함.
+    public/index.html 같은 파일이 인덱싱 됐는지 즉시 확인 가능.
+    """
     ollama = get_ollama()
     store = get_store()
     ollama_ok = await ollama.ping()
     models = await ollama.list_models() if ollama_ok else []
     supabase_ok = store.ping()
     stats = store.stats() if supabase_ok else {}
-    return {
+    out = {
         "status": "ok" if (ollama_ok and supabase_ok) else "degraded",
         "model": settings.LLM_MODEL,
         "embed_model": settings.EMBED_MODEL,
@@ -81,6 +85,9 @@ async def health():
         "chunks": stats,
         "uptime_sec": int(time.time() - START_TIME),
     }
+    if verbose and supabase_ok:
+        out["top_sources"] = store.top_sources(limit=15)
+    return out
 
 
 @app.post("/chat")

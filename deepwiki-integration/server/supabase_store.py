@@ -81,6 +81,40 @@ class SupabaseStore:
             except Exception:
                 return {"error": "doc_chunks 테이블 없음 — SQL 마이그레이션 미실행"}
 
+    def top_sources(self, limit: int = 15) -> List[Dict[str, Any]]:
+        """[r97] source_id별 청크 수 상위 N개 — 진단용.
+
+        public/index.html 같은 큰 파일이 인덱싱 됐는지 즉시 확인할 수 있게.
+        """
+        try:
+            # 단순 카운트 — Python 측 집계 (pagination으로 모두 가져옴)
+            from collections import Counter
+            counter = Counter()
+            page = 0
+            page_size = 1000
+            while True:
+                res = (
+                    self.client.table("doc_chunks")
+                    .select("source_type,source_id")
+                    .range(page * page_size, (page + 1) * page_size - 1)
+                    .execute()
+                )
+                rows = res.data or []
+                if not rows:
+                    break
+                for r in rows:
+                    counter[(r.get("source_type") or "?", r.get("source_id") or "?")] += 1
+                if len(rows) < page_size:
+                    break
+                page += 1
+            top = counter.most_common(limit)
+            return [
+                {"source_type": st, "source_id": sid, "chunks": n}
+                for (st, sid), n in top
+            ]
+        except Exception as e:
+            return [{"error": str(e)}]
+
     def ping(self) -> bool:
         """연결 확인."""
         try:
