@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r107 (source_type별 분리 검색 — 진짜 sprint/task 청크 후보 풀에 보장: r106 다양성 쿼터를 추가했지만 사용자 진단에서 검색 결과 여전히 sprint/task 0개. 원인: store.search가 모든 type 합쳐서 top-50 가져왔는데 public/index.html 1778청크가 sim 0.65+로 풀을 점유, sprint 2청크·task 4청크가 후보 풀에서 밀려남. 다양성 쿼터는 후보 풀에 있어야 동작. 수정: retriever.py 벡터 검색을 source_type별로 분리 — sprint:8, task:10, wiki:8, code:30 따로 fetch한 뒤 union. type별 fan-out으로 작은 type도 후보 풀 확보. 추가로 sprint/task/wiki는 임계치 미달이라도 다양성 쿼터에 도달할 때까지 후보 유지) -->
+<!-- BUILD: 2026-05-28 r108 (Tool Use 패러다임 전환 — 진짜 Agentic RAG: r93~r107 14라운드 동안 단순 RAG 안에서 라이브 데이터 질문("진행중인 스프린트") 풀려고 휴리스틱·매핑 사전·임계치 조정만 했는데 본질 한계. 임베딩 의미공간과 실제 DB 스냅샷이 다른 차원이라 검색으로 안 잡힘. 해결: LLM이 능동적으로 도구(get_active_sprint, list_tasks, search_vector) 호출하는 Agentic 패턴. ① tools.py — Supabase 직접 조회 도구 3개 + OpenAI 호환 스키마 ② ollama_client.py chat_with_tools — Qwen tool_calls 지원 ③ agent.py — 도구 호출 루프(최대 5라운드) + 새 시스템 프롬프트, 도구 결과를 tool 메시지로 LLM에 재첨부 ④ main.py /chat을 agent.run으로 연결, legacy RAG는 model="legacy"로 호환 유지. 이제 사용자 "진행중인 스프린트" → LLM이 get_active_sprint(project_id) 직접 호출 → DB에서 W22 가져옴 → 실제 메타로 답변) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">

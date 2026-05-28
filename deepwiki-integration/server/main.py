@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from config import settings
 from ollama_client import get_ollama
 from supabase_store import get_store
-from rag import chat_stream
+from rag import chat_stream as legacy_chat_stream  # [r108] 폴백용
+from agent import run as agent_run  # [r108] Tool Use 에이전트
 from retriever import retrieve, SIMILARITY_THRESHOLD
 from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints, _is_empty_template_chunk
 
@@ -96,18 +97,24 @@ async def chat(req: ChatRequest):
     if not req.messages:
         raise HTTPException(400, "messages가 비어있습니다")
 
+    # [r108] 기본은 Agentic Tool-Use 에이전트. 'legacy' 모델 명시 시 옛 RAG.
+    use_agent = (req.model or "").lower() != "legacy"
+    chat_fn = agent_run if use_agent else legacy_chat_stream
+
     if req.stream:
         async def gen():
             try:
-                async for event in chat_stream(
+                async for event in chat_fn(
                     messages=[m.model_dump() for m in req.messages],
                     project_id=req.project_id,
-                    model=req.model,
+                    model=req.model if not use_agent or req.model != "legacy" else None,
                     include_tasks=req.include_tasks,
                 ):
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             except Exception as e:
-                yield f"data: {json.dumps({'delta': f'❌ 오류: {e}'}, ensure_ascii=False)}\n\n"
+                import traceback
+                tb = traceback.format_exc().splitlines()[-3:]
+                yield f"data: {json.dumps({'delta': f'❌ 오류: {e}', 'trace': tb}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(gen(), media_type="text/event-stream")
@@ -115,11 +122,11 @@ async def chat(req: ChatRequest):
         # 비스트리밍: 전체 응답을 모아서 한 번에
         content = ""
         sources = []
-        meta = None  # [r94] 검색 진단 메타
-        async for event in chat_stream(
+        meta = None
+        async for event in chat_fn(
             messages=[m.model_dump() for m in req.messages],
             project_id=req.project_id,
-            model=req.model,
+            model=req.model if not use_agent or req.model != "legacy" else None,
             include_tasks=req.include_tasks,
         ):
             if "delta" in event:

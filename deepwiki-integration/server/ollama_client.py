@@ -62,7 +62,7 @@ class OllamaClient:
         model: str = None,
         temperature: float = 0.3,
     ) -> AsyncIterator[str]:
-        """LLM 채팅 스트리밍.
+        """LLM 채팅 스트리밍 (텍스트 전용).
 
         messages: [{"role": "system|user|assistant", "content": "..."}]
         yields: 응답 텍스트 청크 (delta only).
@@ -76,7 +76,7 @@ class OllamaClient:
                 "messages": messages,
                 "stream": True,
                 "options": {"temperature": temperature, "num_ctx": 8192},
-                "keep_alive": "30m",  # 모델 메모리 상주
+                "keep_alive": "30m",
             },
         ) as response:
             response.raise_for_status()
@@ -94,6 +94,58 @@ class OllamaClient:
                 content = msg.get("content", "")
                 if content:
                     yield content
+
+    async def chat_with_tools(
+        self,
+        messages: List[dict],
+        tools: List[dict],
+        model: str = None,
+        temperature: float = 0.2,
+    ) -> dict:
+        """[r108] Tool calling 지원 1회 호출 (비스트리밍).
+
+        Returns: { "role": "assistant", "content": "...", "tool_calls": [...] }
+            tool_calls 가 있으면 호출자는 실행 후 새 message로 다시 chat_with_tools 호출.
+            tool_calls 가 비어있으면 content 가 최종 답변.
+
+        Ollama API spec: https://github.com/ollama/ollama/blob/main/docs/api.md
+        Qwen 2.5 Coder는 OpenAI 호환 tool_calls 지원.
+        """
+        import json
+        model = model or settings.LLM_MODEL
+        r = await self.client.post(
+            f"{self.base_url}/api/chat",
+            json={
+                "model": model,
+                "messages": messages,
+                "tools": tools,
+                "stream": False,
+                "options": {"temperature": temperature, "num_ctx": 8192},
+                "keep_alive": "30m",
+            },
+            timeout=180.0,
+        )
+        r.raise_for_status()
+        data = r.json()
+        msg = data.get("message", {}) or {}
+        return {
+            "role": msg.get("role", "assistant"),
+            "content": msg.get("content", "") or "",
+            "tool_calls": msg.get("tool_calls", []) or [],
+        }
+
+    async def chat_stream_final(
+        self,
+        messages: List[dict],
+        model: str = None,
+        temperature: float = 0.2,
+    ) -> AsyncIterator[str]:
+        """[r108] 도구 호출 루프 마지막 단계 — 최종 답변 스트리밍.
+
+        도구 호출 없는 일반 chat과 동일하지만 의미적으로 구분.
+        """
+        async for d in self.chat_stream(messages, model=model, temperature=temperature):
+            yield d
 
 
 # 싱글톤 (FastAPI 의존성으로 주입)
