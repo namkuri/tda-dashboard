@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r109 (Tool Use fallback — Qwen content JSON 파싱: r108 직후 사용자 테스트에서 LLM이 도구 호출 결정은 정확히 했지만(`{"name":"get_active_sprint","arguments":{"project_id":"..."}}`) Ollama가 message.tool_calls 필드 대신 message.content에 JSON 텍스트로 반환. agent.py가 tool_calls만 보니까 파싱 실패하고 JSON 그대로 출력. 수정: ollama_client.py에 _parse_tool_calls_from_content fallback 추가 — content에서 raw JSON / ```json 블록 / <tool_call> 태그 / 배열 형태 모두 추출해 OpenAI tool_calls 형식으로 변환. tool_calls 필드 비어있을 때만 fallback 동작. 검증: 사용자 실제 케이스 포함 5케이스 모두 정확히 파싱) -->
+<!-- BUILD: 2026-05-28 r110 (Tool Use 결과 가독성 — UUID→이름·마크다운 강제: r109 후 W22 스프린트 데이터로 답변 성공, 그러나 두 가지 문제. ① 참가자/담당자가 raw UUID로 출력(9e02df00-abb4-...) — Supabase users 테이블 join 안 함. ② plain text 단락 나열, 마크다운/표 사용 안 함. 수정: A. tools.py — _resolve_users(users 테이블 IN 쿼리로 user_id→{id,name,email} 매핑), _resolve_categories(cat_id→{id,title}), _enrich_card 헬퍼. get_active_sprint/list_tasks 결과의 assignees/participants UUID 배열을 객체 배열로 변환, cat_id도 category 객체로. B. agent.py SYSTEM_PROMPT — 마크다운 형식 가이드 추가: ## 헤더, 표(파이프 문법), 상태/Zone/P 이모지(✅🔥⏳/📌📦🗑/🔴🟡🔵), 굵게/인라인코드/인용 활용 강제. raw UUID 출력 금지, assignees는 name만. 좋은 답변 예시 직접 제공해 LLM이 패턴 학습) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">

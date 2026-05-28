@@ -1,18 +1,66 @@
-"""[r108] Tool Use 도구 정의 + 실행기.
+"""[r108→r110] Tool Use 도구 정의 + 실행기.
 
 LLM이 사용자 질문을 분석해 어떤 도구를 호출할지 결정한다.
 각 도구는 Supabase에서 직접 데이터를 조회하거나, 기존 벡터 검색을 호출.
 
-기존 단순 RAG의 한계:
-- 라이브 상태 질문("진행중인 스프린트")을 벡터 검색으로 풀려고 시도
-- 사용자가 만든 실제 데이터(W22 sprint object)와 검색 청크는 의미 공간이 다름
-
-해결: 라이브 데이터는 DB 직접 조회, 정적 컨텐츠는 벡터 검색.
+r110: 도구 결과의 user_id/cat_id를 사람이 읽을 수 있는 이름으로 자동 join.
 """
 import json
 from typing import Any, Dict, List, Optional
 from supabase_store import get_store
 from retriever import retrieve as vector_retrieve
+
+
+# ─────────────────────────────────────────────
+# [r110] ID → 이름 매핑 헬퍼
+# ─────────────────────────────────────────────
+
+async def _resolve_users(user_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """user_id 리스트 → {id: {id, name, email}} 매핑."""
+    ids = [u for u in (user_ids or []) if u and isinstance(u, str)]
+    if not ids:
+        return {}
+    store = get_store()
+    try:
+        res = store.client.table("users").select("id,display_name,email").in_("id", list(set(ids))).execute()
+        out: Dict[str, Dict[str, Any]] = {}
+        for u in (res.data or []):
+            uid = u.get("id")
+            out[uid] = {
+                "id": uid,
+                "name": u.get("display_name") or (u.get("email", "").split("@")[0] if u.get("email") else uid[:8]),
+                "email": u.get("email"),
+            }
+        return out
+    except Exception:
+        return {}
+
+
+async def _resolve_categories(cat_ids: List[str], project_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """cat_id 리스트 → {id: {id, title, subtitle}} 매핑."""
+    ids = [c for c in (cat_ids or []) if c and isinstance(c, str)]
+    if not ids:
+        return {}
+    store = get_store()
+    try:
+        q = store.client.table("kanban_categories").select("id,title,subtitle").in_("id", list(set(ids)))
+        if project_id:
+            q = q.eq("project_id", project_id)
+        res = q.execute()
+        return {c["id"]: {"id": c["id"], "title": c.get("title") or "(이름 없음)", "subtitle": c.get("subtitle")} for c in (res.data or [])}
+    except Exception:
+        return {}
+
+
+def _enrich_card(card: Dict[str, Any], user_map: Dict[str, Dict], cat_map: Dict[str, Dict]) -> Dict[str, Any]:
+    """카드 1개의 assignees/cat_id를 객체로 변환."""
+    out = dict(card)
+    raw_assignees = card.get("assignees") or []
+    if isinstance(raw_assignees, list):
+        out["assignees"] = [user_map.get(uid, {"id": uid, "name": uid[:8] if uid else "?"}) for uid in raw_assignees]
+    if card.get("cat_id"):
+        out["category"] = cat_map.get(card["cat_id"], {"id": card["cat_id"], "title": "?"})
+    return out
 
 
 # ─────────────────────────────────────────────
@@ -125,7 +173,7 @@ async def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _tool_get_active_sprint(args: Dict[str, Any]) -> Dict[str, Any]:
-    """진행중 스프린트 + 그 안의 카드들 조회."""
+    """진행중 스프린트 + 그 안의 카드들 조회. [r110] user/category 이름 자동 join."""
     project_id = args.get("project_id")
     if not project_id:
         return {"ok": False, "error": "project_id required"}
@@ -154,7 +202,7 @@ async def _tool_get_active_sprint(args: Dict[str, Any]) -> Dict[str, Any]:
         .execute()
     )
     cards = tasks_res.data or []
-    # 카테고리(컬럼)도 함께
+    # 카테고리(컬럼)
     cats_res = (
         store.client.table("kanban_categories")
         .select("id,title,subtitle")
@@ -163,6 +211,19 @@ async def _tool_get_active_sprint(args: Dict[str, Any]) -> Dict[str, Any]:
         .execute()
     )
     cats = cats_res.data or []
+    # [r110] 모든 user_id 모아서 한 번에 join
+    all_uids: List[str] = list(sp.get("participants") or [])
+    for c in cards:
+        for u in (c.get("assignees") or []):
+            if isinstance(u, str):
+                all_uids.append(u)
+    user_map = await _resolve_users(all_uids)
+    # 카테고리 매핑 (kbox 안에 이미 있음)
+    cat_map = {c["id"]: {"id": c["id"], "title": c.get("title") or "?", "subtitle": c.get("subtitle")} for c in cats}
+    # 카드들에 이름 join
+    enriched_cards = [_enrich_card(c, user_map, cat_map) for c in cards]
+    # 참여자 객체화
+    participants_obj = [user_map.get(uid, {"id": uid, "name": uid[:8] if uid else "?"}) for uid in (sp.get("participants") or [])]
     return {
         "ok": True,
         "result": {
@@ -173,16 +234,16 @@ async def _tool_get_active_sprint(args: Dict[str, Any]) -> Dict[str, Any]:
             "startDate": sp.get("start_date"),
             "endDate": sp.get("end_date"),
             "intrusionCount": sp.get("intrusion_count", 0),
-            "participants": sp.get("participants") or [],
-            "categories": [{"id": c["id"], "title": c["title"], "subtitle": c.get("subtitle")} for c in cats],
-            "cards": cards,
-            "cardCount": len(cards),
+            "participants": participants_obj,
+            "categories": list(cat_map.values()),
+            "cards": enriched_cards,
+            "cardCount": len(enriched_cards),
         },
     }
 
 
 async def _tool_list_tasks(args: Dict[str, Any]) -> Dict[str, Any]:
-    """필터링된 카드 목록 조회."""
+    """필터링된 카드 목록 조회. [r110] user/category 이름 자동 join."""
     project_id = args.get("project_id")
     if not project_id:
         return {"ok": False, "error": "project_id required"}
@@ -198,19 +259,29 @@ async def _tool_list_tasks(args: Dict[str, Any]) -> Dict[str, Any]:
         q = q.eq("zone", args["zone"])
     if args.get("status"):
         q = q.eq("status", args["status"])
-    # due_before_days 필터는 Python 측에서 처리 (Supabase 비교 연산 회피)
     limit = args.get("limit") or 20
-    q = q.limit(int(limit) * 2)  # due 필터 위해 2배 가져와서 잘라냄
+    q = q.limit(int(limit) * 2)
     res = q.execute()
     rows = res.data or []
-    # due_before_days 필터
     if args.get("due_before_days") is not None:
         from datetime import date, timedelta
         cutoff = date.today() + timedelta(days=int(args["due_before_days"]))
         cutoff_iso = cutoff.isoformat()
         rows = [r for r in rows if r.get("due_date") and r["due_date"] <= cutoff_iso]
     rows = rows[:int(limit)]
-    return {"ok": True, "result": rows, "count": len(rows)}
+    # [r110] user / category 매핑
+    all_uids: List[str] = []
+    all_cids: List[str] = []
+    for r in rows:
+        for u in (r.get("assignees") or []):
+            if isinstance(u, str):
+                all_uids.append(u)
+        if r.get("cat_id"):
+            all_cids.append(r["cat_id"])
+    user_map = await _resolve_users(all_uids)
+    cat_map = await _resolve_categories(all_cids, project_id)
+    enriched = [_enrich_card(r, user_map, cat_map) for r in rows]
+    return {"ok": True, "result": enriched, "count": len(enriched)}
 
 
 async def _tool_search_vector(args: Dict[str, Any]) -> Dict[str, Any]:
