@@ -74,15 +74,19 @@ def detect_default_branch(git_url: str) -> Optional[str]:
     return None
 
 
-def clone_with_fallback(git_url: str, repo_path: Path, requested_branch: Optional[str] = None) -> str:
-    """[r117] Git clone — 기본 브랜치 자동 감지 + 명시 브랜치 실패 시 fallback.
+def clone_with_fallback(
+    git_url: str,
+    repo_path: Path,
+    requested_branch: Optional[str] = None,
+    on_attempt=None,  # [r118] callable(branch_name) — 시도 중 알림
+) -> str:
+    """[r117/r118] Git clone — 기본 브랜치 자동 감지 + 명시 브랜치 실패 시 fallback.
 
     1) requested_branch 명시되면 그것 먼저 시도
     2) ls-remote 로 기본 브랜치 추출해서 시도
     3) main/master/develop 순차 fallback
 
-    Returns: 성공한 branch 이름
-    Raises: 전부 실패 시 마지막 GitCommandError
+    on_attempt 콜백이 있으면 시도 시작 시 호출(SSE 진행률 노출용).
     """
     candidates: List[str] = []
     if requested_branch and requested_branch.strip():
@@ -90,28 +94,41 @@ def clone_with_fallback(git_url: str, repo_path: Path, requested_branch: Optiona
     detected = detect_default_branch(git_url)
     if detected and detected not in candidates:
         candidates.append(detected)
-    for fb in ["main", "master", "develop", "trunk"]:
+    for fb in ["main", "master", "develop", "trunk", "dev"]:
         if fb not in candidates:
             candidates.append(fb)
 
     last_err: Optional[Exception] = None
+    last_branch: Optional[str] = None
+    tried: List[str] = []
     for b in candidates:
+        tried.append(b)
+        if on_attempt:
+            try: on_attempt(b)
+            except Exception: pass
         try:
             git.Repo.clone_from(git_url, repo_path, branch=b, depth=1)
             return b
         except git.exc.GitCommandError as e:
             last_err = e
+            last_branch = b
             msg = (e.stderr or "") + (e.stdout or "")
-            # "Remote branch X not found" → 다음 후보로
             if "not found in upstream" in msg or "Remote branch" in msg:
-                # 부분 clone된 폴더 정리
                 if repo_path.exists():
                     _safe_remove_repo(repo_path)
                 continue
             # 다른 에러(인증·네트워크 등)는 즉시 raise
             raise
+    # 모든 후보 실패
     if last_err:
-        raise last_err
+        # 시도 목록 명시한 새 에러 메시지
+        tried_str = " / ".join(tried)
+        new_msg = f"모든 브랜치 후보 실패 (시도: {tried_str}). 마지막 에러: {(last_err.stderr or last_err.stdout or str(last_err)).strip()}"
+        raise git.exc.GitCommandError(
+            getattr(last_err, 'command', ['git', 'clone']),
+            getattr(last_err, 'status', 128),
+            stderr=new_msg.encode() if isinstance(new_msg, str) else new_msg,
+        )
     raise RuntimeError("clone 실패 — 시도할 브랜치 후보 없음")
 
 
@@ -214,17 +231,27 @@ async def index_git_repo(
                 return
         if not repo_path.exists():
             yield {"event": "clone_start", "repo": repo_name, "url": git_url}
+            attempt_log: list = []
+            def _on_attempt(b):
+                attempt_log.append(b)
+                print(f"[indexer] clone attempt: branch='{b}'")
             try:
-                # [r117] 기본 브랜치 자동 감지 + main/master/develop fallback
-                used_branch = clone_with_fallback(git_url, repo_path, requested_branch=branch)
-                yield {"event": "info", "message": f"브랜치 '{used_branch}' 클론 성공"}
+                # [r117/r118] 기본 브랜치 자동 감지 + main/master/develop fallback
+                used_branch = clone_with_fallback(
+                    git_url, repo_path,
+                    requested_branch=branch,
+                    on_attempt=_on_attempt,
+                )
+                yield {"event": "info", "message": f"브랜치 '{used_branch}' 클론 성공 (시도: {' / '.join(attempt_log)})"}
             except git.exc.GitCommandError as gce:
-                stderr = (gce.stderr or "").strip()
-                stdout = (gce.stdout or "").strip()
-                detail = stderr or stdout or str(gce)
-                yield {"event": "error", "message": f"git clone 실패 ({gce.status}): {detail}"}
+                stderr = (gce.stderr or "")
+                stdout = (gce.stdout or "")
+                if isinstance(stderr, bytes): stderr = stderr.decode("utf-8", errors="ignore")
+                if isinstance(stdout, bytes): stdout = stdout.decode("utf-8", errors="ignore")
+                detail = (stderr.strip() or stdout.strip() or str(gce))
+                yield {"event": "error", "message": f"git clone 실패 ({gce.status}): {detail}", "tried_branches": attempt_log}
                 return
-            yield {"event": "clone_done"}
+            yield {"event": "clone_done", "branch": locals().get('used_branch', '?')}
         else:
             # 기존 clone — pull
             try:

@@ -282,16 +282,27 @@ async def generate_wiki(
         if repo_path.exists() and clean_first:
             _safe_remove_repo(repo_path)
         if not repo_path.exists():
+            # [r118] 시도 브랜치를 events 리스트로 모아 호출 사이 노출
+            attempt_log: List[str] = []
+            def _on_attempt(b):
+                attempt_log.append(b)
+                print(f"[wiki_generator] clone attempt: branch='{b}'")
             try:
-                # [r117] 기본 브랜치 자동 감지 + fallback
-                used_branch = clone_with_fallback(git_url, repo_path, requested_branch=branch)
-                yield {"event": "info", "message": f"브랜치 '{used_branch}' 클론 성공"}
+                # [r117/r118] 기본 브랜치 자동 감지 + fallback (콜백으로 진행 노출)
+                used_branch = clone_with_fallback(
+                    git_url, repo_path,
+                    requested_branch=branch,
+                    on_attempt=_on_attempt,
+                )
+                yield {"event": "info", "message": f"브랜치 '{used_branch}' 클론 성공 (시도: {' / '.join(attempt_log)})"}
             except git.exc.GitCommandError as gce:
                 detail = (gce.stderr or gce.stdout or str(gce)).strip()
-                yield {"event": "error", "message": f"git clone 실패 ({gce.status}): {detail}"}
+                if isinstance(detail, bytes):
+                    detail = detail.decode("utf-8", errors="ignore")
+                yield {"event": "error", "message": f"git clone 실패 ({gce.status}): {detail}", "tried_branches": attempt_log}
                 return
             except Exception as ge:
-                yield {"event": "error", "message": f"clone 실패: {type(ge).__name__}: {ge}"}
+                yield {"event": "error", "message": f"clone 실패: {type(ge).__name__}: {ge}", "tried_branches": attempt_log}
                 return
         else:
             try:

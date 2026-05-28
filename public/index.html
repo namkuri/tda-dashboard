@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r117 (Git 기본 브랜치 자동 감지 — main/master/develop 등 임의 브랜치 레포 지원: 사용자 보고 git clone 실패 (128): Remote branch main not found in upstream origin (예: github.com/Ethaniya0912/pB는 master). 수정: indexer.py에 detect_default_branch(subprocess git ls-remote --symref HEAD)와 clone_with_fallback(요청 브랜치 → ls-remote 결과 → main/master/develop/trunk 순차 시도) 추가. wiki_generator.py + indexer.py 모두 활용. 프론트 dwpGenerate는 branch="" 빈 값으로 보내 서버가 자동 감지) -->
+<!-- BUILD: 2026-05-29 r118 (Clone fallback 진행 노출 + 에러 메시지 개선: r117 후에도 동일 에러 보고 → 사용자 측 서버 재시작 누락 가능성 + 진단 부족 인지. 수정: clone_with_fallback에 on_attempt 콜백 추가 → 시도 브랜치마다 print + SSE info 이벤트. 최종 에러에 tried_branches 배열 + 시도 목록 명시. dev 브랜치도 fallback 후보에 추가. wiki_generator/indexer 둘 다 attempt_log 수집해 노출. 프론트는 info 이벤트 ℹ️ 아이콘으로 표시) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -8115,6 +8115,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             var ev = JSON.parse(data);
                             if (ev.event === 'stage') {
                                 _dwpProgress('🔄 ' + _annEsc(ev.message || ev.stage));
+                            } else if (ev.event === 'info') {
+                                _dwpProgress('ℹ️ ' + _annEsc(ev.message || ''));
                             } else if (ev.event === 'clone_done') {
                                 _dwpProgress('✅ Clone 완료 (커밋 <code>' + _annEsc(ev.commit || '?') + '</code>) — 스캔 중...');
                             } else if (ev.event === 'scan_done') {
