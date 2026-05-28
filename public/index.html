@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r68 (데스크톱 로그인: opener 플러그인으로 시스템 브라우저 열기(원격 ACL 통과, open_external 폴백)+딥링크 복귀. 빌드 수정(createUpdaterArtifacts off→서명키 불필요). 원격 URL 캐시버스트 ?v=0.46.0. 코멘트 새로고침 후 미표시 수정(마크 재시도). 0.46.0) -->
+<!-- BUILD: 2026-05-28 r69 (데스크톱 로컬번들 복귀: 원격 github.io 로드는 WebView2 Tracking Prevention이 storage 차단→세션 401(데이터 안 뜸). 로컬번들(tauri.localhost)은 정상이라 url 제거하고 ../public 임베드로 복귀(로그인·데이터 검증됨). + 서버 데이터 로드 실패 시 경고 토스트. 0.47.0) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -7906,6 +7906,8 @@ return data;
             } catch (error) {
                 console.error("Supabase 로드 실패:", error);
                 var errMsg = (error && error.message) ? error.message : String(error);
+                // [r69] 조용한 실패 방지 — 눈에 띄는 경고 토스트 (이전엔 작은 상태칩만 떠서 인지 못함)
+                if (typeof showToast === 'function') showToast('⚠️ 서버 데이터 로드 실패: ' + errMsg.substring(0, 90) + ' — 로컬 캐시로 표시 중입니다. 새로고침/재로그인 해보세요.', 'alert');
                 statusEl.innerHTML = '🔴 ' + errMsg.substring(0, 60);
                 statusEl.className = 'cursor-pointer hover:bg-red-200 transition-colors text-xs font-bold text-red-700 bg-red-100 border border-red-300 px-3 py-1 rounded-full shadow-sm flex items-center gap-1';
                 statusEl.onclick = () => { document.getElementById('api-key-input').value = SUPABASE_ANON_KEY || ''; openModal('api-key-modal'); };
