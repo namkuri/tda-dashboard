@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r118 (Clone fallback 진행 노출 + 에러 메시지 개선: r117 후에도 동일 에러 보고 → 사용자 측 서버 재시작 누락 가능성 + 진단 부족 인지. 수정: clone_with_fallback에 on_attempt 콜백 추가 → 시도 브랜치마다 print + SSE info 이벤트. 최종 에러에 tried_branches 배열 + 시도 목록 명시. dev 브랜치도 fallback 후보에 추가. wiki_generator/indexer 둘 다 attempt_log 수집해 노출. 프론트는 info 이벤트 ℹ️ 아이콘으로 표시) -->
+<!-- BUILD: 2026-05-29 r119 (Hallucination 차단 + UI 동시 실행 차단 2건: 사용자 보고 ① "이번 주 일정+내 결재+진행중 스프린트" 복합 질문에 LLM이 search_vector만 호출 후 매칭 0개 받고도 가짜 데이터(프로젝트 회의 2023-10-05, Dev A, AI 테스트 W45 등) 생성 ② 1차 위키 작성 중 다른 버튼 누를 수 있음. 수정: A. agent.py 시스템 프롬프트 강화 — 🚨 절대 금지: 데이터 환각 섹션 추가, 가짜 회의/사람/날짜/스프린트/결재 예시 명시, 도구 결과 빈 배열이면 "데이터 없음" 정직 답변 강제, 복합 질문 처리(여러 도구 순차 호출), search_vector 단독 사용 키워드 제한("이번 주", "현재", "내", "결재" 등). B. _dwpState.isRunning + _dwpSetRunning — dwpGenerate/dwpAudit 진행 중 모든 🤖/📊/🔄 버튼 disabled+opacity 0.45+cursor not-allowed. try/finally로 보장 해제) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -7873,7 +7873,23 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
 
         // [r113~r115] Deep Wiki 상태 — 1차 페이지·2차 감사 보고서 통합
-        var _dwpState = { pages: [], audits: [], currentSlug: null, currentAuditId: null };
+        var _dwpState = { pages: [], audits: [], currentSlug: null, currentAuditId: null, isRunning: false };
+
+        // [r119] 위키 생성/감사 진행 중 모든 액션 버튼 비활성화
+        function _dwpSetRunning(running) {
+            _dwpState.isRunning = !!running;
+            var view = document.getElementById('deepwikiPages-view');
+            if (!view) return;
+            view.querySelectorAll('.dwp-tree button').forEach(function (b) {
+                // 페이지/감사 항목 클릭은 막지 않음(읽기 전용) — 상단 액션 버튼만
+                var t = (b.textContent || '');
+                if (t.indexOf('🤖') >= 0 || t.indexOf('📊') >= 0 || t.indexOf('🔄') >= 0) {
+                    b.disabled = !!running;
+                    b.style.opacity = running ? '0.45' : '';
+                    b.style.cursor = running ? 'not-allowed' : '';
+                }
+            });
+        }
 
         function _dwpBackendUrl() {
             var s = (typeof _dwGetSettings === 'function') ? _dwGetSettings() : null;
@@ -8068,6 +8084,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
 
         async function dwpGenerate() {
+            if (_dwpState.isRunning) { showToast('이미 위키 생성/감사 작업이 진행 중입니다', 'info'); return; }
             var url = _dwpBackendUrl();
             if (!url) { showToast('⚙️ AI Agent 설정에서 백엔드 URL 먼저', 'alert'); return; }
             if (!activeProjectId) { showToast('프로젝트가 선택되어 있지 않습니다', 'alert'); return; }
@@ -8089,6 +8106,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 confirmText: '시작',
             });
             if (!ok) return;
+            _dwpSetRunning(true);
             _dwpProgress('🔄 시작 중...');
             try {
                 // [r117] branch 빈 값 = 서버가 ls-remote로 자동 감지 + main/master/develop fallback
@@ -8141,6 +8159,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
             } catch (e) {
                 _dwpProgress('<span style="color:#d2393d;">❌ 요청 실패: ' + _annEsc(e.message || e) + '</span>');
+            } finally {
+                _dwpSetRunning(false);
             }
         }
 
@@ -8151,6 +8171,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         // [r115] 기획 대조 감사 — 실 구현
         async function dwpAudit() {
+            if (_dwpState.isRunning) { showToast('이미 위키 생성/감사 작업이 진행 중입니다', 'info'); return; }
             var url = _dwpBackendUrl();
             if (!url) { showToast('⚙️ AI Agent 설정에서 백엔드 URL 먼저', 'alert'); return; }
             if (!activeProjectId) { showToast('프로젝트가 선택되어 있지 않습니다', 'alert'); return; }
@@ -8160,6 +8181,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 confirmText: '시작',
             });
             if (!ok) return;
+            _dwpSetRunning(true);
             _dwpProgress('🔄 시작 중...');
             try {
                 var res = await fetch(url + '/wiki/audit', {
@@ -8208,6 +8230,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
             } catch (e) {
                 _dwpProgress('<span style="color:#d2393d;">❌ 요청 실패: ' + _annEsc(e.message || e) + '</span>');
+            } finally {
+                _dwpSetRunning(false);
             }
         }
 
