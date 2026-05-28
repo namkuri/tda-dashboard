@@ -16,6 +16,7 @@ from agent import run as agent_run  # [r108] Tool Use 에이전트
 from retriever import retrieve, SIMILARITY_THRESHOLD
 from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints, _is_empty_template_chunk
 from wiki_generator import generate_wiki  # [r113] Deep Wiki 자동 위키
+from wiki_auditor import audit_wiki  # [r115] 기획 대조 2차 MD
 
 
 app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
@@ -61,6 +62,12 @@ class WikiGenerateRequest(BaseModel):
     git_url: str
     project_id: str
     branch: str = "main"
+    model: Optional[str] = None
+
+
+# [r115] 기획 대조 감사 요청
+class WikiAuditRequest(BaseModel):
+    project_id: str
     model: Optional[str] = None
 
 
@@ -259,6 +266,60 @@ async def wiki_pages_delete(project_id: str):
         return {"deleted": len(res.data or [])}
     except Exception as e:
         raise HTTPException(500, f"삭제 실패: {e}")
+
+
+# ─────────────────────────────────────────────
+# [r115] Phase C — 기획 대조 감사 보고서
+# ─────────────────────────────────────────────
+
+@app.post("/wiki/audit")
+async def wiki_audit(req: WikiAuditRequest):
+    """canon 문서 × 1차 자동 위키 대조 → 2차 일치도 보고서 생성."""
+    return _sse_indexer(audit_wiki(project_id=req.project_id, model=req.model))
+
+
+@app.get("/wiki/audits")
+async def wiki_audits(project_id: str):
+    """프로젝트의 감사 보고서 목록."""
+    if not project_id:
+        raise HTTPException(400, "project_id 필수")
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_audits")
+            .select("id,title,summary,match_score,related_pages,related_canons,findings,updated_at")
+            .eq("project_id", project_id)
+            .order("match_score", desc=False)  # 점수 낮은 것 = 문제 많은 것 먼저
+            .execute()
+        )
+        return {"audits": res.data or [], "count": len(res.data or [])}
+    except Exception as e:
+        return {"audits": [], "count": 0, "error": f"deep_wiki_audits 테이블 미생성 또는 조회 실패: {e}"}
+
+
+@app.get("/wiki/audit/{audit_id}")
+async def wiki_audit_get(audit_id: str, project_id: str):
+    """단일 감사 보고서 상세."""
+    if not project_id or not audit_id:
+        raise HTTPException(400, "audit_id, project_id 필수")
+    store = get_store()
+    try:
+        res = (
+            store.client.table("deep_wiki_audits")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("id", audit_id)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            raise HTTPException(404, f"audit '{audit_id}' 없음")
+        return rows[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"조회 실패: {e}")
 
 
 @app.get("/debug/search")

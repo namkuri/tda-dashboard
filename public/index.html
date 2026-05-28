@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r114 (Phase B — Deep Wiki UI 정교화: r113 위에 mermaid.js CDN 임포트 + 본문 후처리에서 ```mermaid 코드블록을 SVG 다이어그램으로 변환(_dwpRenderMermaidBlocks). 우측 목차(_dwpBuildTOC) — h2/h3 추출해 클릭 스크롤. 페이지 내 링크(_dwpAttachLinkHandlers) — ?slug=xxx 또는 [slug](slug) 형태 SPA 라우팅. 좌측 트리 검색바(_dwpFilterTree). 본문 3열 레이아웃: 좌트리(280px) + 본문(880px center) + 우TOC(200px). r115 감사 섹션 placeholder 추가) -->
+<!-- BUILD: 2026-05-28 r115 (Phase C — 기획 대조 2차 MD 보고서: r113 1차 자동 위키 + 사용자 canon 기획 문서 LLM 대조 → 일치도(match_score 0~1) + findings 배열 + 마크다운 보고서. 백엔드: ① wiki_auditor.py(_AUDIT_PROMPT 매핑표·미구현·부분구현·기획외 3분류 + JSON 메타 추출) → deep_wiki_audits INSERT ② main.py /wiki/audit(SSE), /wiki/audits, /wiki/audit/{id}. 프론트: ③ dwpAudit 실 구현 SSE + dwpRefreshAudits 자동 트리 + dwpOpenAudit(점수 게이지·findings 표·MD 렌더). canon 문서별 보고서 1개씩 생성, 일치도 낮은 순(문제 많은 순) 정렬 표시) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4456,11 +4456,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <div id="dwp-progress" style="font-size:11px;color:var(--c-text2);padding:6px 4px;min-height:14px;"></div>
                     <!-- [r114] 페이지 검색 -->
                     <input id="dwp-search" type="text" placeholder="🔍 페이지 검색..." oninput="_dwpFilterTree()" style="background:var(--c-card);color:var(--c-text);border:1px solid var(--c-border);border-radius:7px;padding:6px 10px;font-size:12px;margin-top:8px;width:100%;box-sizing:border-box;">
-                    <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;display:flex;justify-content:space-between;"><span>자동 생성 페이지</span><span id="dwp-tab-pages" style="cursor:pointer;color:var(--c-accent);" onclick="dwpShowTab('pages')">[1차]</span></div>
+                    <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;">자동 생성 페이지 (1차)</div>
                     <div id="dwp-tree" style="display:flex;flex-direction:column;gap:2px;"></div>
-                    <!-- [r115] 감사 보고서 트리 -->
+                    <!-- [r115] 감사 보고서 트리 — 데이터 있으면 dwpRefreshAudits에서 자동 표시 -->
                     <div id="dwp-audits-section" style="display:none;">
-                        <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;">📊 감사 보고서 (2차)</div>
+                        <div style="font-size:11px;color:var(--c-text3);padding:8px 6px 4px;border-top:1px dashed var(--c-border);margin-top:6px;text-transform:uppercase;font-weight:700;">📊 기획 대조 보고서 (2차)</div>
                         <div id="dwp-audits" style="display:flex;flex-direction:column;gap:2px;"></div>
                     </div>
                 </aside>
@@ -7872,8 +7872,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
-        // [r113] Deep Wiki — 1차 자동 위키 페이지 시스템
-        var _dwpState = { pages: [], currentSlug: null };
+        // [r113~r115] Deep Wiki 상태 — 1차 페이지·2차 감사 보고서 통합
+        var _dwpState = { pages: [], audits: [], currentSlug: null, currentAuditId: null };
 
         function _dwpBackendUrl() {
             var s = (typeof _dwGetSettings === 'function') ? _dwGetSettings() : null;
@@ -8141,11 +8141,145 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
 
-        // [r115] 감사 보고서 — 구현은 아래에서 (placeholder는 dwpAudit가 실행기로 덮어씀)
         function dwpShowTab(tab) {
-            // r115에서 동적으로 audits 섹션 visible 토글
             var a = document.getElementById('dwp-audits-section');
             if (a) a.style.display = (tab === 'audits') ? '' : 'none';
+        }
+
+        // [r115] 기획 대조 감사 — 실 구현
+        async function dwpAudit() {
+            var url = _dwpBackendUrl();
+            if (!url) { showToast('⚙️ AI Agent 설정에서 백엔드 URL 먼저', 'alert'); return; }
+            if (!activeProjectId) { showToast('프로젝트가 선택되어 있지 않습니다', 'alert'); return; }
+            var ok = await uiConfirm({
+                title: '📊 기획 대조 보고서 생성',
+                message: '프로젝트의 기획 문서(canon kind) 각각에 대해 자동 위키 페이지와 대조 분석합니다.\n\nLLM 호출이 canon 수만큼 일어나며 약 1~3분 소요. 진행 OK?',
+                confirmText: '시작',
+            });
+            if (!ok) return;
+            _dwpProgress('🔄 시작 중...');
+            try {
+                var res = await fetch(url + '/wiki/audit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: activeProjectId }),
+                });
+                if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+                var reader = res.body.getReader();
+                var decoder = new TextDecoder();
+                var buf = '';
+                while (true) {
+                    var chunk = await reader.read();
+                    if (chunk.done) break;
+                    buf += decoder.decode(chunk.value, { stream: true });
+                    var lines = buf.split('\n');
+                    buf = lines.pop() || '';
+                    lines.forEach(function (line) {
+                        if (!line.startsWith('data:')) return;
+                        var data = line.slice(5).trim();
+                        if (!data || data === '[DONE]') return;
+                        try {
+                            var ev = JSON.parse(data);
+                            if (ev.event === 'stage') {
+                                _dwpProgress('🔄 ' + _annEsc(ev.message || ev.stage));
+                            } else if (ev.event === 'info') {
+                                _dwpProgress('ℹ️ ' + _annEsc(ev.message || ''));
+                            } else if (ev.event === 'progress') {
+                                var pct = Math.round((ev.current / ev.total) * 100);
+                                _dwpProgress('📊 [' + ev.current + '/' + ev.total + ' · ' + pct + '%] ' + _annEsc(ev.canon_title || ''));
+                            } else if (ev.event === 'audit_done') {
+                                var pct = ev.match_score != null ? Math.round(ev.match_score * 100) + '%' : '?';
+                                _dwpProgress('✅ ' + _annEsc(ev.title) + ' (일치도 ' + pct + ')');
+                            } else if (ev.event === 'done') {
+                                _dwpProgress('🎉 완료 — ' + ev.audits_created + '개 보고서 생성됨');
+                                showToast('📊 기획 대조 보고서 ' + ev.audits_created + '개 생성 완료', 'success');
+                                setTimeout(dwpRefreshAudits, 200);
+                            } else if (ev.event === 'error') {
+                                _dwpProgress('<span style="color:#d2393d;">❌ ' + _annEsc(ev.message) + '</span>');
+                                showToast('❌ 감사 실패: ' + (ev.message || ''), 'alert');
+                            } else if (ev.event === 'warn') {
+                                console.warn('[wiki/audit]', ev.message);
+                            }
+                        } catch (e) { /* ignore */ }
+                    });
+                }
+            } catch (e) {
+                _dwpProgress('<span style="color:#d2393d;">❌ 요청 실패: ' + _annEsc(e.message || e) + '</span>');
+            }
+        }
+
+        // [r115] 감사 보고서 목록 로드 + 트리 렌더
+        async function dwpRefreshAudits() {
+            var url = _dwpBackendUrl();
+            if (!url || !activeProjectId) return;
+            try {
+                var res = await fetch(url + '/wiki/audits?project_id=' + encodeURIComponent(activeProjectId));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                var audits = data.audits || [];
+                _dwpState.audits = audits;
+                var sect = document.getElementById('dwp-audits-section');
+                var box = document.getElementById('dwp-audits');
+                if (!box || !sect) return;
+                if (!audits.length) {
+                    sect.style.display = 'none';
+                    return;
+                }
+                sect.style.display = '';
+                box.innerHTML = audits.map(function (a) {
+                    var score = a.match_score;
+                    var scorePct = score != null ? Math.round(score * 100) + '%' : '?';
+                    var color = score == null ? 'var(--c-text3)' :
+                        (score >= 0.7 ? '#2c6849' : (score >= 0.4 ? '#b58a16' : '#d2393d'));
+                    var active = (_dwpState.currentAuditId === a.id) ? 'background:var(--c-accent-soft);color:var(--c-accent);' : 'color:var(--c-text2);';
+                    var safeId = (a.id || '').replace(/'/g, "\\'");
+                    return '<button onclick="dwpOpenAudit(\'' + safeId + '\')" style="text-align:left;background:none;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;gap:6px;' + active + '">' +
+                        '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + _annEsc(a.title || '?') + '</span>' +
+                        '<span style="font-size:10px;font-weight:800;color:' + color + ';flex-shrink:0;">' + scorePct + '</span>' +
+                        '</button>';
+                }).join('');
+            } catch (e) {
+                console.warn('[dwpRefreshAudits]', e);
+            }
+        }
+
+        async function dwpOpenAudit(auditId) {
+            _dwpState.currentAuditId = auditId;
+            _dwpState.currentSlug = null;
+            _dwpRenderTree();
+            dwpRefreshAudits();
+            var url = _dwpBackendUrl();
+            if (!url || !activeProjectId) return;
+            var box = document.getElementById('dwp-content');
+            if (box) box.innerHTML = '<div style="text-align:center;padding:60px;color:var(--c-text3);">🔄 보고서 로딩...</div>';
+            try {
+                var res = await fetch(url + '/wiki/audit/' + encodeURIComponent(auditId) + '?project_id=' + encodeURIComponent(activeProjectId));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var audit = await res.json();
+                var md = audit.content || '(빈 보고서)';
+                var html;
+                try { html = DOMPurify.sanitize(parseMarkdownWithTables(md), domPurifyConfig); }
+                catch (e) { html = '<pre style="white-space:pre-wrap;">' + md.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</pre>'; }
+                var score = audit.match_score;
+                var scorePct = score != null ? Math.round(score * 100) : null;
+                var scoreColor = scorePct == null ? '#888' : (scorePct >= 70 ? '#2c6849' : (scorePct >= 40 ? '#b58a16' : '#d2393d'));
+                var findings = audit.findings || [];
+                var fCount = findings.length;
+                var metaHtml = '<div style="display:flex;align-items:center;gap:18px;margin-bottom:18px;padding:14px 16px;background:var(--ios-fill);border-radius:10px;border:1px solid var(--c-border);">' +
+                    (scorePct != null ? '<div style="text-align:center;"><div style="font-size:32px;font-weight:900;color:' + scoreColor + ';line-height:1;">' + scorePct + '%</div><div style="font-size:10.5px;color:var(--c-text3);text-transform:uppercase;letter-spacing:.04em;margin-top:4px;">일치도</div></div>' : '') +
+                    '<div style="font-size:12px;color:var(--c-text2);"><b style="color:var(--c-text);">' + fCount + '건</b>의 차이 발견<br><span style="color:var(--c-text3);">' + (audit.updated_at ? new Date(audit.updated_at).toLocaleString() : '') + '</span></div></div>';
+                if (box) box.innerHTML = metaHtml + '<div id="dwp-body-inner">' + html + '</div>';
+                var inner = box ? box.querySelector('#dwp-body-inner') : null;
+                if (inner) {
+                    await _dwpRenderMermaidBlocks(inner);
+                    _dwpAttachLinkHandlers(inner);
+                    var tocEl = document.getElementById('dwp-toc');
+                    if (tocEl) _dwpBuildTOC(inner, tocEl);
+                }
+                if (box) box.scrollTop = 0;
+            } catch (e) {
+                _dwpRenderEmpty('보고서 로드 실패: ' + (e.message || e));
+            }
         }
 
         function dwShowSetupGuide() {
@@ -11404,9 +11538,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r112] 진짜 Deep Wiki — 자료 그룹 (별도 페이지)
             var _csDwp = document.getElementById('cs-nav-deepwiki-pages'); if (_csDwp) _csDwp.classList.toggle('active', viewName === 'deepwikiPages');
             var _dwpvw = document.getElementById('deepwikiPages-view'); if (_dwpvw) { _dwpvw.classList.toggle('hidden', viewName !== 'deepwikiPages'); _dwpvw.classList.toggle('block', viewName === 'deepwikiPages'); }
-            // [r113] Deep Wiki 진입 시 페이지 트리 자동 로드
-            if (viewName === 'deepwikiPages' && typeof dwpRefreshTree === 'function') {
-                setTimeout(dwpRefreshTree, 50);
+            // [r113~r115] Deep Wiki 진입 시 페이지 트리 + 감사 보고서 트리 자동 로드
+            if (viewName === 'deepwikiPages') {
+                if (typeof dwpRefreshTree === 'function') setTimeout(dwpRefreshTree, 50);
+                if (typeof dwpRefreshAudits === 'function') setTimeout(dwpRefreshAudits, 80);
             }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
