@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-28 r81 (#1 에셋 매니저(자료>문서 밑): 폴더+에셋, kind(11종), status(planned/progress/done/blocked), 담당자, 드라이브 파일 연결, 필터·검색. #2 이슈 트래커(운영>위키 밑): 우선순위(P0-P3)·상태(open/progress/review/closed/wont)·담당자·납기·대상, P/납기 정렬, 닫힘 자동 라인스루. #3 DB도구→서버상태로 병합: 사이드바 dbtool 제거, 서버 상태 페이지 상단에 🗄️ DB 편집 버튼. #4 버그 리포트(도구>서버상태 옆): TDA_ADMIN_EMAILS=['rnk505@gmail.com'] 하드코딩, 작성자+관리자만 열람, severity 5단계, 현재 화면·UA 자동 캡처. #5 대시보드 그리드 3+칸 표시 버그: 미디어쿼리가 옛 .size-N에만 적용되던 문제 → .w-3/.w-4도 함께 클램프. #6 사이드바 행간 80%로 축소(.cs-nav padding 6px→4px, font-size 13→12.5px) -->
+<!-- BUILD: 2026-05-28 r82 (버그 리포트 사이드바 UX 개선: 비관리자가 🐞 버그 리포트 클릭 → 페이지 진입 없이 _brPrevView 캡처 후 즉시 작성 모달 표시. 관리자는 기존대로 리포트 페이지 진입(검토용). br-e-view를 readonly text → select(18개 뷰 옵션)로 변경, 디폴트=이전 화면(_brPrevView), 없으면 other) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4231,7 +4231,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <option value="request">💡 Request (개선 제안)</option>
                         </select>
                     </label>
-                    <label class="cal-fld"><span>현재 화면</span><input id="br-e-view" type="text" readonly></label>
+                    <label class="cal-fld"><span>관련 화면 (선택)</span>
+                        <select id="br-e-view">
+                            <option value="dashboard">🏠 대시보드</option>
+                            <option value="kanban">📋 칸반 보드</option>
+                            <option value="sprint">🏃 스프린트</option>
+                            <option value="canon">📘 프로젝트 위키</option>
+                            <option value="issues">🐛 이슈 트래커</option>
+                            <option value="calendar">📅 캘린더</option>
+                            <option value="review">🗳 리뷰함</option>
+                            <option value="docs">📚 문서</option>
+                            <option value="assets">🎮 에셋 매니저</option>
+                            <option value="personal">🔒 개인 문서</option>
+                            <option value="graph">📈 그래프</option>
+                            <option value="drive">🗂️ 공용 드라이브</option>
+                            <option value="history">🗓️ 히스토리</option>
+                            <option value="git">📦 Git</option>
+                            <option value="gview">🕸️ 그래프 뷰</option>
+                            <option value="status">📡 서버 상태</option>
+                            <option value="bugReport">🐞 버그 리포트 (이 페이지)</option>
+                            <option value="other">📦 그 외 / 전역</option>
+                        </select>
+                    </label>
                     <label class="cal-fld"><span>재현 단계 + 기대/실제 동작</span><textarea id="br-e-desc" rows="6" placeholder="1. ___ 페이지에서&#10;2. ___ 버튼을 누르면&#10;3. ___ 가 일어남 (기대: ___)"></textarea></label>
                     <label class="cal-fld"><span>브라우저/OS (자동)</span><input id="br-e-env" type="text" readonly></label>
                 </div>
@@ -7067,8 +7088,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             document.getElementById('br-e-title').value = '';
             document.getElementById('br-e-desc').value = '';
             document.getElementById('br-e-severity').value = 'medium';
-            // 자동: 현재 화면, 환경
-            document.getElementById('br-e-view').value = (currentView || '?') + ' (현재 화면)';
+            // [r82] 관련 화면: 사이드바에서 진입했다면 이전 화면, 아니면 현재 view
+            var viewSel = document.getElementById('br-e-view');
+            var defaultView = window._brPrevView || (currentView && currentView !== 'bugReport' ? currentView : 'dashboard');
+            // option에 매칭되는 게 있으면 선택, 아니면 other
+            if (viewSel) {
+                var match = Array.from(viewSel.options).some(function (o) { return o.value === defaultView; });
+                viewSel.value = match ? defaultView : 'other';
+            }
             document.getElementById('br-e-env').value = (navigator.userAgent || '').slice(0, 120);
             document.getElementById('br-e-del').classList.add('hidden');
             openModal('br-edit-modal');
@@ -7085,7 +7112,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             document.getElementById('br-e-title').value = r.title || '';
             document.getElementById('br-e-desc').value = r.desc || '';
             document.getElementById('br-e-severity').value = r.severity || 'medium';
-            document.getElementById('br-e-view').value = r.view || '';
+            // [r82] view 셀렉트로 변경됨 — 저장된 값과 매칭, 매칭 없으면 other
+            var viewSel2 = document.getElementById('br-e-view');
+            if (viewSel2) {
+                var savedView = r.view || 'other';
+                var hasOpt = Array.from(viewSel2.options).some(function (o) { return o.value === savedView; });
+                viewSel2.value = hasOpt ? savedView : 'other';
+            }
             document.getElementById('br-e-env').value = r.env || '';
             document.getElementById('br-e-del').classList.remove('hidden');
             openModal('br-edit-modal');
@@ -9279,6 +9312,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
 
         function switchView(viewName) {
+            // [r82] 버그 리포트 사이드바 클릭 — 비관리자는 페이지로 가지 말고 즉시 모달
+            //   현재 view를 캡처해서 모달의 "관련 화면" 기본값으로
+            if (viewName === 'bugReport' && !isAdminUser()) {
+                window._brPrevView = currentView || 'dashboard'; // 모달 닫힐 때 복귀용
+                if (typeof brAddReport === 'function') brAddReport();
+                return; // currentView 변경 없음 — 페이지 전환 안 함
+            }
+            // 관리자도 페이지 진입 시 brAddReport 모달의 기본값으로 쓰도록 prevView 기록
+            if (viewName === 'bugReport') {
+                window._brPrevView = (currentView && currentView !== 'bugReport') ? currentView : 'dashboard';
+            }
             currentView = viewName;
             updateMobNav(viewName);
             hideToolbar();
