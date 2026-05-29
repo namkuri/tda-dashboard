@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r128 (Deep Wiki 5건 v2: ① dead 슬러그 링크 시각화 — _dwpAttachLinkHandlers 가 본문 [text](?slug=xxx) 의 슬러그가 _dwpState.pages 에 없으면 .dwp-dead-link 클래스(line-through + opacity 0.65 + ⚠) 적용, 클릭 시 안내 토스트 ② 트리 헤더 자식 중첩 — _dwpExtractPageStructure 가 헤더별 links 배열로 그룹화(orphan 별도), 트리 렌더가 § Subsystems 헤더 아래 자식으로 🔗 링크 들여쓰기 + dead 도 strikethrough ③ Mermaid 줌 다크 BG — 박스 var(--c-paper)/var(--c-text)/var(--c-border) 적용, SVG 안쪽도 isDark 면 #1f1d18 (웜다크) ④ 플로팅 진행 위젯 — dwp-progress-widget 신설: 화면 하단 중앙 고정, 회전 스피너(@keyframes dwp-spin) + 단계/디테일/퍼센트 + 그라데이션 프로그래스바 + 클릭 시 상세 로그 펼침(인라인 로그 박스). dwpGenerate/dwpAudit 시작·SSE 이벤트·busy 폴링 모두에서 _dwpShowProgressWidget/_dwpUpdateProgressWidget/_dwpAppendProgressLog 갱신 ⑤ 404 박스 — _dwpRender404(slug, err) 가 HTTP 404 / 네트워크 / 기타 분기, 슬러그·가능한 원인(LLM 실패/카테고리 병합/버전/SQL 003) + 대처(자동 생성 다시·트리 새로고침·Overview 이동) 액션 버튼 박스로 표시) | r127 (Deep Wiki 5건 픽스 — 자동 복구·실시간 로그·시간 표시·트리 하이어라키·Mermaid 줌 SVG: ① 새로고침 자동 복구 — _dwpRestoreIfBusy: 뷰 진입 시 /health 조회해 llm_busy.running 이면 진행 정보(kind/stage/current/total/category/started_at) 를 로그에 흘리고 _dwpSetRunning(true) + 2초 폴링(_dwpStartPolling) 시작. 폴링은 running→false 전환 감지 시 자동 트리 갱신 후 stop. 뷰 떠날 때 _dwpStopPolling. dwpGenerate/dwpAudit 도 시작 시 같은 폴링 호출해 클라이언트 SSE 끊겨도 백엔드 완료 감지 ② 실시간 로그 — 좌측 사이드바 #dwp-logs-wrap 추가(접/펼 가능, 최대 500줄), _dwpLog(msg, level)/_dwpClearLogs/_dwpToggleLogs. 모든 SSE 이벤트(stage/info/clone_done/scan_done/progress/page_done/done/error/warn) 가 시간 + 색상별 한 줄로 기록 ③ Last indexed 에 시간 추가 — toLocaleDateString → toLocaleString (날짜+시간) ④ 트리 하이어라키 — _dwpExtractPageStructure(md, allSlugs): ## ### 헤더 + [텍스트](?slug=xxx) 내부 링크 추출. _dwpFetchPageStructure: lazy fetch + 캐시. _dwpToggleExpand: 페이지마다 ▶/▼ 토글 버튼, 펼치면 헤더 클릭 시 dwpOpenPage + scrollIntoView, 관련 페이지 링크 별도 섹션. expandedSlugs 영속 ⑤ Mermaid 줌 SVG 사이즈 픽스 — 흰 박스 원인: width/height 제거 후 width:auto 하면 viewBox 만으론 브라우저가 0×0 렌더. 픽스: viewBox 보존 + preserveAspectRatio xMidYMid meet + width:min(90vw,1800px);height:auto 강제 부여. 추가로 다운로드 버튼·닫기 버튼·ESC 키·바깥 클릭 닫기·중복 바인딩 방지) | r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
+<!-- BUILD: 2026-05-29 r129 (모델 선택 UI 3종 + ✦ 아이콘 통일: ① 작업별 3개 모델 — settings 모달에 chatModel(AI Agent·Tool Use), wikiGenModel(Deep Wiki 자동 생성·코드 분석), auditModel(2차 기획 대조·장문 추론) 각각 dropdown. 추천 모델 ✦ 표시 + optgroup 으로 추천/기본 분리 ② 추천 모델 큐레이션: chat=qwen3:30b(균형) / wikigen=qwen2.5-coder:32b(코드 위키 최강) / audit=deepseek-r1:32b(깊은 분석·추론). 보조 옵션으로 llama3.3:70b, deepseek-coder-v2:16b, codestral:22b, qwen3 시리즈, command-r 등 포함 ③ backward compat: 옛 settings.model 이 있으면 chatModel 로 이관, 누락된 키는 추천값으로 기본 초기화 ④ dwSend payload.model = chatModel, dwpGenerate body.model = wikiGenModel, dwpAudit body.model = auditModel — 백엔드는 이미 req.model 받음 ⑤ 커스텀 모델 명도 dropdown 에 자동 추가(저장된 값 미일치 시 '(커스텀)' 라벨로 옵션 추가) ⑥ Deep Wiki 사이드바에 #dwp-model-indicator: 현재 wiki·audit 모델 표시 + 클릭 시 설정 모달 ⑦ AI Agent 상태 pill 이 server LLM_MODEL 대신 chatModel 우선 ⑧ 🤖 → ✦ 일괄 교체: AI Agent 사이드바·헤더 타이틀·빈 상태 이모지·봇 아바타·진행 위젯·busy 게이트 메시지·dwpGenerate 다이얼로그·상태 표시 등 12+ 위치. ✦ 는 4-point star — 옵시디언/Claude/Devin 풍 미니멀 사인) | r128 (Deep Wiki 5건 v2: ① dead 슬러그 링크 시각화 — _dwpAttachLinkHandlers 가 본문 [text](?slug=xxx) 의 슬러그가 _dwpState.pages 에 없으면 .dwp-dead-link 클래스(line-through + opacity 0.65 + ⚠) 적용, 클릭 시 안내 토스트 ② 트리 헤더 자식 중첩 — _dwpExtractPageStructure 가 헤더별 links 배열로 그룹화(orphan 별도), 트리 렌더가 § Subsystems 헤더 아래 자식으로 🔗 링크 들여쓰기 + dead 도 strikethrough ③ Mermaid 줌 다크 BG — 박스 var(--c-paper)/var(--c-text)/var(--c-border) 적용, SVG 안쪽도 isDark 면 #1f1d18 (웜다크) ④ 플로팅 진행 위젯 — dwp-progress-widget 신설: 화면 하단 중앙 고정, 회전 스피너(@keyframes dwp-spin) + 단계/디테일/퍼센트 + 그라데이션 프로그래스바 + 클릭 시 상세 로그 펼침(인라인 로그 박스). dwpGenerate/dwpAudit 시작·SSE 이벤트·busy 폴링 모두에서 _dwpShowProgressWidget/_dwpUpdateProgressWidget/_dwpAppendProgressLog 갱신 ⑤ 404 박스 — _dwpRender404(slug, err) 가 HTTP 404 / 네트워크 / 기타 분기, 슬러그·가능한 원인(LLM 실패/카테고리 병합/버전/SQL 003) + 대처(자동 생성 다시·트리 새로고침·Overview 이동) 액션 버튼 박스로 표시) | r127 (Deep Wiki 5건 픽스 — 자동 복구·실시간 로그·시간 표시·트리 하이어라키·Mermaid 줌 SVG: ① 새로고침 자동 복구 — _dwpRestoreIfBusy: 뷰 진입 시 /health 조회해 llm_busy.running 이면 진행 정보(kind/stage/current/total/category/started_at) 를 로그에 흘리고 _dwpSetRunning(true) + 2초 폴링(_dwpStartPolling) 시작. 폴링은 running→false 전환 감지 시 자동 트리 갱신 후 stop. 뷰 떠날 때 _dwpStopPolling. dwpGenerate/dwpAudit 도 시작 시 같은 폴링 호출해 클라이언트 SSE 끊겨도 백엔드 완료 감지 ② 실시간 로그 — 좌측 사이드바 #dwp-logs-wrap 추가(접/펼 가능, 최대 500줄), _dwpLog(msg, level)/_dwpClearLogs/_dwpToggleLogs. 모든 SSE 이벤트(stage/info/clone_done/scan_done/progress/page_done/done/error/warn) 가 시간 + 색상별 한 줄로 기록 ③ Last indexed 에 시간 추가 — toLocaleDateString → toLocaleString (날짜+시간) ④ 트리 하이어라키 — _dwpExtractPageStructure(md, allSlugs): ## ### 헤더 + [텍스트](?slug=xxx) 내부 링크 추출. _dwpFetchPageStructure: lazy fetch + 캐시. _dwpToggleExpand: 페이지마다 ▶/▼ 토글 버튼, 펼치면 헤더 클릭 시 dwpOpenPage + scrollIntoView, 관련 페이지 링크 별도 섹션. expandedSlugs 영속 ⑤ Mermaid 줌 SVG 사이즈 픽스 — 흰 박스 원인: width/height 제거 후 width:auto 하면 viewBox 만으론 브라우저가 0×0 렌더. 픽스: viewBox 보존 + preserveAspectRatio xMidYMid meet + width:min(90vw,1800px);height:auto 강제 부여. 추가로 다운로드 버튼·닫기 버튼·ESC 키·바깥 클릭 닫기·중복 바인딩 방지) | r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -3471,7 +3471,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <!-- [r86 #5] 탐색기 — 통합 검색 + 미리보기 -->
                     <button class="cs-nav" data-nav="explorer" id="cs-nav-explorer" onclick="switchView('explorer')" title="탐색기 (전체 콘텐츠 통합 검색·미리보기·바로가기)"><span class="cs-ico">🔍</span><span class="cs-label">탐색기</span></button>
                     <!-- [r112] r89 "Deep Wiki" → "AI Agent"로 리네임 (실제로는 Qwen Tool Use 챗봇). 진짜 Deep Wiki는 별도 자료 카테고리에 -->
-                    <button class="cs-nav" data-nav="deepwiki" id="cs-nav-deepwiki" onclick="switchView('deepwiki')" title="AI Agent (Qwen Coder 14B + Tool Use — 스프린트/카드/문서/결재/일정 등 라이브 데이터 능동 조회)"><span class="cs-ico">🤖</span><span class="cs-label">AI Agent</span></button>
+                    <button class="cs-nav" data-nav="deepwiki" id="cs-nav-deepwiki" onclick="switchView('deepwiki')" title="AI Agent — Tool Use 기반 라이브 데이터 능동 조회 (모델 선택 가능)"><span class="cs-ico">✦</span><span class="cs-label">AI Agent</span></button>
                     <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태 (DB 편집 포함)"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
                     <button class="cs-nav" data-nav="bugReport" id="cs-nav-bug-report" onclick="switchView('bugReport')" title="버그 리포트 (앱 이슈 제보 + 관리자 검토)"><span class="cs-ico">🐞</span><span class="cs-label">버그 리포트</span></button>
                     <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
@@ -4487,8 +4487,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <!-- 좌측: 페이지 트리 -->
                 <aside class="dwp-tree" style="width:280px;flex-shrink:0;border-right:1px solid var(--c-border);background:var(--c-paper);padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
                     <div style="font-size:13px;font-weight:800;color:var(--c-text);padding:0 4px 8px;border-bottom:1px solid var(--c-border);margin-bottom:6px;display:flex;align-items:center;gap:6px;">📘 Deep Wiki <button onclick="dwpRefreshTree()" style="margin-left:auto;background:none;border:none;color:var(--c-text3);cursor:pointer;font-size:13px;" title="새로고침">🔄</button></div>
-                    <button onclick="dwpGenerate()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;width:100%;text-align:left;padding:8px 12px;">🤖 위키 자동 생성 (1차 MD)</button>
+                    <button onclick="dwpGenerate()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;width:100%;text-align:left;padding:8px 12px;">✦ 위키 자동 생성 (1차 MD)</button>
                     <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서">📊 기획 대조 보고서 (2차)</button>
+                    <!-- [r129] 현재 모델 인디케이터 + 변경 링크 -->
+                    <div id="dwp-model-indicator" onclick="dwOpenSettings()" title="모델 변경 (AI Agent 설정 모달 → 모델 선택)" style="font-size:10.5px;color:var(--c-text3);padding:5px 8px;background:var(--c-card);border:1px dashed var(--c-border);border-radius:6px;cursor:pointer;line-height:1.45;"></div>
                     <div id="dwp-progress" style="font-size:11px;color:var(--c-text2);padding:6px 4px;min-height:14px;"></div>
                     <!-- [r127] 실시간 로그 패널 (접기/펼치기) -->
                     <div id="dwp-logs-wrap" style="display:none;flex-direction:column;border:1px solid var(--c-border);border-radius:7px;background:var(--c-card);overflow:hidden;">
@@ -4543,7 +4545,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div class="dw-wrap">
                 <header class="dw-head">
                     <div>
-                        <h2 class="dw-title">🤖 AI Agent</h2>
+                        <h2 class="dw-title">✦ AI Agent</h2>
                         <div class="dw-sub">자체 PC 호스팅 · Qwen 2.5-Coder 14B + Tool Use (스프린트·카드·문서·결재·일정 등 라이브 데이터 능동 조회)</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
@@ -4572,13 +4574,57 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <input id="dw-backend-url" type="text" placeholder="https://random.trycloudflare.com">
                     </label>
                     <div style="font-size:11.5px;color:var(--c-text3);line-height:1.6;">PC에서 <code>cloudflared tunnel --url http://localhost:8000</code>으로 노출한 FastAPI 백엔드 주소.<br>각 사용자가 자기 PC URL을 갖거나, 팀 공용 URL 하나로 둘 수 있습니다.</div>
-                    <label class="cal-fld"><span>모델</span>
-                        <select id="dw-model">
-                            <option value="qwen2.5-coder:14b" selected>🧠 Qwen 2.5-Coder 14B (권장)</option>
-                            <option value="qwen2.5:14b">🧠 Qwen 2.5 14B (범용)</option>
-                            <option value="qwen2.5:7b">⚡ Qwen 2.5 7B (빠름)</option>
-                        </select>
-                    </label>
+                    <!-- [r129] 3개 모델 별도 — 작업 특성에 맞게 선택 -->
+                    <div style="margin-top:6px;padding:10px 12px;background:var(--ios-fill);border:1px solid var(--c-border);border-radius:9px;">
+                        <div style="font-size:12px;font-weight:800;color:var(--c-text);margin-bottom:8px;">🎛 모델 선택 (작업별)</div>
+                        <label class="cal-fld" style="margin-top:4px;"><span>💬 AI Agent 채팅 (Tool Use · RAG)</span>
+                            <select id="dw-chat-model">
+                                <optgroup label="✦ 추천 (Agent · Tool Use)">
+                                    <option value="qwen3:30b">✦ Qwen3 30B — 추론 + Tool Use 최고 균형 (권장)</option>
+                                    <option value="qwen2.5-coder:32b">Qwen 2.5-Coder 32B — 코드 질문 강함</option>
+                                    <option value="llama3.3:70b">Llama 3.3 70B — 최고 품질, 매우 느림</option>
+                                    <option value="command-r7b">Cohere Command R 7B — RAG 특화</option>
+                                </optgroup>
+                                <optgroup label="기본 / 가벼움">
+                                    <option value="qwen2.5-coder:14b" selected>Qwen 2.5-Coder 14B (기본, 빠름)</option>
+                                    <option value="qwen2.5:14b">Qwen 2.5 14B (범용)</option>
+                                    <option value="qwen2.5:7b">⚡ Qwen 2.5 7B (가장 빠름)</option>
+                                    <option value="qwen3:14b">Qwen3 14B</option>
+                                    <option value="qwen3:8b">Qwen3 8B</option>
+                                </optgroup>
+                            </select>
+                        </label>
+                        <label class="cal-fld" style="margin-top:8px;"><span>📘 Deep Wiki 자동 생성 (코드 분석)</span>
+                            <select id="dw-wikigen-model">
+                                <optgroup label="✦ 추천 (코드 위키)">
+                                    <option value="qwen2.5-coder:32b" selected>✦ Qwen 2.5-Coder 32B — 코드 위키 최고 (권장)</option>
+                                    <option value="deepseek-coder-v2:16b">DeepSeek-Coder-V2 16B</option>
+                                    <option value="codestral:22b">Codestral 22B (Mistral)</option>
+                                </optgroup>
+                                <optgroup label="기본 / 가벼움">
+                                    <option value="qwen2.5-coder:14b">Qwen 2.5-Coder 14B</option>
+                                    <option value="qwen2.5-coder:7b">Qwen 2.5-Coder 7B (가장 빠름)</option>
+                                </optgroup>
+                            </select>
+                        </label>
+                        <label class="cal-fld" style="margin-top:8px;"><span>📊 기획 대조 보고서 2차 (장문 비교 + 추론)</span>
+                            <select id="dw-audit-model">
+                                <optgroup label="✦ 추천 (분석 · 추론)">
+                                    <option value="deepseek-r1:32b" selected>✦ DeepSeek R1 32B — 깊은 추론, 분석 최고 (권장)</option>
+                                    <option value="qwen3:32b">Qwen3 32B — 장문 비교 좋음</option>
+                                    <option value="qwen2.5-coder:32b">Qwen 2.5-Coder 32B (코드 위주면)</option>
+                                    <option value="llama3.3:70b">Llama 3.3 70B (최고 품질, 매우 느림)</option>
+                                </optgroup>
+                                <optgroup label="기본 / 가벼움">
+                                    <option value="deepseek-r1:14b">DeepSeek R1 14B</option>
+                                    <option value="qwen2.5:14b">Qwen 2.5 14B (기본)</option>
+                                </optgroup>
+                            </select>
+                        </label>
+                        <div style="font-size:10.5px;color:var(--c-text3);line-height:1.55;margin-top:6px;">
+                            ✦ 표시는 추천 모델. Ollama 미설치 모델 선택 시 호출 단계에서 실패하므로 <code>ollama pull &lt;모델&gt;</code> 먼저 실행하세요.
+                        </div>
+                    </div>
                     <label class="cal-fld-inline"><input type="checkbox" id="dw-include-tasks" checked> 카드·스프린트도 컨텍스트에 포함</label>
                     <label class="cal-fld-inline"><input type="checkbox" id="dw-stream" checked> 응답 스트리밍 (SSE)</label>
                     <!-- [r90] 인덱싱 섹션 -->
@@ -7383,7 +7429,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var raw = localStorage.getItem('tda_dw_settings');
                 if (raw) dwState.settings = JSON.parse(raw);
             } catch (e) {}
-            if (!dwState.settings) dwState.settings = { backendUrl: '', model: 'qwen2.5-coder:14b', includeTasks: true, stream: true };
+            if (!dwState.settings) dwState.settings = {};
+            // [r129] 3개 모델 별도 + 기존 model 키 backward compat
+            var s = dwState.settings;
+            if (!s.backendUrl) s.backendUrl = '';
+            // 옛 settings 의 model 이 있으면 chatModel 로 이관 (한 번만)
+            if (!s.chatModel) s.chatModel = s.model || 'qwen2.5-coder:14b';
+            if (!s.wikiGenModel) s.wikiGenModel = 'qwen2.5-coder:32b';
+            if (!s.auditModel) s.auditModel = 'deepseek-r1:32b';
+            if (typeof s.includeTasks !== 'boolean') s.includeTasks = true;
+            if (typeof s.stream !== 'boolean') s.stream = true;
+            // 옛 키 정리 (없어도 무방)
             return dwState.settings;
         }
         function _dwSaveSettings(s) {
@@ -7411,7 +7467,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function dwOpenSettings() {
             var s = _dwGetSettings();
             document.getElementById('dw-backend-url').value = s.backendUrl || '';
-            document.getElementById('dw-model').value = s.model || 'qwen2.5-coder:14b';
+            // [r129] 3개 모델 dropdown (없는 option 이면 추가)
+            function _setSel(id, val) {
+                var sel = document.getElementById(id); if (!sel || !val) return;
+                if (![].some.call(sel.options, function (o) { return o.value === val; })) {
+                    var o = document.createElement('option'); o.value = val; o.textContent = val + ' (커스텀)'; sel.appendChild(o);
+                }
+                sel.value = val;
+            }
+            _setSel('dw-chat-model', s.chatModel);
+            _setSel('dw-wikigen-model', s.wikiGenModel);
+            _setSel('dw-audit-model', s.auditModel);
             document.getElementById('dw-include-tasks').checked = !!s.includeTasks;
             document.getElementById('dw-stream').checked = (s.stream !== false);
             // [r90] Git URL 복원
@@ -7425,16 +7491,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             openModal('dw-settings-modal');
         }
         function dwSaveSettings() {
+            // [r129] 3개 모델 별도 저장 (chatModel / wikiGenModel / auditModel)
             var s = {
                 backendUrl: (document.getElementById('dw-backend-url').value || '').trim().replace(/\/$/, ''),
-                model: document.getElementById('dw-model').value,
+                chatModel: document.getElementById('dw-chat-model').value,
+                wikiGenModel: document.getElementById('dw-wikigen-model').value,
+                auditModel: document.getElementById('dw-audit-model').value,
                 includeTasks: document.getElementById('dw-include-tasks').checked,
                 stream: document.getElementById('dw-stream').checked
             };
             _dwSaveSettings(s);
             closeModal('dw-settings-modal');
-            showToast('⚙️ Deep Wiki 설정 저장됨', 'success');
+            showToast('⚙ 설정 저장됨 — 채팅: ' + s.chatModel + ' · 위키: ' + s.wikiGenModel + ' · 감사: ' + s.auditModel, 'success');
             dwHealthCheck();
+            if (typeof _dwpRenderModelIndicator === 'function') _dwpRenderModelIndicator();
         }
         async function dwHealthCheck() {
             var pill = document.getElementById('dw-status-pill');
@@ -7471,9 +7541,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         pill.textContent = '🔄 ' + kindLabel + ' 중 · ' + stage + ' · ' + prog;
                         pill.title = dwState.llmBusy.human || '';
                     } else {
+                        // [r129] AI Agent pill 에 현재 chat 모델 우선 표시 (서버 LLM_MODEL 폴백)
+                        var s2 = _dwGetSettings();
+                        var modelLbl = s2.chatModel || info.model || '';
                         pill.className = 'dw-status dw-status-ok';
-                        pill.textContent = '🟢 연결됨' + (info.model ? ' · ' + info.model : '');
-                        pill.title = '';
+                        pill.textContent = '🟢 연결됨' + (modelLbl ? ' · ' + modelLbl : '');
+                        pill.title = modelLbl ? ('현재 채팅 모델: ' + modelLbl) : '';
                     }
                     dwState.healthOk = true;
                     return;
@@ -7491,7 +7564,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var box = document.getElementById('dw-messages'); if (!box) return;
             if (!dwState.messages.length) {
                 box.innerHTML = '<div class="dw-empty">' +
-                    '<div class="dw-empty-emoji">🤖</div>' +
+                    '<div class="dw-empty-emoji" style="font-size:48px;color:var(--c-accent);">✦</div>' +
                     '<div><b>Deep Wiki에 질문해보세요</b></div>' +
                     '<div style="font-size:12px;margin-top:6px;">프로젝트 문서·태스크·스프린트를 컨텍스트로 답변합니다.</div>' +
                     '<div style="font-size:11px;margin-top:14px;opacity:.7;">💡 예시: "전투 시스템 관련 카드는 뭐가 있어?"<br>"PlayerCharacter 프리팹 작성 가이드 알려줘"<br>"이번 스프린트 목표를 마크다운으로 정리해줘"</div>' +
@@ -7500,7 +7573,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
             box.innerHTML = dwState.messages.map(function (m) {
                 var isUser = m.role === 'user';
-                var avatar = isUser ? '👤' : '🤖';
+                var avatar = isUser ? '👤' : '✦';
                 var bodyHtml;
                 if (isUser) bodyHtml = _annEsc(m.content);
                 else {
@@ -7556,7 +7629,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 // 명확한 안내 — Deep Wiki 자동 생성/감사가 진행 중이라 LLM 점유
                 var b = dwState.llmBusy;
                 var kindLabel = ({
-                    wiki_generate: '🤖 Deep Wiki 자동 생성',
+                    wiki_generate: '✦ Deep Wiki 자동 생성',
                     wiki_audit: '📊 기획 대조 보고서(2차)',
                     index_code: '🗂 코드 인덱싱',
                     index_wiki: '📚 위키 인덱싱',
@@ -7587,7 +7660,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var payload = {
                     messages: dwState.messages.slice(0, -1).map(function (m) { return { role: m.role === 'bot' ? 'assistant' : 'user', content: m.content }; }),
                     project_id: activeProjectId,
-                    model: s.model,
+                    model: s.chatModel || s.model,  // [r129] chatModel 우선
                     include_tasks: s.includeTasks,
                     stream: s.stream
                 };
@@ -8016,7 +8089,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             view.querySelectorAll('.dwp-tree button').forEach(function (b) {
                 // 페이지/감사 항목 클릭은 막지 않음(읽기 전용) — 상단 액션 버튼만
                 var t = (b.textContent || '');
-                if (t.indexOf('🤖') >= 0 || t.indexOf('📊') >= 0 || t.indexOf('🔄') >= 0) {
+                if (t.indexOf('✦') >= 0 || t.indexOf('🤖') >= 0 || t.indexOf('📊') >= 0 || t.indexOf('🔄') >= 0) {
                     b.disabled = !!running;
                     b.style.opacity = running ? '0.45' : '';
                     b.style.cursor = running ? 'not-allowed' : '';
@@ -8031,6 +8104,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function _dwpProgress(html) {
             var el = document.getElementById('dwp-progress');
             if (el) el.innerHTML = html;
+        }
+        // [r129] 사이드바 모델 인디케이터 — 현재 wikiGenModel / auditModel 표시
+        function _dwpRenderModelIndicator() {
+            var el = document.getElementById('dwp-model-indicator');
+            if (!el) return;
+            var s = _dwGetSettings();
+            el.innerHTML = '<div style="font-weight:700;color:var(--c-text2);margin-bottom:2px;">🎛 현재 모델</div>'
+                + '<div>📘 위키: <code style="color:var(--c-accent);">' + (s.wikiGenModel || '?') + '</code></div>'
+                + '<div>📊 감사: <code style="color:var(--c-accent);">' + (s.auditModel || '?') + '</code></div>'
+                + '<div style="margin-top:3px;color:var(--c-text3);">⚙ 클릭해서 변경</div>';
         }
         // [r128] 플로팅 진행 위젯 — show/hide/update + 로그 펼침
         function _dwpShowProgressWidget() {
@@ -8133,7 +8216,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         var cat = busy.category ? ' · ' + busy.category : '';
                         _dwpProgress('🔄 ' + _annEsc(busy.kind || 'busy') + ' · ' + _annEsc(stage) + ' · ' + _annEsc(prog) + _annEsc(cat));
                         // [r128] 위젯 실시간 업데이트
-                        var kindLbl = ({ wiki_generate: '🤖 Deep Wiki 자동 생성', wiki_audit: '📊 기획 대조(2차)', index_code: '🗂 코드 인덱싱', index_wiki: '📚 위키 인덱싱', index_task: '📋 태스크 인덱싱', index_sprint: '🏃 스프린트 인덱싱' })[busy.kind] || (busy.kind || '작업');
+                        var kindLbl = ({ wiki_generate: '✦ Deep Wiki 자동 생성', wiki_audit: '📊 기획 대조(2차)', index_code: '🗂 코드 인덱싱', index_wiki: '📚 위키 인덱싱', index_task: '📋 태스크 인덱싱', index_sprint: '🏃 스프린트 인덱싱' })[busy.kind] || (busy.kind || '작업');
                         _dwpUpdateProgressWidget({
                             stage: kindLbl + ' · ' + stage,
                             detail: cat ? ('현재: ' + busy.category) : (busy.total ? '진행 중' : '시작 중…'),
@@ -8208,7 +8291,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (!_dwpState.pages.length) {
                     _dwpRenderEmpty(_dwpState.repos.length
                         ? '선택된 레포·버전에 페이지가 없습니다.'
-                        : '아직 생성된 위키 페이지가 없습니다. 좌측 🤖 버튼으로 자동 생성하세요.');
+                        : '아직 생성된 위키 페이지가 없습니다. 좌측 ✦ 버튼으로 자동 생성하세요.');
                 } else if (!_dwpState.currentSlug || !_dwpState.pages.find(function(p){return p.slug===_dwpState.currentSlug;})) {
                     var ov = _dwpState.pages.find(function (p) { return p.slug === '_overview'; });
                     dwpOpenPage((ov || _dwpState.pages[0]).slug);
@@ -8492,7 +8575,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     a.title = '⚠ 이 페이지는 생성되지 않았습니다 (LLM 호출 실패 또는 카테고리 병합). Overview 의 "생성되지 않은 카테고리" 섹션 참조.';
                     a.addEventListener('click', function (ev) {
                         ev.preventDefault();
-                        showToast('⚠ "' + slugTarget + '" 페이지는 생성되지 않았습니다. 🤖 위키 자동 생성 다시 실행하세요.', 'alert');
+                        showToast('⚠ "' + slugTarget + '" 페이지는 생성되지 않았습니다. ✦ 위키 자동 생성 다시 실행하세요.', 'alert');
                     });
                     return;
                 }
@@ -8722,7 +8805,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var gitUrl = '';
             try { gitUrl = localStorage.getItem('tda_dw_git_url') || ''; } catch (e) {}
             gitUrl = await uiPrompt({
-                title: '🤖 Deep Wiki 자동 생성',
+                title: '✦ Deep Wiki 자동 생성',
                 label: 'Git 레포 URL (유니티 프로젝트, 공개 레포):',
                 value: gitUrl,
                 placeholder: 'https://github.com/yourname/your-unity-game',
@@ -8742,15 +8825,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             _dwpLog('🚀 위키 자동 생성 시작 — ' + gitUrl, 'stage');
             // [r128] 플로팅 진행 위젯
             _dwpShowProgressWidget();
-            _dwpUpdateProgressWidget({ stage: '🤖 Deep Wiki 자동 생성', detail: '시작 중…', indeterminate: true });
+            _dwpUpdateProgressWidget({ stage: '✦ Deep Wiki 자동 생성', detail: '시작 중…', indeterminate: true });
             _dwpAppendProgressLog('🚀 시작 — ' + gitUrl, 'stage');
             _dwpStartPolling();
             try {
                 // [r117] branch 빈 값 = 서버가 ls-remote로 자동 감지 + main/master/develop fallback
+                // [r129] wikiGenModel 사용 — Deep Wiki 자동 생성용 (코드 분석 특화)
+                var _s = _dwGetSettings();
                 var res = await fetch(url + '/wiki/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ git_url: gitUrl, project_id: activeProjectId, branch: '' }),
+                    body: JSON.stringify({ git_url: gitUrl, project_id: activeProjectId, branch: '', model: _s.wikiGenModel || null }),
                 });
                 if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
                 var reader = res.body.getReader();
@@ -8791,10 +8876,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                                 _dwpAppendProgressLog('📁 카테고리 ' + ev.category_count + '개 발견', 'info');
                             } else if (ev.event === 'progress') {
                                 var pct = Math.round((ev.current / ev.total) * 100);
-                                _dwpProgress('🤖 [' + ev.current + '/' + ev.total + ' · ' + pct + '%] ' + _annEsc(ev.category || ev.slug));
-                                _dwpLog('🤖 [' + ev.current + '/' + ev.total + '] ' + (ev.category || ev.slug || '?') + ' (' + (ev.files_in_cat || 0) + ' files)', 'info');
-                                _dwpUpdateProgressWidget({ stage: '🤖 LLM 페이지 생성 중', detail: (ev.category || ev.slug || '?') + ' · ' + (ev.files_in_cat || 0) + ' files', current: ev.current, total: ev.total });
-                                _dwpAppendProgressLog('🤖 [' + ev.current + '/' + ev.total + '] ' + (ev.category || ev.slug || '?'), 'info');
+                                _dwpProgress('✦ [' + ev.current + '/' + ev.total + ' · ' + pct + '%] ' + _annEsc(ev.category || ev.slug));
+                                _dwpLog('✦ [' + ev.current + '/' + ev.total + '] ' + (ev.category || ev.slug || '?') + ' (' + (ev.files_in_cat || 0) + ' files)', 'info');
+                                _dwpUpdateProgressWidget({ stage: '✦ LLM 페이지 생성 중', detail: (ev.category || ev.slug || '?') + ' · ' + (ev.files_in_cat || 0) + ' files', current: ev.current, total: ev.total });
+                                _dwpAppendProgressLog('✦ [' + ev.current + '/' + ev.total + '] ' + (ev.category || ev.slug || '?'), 'info');
                             } else if (ev.event === 'page_done') {
                                 _dwpProgress('✅ ' + _annEsc(ev.title));
                                 _dwpLog('✅ 페이지 저장: ' + (ev.title || ev.slug || '?'), 'success');
@@ -8866,10 +8951,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             _dwpAppendProgressLog('🚀 기획 대조(2차) 시작', 'stage');
             _dwpStartPolling();
             try {
+                // [r129] auditModel 사용 — 기획 대조 2차 (장문 비교 + 추론 특화)
+                var _sa = _dwGetSettings();
                 var res = await fetch(url + '/wiki/audit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: activeProjectId }),
+                    body: JSON.stringify({ project_id: activeProjectId, model: _sa.auditModel || null }),
                 });
                 if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
                 var reader = res.body.getReader();
@@ -12258,6 +12345,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (typeof dwpRefreshAudits === 'function') setTimeout(dwpRefreshAudits, 80);
                 // [r127] 새로고침 직후라도 백엔드가 작업 중이면 자동 복구 (진행률·로그 폴링)
                 if (typeof _dwpRestoreIfBusy === 'function') setTimeout(_dwpRestoreIfBusy, 200);
+                // [r129] 사이드바 모델 인디케이터 표시
+                if (typeof _dwpRenderModelIndicator === 'function') setTimeout(_dwpRenderModelIndicator, 60);
             } else {
                 // 다른 뷰로 떠나면 폴링 중단 (Deep Wiki 다시 진입 시 _dwpRestoreIfBusy 가 재시작)
                 if (typeof _dwpStopPolling === 'function') _dwpStopPolling();
