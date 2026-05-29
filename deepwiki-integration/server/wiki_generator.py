@@ -718,8 +718,11 @@ def _build_overview_page(
         "graph TB",
         f"    ROOT[\"📘 {repo_name}<br/>{total_files} files\"]",
     ]
-    cat_items = sorted(categories.values(), key=lambda c: c["priority"])
+    # [r125 #1·#2] 실제 생성된 페이지(by_slug)만 Subsystems / 시스템맵에 포함 — 404 링크 제거
     by_slug = {p["slug"]: p for p in pages}
+    cat_items_all = sorted(categories.values(), key=lambda c: c["priority"])
+    cat_items = [c for c in cat_items_all if c["slug"] in by_slug]
+    skipped = [c for c in cat_items_all if c["slug"] not in by_slug]
     for cat in cat_items:
         node_id = re.sub(r"[^A-Za-z0-9_]", "_", cat["slug"])
         title = by_slug.get(cat["slug"], {}).get("title") or cat["title"]
@@ -741,6 +744,18 @@ def _build_overview_page(
         if len(summary) > 80:
             summary = summary[:80] + "…"
         lines.append(f"| **[{title}](?slug={slug})** | [`{slug}`](?slug={slug}) | {cat['total_files']} | {summary} |")
+
+    # [r125 #1] LLM 실패로 생성 안 된 카테고리 명시 (혼동 방지)
+    if skipped:
+        lines.extend([
+            "",
+            "### ⚠ 생성되지 않은 카테고리",
+            "",
+            "_(LLM 호출 실패 또는 타임아웃. 위키 자동 생성을 다시 실행하면 재시도됩니다.)_",
+            "",
+        ])
+        for cat in skipped:
+            lines.append(f"- ❌ **{cat['title']}** ({cat['total_files']} 파일) — `{cat['slug']}`")
 
     lines.extend([
         "",

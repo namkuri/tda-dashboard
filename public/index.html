@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
+<!-- BUILD: 2026-05-29 r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -8177,18 +8177,25 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 try { html = DOMPurify.sanitize(parseMarkdownWithTables(md), domPurifyConfig); }
                 catch (e) { html = '<pre style="white-space:pre-wrap;">' + md.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</pre>'; }
                 var meta = page.meta || {};
-                var metaHtml = '<div style="font-size:11px;color:var(--c-text3);margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--c-border);display:flex;gap:14px;flex-wrap:wrap;">' +
-                    (page.git_commit ? '<span>📦 커밋: <code>' + _annEsc(page.git_commit) + '</code></span>' : '') +
-                    (meta.total_files ? '<span>📁 파일 ' + meta.total_files + '개</span>' : '') +
-                    (meta.generated_by ? '<span>🤖 ' + _annEsc(meta.generated_by) + '</span>' : '') +
-                    (page.updated_at ? '<span>🕐 ' + new Date(page.updated_at).toLocaleString() + '</span>' : '') +
+                // [r125 #5] deepwiki.com 톤 — 매우 미묘한 한 줄 메타 (Last indexed 만 강조, 나머지는 약함)
+                var metaParts = [];
+                if (page.updated_at) metaParts.push('Last indexed: ' + new Date(page.updated_at).toLocaleDateString());
+                if (page.git_commit) metaParts.push('<code style="font-size:10.5px;background:var(--ios-fill);padding:1px 6px;border-radius:5px;">' + _annEsc(page.git_commit.slice(0, 7)) + '</code>');
+                if (meta.total_files) metaParts.push(meta.total_files + ' files');
+                if (meta.generated_by) metaParts.push(_annEsc(meta.generated_by));
+                var metaHtml = '<div style="font-size:11.5px;color:var(--c-text3);margin-bottom:24px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+                    metaParts.join('<span style="color:var(--c-border);">·</span>') +
                     '</div>';
-                if (box) box.innerHTML = metaHtml + '<div id="dwp-body-inner">' + html + '</div>';
+                // [r125 #3] markdown-body 클래스 적용 → 표/코드/blockquote 등 기존 스타일 자동 상속
+                if (box) box.innerHTML = metaHtml + '<div id="dwp-body-inner" class="markdown-body">' + html + '</div>';
                 // [r114/r122] 본문 후처리 — Mermaid, 페이지 링크, Sources 배지, TOC
                 var inner = box ? box.querySelector('#dwp-body-inner') : null;
                 if (inner) {
                     await _dwpRenderMermaidBlocks(inner);
                     _dwpAttachLinkHandlers(inner, page);
+                    // [r125 #4] Mermaid SVG 클릭 줌 + #5 prev/next 네비
+                    _dwpAttachMermaidZoom(inner);
+                    _dwpAppendPrevNext(box, slug);
                     var tocEl = document.getElementById('dwp-toc');
                     if (tocEl) _dwpBuildTOC(inner, tocEl);
                 }
@@ -8196,6 +8203,58 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } catch (e) {
                 _dwpRenderEmpty('페이지 로드 실패: ' + (e.message || e));
             }
+        }
+        // [r125 #4] Mermaid SVG 클릭 시 풀스크린 오버레이로 줌
+        function _dwpAttachMermaidZoom(containerEl) {
+            if (!containerEl) return;
+            var wraps = containerEl.querySelectorAll('.dwp-mermaid');
+            wraps.forEach(function (w) {
+                w.style.cursor = 'zoom-in';
+                w.title = '클릭하면 확대';
+                w.addEventListener('click', function () {
+                    var svg = w.querySelector('svg');
+                    if (!svg) return;
+                    var ov = document.createElement('div');
+                    ov.id = 'dwp-zoom-overlay';
+                    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.86);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:30px;';
+                    var clone = svg.cloneNode(true);
+                    clone.removeAttribute('width'); clone.removeAttribute('height');
+                    clone.style.cssText = 'max-width:96vw;max-height:96vh;width:auto;height:auto;display:block;';
+                    var box = document.createElement('div');
+                    box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;box-shadow:0 24px 64px rgba(0,0,0,0.5);overflow:auto;max-width:96vw;max-height:96vh;';
+                    box.appendChild(clone);
+                    ov.appendChild(box);
+                    ov.addEventListener('click', function () { ov.remove(); });
+                    document.body.appendChild(ov);
+                });
+            });
+        }
+        // [r125 #5] 페이지 하단 prev/next 네비 (deepwiki.com 스타일)
+        function _dwpAppendPrevNext(box, currentSlug) {
+            if (!box) return;
+            var pages = (_dwpState.pages || []).slice().sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+            var idx = pages.findIndex(function (p) { return p.slug === currentSlug; });
+            if (idx < 0) return;
+            var prev = idx > 0 ? pages[idx - 1] : null;
+            var next = idx < pages.length - 1 ? pages[idx + 1] : null;
+            if (!prev && !next) return;
+            var nav = document.createElement('div');
+            nav.style.cssText = 'display:flex;gap:12px;margin-top:48px;padding-top:24px;border-top:1px solid var(--c-border);';
+            function mkBtn(p, label, align) {
+                var btn = document.createElement('button');
+                btn.style.cssText = 'flex:1;text-align:' + align + ';background:var(--c-paper);border:1px solid var(--c-border);border-radius:10px;padding:14px 18px;cursor:pointer;color:var(--c-text);transition:border-color .15s,background .15s;';
+                btn.onmouseover = function () { btn.style.borderColor = 'var(--c-accent)'; btn.style.background = 'var(--c-accent-soft)'; };
+                btn.onmouseout = function () { btn.style.borderColor = 'var(--c-border)'; btn.style.background = 'var(--c-paper)'; };
+                btn.onclick = function () { dwpOpenPage(p.slug); };
+                btn.innerHTML = '<div style="font-size:10.5px;color:var(--c-text3);font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px;">' + label + '</div>' +
+                                '<div style="font-size:13px;font-weight:600;color:var(--c-text);">' + (p.title || p.slug).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+                return btn;
+            }
+            if (prev) nav.appendChild(mkBtn(prev, '← Previous', 'left'));
+            else nav.appendChild(document.createElement('div'));
+            if (next) nav.appendChild(mkBtn(next, 'Next →', 'right'));
+            else nav.appendChild(document.createElement('div'));
+            box.appendChild(nav);
         }
         // [r114] 좌측 트리 검색 — 페이지 제목 부분 매칭
         function _dwpFilterTree() {
@@ -8427,13 +8486,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var metaHtml = '<div style="display:flex;align-items:center;gap:18px;margin-bottom:18px;padding:14px 16px;background:var(--ios-fill);border-radius:10px;border:1px solid var(--c-border);">' +
                     (scorePct != null ? '<div style="text-align:center;"><div style="font-size:32px;font-weight:900;color:' + scoreColor + ';line-height:1;">' + scorePct + '%</div><div style="font-size:10.5px;color:var(--c-text3);text-transform:uppercase;letter-spacing:.04em;margin-top:4px;">일치도</div></div>' : '') +
                     '<div style="font-size:12px;color:var(--c-text2);"><b style="color:var(--c-text);">' + fCount + '건</b>의 차이 발견<br><span style="color:var(--c-text3);">' + (audit.updated_at ? new Date(audit.updated_at).toLocaleString() : '') + '</span></div></div>';
-                if (box) box.innerHTML = metaHtml + '<div id="dwp-body-inner">' + html + '</div>';
+                // [r125 #3] markdown-body 클래스 적용 — 표·코드 자동 스타일
+                if (box) box.innerHTML = metaHtml + '<div id="dwp-body-inner" class="markdown-body">' + html + '</div>';
                 var inner = box ? box.querySelector('#dwp-body-inner') : null;
                 if (inner) {
                     await _dwpRenderMermaidBlocks(inner);
                     // [r122] audit에도 동일하게 — 첫 latest page의 git_url 재사용
                     var refMeta = (_dwpState.pages && _dwpState.pages[0]) || {};
                     _dwpAttachLinkHandlers(inner, refMeta);
+                    // [r125 #4] Mermaid 줌
+                    _dwpAttachMermaidZoom(inner);
                     var tocEl = document.getElementById('dwp-toc');
                     if (tocEl) _dwpBuildTOC(inner, tocEl);
                 }
