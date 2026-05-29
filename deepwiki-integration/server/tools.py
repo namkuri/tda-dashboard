@@ -695,14 +695,30 @@ async def _tool_list_reviews(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _tool_list_calendar_events(args: Dict[str, Any]) -> Dict[str, Any]:
-    """캘린더 일정 목록."""
+    """캘린더 일정 목록.
+
+    [r144] project_id 필터는 lenient — 사용자 캘린더 모델상 일정의 `project_id` 는
+    소속 캘린더(`calendars` 테이블)의 scope 에 따라 다음과 같이 채워짐:
+      - 팀 캘린더(scope=team)      → project_id NULL  (전사 공통)
+      - 개인 캘린더(scope=personal) → project_id NULL  (본인용)
+      - 프로젝트 캘린더(scope=project) → project_id = 해당 프로젝트
+    그래서 `.eq(project_id, X)` 만 걸면 팀/개인 캘린더 일정이 통째로 사라짐.
+    → `project_id == X OR project_id IS NULL` 로 완화. 또한 응답에 cal_id 및
+    `calendars` join 결과(이름·scope·색)도 같이 노출해 모델이 출처를 명시 가능.
+    """
     store = get_store()
     try:
         q = store.client.table("calendar_events").select("*")
     except Exception as e:
         return {"ok": False, "error": f"calendar_events 테이블 없음: {e}"}
-    if args.get("project_id"):
-        q = q.eq("project_id", args["project_id"])
+    project_id = args.get("project_id")
+    if project_id:
+        # PostgREST or() 문법: project_id.eq.X,project_id.is.null
+        try:
+            q = q.or_(f"project_id.eq.{project_id},project_id.is.null")
+        except Exception:
+            # supabase-py 옛 버전 호환: .or_() 미지원이면 그냥 필터 빼고 전체 조회
+            pass
     # 날짜 범위 필터
     if args.get("from_date"):
         try:
@@ -714,17 +730,37 @@ async def _tool_list_calendar_events(args: Dict[str, Any]) -> Dict[str, Any]:
             q = q.lte("start_at", args["to_date"])
         except Exception:
             pass
-    q = q.order("start_at").limit(int(args.get("limit") or 30))
+    q = q.order("start_at").limit(int(args.get("limit") or 50))
     try:
         res = q.execute()
         rows = res.data or []
     except Exception as e:
         return {"ok": False, "error": f"calendar_events 조회 실패: {e}"}
+    # [r144] calendars 테이블도 같이 fetch 해 cal_id → {name, scope, color} 매핑
+    cal_ids = list({r.get("cal_id") for r in rows if r.get("cal_id")})
+    cal_map: Dict[str, Dict[str, Any]] = {}
+    if cal_ids:
+        try:
+            cres = (
+                store.client.table("calendars")
+                .select("id,title,scope,color,owner_user_id,project_id")
+                .in_("id", cal_ids)
+                .execute()
+            )
+            for c in (cres.data or []):
+                cal_map[c["id"]] = {
+                    "name": c.get("title") or "(이름 없음)",
+                    "scope": c.get("scope") or "team",
+                    "color": c.get("color") or "",
+                }
+        except Exception:
+            pass
     # owner user 이름 join
     uids = [r["owner_user_id"] for r in rows if r.get("owner_user_id")]
     user_map = await _resolve_users(uids) if uids else {}
     out = []
     for r in rows:
+        cal_meta = cal_map.get(r.get("cal_id")) or {}
         out.append({
             "id": r.get("id"),
             "title": r.get("title") or "(제목 없음)",
@@ -734,8 +770,17 @@ async def _tool_list_calendar_events(args: Dict[str, Any]) -> Dict[str, Any]:
             "owner": user_map.get(r.get("owner_user_id")) or {"name": "(미상)"},
             "is_public": bool(r.get("is_public")),
             "project_id": r.get("project_id"),
+            "cal_id": r.get("cal_id"),
+            "calendar_name": cal_meta.get("name"),
+            "calendar_scope": cal_meta.get("scope"),  # team | personal | project
         })
-    return {"ok": True, "result": out, "count": len(out)}
+    note = None
+    if project_id and not out:
+        note = (
+            f"project_id={project_id} 또는 project_id IS NULL 범위에 일정 없음. "
+            "사용자가 다른 프로젝트의 일정을 묻는지 확인하거나, from_date/to_date 범위 조정 시도."
+        )
+    return {"ok": True, "result": out, "count": len(out), "note": note}
 
 
 async def _tool_list_issues(args: Dict[str, Any]) -> Dict[str, Any]:
