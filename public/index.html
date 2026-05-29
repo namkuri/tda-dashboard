@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
+<!-- BUILD: 2026-05-29 r127 (Deep Wiki 5건 픽스 — 자동 복구·실시간 로그·시간 표시·트리 하이어라키·Mermaid 줌 SVG: ① 새로고침 자동 복구 — _dwpRestoreIfBusy: 뷰 진입 시 /health 조회해 llm_busy.running 이면 진행 정보(kind/stage/current/total/category/started_at) 를 로그에 흘리고 _dwpSetRunning(true) + 2초 폴링(_dwpStartPolling) 시작. 폴링은 running→false 전환 감지 시 자동 트리 갱신 후 stop. 뷰 떠날 때 _dwpStopPolling. dwpGenerate/dwpAudit 도 시작 시 같은 폴링 호출해 클라이언트 SSE 끊겨도 백엔드 완료 감지 ② 실시간 로그 — 좌측 사이드바 #dwp-logs-wrap 추가(접/펼 가능, 최대 500줄), _dwpLog(msg, level)/_dwpClearLogs/_dwpToggleLogs. 모든 SSE 이벤트(stage/info/clone_done/scan_done/progress/page_done/done/error/warn) 가 시간 + 색상별 한 줄로 기록 ③ Last indexed 에 시간 추가 — toLocaleDateString → toLocaleString (날짜+시간) ④ 트리 하이어라키 — _dwpExtractPageStructure(md, allSlugs): ## ### 헤더 + [텍스트](?slug=xxx) 내부 링크 추출. _dwpFetchPageStructure: lazy fetch + 캐시. _dwpToggleExpand: 페이지마다 ▶/▼ 토글 버튼, 펼치면 헤더 클릭 시 dwpOpenPage + scrollIntoView, 관련 페이지 링크 별도 섹션. expandedSlugs 영속 ⑤ Mermaid 줌 SVG 사이즈 픽스 — 흰 박스 원인: width/height 제거 후 width:auto 하면 viewBox 만으론 브라우저가 0×0 렌더. 픽스: viewBox 보존 + preserveAspectRatio xMidYMid meet + width:min(90vw,1800px);height:auto 강제 부여. 추가로 다운로드 버튼·닫기 버튼·ESC 키·바깥 클릭 닫기·중복 바인딩 방지) | r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4454,6 +4454,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button onclick="dwpGenerate()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;width:100%;text-align:left;padding:8px 12px;">🤖 위키 자동 생성 (1차 MD)</button>
                     <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서">📊 기획 대조 보고서 (2차)</button>
                     <div id="dwp-progress" style="font-size:11px;color:var(--c-text2);padding:6px 4px;min-height:14px;"></div>
+                    <!-- [r127] 실시간 로그 패널 (접기/펼치기) -->
+                    <div id="dwp-logs-wrap" style="display:none;flex-direction:column;border:1px solid var(--c-border);border-radius:7px;background:var(--c-card);overflow:hidden;">
+                        <div onclick="_dwpToggleLogs()" style="display:flex;align-items:center;gap:6px;padding:5px 9px;font-size:11px;font-weight:700;color:var(--c-text2);background:var(--ios-fill);cursor:pointer;user-select:none;">
+                            <span id="dwp-logs-caret">▼</span>
+                            <span>📜 실시간 로그</span>
+                            <span id="dwp-logs-count" style="margin-left:auto;color:var(--c-text3);font-weight:600;">0</span>
+                        </div>
+                        <div id="dwp-logs" style="max-height:280px;overflow-y:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.55;padding:6px 8px;background:var(--c-paper);color:var(--c-text2);"></div>
+                    </div>
                     <!-- [r121] repo + 버전 선택 -->
                     <div id="dwp-repo-selector" style="display:none;"></div>
                     <!-- [r114] 페이지 검색 -->
@@ -7938,6 +7947,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             repos: [],              // [r121] [{repo_name, git_url, generations:[{generation_id, git_commit, is_latest, page_count}]}]
             currentRepo: null,      // [r121] 선택된 repo_name
             currentGen: null,       // [r121] 선택된 generation_id (null = 최신)
+            // [r127] 새로고침 복구 + 실시간 로그 + 트리 하이어라키
+            logs: [],               // [{ts, icon, msg, level}]
+            logsOpen: true,         // 로그 패널 펼침
+            pollTimer: null,        // busy 폴링 setInterval id
+            wasRunning: false,      // 직전 폴링에서 running 이었나 (전환 감지)
+            expandedSlugs: {},      // {slug: true} — 트리 펼친 항목
+            pageStructures: {},     // {slug: {headers:[{level,text,id}], links:[{slug,text}]}}
         };
 
         // [r119] 위키 생성/감사 진행 중 모든 액션 버튼 비활성화
@@ -7963,6 +7979,96 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function _dwpProgress(html) {
             var el = document.getElementById('dwp-progress');
             if (el) el.innerHTML = html;
+        }
+        // [r127] 실시간 로그 — 한 줄 추가 + 패널 갱신 (자동 스크롤)
+        function _dwpLog(msg, level) {
+            var entry = { ts: Date.now(), msg: String(msg || ''), level: level || 'info' };
+            _dwpState.logs.push(entry);
+            if (_dwpState.logs.length > 500) _dwpState.logs = _dwpState.logs.slice(-500);
+            var wrap = document.getElementById('dwp-logs-wrap');
+            if (wrap) wrap.style.display = 'flex';
+            var box = document.getElementById('dwp-logs');
+            if (box) {
+                var time = new Date(entry.ts).toLocaleTimeString();
+                var color = ({ error: '#d2393d', warn: '#b58a16', success: '#2c6849', stage: 'var(--c-accent)', info: 'var(--c-text2)' })[entry.level] || 'var(--c-text2)';
+                var safe = entry.msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                box.insertAdjacentHTML('beforeend', '<div style="color:' + color + ';"><span style="color:var(--c-text3);">[' + time + ']</span> ' + safe + '</div>');
+                box.scrollTop = box.scrollHeight;
+            }
+            var cnt = document.getElementById('dwp-logs-count');
+            if (cnt) cnt.textContent = _dwpState.logs.length;
+        }
+        function _dwpClearLogs() {
+            _dwpState.logs = [];
+            var box = document.getElementById('dwp-logs');
+            if (box) box.innerHTML = '';
+            var cnt = document.getElementById('dwp-logs-count');
+            if (cnt) cnt.textContent = '0';
+        }
+        function _dwpToggleLogs() {
+            _dwpState.logsOpen = !_dwpState.logsOpen;
+            var box = document.getElementById('dwp-logs');
+            var caret = document.getElementById('dwp-logs-caret');
+            if (box) box.style.display = _dwpState.logsOpen ? '' : 'none';
+            if (caret) caret.textContent = _dwpState.logsOpen ? '▼' : '▶';
+        }
+        // [r127] busy 폴링 — 새로고침 후/다른 클라이언트가 시작한 작업도 진행 상황 추적
+        function _dwpStartPolling() {
+            if (_dwpState.pollTimer) return;
+            _dwpState.pollTimer = setInterval(async function () {
+                var url = _dwpBackendUrl();
+                if (!url) return;
+                try {
+                    var r = await fetch(url + '/health');
+                    if (!r.ok) return;
+                    var info = await r.json();
+                    var busy = info.llm_busy || {};
+                    if (busy.running) {
+                        if (!_dwpState.wasRunning) {
+                            // 새로 시작됨 감지 (다른 곳에서 트리거)
+                            _dwpLog('🔄 백엔드 작업 감지: ' + (busy.kind || '?'), 'stage');
+                            _dwpSetRunning(true);
+                            _dwpState.wasRunning = true;
+                        }
+                        var stage = busy.stage || '?';
+                        var prog = busy.total ? (busy.current + '/' + busy.total) : '진행 중';
+                        var cat = busy.category ? ' · ' + busy.category : '';
+                        _dwpProgress('🔄 ' + _annEsc(busy.kind || 'busy') + ' · ' + _annEsc(stage) + ' · ' + _annEsc(prog) + _annEsc(cat));
+                    } else if (_dwpState.wasRunning) {
+                        // 완료 전환 감지 → 트리·로그 갱신
+                        _dwpLog('✅ 백엔드 작업 종료 — 트리 새로고침', 'success');
+                        _dwpProgress('🎉 완료 — 트리 갱신 중...');
+                        _dwpState.wasRunning = false;
+                        _dwpSetRunning(false);
+                        _dwpStopPolling();
+                        setTimeout(dwpRefreshTree, 300);
+                        if (typeof dwpRefreshAudits === 'function') setTimeout(dwpRefreshAudits, 600);
+                    }
+                } catch (e) { /* 일시적 네트워크 오류는 무시 */ }
+            }, 2000);
+        }
+        function _dwpStopPolling() {
+            if (_dwpState.pollTimer) { clearInterval(_dwpState.pollTimer); _dwpState.pollTimer = null; }
+        }
+        // [r127] Deep Wiki 뷰 진입 시 — 진행 중이면 자동 복구 (새로고침 후 시나리오)
+        async function _dwpRestoreIfBusy() {
+            var url = _dwpBackendUrl();
+            if (!url) return;
+            try {
+                var r = await fetch(url + '/health');
+                if (!r.ok) return;
+                var info = await r.json();
+                var busy = info.llm_busy || {};
+                if (busy.running) {
+                    _dwpLog('🔄 진행 중인 백엔드 작업 발견 — 자동 복구', 'stage');
+                    _dwpLog('· kind: ' + (busy.kind || '?') + ' / stage: ' + (busy.stage || '?') + ' / ' + (busy.current || 0) + '/' + (busy.total || 0), 'info');
+                    if (busy.category) _dwpLog('· 현재 카테고리: ' + busy.category, 'info');
+                    if (busy.started_at) _dwpLog('· 시작: ' + new Date(busy.started_at * 1000).toLocaleString(), 'info');
+                    _dwpState.wasRunning = true;
+                    _dwpSetRunning(true);
+                    _dwpStartPolling();
+                }
+            } catch (e) { /* ignore */ }
         }
 
         async function dwpRefreshTree() {
@@ -8052,6 +8158,67 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             dwpRefreshTree();
         }
 
+        // [r127] 페이지 본문에서 ## ### 헤더 + 내부 슬러그 링크 추출 (lazy)
+        function _dwpExtractPageStructure(md, allSlugs) {
+            var headers = []; var links = [];
+            if (!md) return { headers: headers, links: links };
+            var lines = String(md).split(/\r?\n/);
+            var inCode = false;
+            for (var i = 0; i < lines.length; i++) {
+                var L = lines[i];
+                if (/^```/.test(L)) { inCode = !inCode; continue; }
+                if (inCode) continue;
+                var hm = L.match(/^(#{2,3})\s+(.+?)\s*$/);
+                if (hm) {
+                    var level = hm[1].length; // 2 or 3
+                    var text = hm[2].replace(/[#*`_]/g, '').trim();
+                    if (text) headers.push({ level: level, text: text, anchorIdx: headers.length });
+                }
+            }
+            // 내부 슬러그 링크: [텍스트](?slug=xxx) 또는 [텍스트](xxx) 가 슬러그 목록에 있으면
+            var slugSet = {}; (allSlugs || []).forEach(function (s) { slugSet[s] = true; });
+            var seen = {};
+            var re = /\[([^\]\n]+)\]\(([^)\s#]+)(?:#[^)]*)?\)/g;
+            var m;
+            while ((m = re.exec(md)) !== null) {
+                var text2 = m[1].replace(/[#*`_]/g, '').trim();
+                var href = m[2];
+                var slug = null;
+                var qm = href.match(/[?&]slug=([^&#]+)/);
+                if (qm) slug = decodeURIComponent(qm[1]);
+                else if (slugSet[href]) slug = href;
+                if (slug && !seen[slug] && text2) {
+                    seen[slug] = true;
+                    links.push({ slug: slug, text: text2 });
+                }
+            }
+            return { headers: headers, links: links };
+        }
+        async function _dwpFetchPageStructure(slug) {
+            if (_dwpState.pageStructures[slug]) return _dwpState.pageStructures[slug];
+            var url = _dwpBackendUrl();
+            if (!url || !activeProjectId) return null;
+            try {
+                var r = await fetch(url + '/wiki/page?project_id=' + encodeURIComponent(activeProjectId) + '&slug=' + encodeURIComponent(slug));
+                if (!r.ok) return null;
+                var page = await r.json();
+                var allSlugs = (_dwpState.pages || []).map(function (p) { return p.slug; });
+                var s = _dwpExtractPageStructure(page.content || '', allSlugs);
+                _dwpState.pageStructures[slug] = s;
+                return s;
+            } catch (e) { return null; }
+        }
+        async function _dwpToggleExpand(slug) {
+            if (_dwpState.expandedSlugs[slug]) {
+                delete _dwpState.expandedSlugs[slug];
+                _dwpRenderTree();
+                return;
+            }
+            _dwpState.expandedSlugs[slug] = true;
+            _dwpRenderTree(); // 즉시 ▼로 변경 (로딩 표시)
+            await _dwpFetchPageStructure(slug);
+            _dwpRenderTree(); // 자식 채우기
+        }
         function _dwpRenderTree() {
             var el = document.getElementById('dwp-tree');
             if (!el) return;
@@ -8061,11 +8228,48 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
             // _overview 최상단, 나머지 sort_order 순
             var pages = _dwpState.pages.slice().sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+            function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+            function escAttr(s) { return String(s || '').replace(/'/g, "\\'"); }
             el.innerHTML = pages.map(function (p) {
                 var active = (p.slug === _dwpState.currentSlug) ? 'background:var(--c-accent-soft);color:var(--c-accent);' : 'color:var(--c-text2);';
-                var safeTitle = (p.title || p.slug).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                var safeSlug = (p.slug || '').replace(/'/g, "\\'");
-                return '<button onclick="dwpOpenPage(\'' + safeSlug + '\')" style="text-align:left;background:none;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;' + active + '" title="' + safeTitle + '">' + safeTitle + '</button>';
+                var safeTitle = esc(p.title || p.slug);
+                var safeSlug = escAttr(p.slug || '');
+                var open = !!_dwpState.expandedSlugs[p.slug];
+                var caret = open ? '▼' : '▶';
+                var headRow = '<div style="display:flex;align-items:center;gap:2px;padding:2px 0;">'
+                    + '<button onclick="_dwpToggleExpand(\'' + safeSlug + '\')" title="펼치기/접기" style="background:none;border:none;color:var(--c-text3);cursor:pointer;padding:4px 4px;font-size:10px;line-height:1;width:18px;flex-shrink:0;">' + caret + '</button>'
+                    + '<button onclick="dwpOpenPage(\'' + safeSlug + '\')" style="flex:1;text-align:left;background:none;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;' + active + '" title="' + safeTitle + '">' + safeTitle + '</button>'
+                    + '</div>';
+                if (!open) return headRow;
+                // 자식 — 헤더 + 내부 링크
+                var s = _dwpState.pageStructures[p.slug];
+                var inner;
+                if (!s) {
+                    inner = '<div style="font-size:11px;color:var(--c-text3);padding:4px 28px;">로딩…</div>';
+                } else {
+                    var rows = [];
+                    if (s.headers && s.headers.length) {
+                        s.headers.slice(0, 30).forEach(function (h) {
+                            var indent = (h.level - 2) * 10;
+                            rows.push('<button onclick="dwpOpenPage(\'' + safeSlug + '\');setTimeout(function(){var els=document.querySelectorAll(\'#dwp-body-inner h2,#dwp-body-inner h3\');if(els[' + h.anchorIdx + '])els[' + h.anchorIdx + '].scrollIntoView({behavior:\'smooth\',block:\'start\'});},250)"'
+                                + ' style="display:block;width:100%;text-align:left;background:none;border:none;padding:3px 8px 3px ' + (28 + indent) + 'px;font-size:11.5px;color:var(--c-text3);cursor:pointer;border-left:2px solid var(--c-border);margin-left:18px;" '
+                                + 'title="' + esc(h.text) + '">' + (h.level === 2 ? '§ ' : '· ') + esc(h.text) + '</button>');
+                        });
+                    }
+                    if (s.links && s.links.length) {
+                        rows.push('<div style="font-size:10px;color:var(--c-text3);padding:6px 28px 2px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-left:2px solid var(--c-border);margin-left:18px;">관련 페이지</div>');
+                        s.links.slice(0, 20).forEach(function (lk) {
+                            rows.push('<button onclick="dwpOpenPage(\'' + escAttr(lk.slug) + '\')" '
+                                + 'style="display:block;width:100%;text-align:left;background:none;border:none;padding:3px 8px 3px 32px;font-size:11.5px;color:var(--c-accent);cursor:pointer;border-left:2px solid var(--c-border);margin-left:18px;" '
+                                + 'title="' + esc(lk.text) + '">🔗 ' + esc(lk.text) + '</button>');
+                        });
+                    }
+                    if (!rows.length) {
+                        rows.push('<div style="font-size:11px;color:var(--c-text3);padding:4px 28px;font-style:italic;">_(헤더·링크 없음)_</div>');
+                    }
+                    inner = rows.join('');
+                }
+                return headRow + inner;
             }).join('');
         }
 
@@ -8235,7 +8439,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var meta = page.meta || {};
                 // [r125 #5] deepwiki.com 톤 — 매우 미묘한 한 줄 메타 (Last indexed 만 강조, 나머지는 약함)
                 var metaParts = [];
-                if (page.updated_at) metaParts.push('Last indexed: ' + new Date(page.updated_at).toLocaleDateString());
+                if (page.updated_at) metaParts.push('Last indexed: ' + new Date(page.updated_at).toLocaleString());
                 if (page.git_commit) metaParts.push('<code style="font-size:10.5px;background:var(--ios-fill);padding:1px 6px;border-radius:5px;">' + _annEsc(page.git_commit.slice(0, 7)) + '</code>');
                 if (meta.total_files) metaParts.push(meta.total_files + ' files');
                 if (meta.generated_by) metaParts.push(_annEsc(meta.generated_by));
@@ -8260,27 +8464,56 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 _dwpRenderEmpty('페이지 로드 실패: ' + (e.message || e));
             }
         }
-        // [r125 #4] Mermaid SVG 클릭 시 풀스크린 오버레이로 줌
+        // [r125→r127] Mermaid SVG 클릭 시 풀스크린 오버레이로 줌 (사이즈 누락 픽스)
         function _dwpAttachMermaidZoom(containerEl) {
             if (!containerEl) return;
             var wraps = containerEl.querySelectorAll('.dwp-mermaid');
             wraps.forEach(function (w) {
+                if (w._zoomBound) return; // 중복 바인딩 방지
+                w._zoomBound = true;
                 w.style.cursor = 'zoom-in';
                 w.title = '클릭하면 확대';
                 w.addEventListener('click', function () {
                     var svg = w.querySelector('svg');
                     if (!svg) return;
+                    // [r127] viewBox / 원본 width·height 추출 → 큰 사이즈로 명시 부여
+                    var vb = svg.getAttribute('viewBox') || '';
+                    var vbParts = vb.split(/\s+/).map(Number);
+                    var origW = svg.getAttribute('width') || (vbParts[2] || svg.clientWidth || 800);
+                    var origH = svg.getAttribute('height') || (vbParts[3] || svg.clientHeight || 600);
+                    var ratio = (parseFloat(origH) || 600) / (parseFloat(origW) || 800);
+                    var clone = svg.cloneNode(true);
+                    // 원본의 width/height 가 100% 같은 경우 viewBox 기반으로 강제 설정
+                    if (vb) clone.setAttribute('viewBox', vb);
+                    clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                    // CSS — 화면 폭의 90% 까지 확대 + viewBox 비율 유지
+                    clone.style.cssText = 'width:min(90vw,1800px);height:auto;max-height:90vh;display:block;background:#fff;';
+                    clone.removeAttribute('width'); clone.removeAttribute('height');
                     var ov = document.createElement('div');
                     ov.id = 'dwp-zoom-overlay';
-                    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.86);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:30px;';
-                    var clone = svg.cloneNode(true);
-                    clone.removeAttribute('width'); clone.removeAttribute('height');
-                    clone.style.cssText = 'max-width:96vw;max-height:96vh;width:auto;height:auto;display:block;';
+                    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:30px;';
                     var box = document.createElement('div');
-                    box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;box-shadow:0 24px 64px rgba(0,0,0,0.5);overflow:auto;max-width:96vw;max-height:96vh;';
+                    box.style.cssText = 'background:#fff;border-radius:12px;padding:20px;box-shadow:0 24px 64px rgba(0,0,0,0.5);overflow:auto;max-width:96vw;max-height:96vh;cursor:default;';
+                    box.addEventListener('click', function (e) { e.stopPropagation(); });
                     box.appendChild(clone);
+                    // 닫기 버튼 + 다운로드 버튼
+                    var bar = document.createElement('div');
+                    bar.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;';
+                    var dl = document.createElement('button');
+                    dl.textContent = '💾 SVG 다운로드'; dl.style.cssText = 'background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;font-weight:600;';
+                    dl.onclick = function () {
+                        var s = new XMLSerializer().serializeToString(clone);
+                        var blob = new Blob([s], { type: 'image/svg+xml' });
+                        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click();
+                    };
+                    var close = document.createElement('button');
+                    close.textContent = '✕ 닫기'; close.style.cssText = 'background:var(--c-accent);color:#fff;border:none;border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;font-weight:600;';
+                    close.onclick = function () { ov.remove(); };
+                    bar.appendChild(dl); bar.appendChild(close);
+                    box.insertBefore(bar, clone);
                     ov.appendChild(box);
-                    ov.addEventListener('click', function () { ov.remove(); });
+                    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+                    document.addEventListener('keydown', function escClose(e) { if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', escClose); } });
                     document.body.appendChild(ov);
                 });
             });
@@ -8372,21 +8605,29 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         if (!data || data === '[DONE]') return;
                         try {
                             var ev = JSON.parse(data);
+                            // [r127] 모든 SSE 이벤트를 실시간 로그에 기록
                             if (ev.event === 'stage') {
                                 _dwpProgress('🔄 ' + _annEsc(ev.message || ev.stage));
+                                _dwpLog('🔄 [stage] ' + (ev.stage || '') + (ev.message ? ' — ' + ev.message : ''), 'stage');
                             } else if (ev.event === 'info') {
                                 _dwpProgress('ℹ️ ' + _annEsc(ev.message || ''));
+                                _dwpLog('ℹ️ ' + (ev.message || ''), 'info');
                             } else if (ev.event === 'clone_done') {
                                 _dwpProgress('✅ Clone 완료 (커밋 <code>' + _annEsc(ev.commit || '?') + '</code>) — 스캔 중...');
+                                _dwpLog('✅ Clone 완료 (커밋: ' + (ev.commit || '?') + ')', 'success');
                             } else if (ev.event === 'scan_done') {
                                 _dwpProgress('📁 카테고리 ' + ev.category_count + '개 발견 — LLM 생성 시작');
+                                _dwpLog('📁 카테고리 ' + ev.category_count + '개 발견' + (ev.merged && ev.merged.length ? ' (병합: ' + ev.merged.join(', ') + ')' : ''), 'info');
                             } else if (ev.event === 'progress') {
                                 var pct = Math.round((ev.current / ev.total) * 100);
                                 _dwpProgress('🤖 [' + ev.current + '/' + ev.total + ' · ' + pct + '%] ' + _annEsc(ev.category || ev.slug));
+                                _dwpLog('🤖 [' + ev.current + '/' + ev.total + '] ' + (ev.category || ev.slug || '?') + ' (' + (ev.files_in_cat || 0) + ' files)', 'info');
                             } else if (ev.event === 'page_done') {
                                 _dwpProgress('✅ ' + _annEsc(ev.title));
+                                _dwpLog('✅ 페이지 저장: ' + (ev.title || ev.slug || '?'), 'success');
                             } else if (ev.event === 'done') {
                                 _dwpProgress('🎉 완료 — ' + ev.pages_created + '개 페이지 (' + (ev.repo_name || '?') + ' / ' + (ev.generation_id || '') + ')');
+                                _dwpLog('🎉 완료 — 페이지 ' + ev.pages_created + '개 (repo=' + (ev.repo_name || '?') + ', gen=' + (ev.generation_id || '?') + ')', 'success');
                                 showToast('🎉 Deep Wiki 생성 완료 (' + ev.pages_created + '개 · ' + (ev.repo_name || '?') + ')', 'success');
                                 // [r121] 새 repo/gen 자동 선택
                                 if (ev.repo_name) {
@@ -8397,17 +8638,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                                 setTimeout(dwpRefreshTree, 300);
                             } else if (ev.event === 'error') {
                                 _dwpProgress('<span style="color:#d2393d;">❌ ' + _annEsc(ev.message) + '</span>');
+                                _dwpLog('❌ ERROR: ' + (ev.message || '?'), 'error');
                                 showToast('❌ 위키 생성 실패: ' + (ev.message || ''), 'alert');
                             } else if (ev.event === 'warn') {
+                                _dwpLog('⚠ WARN: ' + (ev.message || '?'), 'warn');
                                 console.warn('[wiki/generate]', ev.message);
+                            } else {
+                                _dwpLog('· ' + (ev.event || '?') + ' ' + JSON.stringify(ev).slice(0, 180), 'info');
                             }
                         } catch (e) { /* ignore */ }
                     });
                 }
             } catch (e) {
                 _dwpProgress('<span style="color:#d2393d;">❌ 요청 실패: ' + _annEsc(e.message || e) + '</span>');
+                _dwpLog('❌ 요청 실패: ' + (e.message || e), 'error');
+                // [r127] 클라이언트 끊겨도 백엔드는 계속 → 폴링은 유지하여 완료 감지
             } finally {
                 _dwpSetRunning(false);
+                // pollTimer 는 _dwpStartPolling 에서 done 감지 시 자동 stop, 또는 다음 진입 시 cleanup
             }
         }
 
@@ -8430,6 +8678,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!ok) return;
             _dwpSetRunning(true);
             _dwpProgress('🔄 시작 중...');
+            _dwpClearLogs();
+            _dwpLog('🚀 기획 대조(2차) 시작', 'stage');
+            _dwpStartPolling();
             try {
                 var res = await fetch(url + '/wiki/audit', {
                     method: 'POST',
@@ -11821,6 +12072,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (viewName === 'deepwikiPages') {
                 if (typeof dwpRefreshTree === 'function') setTimeout(dwpRefreshTree, 50);
                 if (typeof dwpRefreshAudits === 'function') setTimeout(dwpRefreshAudits, 80);
+                // [r127] 새로고침 직후라도 백엔드가 작업 중이면 자동 복구 (진행률·로그 폴링)
+                if (typeof _dwpRestoreIfBusy === 'function') setTimeout(_dwpRestoreIfBusy, 200);
+            } else {
+                // 다른 뷰로 떠나면 폴링 중단 (Deep Wiki 다시 진입 시 _dwpRestoreIfBusy 가 재시작)
+                if (typeof _dwpStopPolling === 'function') _dwpStopPolling();
             }
             // [개인문서] 사이드바 active (docs-view 공유, kind=personal)
             var _csP = document.getElementById('cs-nav-personal'); if (_csP) _csP.classList.toggle('active', viewName === 'personal');
