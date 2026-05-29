@@ -294,7 +294,7 @@ _CATEGORY_PROMPT = """당신은 DeepWiki(deepwiki.com) 스타일의 시니어 �
 
 # 📋 출력 형식 — 다음 7개 섹션을 정확한 헤더로
 
-# {{시스템 제목}}
+# {시스템 제목}
 
 ## Overview
 이 시스템의 책임과 주요 사용처를 4~6문장. 어떤 문제를 해결하고 어디서 호출되는지. 핵심 클래스·매니저 1~3개를 굵게 강조하면서 첫 등장 시 Sources 추가:
@@ -377,7 +377,7 @@ _ARCHITECTURE_PROMPT = """당신은 DeepWiki(deepwiki.com) 스타일의 시니�
 
 # 📋 출력 형식
 
-# {{프로젝트 이름}} — System Architecture
+# {프로젝트 이름} — System Architecture
 
 ## Overall Architecture Diagram
 프로젝트의 모든 서브시스템을 큰 Mermaid 다이어그램 1개로 표현. 카테고리 = 노드, 호출/의존 관계 = 화살표.
@@ -453,6 +453,21 @@ sequenceDiagram
 """
 
 
+def _safe_format(template: str, **kwargs) -> str:
+    """[r138] str.format 대신 키 단위 replace — 본문에 `{` `}` 가 있어도 안전.
+
+    Python 의 str.format 은 템플릿 안의 모든 `{...}` 패턴을 키로 해석하므로,
+    csharp/json/JS 등 코드 블록의 `{` `}` 가 KeyError 일으킴.
+    예: 템플릿에 `public class Foo { ... }` 있으면 `{...}` 안 내용을 키로 검색해 실패.
+
+    safe_format 은 명시한 키만 정확히 치환하고 나머지 brace 는 손대지 않음.
+    """
+    out = template
+    for k, v in kwargs.items():
+        out = out.replace("{" + k + "}", str(v))
+    return out
+
+
 def _build_files_block(files: List[Dict[str, Any]]) -> str:
     """LLM에 첨부할 파일 본문 블록 + 라인 정보."""
     blocks = []
@@ -484,7 +499,9 @@ async def _llm_generate_category_page(
     unity_mode: bool = False,
 ) -> Dict[str, Any]:
     """카테고리 페이지 생성 — DeepWiki 7섹션 형식. unity_mode=True 면 Unity 특화 addendum."""
-    prompt = _CATEGORY_PROMPT.format(
+    # [r138] _safe_format — 템플릿 내 csharp/json 코드의 {} 가 KeyError 일으키던 버그 픽스
+    prompt = _safe_format(
+        _CATEGORY_PROMPT,
         category_title=cat["title"],
         slug=cat["slug"],
         total_files=cat["total_files"],
@@ -551,7 +568,9 @@ async def _llm_generate_architecture_page(
     unity_mode: bool = False,
 ) -> Dict[str, Any]:
     """전체 Architecture 페이지 — 모든 카테고리 관계 Mermaid."""
-    prompt = _ARCHITECTURE_PROMPT.format(
+    # [r138] _safe_format
+    prompt = _safe_format(
+        _ARCHITECTURE_PROMPT,
         git_url=git_url,
         commit=commit or "?",
         category_count=len(categories),
@@ -1087,7 +1106,8 @@ async def extend_wiki_page(
         if not custom_prompt or not custom_prompt.strip():
             yield {"event": "error", "message": "custom_prompt 가 비어있습니다"}
             return
-        addendum = addendum.format(custom_prompt=custom_prompt.strip())
+        # [r138] _safe_format — custom_prompt 안에 {} 가 있어도 안전
+        addendum = _safe_format(addendum, custom_prompt=custom_prompt.strip())
 
     # 본문 너무 길면 LLM context 초과 — 8000자 정도로 컷 (8000 chars ≈ 2000 tokens)
     existing_content = (page.get("content") or "")[:8000]
