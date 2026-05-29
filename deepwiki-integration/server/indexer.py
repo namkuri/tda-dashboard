@@ -363,8 +363,13 @@ async def index_git_repo(
     yield {"event": "done", "chunks_inserted": chunks_inserted}
 
 
-async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
-    """Supabase wiki_docs 전체 → 청크 → 임베딩."""
+async def index_wiki_docs(project_id: Optional[str] = None, since: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
+    """Supabase wiki_docs → 청크 → 임베딩.
+
+    [r130] since (ISO 문자열) 가 주어지면 updated_at >= since 인 doc 만 증분 인덱싱.
+      - 변경된 source_id 의 기존 청크만 삭제 후 재 임베딩 (전체 wipe X)
+      - since 가 None 이면 기존 동작 (전체 재인덱싱)
+    """
     ollama = get_ollama()
     store = get_store()
 
@@ -372,20 +377,39 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
     q = store.client.table("wiki_docs").select("*")
     if project_id:
         q = q.eq("project_id", project_id)
+    # [r130] 증분: updated_at >= since 필터 (컬럼 없으면 전체)
+    if since:
+        try:
+            q = q.gte("updated_at", since)
+        except Exception:
+            pass
     res = q.execute()
     docs = res.data or []
 
     # 폴더 제외
     docs = [d for d in docs if not (d.get("meta") or {}).get("isFolder")]
 
-    yield {"event": "start", "total_docs": len(docs)}
+    yield {"event": "start", "total_docs": len(docs), "mode": "incremental" if since else "full", "since": since or None}
 
-    # 기존 wiki 청크 삭제
-    if project_id:
-        deleted = store.delete_by_project(project_id, source_type="wiki")
+    # [r130] 증분이면 변경된 source_id 만 청크 삭제, 전체면 전체 wipe
+    if since and docs:
+        ids_to_clean = [d["id"] for d in docs if d.get("id")]
+        deleted = 0
+        for sid in ids_to_clean:
+            try:
+                store.client.table("doc_chunks").delete().eq("source_type", "wiki").eq("source_id", sid).execute()
+                deleted += 1
+            except Exception:
+                pass
+        yield {"event": "cleaned", "deleted": deleted, "mode": "by_source_id"}
+    elif since:
+        yield {"event": "cleaned", "deleted": 0, "mode": "no_changes"}
     else:
-        deleted = store.delete_by_source("wiki")
-    yield {"event": "cleaned", "deleted": deleted}
+        if project_id:
+            deleted = store.delete_by_project(project_id, source_type="wiki")
+        else:
+            deleted = store.delete_by_source("wiki")
+        yield {"event": "cleaned", "deleted": deleted, "mode": "full_wipe"}
 
     chunks_inserted = 0
     skipped_empty = 0
@@ -436,13 +460,12 @@ async def index_wiki_docs(project_id: Optional[str] = None) -> AsyncIterator[Dic
     yield {"event": "done", "chunks_inserted": chunks_inserted, "skipped_empty": skipped_empty}
 
 
-async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
+async def index_tasks(project_id: Optional[str] = None, since: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
     """Supabase tasks → 청크 → 임베딩.
 
     [r102→r103] 라이브 메타(상태·존·담당자 등) content에 포함.
     r103: select("*")로 모든 컬럼 안전 조회 — 스키마에 없는 컬럼은 무시.
-    실제 컬럼: dev_name(legacy), assignees(jsonb 배열), due_date,
-              is_starred, carryover_count, zone, sprint_id, etc.
+    [r130] since (ISO 문자열): updated_at >= since 만 증분 인덱싱.
     """
     ollama = get_ollama()
     store = get_store()
@@ -451,16 +474,30 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
     q = store.client.table("tasks").select("*")
     if project_id:
         q = q.eq("project_id", project_id)
+    if since:
+        try:
+            q = q.gte("updated_at", since)
+        except Exception:
+            pass
     res = q.execute()
     tasks = res.data or []
 
-    yield {"event": "start", "total_tasks": len(tasks)}
+    yield {"event": "start", "total_tasks": len(tasks), "mode": "incremental" if since else "full", "since": since or None}
 
-    # 기존 task 청크 삭제
-    if project_id:
-        store.delete_by_project(project_id, source_type="task")
-    else:
-        store.delete_by_source("task")
+    # [r130] 증분이면 변경된 source_id 만 청크 삭제
+    if since and tasks:
+        for t in tasks:
+            sid = t.get("id")
+            if not sid: continue
+            try:
+                store.client.table("doc_chunks").delete().eq("source_type", "task").eq("source_id", sid).execute()
+            except Exception:
+                pass
+    elif not since:
+        if project_id:
+            store.delete_by_project(project_id, source_type="task")
+        else:
+            store.delete_by_source("task")
 
     chunks_inserted = 0
     skipped_empty = 0
@@ -545,13 +582,11 @@ async def index_tasks(project_id: Optional[str] = None) -> AsyncIterator[Dict[st
     yield {"event": "done", "chunks_inserted": chunks_inserted, "skipped_empty": skipped_empty}
 
 
-async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
-    """Supabase sprints (goal/checklists + status + dates + participants) → 임베딩.
+async def index_sprints(project_id: Optional[str] = None, since: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
+    """Supabase sprints → 임베딩.
 
-    [r102→r103] 라이브 메타 포함. r103: select("*")로 안전 조회.
-    실제 컬럼: status, intrusion_count, intrusion_log, carryover_from_previous,
-              milestone_criteria, start_date, end_date, closed_at, history,
-              participants, section_order, attachments, checklists.
+    [r102→r103] 라이브 메타 포함.
+    [r130] since (ISO 문자열): updated_at >= since 만 증분 인덱싱.
     """
     ollama = get_ollama()
     store = get_store()
@@ -560,15 +595,29 @@ async def index_sprints(project_id: Optional[str] = None) -> AsyncIterator[Dict[
     q = store.client.table("sprints").select("*")
     if project_id:
         q = q.eq("project_id", project_id)
+    if since:
+        try:
+            q = q.gte("updated_at", since)
+        except Exception:
+            pass
     res = q.execute()
     sprints = res.data or []
 
-    yield {"event": "start", "total_sprints": len(sprints)}
+    yield {"event": "start", "total_sprints": len(sprints), "mode": "incremental" if since else "full", "since": since or None}
 
-    if project_id:
-        store.delete_by_project(project_id, source_type="sprint")
-    else:
-        store.delete_by_source("sprint")
+    if since and sprints:
+        for sp in sprints:
+            sid = sp.get("id")
+            if not sid: continue
+            try:
+                store.client.table("doc_chunks").delete().eq("source_type", "sprint").eq("source_id", sid).execute()
+            except Exception:
+                pass
+    elif not since:
+        if project_id:
+            store.delete_by_project(project_id, source_type="sprint")
+        else:
+            store.delete_by_source("sprint")
 
     chunks_inserted = 0
     skipped_empty = 0

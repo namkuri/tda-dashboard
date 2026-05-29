@@ -2,6 +2,7 @@
 import asyncio
 import json
 import time
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -298,6 +299,76 @@ async def index_sprint(req: IndexWikiRequest):
     """Supabase sprints 인덱싱."""
     return _sse_indexer(index_sprints(project_id=req.project_id),
                         busy_kind="index_sprint", busy_project=req.project_id)
+
+
+# [r130] 증분 자동 동기화 — wiki+task+sprint 를 since 이후로만 재 인덱싱
+class IndexSyncRequest(BaseModel):
+    project_id: Optional[str] = None
+    since: Optional[str] = None  # ISO datetime (예: "2026-05-29T11:30:00Z")
+    include: List[str] = ["wiki", "task", "sprint"]
+
+
+@app.post("/index/sync")
+async def index_sync(req: IndexSyncRequest):
+    """[r130] 증분 동기화 — Supabase 의 wiki_docs / tasks / sprints 중 updated_at >= since 인 것만 재 임베딩.
+
+    프론트가 lastSyncAt 을 localStorage 로 관리하고, 헬스체크 성공 직후 + 주기적으로 호출.
+    Ollama 가 다른 작업으로 점유 중이면 거부 (busy 게이트).
+    응답: SSE — phase 별 진행률 + 총 결과 요약.
+    """
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'busy', 'message': _busy_human()}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+
+    async def combined():
+        _busy_set(running=True, kind="index_sync", project_id=req.project_id, started_at=time.time(),
+                  stage="시작", current=0, total=len(req.include), category=None,
+                  message=f"증분 동기화 시작 (since={req.since or 'full'})")
+        try:
+            phase_idx = 0
+            summary: Dict[str, Any] = {"since": req.since, "phases": {}}
+            for kind in req.include:
+                phase_idx += 1
+                _busy_set(stage=kind, current=phase_idx, total=len(req.include), category=kind)
+                yield {"event": "phase_start", "kind": kind, "current": phase_idx, "total": len(req.include)}
+                if kind == "wiki":
+                    gen = index_wiki_docs(project_id=req.project_id, since=req.since)
+                elif kind == "task":
+                    gen = index_tasks(project_id=req.project_id, since=req.since)
+                elif kind == "sprint":
+                    gen = index_sprints(project_id=req.project_id, since=req.since)
+                else:
+                    yield {"event": "warn", "message": f"알 수 없는 kind: {kind}"}
+                    continue
+                phase_result = {"chunks_inserted": 0, "skipped_empty": 0, "total_rows": 0}
+                async for ev in gen:
+                    # 하위 이벤트 그대로 흘리되, prefix 로 kind 표시
+                    ev2 = {**ev, "_kind": kind}
+                    yield ev2
+                    if ev.get("event") == "start":
+                        phase_result["total_rows"] = ev.get("total_docs") or ev.get("total_tasks") or ev.get("total_sprints") or 0
+                    elif ev.get("event") == "done":
+                        phase_result["chunks_inserted"] = ev.get("chunks_inserted", 0)
+                        phase_result["skipped_empty"] = ev.get("skipped_empty", 0)
+                summary["phases"][kind] = phase_result
+                yield {"event": "phase_done", "kind": kind, **phase_result}
+            # 마지막 종합
+            now_iso = datetime.now().isoformat()
+            summary["completed_at"] = now_iso
+            total_chunks = sum(p.get("chunks_inserted", 0) for p in summary["phases"].values())
+            yield {"event": "done", "summary": summary, "total_chunks_inserted": total_chunks, "next_since": now_iso}
+        except Exception as e:
+            yield {"event": "error", "message": str(e)}
+        finally:
+            _busy_clear()
+
+    async def stream():
+        async for ev in combined():
+            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 # ─────────────────────────────────────────────

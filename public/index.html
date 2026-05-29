@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r129 (모델 선택 UI 3종 + ✦ 아이콘 통일: ① 작업별 3개 모델 — settings 모달에 chatModel(AI Agent·Tool Use), wikiGenModel(Deep Wiki 자동 생성·코드 분석), auditModel(2차 기획 대조·장문 추론) 각각 dropdown. 추천 모델 ✦ 표시 + optgroup 으로 추천/기본 분리 ② 추천 모델 큐레이션: chat=qwen3:30b(균형) / wikigen=qwen2.5-coder:32b(코드 위키 최강) / audit=deepseek-r1:32b(깊은 분석·추론). 보조 옵션으로 llama3.3:70b, deepseek-coder-v2:16b, codestral:22b, qwen3 시리즈, command-r 등 포함 ③ backward compat: 옛 settings.model 이 있으면 chatModel 로 이관, 누락된 키는 추천값으로 기본 초기화 ④ dwSend payload.model = chatModel, dwpGenerate body.model = wikiGenModel, dwpAudit body.model = auditModel — 백엔드는 이미 req.model 받음 ⑤ 커스텀 모델 명도 dropdown 에 자동 추가(저장된 값 미일치 시 '(커스텀)' 라벨로 옵션 추가) ⑥ Deep Wiki 사이드바에 #dwp-model-indicator: 현재 wiki·audit 모델 표시 + 클릭 시 설정 모달 ⑦ AI Agent 상태 pill 이 server LLM_MODEL 대신 chatModel 우선 ⑧ 🤖 → ✦ 일괄 교체: AI Agent 사이드바·헤더 타이틀·빈 상태 이모지·봇 아바타·진행 위젯·busy 게이트 메시지·dwpGenerate 다이얼로그·상태 표시 등 12+ 위치. ✦ 는 4-point star — 옵시디언/Claude/Devin 풍 미니멀 사인) | r128 (Deep Wiki 5건 v2: ① dead 슬러그 링크 시각화 — _dwpAttachLinkHandlers 가 본문 [text](?slug=xxx) 의 슬러그가 _dwpState.pages 에 없으면 .dwp-dead-link 클래스(line-through + opacity 0.65 + ⚠) 적용, 클릭 시 안내 토스트 ② 트리 헤더 자식 중첩 — _dwpExtractPageStructure 가 헤더별 links 배열로 그룹화(orphan 별도), 트리 렌더가 § Subsystems 헤더 아래 자식으로 🔗 링크 들여쓰기 + dead 도 strikethrough ③ Mermaid 줌 다크 BG — 박스 var(--c-paper)/var(--c-text)/var(--c-border) 적용, SVG 안쪽도 isDark 면 #1f1d18 (웜다크) ④ 플로팅 진행 위젯 — dwp-progress-widget 신설: 화면 하단 중앙 고정, 회전 스피너(@keyframes dwp-spin) + 단계/디테일/퍼센트 + 그라데이션 프로그래스바 + 클릭 시 상세 로그 펼침(인라인 로그 박스). dwpGenerate/dwpAudit 시작·SSE 이벤트·busy 폴링 모두에서 _dwpShowProgressWidget/_dwpUpdateProgressWidget/_dwpAppendProgressLog 갱신 ⑤ 404 박스 — _dwpRender404(slug, err) 가 HTTP 404 / 네트워크 / 기타 분기, 슬러그·가능한 원인(LLM 실패/카테고리 병합/버전/SQL 003) + 대처(자동 생성 다시·트리 새로고침·Overview 이동) 액션 버튼 박스로 표시) | r127 (Deep Wiki 5건 픽스 — 자동 복구·실시간 로그·시간 표시·트리 하이어라키·Mermaid 줌 SVG: ① 새로고침 자동 복구 — _dwpRestoreIfBusy: 뷰 진입 시 /health 조회해 llm_busy.running 이면 진행 정보(kind/stage/current/total/category/started_at) 를 로그에 흘리고 _dwpSetRunning(true) + 2초 폴링(_dwpStartPolling) 시작. 폴링은 running→false 전환 감지 시 자동 트리 갱신 후 stop. 뷰 떠날 때 _dwpStopPolling. dwpGenerate/dwpAudit 도 시작 시 같은 폴링 호출해 클라이언트 SSE 끊겨도 백엔드 완료 감지 ② 실시간 로그 — 좌측 사이드바 #dwp-logs-wrap 추가(접/펼 가능, 최대 500줄), _dwpLog(msg, level)/_dwpClearLogs/_dwpToggleLogs. 모든 SSE 이벤트(stage/info/clone_done/scan_done/progress/page_done/done/error/warn) 가 시간 + 색상별 한 줄로 기록 ③ Last indexed 에 시간 추가 — toLocaleDateString → toLocaleString (날짜+시간) ④ 트리 하이어라키 — _dwpExtractPageStructure(md, allSlugs): ## ### 헤더 + [텍스트](?slug=xxx) 내부 링크 추출. _dwpFetchPageStructure: lazy fetch + 캐시. _dwpToggleExpand: 페이지마다 ▶/▼ 토글 버튼, 펼치면 헤더 클릭 시 dwpOpenPage + scrollIntoView, 관련 페이지 링크 별도 섹션. expandedSlugs 영속 ⑤ Mermaid 줌 SVG 사이즈 픽스 — 흰 박스 원인: width/height 제거 후 width:auto 하면 viewBox 만으론 브라우저가 0×0 렌더. 픽스: viewBox 보존 + preserveAspectRatio xMidYMid meet + width:min(90vw,1800px);height:auto 강제 부여. 추가로 다운로드 버튼·닫기 버튼·ESC 키·바깥 클릭 닫기·중복 바인딩 방지) | r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
+<!-- BUILD: 2026-05-29 r130 (증분 인덱싱 + 자동 동기화 · 임베딩 모델 설명: ① 인덱싱 동작 — text → nomic-embed-text(137M Ollama 임베딩 모델) → 768d 벡터 → Supabase pgvector 저장. 생성 LLM 안 쓰고 임베딩 모델만 사용해 매우 빠름(청크당 <100ms). 답변 시 같은 모델로 쿼리 임베딩 후 코사인 유사도 검색 ② 백엔드 증분 — indexer.index_wiki_docs/index_tasks/index_sprints 에 since=ISO datetime 파라미터: q.gte('updated_at', since) 로 변경된 row 만 조회 후 그 source_id 의 청크만 삭제 후 재 임베딩(전체 wipe X). updated_at 컬럼 없으면 안전하게 graceful fallback ③ /index/sync 엔드포인트 — IndexSyncRequest(project_id, since, include=[wiki/task/sprint]). 내부에서 3종을 순차 호출하며 phase_start / phase_done / done(summary + next_since=now ISO) SSE 이벤트 흘림. busy 게이트로 LLM 점유 시 거부 ④ 프론트 _dwAutoSync(opts) — localStorage.tda_dw_last_sync_at 추적, 호출 시 since 전달, 완료 시 next_since 갱신. 트리거: 첫 헬스체크 성공(first_load), 끊겼다가 재연결(reconnect), 5분 주기(periodic), 강제(manual). 30초 디바운스, llmBusy 시 자동 패스 ⑤ 사이드바·AI Agent 헤더에 .dw-sync-badge / .dwp-sync-badge — 상태별 색: 동기화중=accent, 완료=text3, 일시정지=노랑, 실패=빨강. 클릭 시 dwTriggerManualSync ⑥ dwInit 시 5분 setInterval 자동 호출 + busy 게이트 자동 회피) | r129 (모델 선택 UI 3종 + ✦ 아이콘 통일: ① 작업별 3개 모델 — settings 모달에 chatModel(AI Agent·Tool Use), wikiGenModel(Deep Wiki 자동 생성·코드 분석), auditModel(2차 기획 대조·장문 추론) 각각 dropdown. 추천 모델 ✦ 표시 + optgroup 으로 추천/기본 분리 ② 추천 모델 큐레이션: chat=qwen3:30b(균형) / wikigen=qwen2.5-coder:32b(코드 위키 최강) / audit=deepseek-r1:32b(깊은 분석·추론). 보조 옵션으로 llama3.3:70b, deepseek-coder-v2:16b, codestral:22b, qwen3 시리즈, command-r 등 포함 ③ backward compat: 옛 settings.model 이 있으면 chatModel 로 이관, 누락된 키는 추천값으로 기본 초기화 ④ dwSend payload.model = chatModel, dwpGenerate body.model = wikiGenModel, dwpAudit body.model = auditModel — 백엔드는 이미 req.model 받음 ⑤ 커스텀 모델 명도 dropdown 에 자동 추가(저장된 값 미일치 시 '(커스텀)' 라벨로 옵션 추가) ⑥ Deep Wiki 사이드바에 #dwp-model-indicator: 현재 wiki·audit 모델 표시 + 클릭 시 설정 모달 ⑦ AI Agent 상태 pill 이 server LLM_MODEL 대신 chatModel 우선 ⑧ 🤖 → ✦ 일괄 교체: AI Agent 사이드바·헤더 타이틀·빈 상태 이모지·봇 아바타·진행 위젯·busy 게이트 메시지·dwpGenerate 다이얼로그·상태 표시 등 12+ 위치. ✦ 는 4-point star — 옵시디언/Claude/Devin 풍 미니멀 사인) | r128 (Deep Wiki 5건 v2: ① dead 슬러그 링크 시각화 — _dwpAttachLinkHandlers 가 본문 [text](?slug=xxx) 의 슬러그가 _dwpState.pages 에 없으면 .dwp-dead-link 클래스(line-through + opacity 0.65 + ⚠) 적용, 클릭 시 안내 토스트 ② 트리 헤더 자식 중첩 — _dwpExtractPageStructure 가 헤더별 links 배열로 그룹화(orphan 별도), 트리 렌더가 § Subsystems 헤더 아래 자식으로 🔗 링크 들여쓰기 + dead 도 strikethrough ③ Mermaid 줌 다크 BG — 박스 var(--c-paper)/var(--c-text)/var(--c-border) 적용, SVG 안쪽도 isDark 면 #1f1d18 (웜다크) ④ 플로팅 진행 위젯 — dwp-progress-widget 신설: 화면 하단 중앙 고정, 회전 스피너(@keyframes dwp-spin) + 단계/디테일/퍼센트 + 그라데이션 프로그래스바 + 클릭 시 상세 로그 펼침(인라인 로그 박스). dwpGenerate/dwpAudit 시작·SSE 이벤트·busy 폴링 모두에서 _dwpShowProgressWidget/_dwpUpdateProgressWidget/_dwpAppendProgressLog 갱신 ⑤ 404 박스 — _dwpRender404(slug, err) 가 HTTP 404 / 네트워크 / 기타 분기, 슬러그·가능한 원인(LLM 실패/카테고리 병합/버전/SQL 003) + 대처(자동 생성 다시·트리 새로고침·Overview 이동) 액션 버튼 박스로 표시) | r127 (Deep Wiki 5건 픽스 — 자동 복구·실시간 로그·시간 표시·트리 하이어라키·Mermaid 줌 SVG: ① 새로고침 자동 복구 — _dwpRestoreIfBusy: 뷰 진입 시 /health 조회해 llm_busy.running 이면 진행 정보(kind/stage/current/total/category/started_at) 를 로그에 흘리고 _dwpSetRunning(true) + 2초 폴링(_dwpStartPolling) 시작. 폴링은 running→false 전환 감지 시 자동 트리 갱신 후 stop. 뷰 떠날 때 _dwpStopPolling. dwpGenerate/dwpAudit 도 시작 시 같은 폴링 호출해 클라이언트 SSE 끊겨도 백엔드 완료 감지 ② 실시간 로그 — 좌측 사이드바 #dwp-logs-wrap 추가(접/펼 가능, 최대 500줄), _dwpLog(msg, level)/_dwpClearLogs/_dwpToggleLogs. 모든 SSE 이벤트(stage/info/clone_done/scan_done/progress/page_done/done/error/warn) 가 시간 + 색상별 한 줄로 기록 ③ Last indexed 에 시간 추가 — toLocaleDateString → toLocaleString (날짜+시간) ④ 트리 하이어라키 — _dwpExtractPageStructure(md, allSlugs): ## ### 헤더 + [텍스트](?slug=xxx) 내부 링크 추출. _dwpFetchPageStructure: lazy fetch + 캐시. _dwpToggleExpand: 페이지마다 ▶/▼ 토글 버튼, 펼치면 헤더 클릭 시 dwpOpenPage + scrollIntoView, 관련 페이지 링크 별도 섹션. expandedSlugs 영속 ⑤ Mermaid 줌 SVG 사이즈 픽스 — 흰 박스 원인: width/height 제거 후 width:auto 하면 viewBox 만으론 브라우저가 0×0 렌더. 픽스: viewBox 보존 + preserveAspectRatio xMidYMid meet + width:min(90vw,1800px);height:auto 강제 부여. 추가로 다운로드 버튼·닫기 버튼·ESC 키·바깥 클릭 닫기·중복 바인딩 방지) | r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -4491,6 +4491,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button onclick="dwpAudit()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;width:100%;text-align:left;padding:8px 12px;" title="1차 MD + 기획 canon 대조 → 2차 일치도 보고서">📊 기획 대조 보고서 (2차)</button>
                     <!-- [r129] 현재 모델 인디케이터 + 변경 링크 -->
                     <div id="dwp-model-indicator" onclick="dwOpenSettings()" title="모델 변경 (AI Agent 설정 모달 → 모델 선택)" style="font-size:10.5px;color:var(--c-text3);padding:5px 8px;background:var(--c-card);border:1px dashed var(--c-border);border-radius:6px;cursor:pointer;line-height:1.45;"></div>
+                    <!-- [r130] 자동 동기화 배지 — 클릭 시 강제 동기화 -->
+                    <div class="dwp-sync-badge" onclick="dwTriggerManualSync()" title="클릭하면 강제 인덱스 동기화" style="font-size:10.5px;color:var(--c-text3);padding:4px 8px;cursor:pointer;text-align:center;border-radius:5px;">동기화 대기…</div>
                     <div id="dwp-progress" style="font-size:11px;color:var(--c-text2);padding:6px 4px;min-height:14px;"></div>
                     <!-- [r127] 실시간 로그 패널 (접기/펼치기) -->
                     <div id="dwp-logs-wrap" style="display:none;flex-direction:column;border:1px solid var(--c-border);border-radius:7px;background:var(--c-card);overflow:hidden;">
@@ -4550,6 +4552,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span id="dw-status-pill" class="dw-status dw-status-unknown" title="백엔드 연결 상태">⏳ 확인 중</span>
+                        <span class="dw-sync-badge" onclick="dwTriggerManualSync()" title="자동 인덱스 동기화 — 클릭하면 강제 동기화" style="font-size:11px;color:var(--c-text3);padding:3px 8px;background:var(--ios-fill);border:1px solid var(--c-border);border-radius:7px;cursor:pointer;">동기화 대기…</span>
                         <button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);" onclick="dwOpenSettings()" title="백엔드 URL 설정">⚙️ 설정</button>
                         <button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);" onclick="dwClearChat()" title="대화 초기화">🗑 지우기</button>
                     </div>
@@ -7422,7 +7425,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         //   엔드포인트: /health (GET), /chat (POST, SSE 스트리밍)
         //   백엔드 미연결 시 명확한 안내 + Phase 2 설정 가이드
         // ═══════════════════════════════════════════════════════════════════
-        var dwState = { messages: [], healthOk: false, sending: false, settings: null, llmBusy: null /* [r126] {running, kind, stage, current, total, category, human} */ };
+        var dwState = { messages: [], healthOk: false, sending: false, settings: null, llmBusy: null /* [r126] */, autoSyncRunning: false, autoSyncBadge: '' /* [r130] */ };
         function _dwGetSettings() {
             if (dwState.settings) return dwState.settings;
             try {
@@ -7446,6 +7449,82 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             dwState.settings = s;
             try { localStorage.setItem('tda_dw_settings', JSON.stringify(s)); } catch (e) {}
         }
+        // [r130] 자동 증분 동기화 — wiki·task·sprint 의 updated_at >= lastSyncAt 만 재 임베딩
+        //   호출 시점: 첫 헬스체크 성공, 끊겼다가 재연결, 5분 주기, 수동 트리거
+        async function _dwAutoSync(opts) {
+            opts = opts || {};
+            if (dwState.autoSyncRunning) return; // 중복 방지
+            if (dwState.llmBusy && dwState.llmBusy.running) return; // 다른 LLM 작업 중이면 패스
+            var s = _dwGetSettings();
+            if (!s.backendUrl) return;
+            if (!activeProjectId) return;
+            // 너무 잦은 호출 방지: 마지막 동기화 후 30초 미만이면 스킵 (강제 트리거 제외)
+            var lastTs = parseInt(localStorage.getItem('tda_dw_last_sync_ts') || '0', 10) || 0;
+            if (opts.trigger !== 'manual' && (Date.now() - lastTs) < 30 * 1000) return;
+            var since = localStorage.getItem('tda_dw_last_sync_at') || null;
+            dwState.autoSyncRunning = true;
+            _dwUpdateSyncBadge('🔄 동기화 중…', 'syncing');
+            try {
+                var res = await fetch(s.backendUrl + '/index/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: activeProjectId, since: since, include: ['wiki', 'task', 'sprint'] })
+                });
+                if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+                var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+                var summary = null; var nextSince = null;
+                while (true) {
+                    var ch = await reader.read(); if (ch.done) break;
+                    buf += dec.decode(ch.value, { stream: true });
+                    var lines = buf.split('\n'); buf = lines.pop() || '';
+                    lines.forEach(function (line) {
+                        if (!line.startsWith('data:')) return;
+                        var data = line.slice(5).trim();
+                        if (!data || data === '[DONE]') return;
+                        try {
+                            var ev = JSON.parse(data);
+                            if (ev.event === 'busy') {
+                                _dwUpdateSyncBadge('⏸ 다른 작업 중', 'paused');
+                            } else if (ev.event === 'phase_start') {
+                                _dwUpdateSyncBadge('🔄 ' + ev.kind + ' (' + ev.current + '/' + ev.total + ')', 'syncing');
+                            } else if (ev.event === 'done') {
+                                summary = ev.summary || null;
+                                nextSince = ev.next_since || null;
+                            }
+                        } catch (e) {}
+                    });
+                }
+                if (nextSince) {
+                    localStorage.setItem('tda_dw_last_sync_at', nextSince);
+                    localStorage.setItem('tda_dw_last_sync_ts', String(Date.now()));
+                    var totalChunks = summary ? Object.values(summary.phases || {}).reduce(function (a, p) { return a + (p.chunks_inserted || 0); }, 0) : 0;
+                    var totalRows = summary ? Object.values(summary.phases || {}).reduce(function (a, p) { return a + (p.total_rows || 0); }, 0) : 0;
+                    var ago = new Date(nextSince).toLocaleTimeString();
+                    _dwUpdateSyncBadge('✓ ' + ago + (totalRows ? ' · ' + totalRows + '건 갱신' : ' · 변경 없음'), 'ok');
+                    if (opts.trigger !== 'periodic' && totalChunks > 0) {
+                        showToast('🔄 인덱스 동기화 완료 — ' + totalRows + '건 (' + totalChunks + ' 청크)', 'success');
+                    }
+                }
+            } catch (e) {
+                _dwUpdateSyncBadge('⚠ 동기화 실패', 'err');
+                console.warn('[autoSync]', e);
+            } finally {
+                dwState.autoSyncRunning = false;
+            }
+        }
+        function _dwUpdateSyncBadge(text, kind) {
+            dwState.autoSyncBadge = text;
+            var bs = document.querySelectorAll('.dwp-sync-badge, .dw-sync-badge');
+            bs.forEach(function (el) {
+                el.textContent = text;
+                var color = ({ ok: 'var(--c-text3)', syncing: 'var(--c-accent)', paused: '#b58a16', err: '#d2393d' })[kind || 'ok'] || 'var(--c-text3)';
+                el.style.color = color;
+                el.title = kind === 'ok' ? '마지막 동기화 시각 — 클릭하면 강제 동기화' : (text || '');
+            });
+        }
+        function dwTriggerManualSync() {
+            _dwAutoSync({ trigger: 'manual' });
+        }
         function dwInit() {
             var s = _dwGetSettings();
             // 대화 복원 (먼저 로드, 그 다음 렌더)
@@ -7455,6 +7534,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } catch (e) {}
             dwRenderMessages();
             dwHealthCheck();
+            // [r130] 주기적 자동 동기화 (5분) — 백그라운드에서 인덱스 최신화
+            if (!window._dwAutoSyncTimer) {
+                window._dwAutoSyncTimer = setInterval(function () {
+                    _dwAutoSync({ trigger: 'periodic' });
+                }, 5 * 60 * 1000);
+            }
             // Enter 키 바인딩 (DOMContentLoaded 시점 외에도 안전하게)
             var inp = document.getElementById('dw-input');
             if (inp && !inp._dwBound) {
@@ -7548,7 +7633,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         pill.textContent = '🟢 연결됨' + (modelLbl ? ' · ' + modelLbl : '');
                         pill.title = modelLbl ? ('현재 채팅 모델: ' + modelLbl) : '';
                     }
+                    // [r130] 끊겼다가 다시 연결된 경우 자동 동기화 트리거
+                    var wasDown = (dwState.healthOk === false);
                     dwState.healthOk = true;
+                    if (wasDown) {
+                        _dwAutoSync({ trigger: 'reconnect' });
+                    } else if (!dwState._initialSyncDone) {
+                        // 첫 헬스체크 성공 — 한 번만 자동 동기화
+                        dwState._initialSyncDone = true;
+                        _dwAutoSync({ trigger: 'first_load' });
+                    }
                     return;
                 }
                 throw new Error('HTTP ' + res.status);
