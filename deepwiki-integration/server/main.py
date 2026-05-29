@@ -22,6 +22,57 @@ from wiki_auditor import audit_wiki  # [r115] 기획 대조 2차 MD
 app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 
+# [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
+#   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
+LLM_BUSY_STATE: Dict[str, Any] = {
+    "running": False,        # True면 LLM 점유 중
+    "kind": None,            # 'wiki_generate' | 'wiki_audit' | 'index_code' | ...
+    "project_id": None,
+    "started_at": None,      # epoch sec
+    "stage": None,           # 'clone' | 'scan' | 'architecture' | 'generate' | 'overview' | ...
+    "current": 0,
+    "total": 0,
+    "category": None,        # 현재 처리 중 카테고리 제목
+    "message": None,         # 사람이 읽을 한국어 진행 메시지
+}
+
+
+def _busy_set(**kwargs):
+    LLM_BUSY_STATE.update(kwargs)
+
+
+def _busy_clear():
+    LLM_BUSY_STATE.update({
+        "running": False, "kind": None, "project_id": None, "started_at": None,
+        "stage": None, "current": 0, "total": 0, "category": None, "message": None,
+    })
+
+
+def _busy_human() -> str:
+    """현재 busy 상태를 한국어 한 줄로."""
+    if not LLM_BUSY_STATE["running"]:
+        return ""
+    kind = LLM_BUSY_STATE.get("kind") or "작업"
+    kind_label = {
+        "wiki_generate": "Deep Wiki 자동 생성",
+        "wiki_audit": "기획 대조 보고서(2차) 생성",
+        "index_code": "코드 인덱싱",
+        "index_wiki": "위키 인덱싱",
+        "index_task": "태스크 인덱싱",
+        "index_sprint": "스프린트 인덱싱",
+    }.get(kind, kind)
+    stage = LLM_BUSY_STATE.get("stage") or "?"
+    cur = LLM_BUSY_STATE.get("current") or 0
+    tot = LLM_BUSY_STATE.get("total") or 0
+    cat = LLM_BUSY_STATE.get("category")
+    elapsed = int(time.time() - (LLM_BUSY_STATE.get("started_at") or time.time()))
+    prog = f"{cur}/{tot}" if tot else "진행 중"
+    parts = [f"🔄 **{kind_label}** 진행 중", f"단계: `{stage}`", f"진행률: `{prog}`"]
+    if cat:
+        parts.append(f"현재: `{cat}`")
+    parts.append(f"경과: `{elapsed}s`")
+    return " · ".join(parts)
+
 # CORS — GitHub Pages 도메인 등 허용
 app.add_middleware(
     CORSMiddleware,
@@ -104,6 +155,10 @@ async def health(verbose: bool = False):
     }
     if verbose and supabase_ok:
         out["top_sources"] = store.top_sources(limit=15)
+    # [r126] LLM 점유 상태 노출
+    out["llm_busy"] = dict(LLM_BUSY_STATE)
+    if LLM_BUSY_STATE["running"]:
+        out["llm_busy_human"] = _busy_human()
     return out
 
 
@@ -112,6 +167,30 @@ async def chat(req: ChatRequest):
     """RAG 챗 — SSE 스트리밍 또는 단건 JSON."""
     if not req.messages:
         raise HTTPException(400, "messages가 비어있습니다")
+
+    # [r126] 위키/인덱싱이 진행 중이면 — 같은 Ollama 모델을 다중 동시 호출하면
+    #   양쪽 모두 매우 느려지거나 타임아웃. 명확한 안내 후 차단.
+    if LLM_BUSY_STATE["running"]:
+        busy_msg = (
+            "⚠ **로컬 LLM이 다른 작업으로 점유 중입니다**\n\n"
+            + _busy_human()
+            + "\n\n"
+            "Ollama 서버는 한 번에 하나의 무거운 LLM 호출만 안정적으로 처리합니다. "
+            "지금 질문을 보내면:\n"
+            "- ❌ AI Agent 응답이 매우 느림(분 단위) 또는 타임아웃\n"
+            "- ❌ 진행 중인 위키 생성도 함께 지연·실패 위험\n\n"
+            "**권장 조치:**\n"
+            "1. Deep Wiki 페이지로 가서 좌측 진행률(`🔄 ...`) 확인\n"
+            "2. 모든 page_done 이벤트가 끝날 때까지 대기 (남은 카테고리 수 × 30~120초)\n"
+            "3. 완료되면 다시 질문하세요 — 즉시 응답됩니다\n\n"
+            "_(이 메시지는 백엔드 연결 실패가 아니라 의도적 게이트입니다.)_"
+        )
+        if req.stream:
+            async def busy_gen():
+                yield f"data: {json.dumps({'delta': busy_msg, 'busy': True, 'busy_state': dict(LLM_BUSY_STATE)}, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(busy_gen(), media_type="text/event-stream")
+        return {"content": busy_msg, "sources": [], "meta": {"busy": True, "busy_state": dict(LLM_BUSY_STATE)}}
 
     # [r108] 기본은 Agentic Tool-Use 에이전트. 'legacy' 모델 명시 시 옛 RAG.
     use_agent = (req.model or "").lower() != "legacy"
@@ -154,14 +233,37 @@ async def chat(req: ChatRequest):
         return {"content": content, "sources": sources, "meta": meta}
 
 
-def _sse_indexer(gen):
-    """인덱서 async generator를 SSE 스트림으로 변환."""
+def _sse_indexer(gen, *, busy_kind: Optional[str] = None, busy_project: Optional[str] = None):
+    """인덱서/제너레이터 async generator를 SSE 스트림으로 변환.
+
+    [r126] busy_kind 가 주어지면 LLM_BUSY_STATE 를 업데이트해 /chat 게이트가 알 수 있게 한다.
+    event 의 stage/current/total/category 를 자동으로 state 에 흘림.
+    """
     async def stream():
+        if busy_kind:
+            _busy_set(running=True, kind=busy_kind, project_id=busy_project, started_at=time.time(),
+                      stage="시작", current=0, total=0, category=None,
+                      message=f"{busy_kind} 시작…")
         try:
             async for event in gen:
+                # state 업데이트 — event 키에 따라 자동 매핑
+                if busy_kind:
+                    et = event.get("event")
+                    if et == "stage":
+                        _busy_set(stage=event.get("stage") or LLM_BUSY_STATE["stage"],
+                                  message=event.get("message") or LLM_BUSY_STATE["message"])
+                    elif et == "progress":
+                        _busy_set(current=event.get("current") or 0,
+                                  total=event.get("total") or 0,
+                                  category=event.get("category") or LLM_BUSY_STATE["category"])
+                    elif et in ("done", "error"):
+                        pass  # finally 에서 clear
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'event': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        finally:
+            if busy_kind:
+                _busy_clear()
         yield "data: [DONE]\n\n"
     return StreamingResponse(stream(), media_type="text/event-stream")
 
@@ -174,25 +276,28 @@ async def index_code(req: IndexCodeRequest):
         project_id=req.project_id,
         branch=req.branch,
         clean_first=True,
-    ))
+    ), busy_kind="index_code", busy_project=req.project_id)
 
 
 @app.post("/index/wiki")
 async def index_wiki(req: IndexWikiRequest):
     """Supabase wiki_docs 인덱싱 (2차)."""
-    return _sse_indexer(index_wiki_docs(project_id=req.project_id))
+    return _sse_indexer(index_wiki_docs(project_id=req.project_id),
+                        busy_kind="index_wiki", busy_project=req.project_id)
 
 
 @app.post("/index/task")
 async def index_task(req: IndexWikiRequest):
     """Supabase tasks 인덱싱."""
-    return _sse_indexer(index_tasks(project_id=req.project_id))
+    return _sse_indexer(index_tasks(project_id=req.project_id),
+                        busy_kind="index_task", busy_project=req.project_id)
 
 
 @app.post("/index/sprint")
 async def index_sprint(req: IndexWikiRequest):
     """Supabase sprints 인덱싱."""
-    return _sse_indexer(index_sprints(project_id=req.project_id))
+    return _sse_indexer(index_sprints(project_id=req.project_id),
+                        busy_kind="index_sprint", busy_project=req.project_id)
 
 
 # ─────────────────────────────────────────────
@@ -202,13 +307,19 @@ async def index_sprint(req: IndexWikiRequest):
 @app.post("/wiki/generate")
 async def wiki_generate(req: WikiGenerateRequest):
     """Git 레포 → LLM 자동 위키 페이지 N개 생성. SSE 진행률 스트리밍."""
+    # [r126] 다른 LLM 작업이 진행 중이면 거부 (동시 호출 시 둘 다 망가짐)
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
     return _sse_indexer(generate_wiki(
         git_url=req.git_url,
         project_id=req.project_id,
         branch=req.branch,
         clean_first=True,
         model=req.model,
-    ))
+    ), busy_kind="wiki_generate", busy_project=req.project_id)
 
 
 @app.get("/wiki/pages")
@@ -356,7 +467,13 @@ async def wiki_pages_delete(project_id: str):
 @app.post("/wiki/audit")
 async def wiki_audit(req: WikiAuditRequest):
     """canon 문서 × 1차 자동 위키 대조 → 2차 일치도 보고서 생성."""
-    return _sse_indexer(audit_wiki(project_id=req.project_id, model=req.model))
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    return _sse_indexer(audit_wiki(project_id=req.project_id, model=req.model),
+                        busy_kind="wiki_audit", busy_project=req.project_id)
 
 
 @app.get("/wiki/audits")

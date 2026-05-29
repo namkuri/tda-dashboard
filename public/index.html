@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
+<!-- BUILD: 2026-05-29 r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -7315,7 +7315,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         //   엔드포인트: /health (GET), /chat (POST, SSE 스트리밍)
         //   백엔드 미연결 시 명확한 안내 + Phase 2 설정 가이드
         // ═══════════════════════════════════════════════════════════════════
-        var dwState = { messages: [], healthOk: false, sending: false, settings: null };
+        var dwState = { messages: [], healthOk: false, sending: false, settings: null, llmBusy: null /* [r126] {running, kind, stage, current, total, category, human} */ };
         function _dwGetSettings() {
             if (dwState.settings) return dwState.settings;
             try {
@@ -7393,8 +7393,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 clearTimeout(timer);
                 if (res.ok) {
                     var info = await res.json().catch(function () { return {}; });
-                    pill.className = 'dw-status dw-status-ok';
-                    pill.textContent = '🟢 연결됨' + (info.model ? ' · ' + info.model : '');
+                    // [r126] LLM busy 상태 보관 + Pill 에 표시
+                    dwState.llmBusy = (info.llm_busy && info.llm_busy.running) ? Object.assign({}, info.llm_busy, { human: info.llm_busy_human || '' }) : null;
+                    if (dwState.llmBusy) {
+                        pill.className = 'dw-status dw-status-down';
+                        var stage = dwState.llmBusy.stage || '?';
+                        var prog = dwState.llmBusy.total ? (dwState.llmBusy.current + '/' + dwState.llmBusy.total) : '진행 중';
+                        var kindLabel = ({
+                            wiki_generate: 'Deep Wiki 생성',
+                            wiki_audit: '기획 대조(2차)',
+                            index_code: '코드 인덱싱',
+                            index_wiki: '위키 인덱싱',
+                            index_task: '태스크 인덱싱',
+                            index_sprint: '스프린트 인덱싱',
+                        })[dwState.llmBusy.kind] || dwState.llmBusy.kind || '작업';
+                        pill.textContent = '🔄 ' + kindLabel + ' 중 · ' + stage + ' · ' + prog;
+                        pill.title = dwState.llmBusy.human || '';
+                    } else {
+                        pill.className = 'dw-status dw-status-ok';
+                        pill.textContent = '🟢 연결됨' + (info.model ? ' · ' + info.model : '');
+                        pill.title = '';
+                    }
                     dwState.healthOk = true;
                     return;
                 }
@@ -7402,7 +7421,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } catch (e) {
                 pill.className = 'dw-status dw-status-down';
                 pill.textContent = '🔴 ' + (e.name === 'AbortError' ? '응답 없음' : '연결 실패');
+                pill.title = (e.message || '') + '';
                 dwState.healthOk = false;
+                dwState.llmBusy = null;
             }
         }
         function dwRenderMessages() {
@@ -7464,12 +7485,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 dwOpenSettings();
                 return;
             }
+            // [r126] 매번 보내기 전 헬스체크 → busy 상태도 최신화
+            await dwHealthCheck();
             if (!dwState.healthOk) {
-                await dwHealthCheck();
-                if (!dwState.healthOk) {
-                    showToast('🔴 백엔드 연결 실패 — 설정/터널/Ollama 확인 필요', 'alert');
-                    return;
-                }
+                showToast('🔴 백엔드 연결 실패 — 설정 > 백엔드 URL · run.bat 실행 여부 · Cloudflare 터널 확인', 'alert');
+                return;
+            }
+            if (dwState.llmBusy) {
+                // 명확한 안내 — Deep Wiki 자동 생성/감사가 진행 중이라 LLM 점유
+                var b = dwState.llmBusy;
+                var kindLabel = ({
+                    wiki_generate: '🤖 Deep Wiki 자동 생성',
+                    wiki_audit: '📊 기획 대조 보고서(2차)',
+                    index_code: '🗂 코드 인덱싱',
+                    index_wiki: '📚 위키 인덱싱',
+                    index_task: '📋 태스크 인덱싱',
+                    index_sprint: '🏃 스프린트 인덱싱',
+                })[b.kind] || (b.kind || '작업');
+                var stage = b.stage || '?';
+                var prog = b.total ? (b.current + '/' + b.total) : '진행 중';
+                var cat = b.category ? ' (현재: ' + b.category + ')' : '';
+                showToast('🔄 ' + kindLabel + ' 진행 중 — 단계: ' + stage + ' · ' + prog + cat + '. 끝난 후 다시 질문하세요.', 'alert');
+                return;
             }
             // 사용자 메시지 추가
             dwState.messages.push({ role: 'user', content: text });
@@ -7502,7 +7539,26 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     dwState.messages[botIdx] = { role: 'bot', content: data.content || '', sources: data.sources || [], meta: data.meta || null };
                 }
             } catch (e) {
-                dwState.messages[botIdx] = { role: 'bot', content: '❌ 백엔드 응답 실패\n\n```\n' + (e.message || e) + '\n```\n\n→ ⚙️ 설정에서 백엔드 URL 확인 + PC에 Ollama/FastAPI 실행 중인지 확인하세요.' };
+                // [r126] 에러 직후 헬스체크 재실행 → busy 상태였으면 그쪽 메시지로 분기
+                try { await dwHealthCheck(); } catch (_) {}
+                var fallbackMsg;
+                if (dwState.llmBusy) {
+                    var bb = dwState.llmBusy;
+                    fallbackMsg = '🔄 **로컬 LLM이 다른 작업으로 점유 중**\n\n' +
+                        (bb.human || ('현재 작업: ' + (bb.kind || '?') + ' · 단계: ' + (bb.stage || '?') + ' · 진행: ' + (bb.current || 0) + '/' + (bb.total || 0))) +
+                        '\n\nOllama 는 한 번에 무거운 LLM 호출 하나만 안정 처리합니다. 위 작업이 끝난 뒤 다시 질문하세요.\n\n' +
+                        '_(이건 백엔드 연결 실패가 아니라 의도적 게이트입니다 — 좌상단 🔄 진행률 확인.)_';
+                } else if (!dwState.healthOk) {
+                    fallbackMsg = '🔴 **백엔드에 닿지 못했습니다**\n\n```\n' + (e.message || e) + '\n```\n\n' +
+                        '확인 사항:\n' +
+                        '1. PC 에서 run.bat 가 실행 중인가? (콘솔에 `Uvicorn running on http://0.0.0.0:8000` 표시)\n' +
+                        '2. 좌상단 ⚙ 설정의 백엔드 URL 이 정확한가? (`http://localhost:8000` 또는 Cloudflare 터널 URL)\n' +
+                        '3. (원격일 경우) Cloudflare 터널이 죽지 않았는가?';
+                } else {
+                    fallbackMsg = '❌ **백엔드 응답 실패**\n\n```\n' + (e.message || e) + '\n```\n\n' +
+                        '백엔드는 정상이지만 /chat 호출 중 오류가 났습니다. 콘솔(run.bat) 로그를 확인하세요.';
+                }
+                dwState.messages[botIdx] = { role: 'bot', content: fallbackMsg };
             }
             dwState.sending = false;
             dwRenderMessages();
