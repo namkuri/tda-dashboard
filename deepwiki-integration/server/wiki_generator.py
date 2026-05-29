@@ -1209,12 +1209,29 @@ async def extend_wiki_page(
     new_meta = dict(page.get("meta") or {})
     new_meta["extensions"] = extensions[-30:]  # 최근 30회만 보존
 
-    yield {"event": "stage", "stage": "save", "message": "DB 저장 중..."}
+    yield {"event": "stage", "stage": "save", "message": f"DB 저장 중... (+{len(new_section)}자)"}
     try:
-        store.client.table("deep_wiki_pages").update({
+        # [r142 #6] update 결과 검증 — Supabase update 는 0행 매칭 시에도 예외 없이 빈 data 반환 가능
+        upd = store.client.table("deep_wiki_pages").update({
             "content": new_content,
             "meta": new_meta,
         }).eq("id", page["id"]).execute()
+        rows_affected = len(getattr(upd, "data", None) or [])
+        if rows_affected == 0:
+            yield {"event": "error", "message": f"저장 실패: 영향받은 행 없음 (id={page['id']}). RLS·트리거 확인."}
+            return
+        # 저장 후 재조회 → 본문 길이 일치 확인
+        verify = (
+            store.client.table("deep_wiki_pages")
+            .select("content")
+            .eq("id", page["id"])
+            .limit(1)
+            .execute()
+        )
+        saved_content = ((verify.data or [{}])[0].get("content") or "")
+        if len(saved_content) < len(new_content) - 10:
+            yield {"event": "error", "message": f"저장 후 검증 실패: 본문 {len(saved_content)}자 (기대 {len(new_content)}자)"}
+            return
         yield {
             "event": "done",
             "slug": slug,
@@ -1222,9 +1239,11 @@ async def extend_wiki_page(
             "extension_type": extension_type,
             "chars_added": len(new_section),
             "total_extensions": len(extensions),
+            "saved_total_chars": len(saved_content),
         }
     except Exception as e:
-        yield {"event": "error", "message": f"저장 실패: {e}"}
+        import traceback
+        yield {"event": "error", "message": f"저장 실패: {type(e).__name__}: {e}\n{traceback.format_exc()[:500]}"}
 
 
 def _build_generation_report(
