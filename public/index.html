@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r127 (Deep Wiki 5건 픽스 — 자동 복구·실시간 로그·시간 표시·트리 하이어라키·Mermaid 줌 SVG: ① 새로고침 자동 복구 — _dwpRestoreIfBusy: 뷰 진입 시 /health 조회해 llm_busy.running 이면 진행 정보(kind/stage/current/total/category/started_at) 를 로그에 흘리고 _dwpSetRunning(true) + 2초 폴링(_dwpStartPolling) 시작. 폴링은 running→false 전환 감지 시 자동 트리 갱신 후 stop. 뷰 떠날 때 _dwpStopPolling. dwpGenerate/dwpAudit 도 시작 시 같은 폴링 호출해 클라이언트 SSE 끊겨도 백엔드 완료 감지 ② 실시간 로그 — 좌측 사이드바 #dwp-logs-wrap 추가(접/펼 가능, 최대 500줄), _dwpLog(msg, level)/_dwpClearLogs/_dwpToggleLogs. 모든 SSE 이벤트(stage/info/clone_done/scan_done/progress/page_done/done/error/warn) 가 시간 + 색상별 한 줄로 기록 ③ Last indexed 에 시간 추가 — toLocaleDateString → toLocaleString (날짜+시간) ④ 트리 하이어라키 — _dwpExtractPageStructure(md, allSlugs): ## ### 헤더 + [텍스트](?slug=xxx) 내부 링크 추출. _dwpFetchPageStructure: lazy fetch + 캐시. _dwpToggleExpand: 페이지마다 ▶/▼ 토글 버튼, 펼치면 헤더 클릭 시 dwpOpenPage + scrollIntoView, 관련 페이지 링크 별도 섹션. expandedSlugs 영속 ⑤ Mermaid 줌 SVG 사이즈 픽스 — 흰 박스 원인: width/height 제거 후 width:auto 하면 viewBox 만으론 브라우저가 0×0 렌더. 픽스: viewBox 보존 + preserveAspectRatio xMidYMid meet + width:min(90vw,1800px);height:auto 강제 부여. 추가로 다운로드 버튼·닫기 버튼·ESC 키·바깥 클릭 닫기·중복 바인딩 방지) | r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
+<!-- BUILD: 2026-05-29 r128 (Deep Wiki 5건 v2: ① dead 슬러그 링크 시각화 — _dwpAttachLinkHandlers 가 본문 [text](?slug=xxx) 의 슬러그가 _dwpState.pages 에 없으면 .dwp-dead-link 클래스(line-through + opacity 0.65 + ⚠) 적용, 클릭 시 안내 토스트 ② 트리 헤더 자식 중첩 — _dwpExtractPageStructure 가 헤더별 links 배열로 그룹화(orphan 별도), 트리 렌더가 § Subsystems 헤더 아래 자식으로 🔗 링크 들여쓰기 + dead 도 strikethrough ③ Mermaid 줌 다크 BG — 박스 var(--c-paper)/var(--c-text)/var(--c-border) 적용, SVG 안쪽도 isDark 면 #1f1d18 (웜다크) ④ 플로팅 진행 위젯 — dwp-progress-widget 신설: 화면 하단 중앙 고정, 회전 스피너(@keyframes dwp-spin) + 단계/디테일/퍼센트 + 그라데이션 프로그래스바 + 클릭 시 상세 로그 펼침(인라인 로그 박스). dwpGenerate/dwpAudit 시작·SSE 이벤트·busy 폴링 모두에서 _dwpShowProgressWidget/_dwpUpdateProgressWidget/_dwpAppendProgressLog 갱신 ⑤ 404 박스 — _dwpRender404(slug, err) 가 HTTP 404 / 네트워크 / 기타 분기, 슬러그·가능한 원인(LLM 실패/카테고리 병합/버전/SQL 003) + 대처(자동 생성 다시·트리 새로고침·Overview 이동) 액션 버튼 박스로 표시) | r127 (Deep Wiki 5건 픽스 — 자동 복구·실시간 로그·시간 표시·트리 하이어라키·Mermaid 줌 SVG: ① 새로고침 자동 복구 — _dwpRestoreIfBusy: 뷰 진입 시 /health 조회해 llm_busy.running 이면 진행 정보(kind/stage/current/total/category/started_at) 를 로그에 흘리고 _dwpSetRunning(true) + 2초 폴링(_dwpStartPolling) 시작. 폴링은 running→false 전환 감지 시 자동 트리 갱신 후 stop. 뷰 떠날 때 _dwpStopPolling. dwpGenerate/dwpAudit 도 시작 시 같은 폴링 호출해 클라이언트 SSE 끊겨도 백엔드 완료 감지 ② 실시간 로그 — 좌측 사이드바 #dwp-logs-wrap 추가(접/펼 가능, 최대 500줄), _dwpLog(msg, level)/_dwpClearLogs/_dwpToggleLogs. 모든 SSE 이벤트(stage/info/clone_done/scan_done/progress/page_done/done/error/warn) 가 시간 + 색상별 한 줄로 기록 ③ Last indexed 에 시간 추가 — toLocaleDateString → toLocaleString (날짜+시간) ④ 트리 하이어라키 — _dwpExtractPageStructure(md, allSlugs): ## ### 헤더 + [텍스트](?slug=xxx) 내부 링크 추출. _dwpFetchPageStructure: lazy fetch + 캐시. _dwpToggleExpand: 페이지마다 ▶/▼ 토글 버튼, 펼치면 헤더 클릭 시 dwpOpenPage + scrollIntoView, 관련 페이지 링크 별도 섹션. expandedSlugs 영속 ⑤ Mermaid 줌 SVG 사이즈 픽스 — 흰 박스 원인: width/height 제거 후 width:auto 하면 viewBox 만으론 브라우저가 0×0 렌더. 픽스: viewBox 보존 + preserveAspectRatio xMidYMid meet + width:min(90vw,1800px);height:auto 강제 부여. 추가로 다운로드 버튼·닫기 버튼·ESC 키·바깥 클릭 닫기·중복 바인딩 방지) | r126 (위키 생성 중 AI Agent 안내 개선 (busy 게이트): ① 백엔드 main.py LLM_BUSY_STATE 글로벌 트래커 신설(running/kind/stage/current/total/category/started_at) — wiki_generate/wiki_audit/index_code/index_wiki/index_task/index_sprint 의 SSE 이벤트(stage/progress)를 _sse_indexer 가 자동으로 state 에 흘림 ② /health 응답에 llm_busy + llm_busy_human(한국어 한 줄) 노출 ③ /chat 진입 시 LLM_BUSY_STATE.running 이면 SSE/JSON 으로 명확한 busy 메시지 반환(작업 종류·단계·진행률·경과·권장 조치 다이얼로그) — '백엔드 연결 실패' 가 아닌 의도적 게이트임을 명시 ④ /wiki/generate, /wiki/audit 도 동시 진입 시 SSE 에러로 거부 ⑤ 프론트 dwState.llmBusy 보관 + dwHealthCheck 에서 갱신 + 상태 pill 에 '🔄 Deep Wiki 생성 중 · architecture · 3/9' 형식으로 노출 + dwSend 보내기 전 게이트 + 에러 catch 직후 헬스체크 재실행해 busy/네트워크/응답 3분기 메시지) | r125 (Deep Wiki 품질·UI 6건 픽스: ① Subsystems 404 — Overview 가 categorizer 결과 전체가 아닌 LLM 으로 실제 생성된 페이지만 by_slug 필터 후 리스트(실패 카테고리는 별도 ⚠ 섹션에 명시) ② 트리 자동 — #1 에 의해 자동 해결(존재하는 페이지만 트리에 표시되고 그 슬러그가 링크 대상) ③ 표 깨짐 — #dwp-body-inner 에 class='markdown-body' 적용해 기존 table/th/td border·padding 자동 상속(audit 페이지에도 동일) ④ Mermaid 줌 — _dwpAttachMermaidZoom 신설: 다이어그램 wrap 클릭 시 풀스크린 오버레이로 SVG max-width:96vw/96vh 확대, 오버레이 클릭 시 닫기, cursor:zoom-in 힌트 ⑤ deepwiki.com 스타일 — 메타 헤더를 큰 박스 4개에서 미묘한 인라인 한 줄(Last indexed · short-commit · N files · model)로 톤다운, 페이지 하단 ← Previous / Next → 카드 추가(호버 시 accent 색 변경, sort_order 기반 인접 페이지) ⑥ 모델 — 사용자 안내) | r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -2740,6 +2740,42 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             0%   { background-position: -120% 0; }
             100% { background-position: 220% 0; }
         }
+        /* [r128] Deep Wiki 진행 위젯 스피너 + dead 링크 + 404 박스 */
+        @keyframes dwp-spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes dwp-pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.55; }
+        }
+        .dwp-dead-link {
+            color: var(--c-text3) !important;
+            text-decoration: line-through !important;
+            cursor: not-allowed !important;
+            opacity: 0.7;
+        }
+        .dwp-dead-link::after {
+            content: " ⚠";
+            font-size: 0.85em;
+            color: #b58a16;
+        }
+        .dwp-404-box {
+            background: var(--c-paper);
+            border: 1px solid var(--c-border);
+            border-radius: 12px;
+            padding: 24px 26px;
+            max-width: 560px;
+            margin: 60px auto;
+            color: var(--c-text);
+            line-height: 1.65;
+        }
+        .dwp-404-box h3 { font-size: 16px; font-weight: 800; margin-bottom: 12px; color: #d2393d; }
+        .dwp-404-box ul { padding-left: 22px; font-size: 13px; color: var(--c-text2); }
+        .dwp-404-box li { margin: 4px 0; }
+        .dwp-404-box code { background: var(--c-card); padding: 1px 6px; border-radius: 5px; font-size: 12px; color: var(--c-accent); }
+        .dwp-404-box .dwp-404-act { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+        .dwp-404-box .dwp-404-act button { background: var(--c-accent); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        .dwp-404-box .dwp-404-act button.sec { background: var(--ios-fill); color: var(--c-text); border: 1px solid var(--c-border); }
         .db-pending {
             position: relative;
             background-image: linear-gradient(
@@ -4483,6 +4519,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <!-- [r114] 우측 목차 -->
                     <aside id="dwp-toc" style="width:200px;flex-shrink:0;border-left:1px solid var(--c-border);padding:30px 12px;overflow-y:auto;display:none;font-size:12px;background:var(--c-paper);"></aside>
                 </main>
+            </div>
+            <!-- [r128] 플로팅 진행 위젯 — 위키 생성 중 직관적 시각 피드백 -->
+            <div id="dwp-progress-widget" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--c-paper);border:1px solid var(--c-border);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.35);padding:16px 22px;min-width:420px;max-width:680px;z-index:9999;font-family:inherit;">
+                <div style="display:flex;align-items:center;gap:14px;cursor:pointer;" onclick="_dwpToggleProgressWidgetLog()">
+                    <div class="dwp-spinner" style="width:32px;height:32px;border:3px solid var(--c-border);border-top-color:var(--c-accent);border-right-color:var(--c-accent);border-radius:50%;animation:dwp-spin 0.9s linear infinite;flex-shrink:0;"></div>
+                    <div style="flex:1;min-width:0;">
+                        <div id="dwp-pw-stage" style="font-size:13.5px;font-weight:800;color:var(--c-text);">위키 자동 생성 중...</div>
+                        <div id="dwp-pw-detail" style="font-size:11.5px;color:var(--c-text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">대기 중</div>
+                    </div>
+                    <div id="dwp-pw-pct" style="font-size:14px;font-weight:800;color:var(--c-accent);font-variant-numeric:tabular-nums;flex-shrink:0;">--%</div>
+                    <button onclick="event.stopPropagation();_dwpToggleProgressWidgetLog()" id="dwp-pw-toggle" title="상세 로그" style="background:var(--ios-fill);border:1px solid var(--c-border);color:var(--c-text2);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:12px;flex-shrink:0;">▼</button>
+                </div>
+                <div style="margin-top:11px;background:var(--c-card);height:6px;border-radius:3px;overflow:hidden;">
+                    <div id="dwp-pw-bar" style="height:100%;background:linear-gradient(90deg,var(--c-accent),var(--c-accent-hover));width:0%;transition:width 0.35s ease;border-radius:3px;"></div>
+                </div>
+                <div id="dwp-pw-log" style="display:none;margin-top:12px;max-height:260px;overflow-y:auto;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:8px 10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.55;color:var(--c-text2);"></div>
             </div>
         </div>
 
@@ -7980,6 +8032,50 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var el = document.getElementById('dwp-progress');
             if (el) el.innerHTML = html;
         }
+        // [r128] 플로팅 진행 위젯 — show/hide/update + 로그 펼침
+        function _dwpShowProgressWidget() {
+            var w = document.getElementById('dwp-progress-widget'); if (w) w.style.display = '';
+        }
+        function _dwpHideProgressWidget() {
+            var w = document.getElementById('dwp-progress-widget'); if (w) w.style.display = 'none';
+            // 로그 비우기 (다음 작업 시 깨끗하게)
+            var log = document.getElementById('dwp-pw-log'); if (log) log.innerHTML = '';
+            var bar = document.getElementById('dwp-pw-bar'); if (bar) bar.style.width = '0%';
+        }
+        function _dwpUpdateProgressWidget(opts) {
+            opts = opts || {};
+            var stage = document.getElementById('dwp-pw-stage');
+            var detail = document.getElementById('dwp-pw-detail');
+            var pct = document.getElementById('dwp-pw-pct');
+            var bar = document.getElementById('dwp-pw-bar');
+            if (stage && opts.stage != null) stage.textContent = opts.stage;
+            if (detail && opts.detail != null) detail.textContent = opts.detail;
+            if (opts.current != null && opts.total != null && opts.total > 0) {
+                var p = Math.round((opts.current / opts.total) * 100);
+                if (pct) pct.textContent = p + '%';
+                if (bar) bar.style.width = p + '%';
+            } else if (opts.indeterminate) {
+                if (pct) pct.textContent = '···';
+                if (bar) bar.style.width = '15%';
+            }
+        }
+        function _dwpToggleProgressWidgetLog() {
+            var log = document.getElementById('dwp-pw-log');
+            var toggle = document.getElementById('dwp-pw-toggle');
+            if (!log) return;
+            var open = log.style.display !== 'none';
+            log.style.display = open ? 'none' : 'block';
+            if (toggle) toggle.textContent = open ? '▼' : '▲';
+            if (!open) log.scrollTop = log.scrollHeight;
+        }
+        function _dwpAppendProgressLog(msg, level) {
+            var log = document.getElementById('dwp-pw-log'); if (!log) return;
+            var time = new Date().toLocaleTimeString();
+            var color = ({ error: '#d2393d', warn: '#b58a16', success: '#2c6849', stage: 'var(--c-accent)', info: 'var(--c-text2)' })[level || 'info'] || 'var(--c-text2)';
+            var safe = String(msg || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            log.insertAdjacentHTML('beforeend', '<div style="color:' + color + ';"><span style="color:var(--c-text3);">[' + time + ']</span> ' + safe + '</div>');
+            log.scrollTop = log.scrollHeight;
+        }
         // [r127] 실시간 로그 — 한 줄 추가 + 패널 갱신 (자동 스크롤)
         function _dwpLog(msg, level) {
             var entry = { ts: Date.now(), msg: String(msg || ''), level: level || 'info' };
@@ -8029,18 +8125,32 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             _dwpLog('🔄 백엔드 작업 감지: ' + (busy.kind || '?'), 'stage');
                             _dwpSetRunning(true);
                             _dwpState.wasRunning = true;
+                            // [r128] 위젯도 띄움 (새로고침 직후 복구 시나리오)
+                            _dwpShowProgressWidget();
                         }
                         var stage = busy.stage || '?';
                         var prog = busy.total ? (busy.current + '/' + busy.total) : '진행 중';
                         var cat = busy.category ? ' · ' + busy.category : '';
                         _dwpProgress('🔄 ' + _annEsc(busy.kind || 'busy') + ' · ' + _annEsc(stage) + ' · ' + _annEsc(prog) + _annEsc(cat));
+                        // [r128] 위젯 실시간 업데이트
+                        var kindLbl = ({ wiki_generate: '🤖 Deep Wiki 자동 생성', wiki_audit: '📊 기획 대조(2차)', index_code: '🗂 코드 인덱싱', index_wiki: '📚 위키 인덱싱', index_task: '📋 태스크 인덱싱', index_sprint: '🏃 스프린트 인덱싱' })[busy.kind] || (busy.kind || '작업');
+                        _dwpUpdateProgressWidget({
+                            stage: kindLbl + ' · ' + stage,
+                            detail: cat ? ('현재: ' + busy.category) : (busy.total ? '진행 중' : '시작 중…'),
+                            current: busy.current || 0,
+                            total: busy.total || 0,
+                            indeterminate: !busy.total
+                        });
                     } else if (_dwpState.wasRunning) {
                         // 완료 전환 감지 → 트리·로그 갱신
                         _dwpLog('✅ 백엔드 작업 종료 — 트리 새로고침', 'success');
                         _dwpProgress('🎉 완료 — 트리 갱신 중...');
+                        _dwpUpdateProgressWidget({ stage: '🎉 완료', detail: '트리 갱신 중…', current: 1, total: 1 });
+                        _dwpAppendProgressLog('🎉 백엔드 작업 종료', 'success');
                         _dwpState.wasRunning = false;
                         _dwpSetRunning(false);
                         _dwpStopPolling();
+                        setTimeout(_dwpHideProgressWidget, 2500);
                         setTimeout(dwpRefreshTree, 300);
                         if (typeof dwpRefreshAudits === 'function') setTimeout(dwpRefreshAudits, 600);
                     }
@@ -8158,41 +8268,51 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             dwpRefreshTree();
         }
 
-        // [r127] 페이지 본문에서 ## ### 헤더 + 내부 슬러그 링크 추출 (lazy)
+        // [r127→r128] 페이지 본문에서 ## ### 헤더 + 내부 슬러그 링크 추출
+        //   [r128] 링크는 그 줄이 속한 헤더의 자식으로 (Subsystems 아래로 가도록)
         function _dwpExtractPageStructure(md, allSlugs) {
-            var headers = []; var links = [];
-            if (!md) return { headers: headers, links: links };
+            var headers = []; // [{level, text, anchorIdx, links:[{slug,text,dead}]}]
+            var orphanLinks = []; // 헤더 없이 등장한 링크 (드뭄)
+            if (!md) return { headers: headers, orphans: orphanLinks };
+            var slugSet = {}; (allSlugs || []).forEach(function (s) { slugSet[s] = true; });
             var lines = String(md).split(/\r?\n/);
             var inCode = false;
+            var currentHeader = null;
+            function extractLinks(line, target) {
+                var re = /\[([^\]\n]+)\]\(([^)\s#]+)(?:#[^)]*)?\)/g;
+                var m;
+                while ((m = re.exec(line)) !== null) {
+                    var text2 = m[1].replace(/[#*`_]/g, '').trim();
+                    var href = m[2];
+                    var slug = null;
+                    var qm = href.match(/[?&]slug=([^&#]+)/);
+                    if (qm) slug = decodeURIComponent(qm[1]);
+                    else if (slugSet[href]) slug = href;
+                    if (!slug || !text2) continue;
+                    var dead = !slugSet[slug];
+                    // 같은 헤더 내 중복 제거
+                    if (target.some(function (l) { return l.slug === slug; })) continue;
+                    target.push({ slug: slug, text: text2, dead: dead });
+                }
+            }
             for (var i = 0; i < lines.length; i++) {
                 var L = lines[i];
                 if (/^```/.test(L)) { inCode = !inCode; continue; }
                 if (inCode) continue;
                 var hm = L.match(/^(#{2,3})\s+(.+?)\s*$/);
                 if (hm) {
-                    var level = hm[1].length; // 2 or 3
+                    var level = hm[1].length;
                     var text = hm[2].replace(/[#*`_]/g, '').trim();
-                    if (text) headers.push({ level: level, text: text, anchorIdx: headers.length });
+                    if (text) {
+                        currentHeader = { level: level, text: text, anchorIdx: headers.length, links: [] };
+                        headers.push(currentHeader);
+                    }
+                    continue;
                 }
+                // 본문 줄의 링크 → 현재 헤더의 자식
+                extractLinks(L, currentHeader ? currentHeader.links : orphanLinks);
             }
-            // 내부 슬러그 링크: [텍스트](?slug=xxx) 또는 [텍스트](xxx) 가 슬러그 목록에 있으면
-            var slugSet = {}; (allSlugs || []).forEach(function (s) { slugSet[s] = true; });
-            var seen = {};
-            var re = /\[([^\]\n]+)\]\(([^)\s#]+)(?:#[^)]*)?\)/g;
-            var m;
-            while ((m = re.exec(md)) !== null) {
-                var text2 = m[1].replace(/[#*`_]/g, '').trim();
-                var href = m[2];
-                var slug = null;
-                var qm = href.match(/[?&]slug=([^&#]+)/);
-                if (qm) slug = decodeURIComponent(qm[1]);
-                else if (slugSet[href]) slug = href;
-                if (slug && !seen[slug] && text2) {
-                    seen[slug] = true;
-                    links.push({ slug: slug, text: text2 });
-                }
-            }
-            return { headers: headers, links: links };
+            return { headers: headers, orphans: orphanLinks };
         }
         async function _dwpFetchPageStructure(slug) {
             if (_dwpState.pageStructures[slug]) return _dwpState.pageStructures[slug];
@@ -8241,7 +8361,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     + '<button onclick="dwpOpenPage(\'' + safeSlug + '\')" style="flex:1;text-align:left;background:none;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;' + active + '" title="' + safeTitle + '">' + safeTitle + '</button>'
                     + '</div>';
                 if (!open) return headRow;
-                // 자식 — 헤더 + 내부 링크
+                // 자식 — 헤더 + 그 헤더의 링크 (중첩 구조)
                 var s = _dwpState.pageStructures[p.slug];
                 var inner;
                 if (!s) {
@@ -8254,14 +8374,38 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             rows.push('<button onclick="dwpOpenPage(\'' + safeSlug + '\');setTimeout(function(){var els=document.querySelectorAll(\'#dwp-body-inner h2,#dwp-body-inner h3\');if(els[' + h.anchorIdx + '])els[' + h.anchorIdx + '].scrollIntoView({behavior:\'smooth\',block:\'start\'});},250)"'
                                 + ' style="display:block;width:100%;text-align:left;background:none;border:none;padding:3px 8px 3px ' + (28 + indent) + 'px;font-size:11.5px;color:var(--c-text3);cursor:pointer;border-left:2px solid var(--c-border);margin-left:18px;" '
                                 + 'title="' + esc(h.text) + '">' + (h.level === 2 ? '§ ' : '· ') + esc(h.text) + '</button>');
+                            // [r128] 이 헤더에 속한 내부 링크를 한 단계 더 들여 자식으로
+                            if (h.links && h.links.length) {
+                                h.links.slice(0, 30).forEach(function (lk) {
+                                    var dead = !!lk.dead;
+                                    var color = dead ? 'var(--c-text3)' : 'var(--c-accent)';
+                                    var deco = dead ? 'text-decoration:line-through;opacity:0.65;' : '';
+                                    var ic = dead ? '⚠' : '🔗';
+                                    var title = dead ? '⚠ 이 페이지는 생성되지 않음 (LLM 호출 실패)' : lk.text;
+                                    var onclick = dead
+                                        ? "showToast('⚠ 이 페이지는 생성되지 않았습니다. 자동 생성을 다시 실행하세요.', 'alert')"
+                                        : "dwpOpenPage('" + escAttr(lk.slug) + "')";
+                                    rows.push('<button onclick="' + onclick + '" '
+                                        + 'style="display:block;width:100%;text-align:left;background:none;border:none;padding:3px 8px 3px ' + (40 + indent) + 'px;font-size:11.5px;color:' + color + ';cursor:' + (dead ? 'not-allowed' : 'pointer') + ';border-left:2px solid var(--c-border);margin-left:18px;' + deco + '" '
+                                        + 'title="' + esc(title) + '">' + ic + ' ' + esc(lk.text) + '</button>');
+                                });
+                            }
                         });
                     }
-                    if (s.links && s.links.length) {
-                        rows.push('<div style="font-size:10px;color:var(--c-text3);padding:6px 28px 2px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-left:2px solid var(--c-border);margin-left:18px;">관련 페이지</div>');
-                        s.links.slice(0, 20).forEach(function (lk) {
-                            rows.push('<button onclick="dwpOpenPage(\'' + escAttr(lk.slug) + '\')" '
-                                + 'style="display:block;width:100%;text-align:left;background:none;border:none;padding:3px 8px 3px 32px;font-size:11.5px;color:var(--c-accent);cursor:pointer;border-left:2px solid var(--c-border);margin-left:18px;" '
-                                + 'title="' + esc(lk.text) + '">🔗 ' + esc(lk.text) + '</button>');
+                    // [r128] orphans — 헤더 외부에 등장한 링크 (드뭄)
+                    if (s.orphans && s.orphans.length) {
+                        rows.push('<div style="font-size:10px;color:var(--c-text3);padding:6px 28px 2px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-left:2px solid var(--c-border);margin-left:18px;">기타 링크</div>');
+                        s.orphans.slice(0, 10).forEach(function (lk) {
+                            var dead = !!lk.dead;
+                            var color = dead ? 'var(--c-text3)' : 'var(--c-accent)';
+                            var deco = dead ? 'text-decoration:line-through;opacity:0.65;' : '';
+                            var ic = dead ? '⚠' : '🔗';
+                            var onclick = dead
+                                ? "showToast('⚠ 페이지 미생성', 'alert')"
+                                : "dwpOpenPage('" + escAttr(lk.slug) + "')";
+                            rows.push('<button onclick="' + onclick + '" '
+                                + 'style="display:block;width:100%;text-align:left;background:none;border:none;padding:3px 8px 3px 32px;font-size:11.5px;color:' + color + ';cursor:' + (dead ? 'not-allowed' : 'pointer') + ';border-left:2px solid var(--c-border);margin-left:18px;' + deco + '" '
+                                + 'title="' + esc(lk.text) + '">' + ic + ' ' + esc(lk.text) + '</button>');
                         });
                     }
                     if (!rows.length) {
@@ -8330,25 +8474,33 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r114/r122] 페이지 내 SPA 링크 + [path/file:line] Sources → GitHub 링크 자동 변환
         function _dwpAttachLinkHandlers(containerEl, pageMeta) {
             if (!containerEl) return;
-            // 1) ?slug=xxx + [slug] SPA 라우팅
+            // 1) ?slug=xxx + [slug] SPA 라우팅 + [r128] dead 링크 감지
+            var pageSlugs = {};
+            (_dwpState.pages || []).forEach(function (p) { pageSlugs[p.slug] = true; });
             var anchors = containerEl.querySelectorAll('a[href]');
             anchors.forEach(function (a) {
                 var href = a.getAttribute('href') || '';
                 var m = href.match(/[?&]slug=([^&#]+)/);
-                if (m) {
+                var slugTarget = null;
+                if (m) slugTarget = decodeURIComponent(m[1]);
+                else if (/^[a-z0-9_-]+$/i.test(href) && pageSlugs[href]) slugTarget = href;
+                if (slugTarget == null) return;
+                if (!pageSlugs[slugTarget]) {
+                    // [r128] dead 링크 — 시각화 + 클릭 시 안내
                     a.setAttribute('href', '#');
+                    a.classList.add('dwp-dead-link');
+                    a.title = '⚠ 이 페이지는 생성되지 않았습니다 (LLM 호출 실패 또는 카테고리 병합). Overview 의 "생성되지 않은 카테고리" 섹션 참조.';
                     a.addEventListener('click', function (ev) {
                         ev.preventDefault();
-                        dwpOpenPage(decodeURIComponent(m[1]));
+                        showToast('⚠ "' + slugTarget + '" 페이지는 생성되지 않았습니다. 🤖 위키 자동 생성 다시 실행하세요.', 'alert');
                     });
                     return;
                 }
-                if (/^[a-z0-9_-]+$/i.test(href) && _dwpState.pages.some(function (p) { return p.slug === href; })) {
-                    a.addEventListener('click', function (ev) {
-                        ev.preventDefault();
-                        dwpOpenPage(href);
-                    });
-                }
+                a.setAttribute('href', '#');
+                a.addEventListener('click', function (ev) {
+                    ev.preventDefault();
+                    dwpOpenPage(slugTarget);
+                });
             });
 
             // 2) [r122] [path/file.ext:N-M] 패턴을 클릭 가능한 Sources 배지로 변환
@@ -8461,10 +8613,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
                 if (box) box.scrollTop = 0;
             } catch (e) {
-                _dwpRenderEmpty('페이지 로드 실패: ' + (e.message || e));
+                // [r128] 404 vs 네트워크 오류 분기 — 명확한 진단
+                _dwpRender404(slug, e);
             }
         }
-        // [r125→r127] Mermaid SVG 클릭 시 풀스크린 오버레이로 줌 (사이즈 누락 픽스)
+        // [r125→r128] Mermaid SVG 클릭 시 풀스크린 오버레이로 줌 (사이즈 + 다크 BG 픽스)
         function _dwpAttachMermaidZoom(containerEl) {
             if (!containerEl) return;
             var wraps = containerEl.querySelectorAll('.dwp-mermaid');
@@ -8487,13 +8640,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     if (vb) clone.setAttribute('viewBox', vb);
                     clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                     // CSS — 화면 폭의 90% 까지 확대 + viewBox 비율 유지
-                    clone.style.cssText = 'width:min(90vw,1800px);height:auto;max-height:90vh;display:block;background:#fff;';
+                    // [r128] 테마 적용: 다크 모드면 SVG 배경도 다크 (var(--c-paper) 가 다크에선 어두운 톤)
+                    var isDark = document.body.classList.contains('dark');
+                    clone.style.cssText = 'width:min(90vw,1800px);height:auto;max-height:90vh;display:block;background:' + (isDark ? '#1f1d18' : '#fff') + ';border-radius:8px;padding:14px;box-sizing:border-box;';
                     clone.removeAttribute('width'); clone.removeAttribute('height');
                     var ov = document.createElement('div');
                     ov.id = 'dwp-zoom-overlay';
                     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:30px;';
                     var box = document.createElement('div');
-                    box.style.cssText = 'background:#fff;border-radius:12px;padding:20px;box-shadow:0 24px 64px rgba(0,0,0,0.5);overflow:auto;max-width:96vw;max-height:96vh;cursor:default;';
+                    // [r128] 테마 변수로 박스 배경/테두리
+                    box.style.cssText = 'background:var(--c-paper);color:var(--c-text);border:1px solid var(--c-border);border-radius:12px;padding:18px;box-shadow:0 24px 64px rgba(0,0,0,0.6);overflow:auto;max-width:96vw;max-height:96vh;cursor:default;';
                     box.addEventListener('click', function (e) { e.stopPropagation(); });
                     box.appendChild(clone);
                     // 닫기 버튼 + 다운로드 버튼
@@ -8582,6 +8738,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!ok) return;
             _dwpSetRunning(true);
             _dwpProgress('🔄 시작 중...');
+            _dwpClearLogs();
+            _dwpLog('🚀 위키 자동 생성 시작 — ' + gitUrl, 'stage');
+            // [r128] 플로팅 진행 위젯
+            _dwpShowProgressWidget();
+            _dwpUpdateProgressWidget({ stage: '🤖 Deep Wiki 자동 생성', detail: '시작 중…', indeterminate: true });
+            _dwpAppendProgressLog('🚀 시작 — ' + gitUrl, 'stage');
+            _dwpStartPolling();
             try {
                 // [r117] branch 빈 값 = 서버가 ls-remote로 자동 감지 + main/master/develop fallback
                 var res = await fetch(url + '/wiki/generate', {
@@ -8609,25 +8772,38 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             if (ev.event === 'stage') {
                                 _dwpProgress('🔄 ' + _annEsc(ev.message || ev.stage));
                                 _dwpLog('🔄 [stage] ' + (ev.stage || '') + (ev.message ? ' — ' + ev.message : ''), 'stage');
+                                _dwpUpdateProgressWidget({ stage: '🔄 ' + (ev.stage || '단계 전환'), detail: ev.message || ev.stage || '', indeterminate: true });
+                                _dwpAppendProgressLog('[stage] ' + (ev.stage || '') + (ev.message ? ' — ' + ev.message : ''), 'stage');
                             } else if (ev.event === 'info') {
                                 _dwpProgress('ℹ️ ' + _annEsc(ev.message || ''));
                                 _dwpLog('ℹ️ ' + (ev.message || ''), 'info');
+                                _dwpUpdateProgressWidget({ detail: ev.message || '' });
+                                _dwpAppendProgressLog('ℹ ' + (ev.message || ''), 'info');
                             } else if (ev.event === 'clone_done') {
                                 _dwpProgress('✅ Clone 완료 (커밋 <code>' + _annEsc(ev.commit || '?') + '</code>) — 스캔 중...');
                                 _dwpLog('✅ Clone 완료 (커밋: ' + (ev.commit || '?') + ')', 'success');
+                                _dwpUpdateProgressWidget({ stage: '✅ Clone 완료', detail: '커밋 ' + (ev.commit || '?').slice(0, 7) + ' — 파일 스캔 중', indeterminate: true });
+                                _dwpAppendProgressLog('✅ Clone 완료 (커밋: ' + (ev.commit || '?') + ')', 'success');
                             } else if (ev.event === 'scan_done') {
                                 _dwpProgress('📁 카테고리 ' + ev.category_count + '개 발견 — LLM 생성 시작');
                                 _dwpLog('📁 카테고리 ' + ev.category_count + '개 발견' + (ev.merged && ev.merged.length ? ' (병합: ' + ev.merged.join(', ') + ')' : ''), 'info');
+                                _dwpUpdateProgressWidget({ stage: '📁 ' + ev.category_count + '개 카테고리 발견', detail: 'LLM 페이지 생성 시작…', indeterminate: true });
+                                _dwpAppendProgressLog('📁 카테고리 ' + ev.category_count + '개 발견', 'info');
                             } else if (ev.event === 'progress') {
                                 var pct = Math.round((ev.current / ev.total) * 100);
                                 _dwpProgress('🤖 [' + ev.current + '/' + ev.total + ' · ' + pct + '%] ' + _annEsc(ev.category || ev.slug));
                                 _dwpLog('🤖 [' + ev.current + '/' + ev.total + '] ' + (ev.category || ev.slug || '?') + ' (' + (ev.files_in_cat || 0) + ' files)', 'info');
+                                _dwpUpdateProgressWidget({ stage: '🤖 LLM 페이지 생성 중', detail: (ev.category || ev.slug || '?') + ' · ' + (ev.files_in_cat || 0) + ' files', current: ev.current, total: ev.total });
+                                _dwpAppendProgressLog('🤖 [' + ev.current + '/' + ev.total + '] ' + (ev.category || ev.slug || '?'), 'info');
                             } else if (ev.event === 'page_done') {
                                 _dwpProgress('✅ ' + _annEsc(ev.title));
                                 _dwpLog('✅ 페이지 저장: ' + (ev.title || ev.slug || '?'), 'success');
+                                _dwpAppendProgressLog('✅ ' + (ev.title || ev.slug || '?'), 'success');
                             } else if (ev.event === 'done') {
                                 _dwpProgress('🎉 완료 — ' + ev.pages_created + '개 페이지 (' + (ev.repo_name || '?') + ' / ' + (ev.generation_id || '') + ')');
                                 _dwpLog('🎉 완료 — 페이지 ' + ev.pages_created + '개 (repo=' + (ev.repo_name || '?') + ', gen=' + (ev.generation_id || '?') + ')', 'success');
+                                _dwpUpdateProgressWidget({ stage: '🎉 완료', detail: ev.pages_created + '개 페이지 생성됨', current: 1, total: 1 });
+                                _dwpAppendProgressLog('🎉 완료 — ' + ev.pages_created + '개 페이지', 'success');
                                 showToast('🎉 Deep Wiki 생성 완료 (' + ev.pages_created + '개 · ' + (ev.repo_name || '?') + ')', 'success');
                                 // [r121] 새 repo/gen 자동 선택
                                 if (ev.repo_name) {
@@ -8636,12 +8812,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                                     _dwpState.currentSlug = null;
                                 }
                                 setTimeout(dwpRefreshTree, 300);
+                                setTimeout(_dwpHideProgressWidget, 3500); // 잠시 보여주고 자동 닫기
                             } else if (ev.event === 'error') {
                                 _dwpProgress('<span style="color:#d2393d;">❌ ' + _annEsc(ev.message) + '</span>');
                                 _dwpLog('❌ ERROR: ' + (ev.message || '?'), 'error');
+                                _dwpUpdateProgressWidget({ stage: '❌ 오류 발생', detail: ev.message || '?' });
+                                _dwpAppendProgressLog('❌ ERROR: ' + (ev.message || '?'), 'error');
                                 showToast('❌ 위키 생성 실패: ' + (ev.message || ''), 'alert');
                             } else if (ev.event === 'warn') {
                                 _dwpLog('⚠ WARN: ' + (ev.message || '?'), 'warn');
+                                _dwpAppendProgressLog('⚠ ' + (ev.message || '?'), 'warn');
                                 console.warn('[wiki/generate]', ev.message);
                             } else {
                                 _dwpLog('· ' + (ev.event || '?') + ' ' + JSON.stringify(ev).slice(0, 180), 'info');
@@ -8680,6 +8860,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             _dwpProgress('🔄 시작 중...');
             _dwpClearLogs();
             _dwpLog('🚀 기획 대조(2차) 시작', 'stage');
+            // [r128] 위젯
+            _dwpShowProgressWidget();
+            _dwpUpdateProgressWidget({ stage: '📊 기획 대조 보고서(2차)', detail: '시작 중…', indeterminate: true });
+            _dwpAppendProgressLog('🚀 기획 대조(2차) 시작', 'stage');
             _dwpStartPolling();
             try {
                 var res = await fetch(url + '/wiki/audit', {
@@ -8808,7 +8992,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
                 if (box) box.scrollTop = 0;
             } catch (e) {
-                _dwpRenderEmpty('보고서 로드 실패: ' + (e.message || e));
+                _dwpRender404(auditId, e);
             }
         }
 
