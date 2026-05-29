@@ -505,7 +505,9 @@ async def _llm_generate_category_page(
     # [r132] Unity 프로젝트 감지되면 system 에 특화 분석 지시 추가
     if unity_mode:
         system_msg += _UNITY_PROMPT_ADDENDUM
+    # [r135] LLM 응답 통계 추적
     content_chunks: List[str] = []
+    t0 = time.time()
     async for d in ollama.chat_stream(
         messages=[
             {"role": "system", "content": system_msg},
@@ -515,7 +517,20 @@ async def _llm_generate_category_page(
         temperature=0.25,
     ):
         content_chunks.append(d)
+    elapsed = time.time() - t0
     content = "".join(content_chunks).strip()
+    print(f"[wiki_generator] category '{cat['slug']}' LLM: {len(content_chunks)} chunks, {len(content)} chars, {elapsed:.1f}s")
+    # [r135] 빈 응답이면 명확한 에러
+    if not content:
+        raise RuntimeError(
+            f"LLM 빈 응답 (model={model or settings.LLM_MODEL}, chunks={len(content_chunks)}, elapsed={elapsed:.1f}s). "
+            f"가능 원인: num_ctx 초과·OOM·모델 미응답"
+        )
+    if len(content) < 200:
+        raise RuntimeError(
+            f"LLM 응답 너무 짧음 ({len(content)}자, model={model or settings.LLM_MODEL}, elapsed={elapsed:.1f}s). "
+            f"카테고리 페이지는 최소 1000자 이상이어야 함. 모델 출력 정상 아님"
+        )
     title = cat["title"]
     first_line = content.split("\n", 1)[0].strip()
     if first_line.startswith("#"):
@@ -555,7 +570,9 @@ async def _llm_generate_architecture_page(
     )
     if unity_mode:
         system_msg += _UNITY_PROMPT_ADDENDUM
+    # [r135] Architecture LLM 응답 통계 + 빈 응답 감지
     content_chunks: List[str] = []
+    t0 = time.time()
     async for d in ollama.chat_stream(
         messages=[
             {"role": "system", "content": system_msg},
@@ -565,7 +582,18 @@ async def _llm_generate_architecture_page(
         temperature=0.2,
     ):
         content_chunks.append(d)
+    elapsed = time.time() - t0
     content = "".join(content_chunks).strip()
+    print(f"[wiki_generator] Architecture LLM: {len(content_chunks)} chunks, {len(content)} chars, {elapsed:.1f}s")
+    if not content:
+        raise RuntimeError(
+            f"Architecture LLM 빈 응답 (model={model or settings.LLM_MODEL}, chunks={len(content_chunks)}, elapsed={elapsed:.1f}s). "
+            f"가능 원인: num_ctx 초과·OOM·모델 미응답·콜드 스타트 실패"
+        )
+    if len(content) < 200:
+        raise RuntimeError(
+            f"Architecture LLM 응답 너무 짧음 ({len(content)}자). 최소 500자 이상이어야 정상 페이지"
+        )
     title = f"{repo_name} — System Architecture"
     summary = _extract_summary(content)
     return {"title": title, "content": content, "summary": summary, "sources": []}
@@ -657,6 +685,28 @@ async def generate_wiki(
             yield {"event": "info", "message": f"✓ LLM 모델 '{effective_model}' 확인됨 ({len(installed)}개 설치됨)"}
     except Exception as e:
         yield {"event": "warn", "message": f"모델 목록 조회 실패(진행 계속): {e}"}
+
+    # [r135] 자동 모델 워밍업 — 콜드 스타트(첫 호출 시 모델 weight 로드 5분+ 가능)를 위키 생성 전 처리
+    yield {"event": "stage", "stage": "warmup", "message": f"🔥 모델 '{effective_model}' 메모리 로드 중 (콜드 스타트면 1~5분 소요)..."}
+    warm = await ollama.warmup(model=effective_model, timeout=600.0)
+    print(f"[wiki_generator] warmup result: {warm}")
+    if not warm["ok"]:
+        msg = (
+            f"❌ 모델 워밍업 실패: {warm['message']}\n\n"
+            f"가능한 원인:\n"
+            f"- VRAM/RAM 부족 (32B 모델은 RAM 32GB+ 또는 VRAM 22GB+ 필요)\n"
+            f"- Ollama 가 모델을 백그라운드 다운로드 중\n"
+            f"- 호스트 환경 문제\n\n"
+            f"대처:\n"
+            f"1. cmd 에서 'ollama ps' 로 모델 상태 확인\n"
+            f"2. 14B 또는 7B 모델로 변경 (⚙ 설정 → Deep Wiki 자동 생성 모델)\n"
+            f"3. 'ollama run {effective_model} \"hi\"' 수동 실행 후 다시 시도"
+        )
+        yield {"event": "error", "message": msg}
+        return
+    yield {"event": "info", "message": f"🔥 워밍업 완료 — {warm['elapsed_sec']:.1f}초, 응답 {warm['response_chars']}자"}
+    if warm["response_chars"] == 0:
+        yield {"event": "warn", "message": "⚠ 워밍업 응답이 빈 문자열 — 모델 출력에 문제 있을 수 있음. 진행하지만 빈 페이지 발생 시 모델 변경 고려"}
 
     # ─ 1) Git clone
     clone_dir = Path(settings.GIT_CLONE_DIR)

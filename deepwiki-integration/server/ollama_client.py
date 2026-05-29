@@ -106,6 +106,53 @@ class OllamaClient:
         except Exception:
             return []
 
+    async def warmup(self, model: str = None, timeout: float = 600.0) -> Dict[str, Any]:
+        """[r135] 모델을 메모리에 로드 — 큰 LLM 호출 전 예열.
+
+        매우 짧은 더미 요청(num_predict=1) 으로 모델 weights 를 VRAM/RAM 에 올림.
+        반환: {ok: bool, elapsed_sec: float, message: str, response_chars: int}
+        timeout 기본 10분 (32B 콜드 스타트는 5분+ 가능).
+        """
+        import time as _t
+        model = model or settings.LLM_MODEL
+        t0 = _t.time()
+        try:
+            r = await self.client.post(
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Reply with just 'ok'"}],
+                    "stream": False,
+                    "options": {"num_predict": 4, "temperature": 0},
+                    "keep_alive": "30m",
+                },
+                timeout=timeout,
+            )
+            elapsed = _t.time() - t0
+            if r.status_code != 200:
+                return {
+                    "ok": False, "elapsed_sec": elapsed, "response_chars": 0,
+                    "message": f"HTTP {r.status_code}: {r.text[:200]}",
+                }
+            data = r.json()
+            content = (data.get("message") or {}).get("content", "") or ""
+            return {
+                "ok": True, "elapsed_sec": elapsed, "response_chars": len(content),
+                "message": f"모델 '{model}' 로드 완료 ({elapsed:.1f}초, 응답 {len(content)}자)",
+            }
+        except httpx.TimeoutException:
+            elapsed = _t.time() - t0
+            return {
+                "ok": False, "elapsed_sec": elapsed, "response_chars": 0,
+                "message": f"모델 '{model}' 로드 타임아웃({elapsed:.1f}초) — VRAM/RAM 부족 또는 모델 다운로드 중일 가능성. 'ollama list' / 'ollama ps' 확인",
+            }
+        except Exception as e:
+            elapsed = _t.time() - t0
+            return {
+                "ok": False, "elapsed_sec": elapsed, "response_chars": 0,
+                "message": f"모델 '{model}' 로드 실패 ({type(e).__name__}): {e}",
+            }
+
     async def embed(self, text: str, model: str = None) -> List[float]:
         """텍스트 임베딩. nomic-embed-text는 768d 반환."""
         model = model or settings.EMBED_MODEL
