@@ -294,7 +294,8 @@ _CATEGORY_PROMPT = """당신은 DeepWiki(deepwiki.com) 스타일의 시니어 �
 
 # 📋 출력 형식 — 다음 7개 섹션을 정확한 헤더로
 
-# {시스템 제목}
+# <시스템 제목>      <!-- [r147] 중괄호 대신 꺾쇠 — str.format 오용에도 안전 -->
+
 
 ## Overview
 이 시스템의 책임과 주요 사용처를 4~6문장. 어떤 문제를 해결하고 어디서 호출되는지. 핵심 클래스·매니저 1~3개를 굵게 강조하면서 첫 등장 시 Sources 추가:
@@ -344,12 +345,10 @@ sequenceDiagram
 
 **`Assets/Scripts/Managers/Player/PlayerManager.cs:5-44`**
 ```csharp
-public class PlayerManager : MonoBehaviour {
-    public static PlayerManager Instance;
-    // ...
-}
+// [r147] 안전 예시 — 중괄호 없는 한 줄 시그니처만. LLM 이 위 입력 파일에서 실제 본문을 발췌해 다시 ```csharp 펜스로 감쌀 것.
+public class XxxManager : MonoBehaviour    // 싱글톤 Instance + 주요 public API + 이벤트
 ```
-싱글톤 패턴으로 글로벌 접근 제공.
+싱글톤·이벤트 발행 등 디자인 패턴을 한 줄로 설명.
 
 ## Sources
 이 페이지가 참조한 모든 파일을 글머리 기호로:
@@ -377,7 +376,7 @@ _ARCHITECTURE_PROMPT = """당신은 DeepWiki(deepwiki.com) 스타일의 시니�
 
 # 📋 출력 형식
 
-# {프로젝트 이름} — System Architecture
+# <프로젝트 이름> — System Architecture     <!-- [r147] 중괄호 대신 꺾쇠 -->
 
 ## Overall Architecture Diagram
 프로젝트의 모든 서브시스템을 큰 Mermaid 다이어그램 1개로 표현. 카테고리 = 노드, 호출/의존 관계 = 화살표.
@@ -454,17 +453,28 @@ sequenceDiagram
 
 
 def _safe_format(template: str, **kwargs) -> str:
-    """[r138] str.format 대신 키 단위 replace — 본문에 `{` `}` 가 있어도 안전.
+    """[r138→r147] str.format 대신 키 단위 replace — 본문에 `{` `}` 가 있어도 안전.
 
     Python 의 str.format 은 템플릿 안의 모든 `{...}` 패턴을 키로 해석하므로,
     csharp/json/JS 등 코드 블록의 `{` `}` 가 KeyError 일으킴.
     예: 템플릿에 `public class Foo { ... }` 있으면 `{...}` 안 내용을 키로 검색해 실패.
 
     safe_format 은 명시한 키만 정확히 치환하고 나머지 brace 는 손대지 않음.
+
+    [r147] 자가 진단:
+      · 치환되지 않은 명시 키(예: `{category_title}` 가 결과에 그대로 남음)는 print 경고.
+      · 결과에 보호되지 않은 `{...}` 패턴이 있어도 그대로 통과 (LLM 에 전달은 정상).
     """
     out = template
     for k, v in kwargs.items():
+        before = out
         out = out.replace("{" + k + "}", str(v))
+        if before == out:
+            # 템플릿에 `{k}` 자체가 없었음 → 호출자가 잘못된 키를 보냈을 가능성
+            print(f"[wiki_generator/_safe_format] WARN — 키 '{k}' 가 템플릿에 없음 (kwargs 오타 가능성).")
+        # 치환된 후에도 같은 키가 남아있는지 확인 (드물지만 중첩 케이스 진단)
+        if ("{" + k + "}") in out:
+            print(f"[wiki_generator/_safe_format] WARN — 키 '{k}' 치환 후 동일 패턴이 다시 등장. 값에 중첩 패턴 가능?")
     return out
 
 

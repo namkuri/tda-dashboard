@@ -19,6 +19,7 @@ from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
 from supabase_store import get_store
+from wiki_generator import _safe_format  # [r147] str.format → _safe_format (canon_content 의 brace KeyError 방지)
 
 
 _AUDIT_PROMPT = """당신은 기획 문서와 실제 코드 위키를 대조하는 감사관(auditor)입니다.
@@ -67,14 +68,15 @@ _AUDIT_PROMPT = """당신은 기획 문서와 실제 코드 위키를 대조하�
 
 ## JSON 메타 (마지막에 반드시 이 형식으로 포함)
 ```json
-{{
+{
   "match_score": 0.0~1.0 사이 실수,
   "findings": [
-    {{"type": "missing"|"mismatch"|"extra", "title": "...", "severity": "high"|"medium"|"low", "note": "..."}}
+    {"type": "missing|mismatch|extra", "title": "...", "severity": "high|medium|low", "note": "..."}
   ],
   "mapped_pages": ["slug1", "slug2"]
-}}
+}
 ```
+<!-- [r147] _safe_format 사용 — {{ }} 이스케이프 불필요. 단일 brace 그대로 LLM 에 전달됨 -->
 
 ## 규칙
 - 기획 문서 텍스트와 위키 페이지 본문에 명시된 사실만 사용
@@ -193,7 +195,9 @@ async def audit_wiki(
             "total": len(canons),
             "canon_title": title,
         }
-        prompt = _AUDIT_PROMPT.format(
+        # [r147] _safe_format — canon_content 안에 csharp/json 의 { } 가 있어도 KeyError 안 남
+        prompt = _safe_format(
+            _AUDIT_PROMPT,
             canon_title=title,
             canon_content=content,
             pages_summaries=pages_summaries,
