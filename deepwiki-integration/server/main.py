@@ -130,6 +130,7 @@ class WikiGenerateRequest(BaseModel):
     project_id: str
     branch: str = "main"
     model: Optional[str] = None
+    mode: str = "full"  # [r146] 'full' | 'incremental' (재시도/누락 채우기)
 
 
 # [r115] 기획 대조 감사 요청
@@ -430,12 +431,15 @@ async def wiki_generate(req: WikiGenerateRequest):
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    # [r146] incremental 모드면 clean_first=False (기존 클론 재사용해 git pull 효과)
+    incremental = (req.mode == "incremental")
     return _sse_indexer(generate_wiki(
         git_url=req.git_url,
         project_id=req.project_id,
         branch=req.branch,
-        clean_first=True,
+        clean_first=not incremental,
         model=req.model,
+        mode=req.mode,
     ), busy_kind="wiki_generate", busy_project=req.project_id)
 
 

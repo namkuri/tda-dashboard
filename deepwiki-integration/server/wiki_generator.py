@@ -694,8 +694,17 @@ async def generate_wiki(
     branch: str = "main",
     clean_first: bool = True,
     model: Optional[str] = None,
+    mode: str = "full",  # [r146] 'full' | 'incremental'
 ) -> AsyncIterator[Dict[str, Any]]:
-    """Git 레포 → DeepWiki 스타일 위키 페이지 N+2개 자동 생성."""
+    """Git 레포 → DeepWiki 스타일 위키 페이지 N+2개 자동 생성.
+
+    [r146] mode:
+      - 'full' (기본): 새 generation_id 로 전체 재생성. 기존 페이지는 is_latest=false 로 강등.
+      - 'incremental': 기존 latest 페이지가 있는 카테고리는 LLM 호출 스킵하고 재사용.
+                       누락/빈/실패 페이지(_report 의 failed_categories 포함) 만 새로 생성.
+                       기존 generation_id 를 유지 → 같은 트리에 누락 페이지가 추가됨.
+                       Architecture/Overview/Report 는 항상 재생성(레포 변경 반영).
+    """
     if not project_id:
         yield {"event": "error", "message": "project_id 필수"}
         return
@@ -817,15 +826,41 @@ async def generate_wiki(
     cat_count = len(categories)
     yield {"event": "scan_done", "category_count": cat_count, "merged": merged}
 
-    # ─ 3) [r121→r131] repo·버전 관리 — is_latest=false 는 첫 페이지 성공 후로 지연
+    # ─ 3) [r121→r131→r146] repo·버전 관리
     repo_clean = re.sub(r"[^a-zA-Z0-9_-]", "_", repo_name)[:60] or "unknown"
-    generation_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     gen_start_ts = time.time()
-    # [r131] 0-페이지 안전망: 페이지 저장 성공이 한 번이라도 일어나야 기존 latest 를 강등
-    is_latest_swapped = False
     collected_errors: List[Dict[str, Any]] = []
     successful_categories: List[Dict[str, Any]] = []
     failed_categories: List[Dict[str, Any]] = []
+    skipped_reused: List[Dict[str, Any]] = []  # [r146] incremental 모드에서 재사용된 페이지
+
+    # [r146] 모드별 generation_id 결정 + 기존 페이지 맵 구성
+    existing_pages_by_slug: Dict[str, Dict[str, Any]] = {}
+    if mode == "incremental":
+        try:
+            ex = (
+                store.client.table("deep_wiki_pages")
+                .select("slug,content,generation_id,git_commit,meta")
+                .eq("project_id", project_id)
+                .eq("repo_name", repo_clean)
+                .eq("is_latest", True)
+                .execute()
+            )
+            for row in (ex.data or []):
+                existing_pages_by_slug[row["slug"]] = row
+        except Exception as e:
+            yield {"event": "warn", "message": f"[incremental] 기존 페이지 조회 실패 — full 모드처럼 진행: {e}"}
+
+    if mode == "incremental" and existing_pages_by_slug:
+        # 가장 최근 generation_id 재사용 (같은 트리에 누락 페이지만 채워 넣음)
+        gens = sorted({p.get("generation_id") for p in existing_pages_by_slug.values() if p.get("generation_id")})
+        generation_id = gens[-1] if gens else datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        is_latest_swapped = True  # 재사용 모드에선 swap 건너뜀 (기존 latest 그대로)
+        yield {"event": "info", "message": f"🔁 incremental 모드 — 기존 generation '{generation_id}' 재사용 · 기존 페이지 {len(existing_pages_by_slug)}개"}
+    else:
+        generation_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        # [r131] 0-페이지 안전망: 페이지 저장 성공이 한 번이라도 일어나야 기존 latest 를 강등
+        is_latest_swapped = False
 
     def _swap_is_latest_once():
         """첫 페이지 저장 성공 시 한 번만 호출 — 기존 같은 repo 의 is_latest=false."""
@@ -840,6 +875,14 @@ async def generate_wiki(
             return f"기존 '{repo_clean}' 버전 → is_latest=false (첫 새 페이지 저장 후 스왑)"
         except Exception as e:
             return f"is_latest 스왑 실패 (003 SQL 미실행?): {e}"
+
+    def _has_valid_existing(slug: str, min_chars: int = 500) -> bool:
+        """[r146] incremental 모드: 기존 페이지가 충분한 내용을 가지면 True (재사용)."""
+        p = existing_pages_by_slug.get(slug)
+        if not p:
+            return False
+        c = (p.get("content") or "")
+        return len(c) >= min_chars
 
     # ─ 4) Architecture 페이지 먼저 (전체 시스템 다이어그램)
     yield {"event": "stage", "stage": "architecture", "message": f"🏛 Architecture 페이지 생성 중..."}
@@ -889,7 +932,8 @@ async def generate_wiki(
         collected_errors.append({"slug": "_architecture", "error": err_msg, "traceback": tb.splitlines()[-12:]})
 
     # ─ 5) 카테고리별 페이지 (LLM 호출 N번)
-    yield {"event": "stage", "stage": "generate", "message": f"LLM이 {cat_count}개 시스템 페이지 생성 중..."}
+    # [r146] incremental: 기존 페이지가 valid 면 LLM 호출 스킵 → "누락만 채워넣기"
+    yield {"event": "stage", "stage": "generate", "message": f"LLM이 {cat_count}개 시스템 페이지 생성 중..." + (" (incremental: 기존 valid 페이지는 재사용)" if mode == "incremental" else "")}
     created_pages: List[Dict[str, Any]] = []
     for idx, cat in enumerate(cat_items_sorted):
         yield {
@@ -900,6 +944,16 @@ async def generate_wiki(
             "slug": cat["slug"],
             "files_in_cat": cat["total_files"],
         }
+        # [r146] incremental: 이미 valid 한 페이지면 LLM 호출 안 함 → 시간/모델 비용 절약
+        if mode == "incremental" and _has_valid_existing(cat["slug"]):
+            ep = existing_pages_by_slug[cat["slug"]]
+            existing_summary = (ep.get("meta") or {}).get("category_title") or cat["title"]
+            yield {"event": "info", "message": f"♻️ [{idx+1}/{cat_count}] {cat['title']} — 기존 페이지 재사용 ({len(ep.get('content') or '')}자)"}
+            skipped_reused.append({"slug": cat["slug"], "title": cat["title"], "chars": len(ep.get("content") or "")})
+            successful_categories.append({"slug": cat["slug"], "title": cat["title"], "reused": True})
+            created_pages.append({"slug": cat["slug"], "title": ep.get("meta", {}).get("category_title") or cat["title"], "summary": "(재사용)"})
+            yield {"event": "page_done", "slug": cat["slug"], "title": existing_summary, "reused": True}
+            continue
         try:
             page = await _llm_generate_category_page(cat=cat, model=model, unity_mode=unity_mode)
         except Exception as e:
@@ -1028,6 +1082,9 @@ async def generate_wiki(
         "pages_created": len(created_pages) + 2,  # +arch +overview (성공한 경우)
         "successful_categories": len(successful_categories),
         "failed_categories": len(failed_categories),
+        "failed_slugs": [f.get("slug") for f in failed_categories],  # [r146] 실패 슬러그 — 프론트가 자동 재시도 결정에 사용
+        "reused_count": len(skipped_reused),  # [r146] incremental 모드 재사용 카운트
+        "mode": mode,
         "is_latest_swapped": is_latest_swapped,
         "repo_name": repo_clean,
         "generation_id": generation_id,
@@ -1209,6 +1266,31 @@ async def extend_wiki_page(
     new_meta = dict(page.get("meta") or {})
     new_meta["extensions"] = extensions[-30:]  # 최근 30회만 보존
 
+    # [r146 #3/#4] 확장 전/후 diff 요약 + 상세 진단 이벤트
+    old_content = page.get("content") or ""
+    old_chars = len(old_content)
+    new_chars = len(new_content)
+    new_lines_count = new_section.count("\n") + 1
+    # 새 섹션의 첫 줄(헤더) + 본문 첫 줄 미리보기 — 사용자에게 무엇이 추가됐는지 보여줌
+    new_section_lines = [l for l in new_section.splitlines() if l.strip()]
+    preview_head = new_section_lines[0] if new_section_lines else ""
+    preview_excerpt = "\n".join(new_section_lines[:6])[:400]
+    yield {
+        "event": "info",
+        "message": (
+            f"📝 diff 요약 — 기존 본문 {old_chars}자 → 확장 후 {new_chars}자 "
+            f"(+{new_chars - old_chars}자 / +{new_lines_count}줄)"
+        ),
+        "diff_summary": {
+            "old_chars": old_chars,
+            "new_chars": new_chars,
+            "chars_added": len(new_section),
+            "lines_added": new_lines_count,
+            "preview_head": preview_head,
+            "preview_excerpt": preview_excerpt,
+        },
+    }
+
     yield {"event": "stage", "stage": "save", "message": f"DB 저장 중... (+{len(new_section)}자)"}
     try:
         # [r142 #6] update 결과 검증 — Supabase update 는 0행 매칭 시에도 예외 없이 빈 data 반환 가능
@@ -1220,18 +1302,29 @@ async def extend_wiki_page(
         if rows_affected == 0:
             yield {"event": "error", "message": f"저장 실패: 영향받은 행 없음 (id={page['id']}). RLS·트리거 확인."}
             return
+        yield {"event": "info", "message": f"💾 update 영향행: {rows_affected} (id={page['id']})"}
         # 저장 후 재조회 → 본문 길이 일치 확인
         verify = (
             store.client.table("deep_wiki_pages")
-            .select("content")
+            .select("content,meta")
             .eq("id", page["id"])
             .limit(1)
             .execute()
         )
-        saved_content = ((verify.data or [{}])[0].get("content") or "")
+        saved_row = (verify.data or [{}])[0]
+        saved_content = saved_row.get("content") or ""
+        saved_meta = saved_row.get("meta") or {}
+        saved_ext_count = len((saved_meta.get("extensions") or []))
         if len(saved_content) < len(new_content) - 10:
             yield {"event": "error", "message": f"저장 후 검증 실패: 본문 {len(saved_content)}자 (기대 {len(new_content)}자)"}
             return
+        yield {
+            "event": "info",
+            "message": (
+                f"✅ 검증 OK — DB 본문 {len(saved_content)}자 · meta.extensions {saved_ext_count}회 · "
+                f"추가 헤더: {preview_head[:80]}"
+            ),
+        }
         yield {
             "event": "done",
             "slug": slug,
@@ -1240,6 +1333,15 @@ async def extend_wiki_page(
             "chars_added": len(new_section),
             "total_extensions": len(extensions),
             "saved_total_chars": len(saved_content),
+            # [r146] 프론트의 diff 카드용
+            "diff_summary": {
+                "old_chars": old_chars,
+                "new_chars": len(saved_content),
+                "chars_added": len(new_section),
+                "lines_added": new_lines_count,
+                "preview_head": preview_head,
+                "preview_excerpt": preview_excerpt,
+            },
         }
     except Exception as e:
         import traceback
