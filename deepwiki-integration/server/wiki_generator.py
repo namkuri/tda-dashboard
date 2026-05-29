@@ -65,8 +65,16 @@ _SYSTEM_PATTERNS: List[Tuple[str, str, str, int]] = [
     (r"Assets/Scripts/Save\b|Assets/Scripts/Persistence\b", "Save System", "save", 52),
     (r"Assets/Scripts/Audio\b|Assets/Scripts/Sound\b", "Audio System", "audio", 53),
     (r"Assets/Scripts/Scene\b|Assets/Scripts/World\b", "Scene & World", "scene-world", 60),
-    (r"Assets/Scripts/Network\b|Assets/Scripts/Net\b", "Network", "network", 61),
-    (r"Assets/Editor\b", "Editor Extensions", "editor", 70),
+    (r"Assets/Scripts/Network\b|Assets/Scripts/Net\b|Mirror\b|Photon\b|NetCode\b", "Network (Mirror/Photon/Netcode)", "network", 61),
+    # [r132] Unity 추가 세분화 — 자주 보이는 시스템
+    (r"Assets/Scripts/Input\b|InputSystem\b", "Input System", "input-system", 62),
+    (r"Assets/Scripts/Animation\b|Animations?/", "Animation & Animator", "animation", 63),
+    (r"Cinemachine\b|Assets/Scripts/Camera\b", "Camera & Cinemachine", "camera", 64),
+    (r"Localization\b|Assets/Localizations?\b", "Localization", "localization", 65),
+    (r"Assets/Tests?\b|PlayMode/|EditMode/", "Tests (PlayMode/EditMode)", "tests-unity", 66),
+    (r"Shaders?/|\.shader$|\.cginc$", "Shaders & Materials", "shaders", 67),
+    (r"VFX\b|VisualEffects?\b|\.vfx$", "VFX Graph", "vfx-graph", 68),
+    (r"Assets/Editor\b|Editor/", "Editor Extensions", "editor", 70),
     (r"Assets/Scripts/Utils?\b|Assets/Scripts/Helpers?\b", "Utility & Helpers", "utils", 71),
     (r"Assets/Scripts\b", "Scripts (Misc)", "scripts-misc", 80),
     (r"Assets/Resources\b", "Resources", "resources", 81),
@@ -163,6 +171,117 @@ def _read_file_truncated(abs_path: str, max_chars: int = 4500) -> str:
 # ─────────────────────────────────────────────
 # LLM 프롬프트 — DeepWiki 형식 (Sources 인용 + Mermaid + 표)
 # ─────────────────────────────────────────────
+
+# [r132] Unity 프로젝트 감지 — 다음 단서가 있으면 Unity 모드
+_UNITY_MARKERS = (
+    "/Assets/",          # 거의 모든 Unity 프로젝트 (대소문자 무관 매치)
+    "/ProjectSettings/",
+    "/Packages/manifest.json",
+)
+_UNITY_EXTENSIONS = (".unity", ".prefab", ".asset", ".meta", ".asmdef", ".asmref", ".mat", ".controller", ".anim", ".shader", ".cginc")
+
+
+def _detect_unity_project(repo_path: Path) -> bool:
+    """[r132] 레포가 Unity 프로젝트인지 — 디렉토리·확장자 단서로 판정."""
+    try:
+        # 1) 디렉토리 단서 (가장 강함)
+        for marker in ("Assets", "ProjectSettings"):
+            if (repo_path / marker).is_dir():
+                return True
+        # 2) Unity 전용 확장자 파일 존재
+        for sub in repo_path.rglob("*"):
+            if sub.is_file() and sub.suffix.lower() in _UNITY_EXTENSIONS:
+                return True
+            # 너무 깊이 들어가지 않게 — 100개 파일 검사 후 단념
+        return False
+    except Exception:
+        return False
+
+
+# [r132] Unity 모드에서 system message 에 덧붙일 한국어 프롬프트
+_UNITY_PROMPT_ADDENDUM = """
+
+## 🎮 Unity 프로젝트 특화 분석 (Unity Mode ON)
+
+이 코드는 **Unity 엔진 프로젝트**입니다. 일반 C# 분석이 아니라 Unity 특화 패턴까지 캐치하세요:
+
+### 반드시 캐치할 Unity 패턴
+1. **MonoBehaviour 라이프사이클** — 사용된 콜백을 명시:
+   - 초기화: `Awake`, `OnEnable`, `Start`
+   - 매 프레임: `Update`, `FixedUpdate`(물리), `LateUpdate`(카메라)
+   - 종료: `OnDisable`, `OnDestroy`
+   - 충돌: `OnTriggerEnter/Stay/Exit`, `OnCollisionEnter/Stay/Exit` (2D 버전 포함)
+   - 에디터: `OnValidate`, `OnDrawGizmos`
+2. **ScriptableObject 패턴**:
+   - `[CreateAssetMenu(menuName="...", fileName="...")]` → 에셋 생성 가능 여부
+   - SO 인스턴스가 다른 컴포넌트에서 참조되는 방식 (data-as-asset 패턴)
+3. **Inspector 노출 필드**:
+   - `[SerializeField]` private 필드 + public 필드
+   - 어트리뷰트: `[Header("...")]`, `[Range(min,max)]`, `[Tooltip]`, `[Min]`, `[Max]`, `[ColorUsage]`, `[TextArea]`
+   - 숨김: `[HideInInspector]`, `[NonSerialized]`
+4. **컴포넌트 의존성**:
+   - `[RequireComponent(typeof(Rigidbody))]`, `[DisallowMultipleComponent]`, `[ExecuteInEditMode]`
+   - `GetComponent<T>()`, `GetComponentInChildren<T>()`, `GetComponentInParent<T>()` 호출 흐름
+5. **코루틴**:
+   - `IEnumerator` 반환 메서드 + `StartCoroutine`/`StopCoroutine`/`StopAllCoroutines`
+   - `yield return new WaitForSeconds(n)`, `WaitUntil(...)`, `WaitForEndOfFrame`
+   - **비동기 흐름 mermaid sequenceDiagram 으로 표현**
+6. **에디터 확장**:
+   - `Editor`, `EditorWindow`, `PropertyDrawer` 상속
+   - `[CustomEditor(typeof(...))]`, `[CustomPropertyDrawer(typeof(...))]`
+   - `Editor/` 폴더에 있는 스크립트는 빌드 제외 — 별도 섹션
+7. **에셋·리소스 시스템**:
+   - `Resources.Load` (안티패턴 경고), `AssetBundle` (레거시)
+   - `Addressables`, `AssetReference` (권장 패턴)
+8. **Input**:
+   - 신 Input System (`PlayerInput`, `InputAction`, `InputActionAsset`) vs 레거시 `Input.GetKey`
+9. **물리**:
+   - `Rigidbody`/`Rigidbody2D`, `Collider`/`Collider2D`, layers, `Physics.Raycast`
+   - **`FixedUpdate`에서만 물리 업데이트** — 다른 곳이면 경고
+10. **UI**:
+    - `Canvas` 렌더 모드 (Overlay/Camera/WorldSpace), `RectTransform` 앵커
+    - `TextMeshPro` vs Legacy `Text`
+    - `EventTrigger`, `IPointerClickHandler`, `Button.onClick` 패턴
+11. **에셈블리 정의**: `*.asmdef` 파일이 보이면 어셈블리 분리 구조 명시
+12. **씬·프리팹**: `*.unity`(씬), `*.prefab` 파일 존재 시 명시
+
+### 출력 시 추가 섹션 (해당 패턴 발견 시 반드시 추가)
+
+기존 7섹션 외에 다음을 **Core Components 다음에** 끼워넣기:
+
+#### 🎮 Unity 컴포넌트 메타 (해당 시)
+
+**MonoBehaviour 라이프사이클 사용 현황**:
+| 클래스 | 사용한 콜백 | 용도 |
+|--------|-----------|------|
+| `PlayerController` | `Awake`, `Update`, `FixedUpdate` | 초기화 + 입력 + 물리 |
+
+**Inspector 노출 필드 (`[SerializeField]` + public)**:
+| 클래스 | 필드 | 타입 | 어트리뷰트 | 용도 |
+|--------|------|------|----------|------|
+| `PlayerController` | `moveSpeed` | `float` | `[Range(0, 20)]` | 이동 속도 |
+
+**컴포넌트 의존성**:
+- `PlayerController` 는 `[RequireComponent(typeof(Rigidbody))]` → 자동으로 `Rigidbody` 부착됨
+
+**코루틴 흐름** (있으면 Mermaid):
+```mermaid
+sequenceDiagram
+    참여자 명시
+    yield 시점 명시
+```
+
+**ScriptableObject 자산** (해당 시):
+- `PlayerStatsData` — `[CreateAssetMenu]` 로 `Assets/Data/Stats/...` 에 인스턴스 생성
+
+각 항목 발견 시 `[path/file.cs:N-M]` Sources 인용 필수.
+
+### 일반 C# 과의 차이
+- `void Update()` 같은 빈 시그니처라도 Unity 엔진이 매 프레임 호출 → "엔트리포인트"로 간주
+- `public` 필드 = 자동으로 Inspector 노출 (private + `[SerializeField]` 와 동등)
+- `static` 매니저 패턴 (e.g. `PlayerManager.Instance`) 가 흔함 — DI 가 아니라 글로벌 싱글톤 명시
+"""
+
 
 _CATEGORY_PROMPT = """당신은 DeepWiki(deepwiki.com) 스타일의 시니어 코드 위키 작성자입니다. 아래 코드 파일들을 정독하고 시스템에 대한 종합 분석 페이지를 작성하세요.
 
@@ -361,8 +480,9 @@ def _build_categories_block(categories: List[Dict[str, Any]], top_files: int = 3
 async def _llm_generate_category_page(
     cat: Dict[str, Any],
     model: Optional[str] = None,
+    unity_mode: bool = False,
 ) -> Dict[str, Any]:
-    """카테고리 페이지 생성 — DeepWiki 7섹션 형식."""
+    """카테고리 페이지 생성 — DeepWiki 7섹션 형식. unity_mode=True 면 Unity 특화 addendum."""
     prompt = _CATEGORY_PROMPT.format(
         category_title=cat["title"],
         slug=cat["slug"],
@@ -381,6 +501,9 @@ async def _llm_generate_category_page(
         "4. Mermaid 다이어그램(graph/sequenceDiagram/stateDiagram) 최소 2개 포함.\n"
         "5. 코드에 명시되지 않은 정보 만들지 말 것."
     )
+    # [r132] Unity 프로젝트 감지되면 system 에 특화 분석 지시 추가
+    if unity_mode:
+        system_msg += _UNITY_PROMPT_ADDENDUM
     content_chunks: List[str] = []
     async for d in ollama.chat_stream(
         messages=[
@@ -409,6 +532,7 @@ async def _llm_generate_architecture_page(
     commit: str,
     repo_name: str,
     model: Optional[str] = None,
+    unity_mode: bool = False,
 ) -> Dict[str, Any]:
     """전체 Architecture 페이지 — 모든 카테고리 관계 Mermaid."""
     prompt = _ARCHITECTURE_PROMPT.format(
@@ -428,6 +552,8 @@ async def _llm_generate_architecture_page(
         "4. Data Flow Examples는 sequenceDiagram 2~3개.\n"
         "5. 추측 금지 — 코드 외 사실 작성 금지."
     )
+    if unity_mode:
+        system_msg += _UNITY_PROMPT_ADDENDUM
     content_chunks: List[str] = []
     async for d in ollama.chat_stream(
         messages=[
@@ -549,6 +675,10 @@ async def generate_wiki(
 
     # ─ 2) 스캔 + 카테고리 분류
     yield {"event": "stage", "stage": "scan", "message": "파일 트리 분석 중..."}
+    # [r132] Unity 프로젝트 감지 — 감지되면 LLM 프롬프트에 Unity addendum 추가
+    unity_mode = _detect_unity_project(repo_path)
+    if unity_mode:
+        yield {"event": "info", "message": "🎮 Unity 프로젝트 감지됨 — MonoBehaviour·SerializeField·Coroutine·ScriptableObject 등 특화 분석 활성화"}
     categories = _scan_repo(repo_path)
     # 너무 작은 카테고리는 root로 머지
     if "project-config" not in categories:
@@ -601,6 +731,7 @@ async def generate_wiki(
             commit=commit_hash or "",
             repo_name=repo_name,
             model=model,
+            unity_mode=unity_mode,
         )
         arch_id = f"dwp:{project_id}:{repo_clean}:{generation_id}:_architecture"
         store.client.table("deep_wiki_pages").upsert({
@@ -647,7 +778,7 @@ async def generate_wiki(
             "files_in_cat": cat["total_files"],
         }
         try:
-            page = await _llm_generate_category_page(cat=cat, model=model)
+            page = await _llm_generate_category_page(cat=cat, model=model, unity_mode=unity_mode)
         except Exception as e:
             err_msg = f"LLM 실패 ({cat['slug']}): {type(e).__name__}: {e}"
             yield {"event": "warn", "message": err_msg}
@@ -777,6 +908,197 @@ async def generate_wiki(
         "generation_id": generation_id,
         "elapsed_sec": int(time.time() - gen_start_ts),
     }
+
+
+# ─────────────────────────────────────────────
+# [r132] 기존 페이지 확장 — extend_wiki_page
+# ─────────────────────────────────────────────
+
+# 확장 타입별 prompt addendum
+_EXTEND_PROMPTS: Dict[str, str] = {
+    "deep_dive": (
+        "위 문서를 **기술적 deep dive** 로 확장하세요. 다음 관점을 추가 분석:\n"
+        "- 핵심 알고리즘의 시간/공간 복잡도\n"
+        "- 디자인 패턴 명시 (싱글톤·Observer·Strategy·State 등)\n"
+        "- 데이터 구조 선택 이유\n"
+        "- 스레딩·동시성 모델 (있다면)\n"
+        "- 메모리 할당 패턴 (Unity면 GC 압박·풀링)\n"
+        "- 호출 흐름의 시퀀스 다이어그램 1~2개 추가\n"
+    ),
+    "performance": (
+        "위 문서에 **성능·최적화** 섹션을 추가하세요:\n"
+        "- 핫패스 식별 (매 프레임 호출되는 코드)\n"
+        "- 잠재적 병목 (할당·복사·LINQ·boxing)\n"
+        "- Unity 특화: Update vs FixedUpdate vs LateUpdate 부담\n"
+        "- 풀링 적용 가능 부분, ScriptableObject 활용 가능성\n"
+        "- 측정·프로파일링 권장 지점\n"
+        "- 개선 안 2~3개 (코드 발췌 예시 포함)\n"
+    ),
+    "pitfalls": (
+        "위 문서에 **주의사항·안티패턴·일반적 실수** 섹션을 추가하세요:\n"
+        "- 코드에서 발견되는 잠재적 버그 (race condition·null·order of execution)\n"
+        "- Unity 특화 함정 (Awake/Start 순서·OnDestroy 정리·코루틴 누수)\n"
+        "- 흔한 오용 시나리오\n"
+        "- 안전한 사용법 가이드\n"
+    ),
+    "examples": (
+        "위 문서에 **사용 예시·코드 샘플** 섹션을 추가하세요:\n"
+        "- 시스템을 외부에서 호출하는 미니멀한 코드 샘플 3개\n"
+        "- 각 샘플은 csharp 코드블록으로 + 어떤 시나리오인지 설명\n"
+        "- 발견된 실제 호출처를 Sources 인용으로 같이 표시\n"
+        "- 가능하면 sequenceDiagram 추가\n"
+    ),
+    "testing": (
+        "위 문서에 **테스트 전략** 섹션을 추가하세요:\n"
+        "- 단위 테스트 가능한 메서드 식별\n"
+        "- Mock/Stub 이 필요한 의존성\n"
+        "- Unity Test Framework (PlayMode/EditMode) 적용 권장\n"
+        "- 통합 테스트 시나리오 제안 (Given/When/Then 형식)\n"
+        "- 테스트하기 어려운 부분 + 리팩토링 제안\n"
+    ),
+    "custom": "위 문서에 사용자 요청 사항대로 새로운 섹션을 추가하세요:\n\n{custom_prompt}",
+}
+
+
+async def extend_wiki_page(
+    project_id: str,
+    slug: str,
+    extension_type: str,
+    custom_prompt: Optional[str] = None,
+    model: Optional[str] = None,
+) -> AsyncIterator[Dict[str, Any]]:
+    """[r132] 기존 위키 페이지에 LLM 으로 새 섹션 추가.
+
+    1. deep_wiki_pages 에서 slug 로 페이지 fetch
+    2. 확장 타입별 prompt + 기존 본문 → LLM 호출
+    3. 응답을 본문 끝에 `## 확장 분석 ({type}, {timestamp})` 헤더 + 내용으로 append
+    4. meta.extensions 배열에 이력 push
+    5. updated_at 갱신
+    """
+    store = get_store()
+    ollama = get_ollama()
+
+    yield {"event": "stage", "stage": "fetch", "message": "페이지 로드 중..."}
+    try:
+        res = (
+            store.client.table("deep_wiki_pages")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("slug", slug)
+            .eq("is_latest", True)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            yield {"event": "error", "message": f"슬러그 '{slug}' 페이지를 찾을 수 없습니다 (latest)"}
+            return
+        page = rows[0]
+    except Exception as e:
+        yield {"event": "error", "message": f"페이지 조회 실패: {e}"}
+        return
+
+    yield {"event": "info", "message": f"📄 {page.get('title', '?')} 로드 완료 — 본문 {len(page.get('content', ''))}자"}
+
+    addendum = _EXTEND_PROMPTS.get(extension_type)
+    if not addendum:
+        yield {"event": "error", "message": f"알 수 없는 확장 타입: {extension_type}"}
+        return
+    if extension_type == "custom":
+        if not custom_prompt or not custom_prompt.strip():
+            yield {"event": "error", "message": "custom_prompt 가 비어있습니다"}
+            return
+        addendum = addendum.format(custom_prompt=custom_prompt.strip())
+
+    # 본문 너무 길면 LLM context 초과 — 8000자 정도로 컷 (8000 chars ≈ 2000 tokens)
+    existing_content = (page.get("content") or "")[:8000]
+    title = page.get("title", "")
+
+    user_msg = (
+        f"# 확장 요청\n\n"
+        f"아래는 기존 위키 페이지 '{title}' 의 본문입니다. 이 문서를 읽고 새로운 섹션을 추가하세요.\n\n"
+        f"## 추가 지시\n\n{addendum}\n\n"
+        f"## 출력 규칙\n"
+        f"- 새로운 마크다운 섹션만 출력 (기존 본문 반복 금지)\n"
+        f"- 한국어\n"
+        f"- 모든 클래스·메서드 언급 시 [path/file.cs:N-M] Sources 인용\n"
+        f"- Mermaid 다이어그램 활용 권장\n"
+        f"- 코드에 없는 사실 만들지 말 것\n\n"
+        f"---\n\n# 기존 본문\n\n{existing_content}"
+    )
+
+    system_msg = (
+        "당신은 시니어 테크니컬 라이터입니다. 이미 작성된 코드 위키 페이지에 "
+        "기술적으로 더 깊은 분석 섹션을 추가합니다. 기존 본문을 다시 쓰지 말고 "
+        "오직 새로운 섹션만 마크다운으로 출력합니다. 한국어. Sources 인용 필수."
+    )
+
+    yield {"event": "stage", "stage": "llm", "message": "🤖 LLM 으로 확장 섹션 생성 중..."}
+    try:
+        chunks: List[str] = []
+        async for d in ollama.chat_stream(
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            model=model,
+            temperature=0.25,
+        ):
+            chunks.append(d)
+        new_section = "".join(chunks).strip()
+        if not new_section:
+            yield {"event": "error", "message": "LLM 이 빈 응답을 반환했습니다"}
+            return
+    except Exception as e:
+        yield {"event": "error", "message": f"LLM 호출 실패: {type(e).__name__}: {e}"}
+        return
+
+    # 본문 append + 메타 이력
+    now_iso = datetime.now().isoformat()
+    type_label = {
+        "deep_dive": "기술 Deep Dive",
+        "performance": "성능·최적화",
+        "pitfalls": "주의사항·안티패턴",
+        "examples": "사용 예시",
+        "testing": "테스트 전략",
+        "custom": "맞춤 분석",
+    }.get(extension_type, extension_type)
+    appended_md = (
+        f"\n\n---\n\n"
+        f"## ✦ 확장 분석 — {type_label} ({now_iso[:19]})\n\n"
+        f"_모델: {model or settings.LLM_MODEL}_\n\n"
+        f"{new_section}\n"
+    )
+    new_content = (page.get("content") or "") + appended_md
+
+    extensions = list((page.get("meta") or {}).get("extensions") or [])
+    extensions.append({
+        "type": extension_type,
+        "label": type_label,
+        "added_at": now_iso,
+        "model": model or settings.LLM_MODEL,
+        "prompt_excerpt": (custom_prompt or "")[:200] if extension_type == "custom" else None,
+        "chars_added": len(new_section),
+    })
+    new_meta = dict(page.get("meta") or {})
+    new_meta["extensions"] = extensions[-30:]  # 최근 30회만 보존
+
+    yield {"event": "stage", "stage": "save", "message": "DB 저장 중..."}
+    try:
+        store.client.table("deep_wiki_pages").update({
+            "content": new_content,
+            "meta": new_meta,
+        }).eq("id", page["id"]).execute()
+        yield {
+            "event": "done",
+            "slug": slug,
+            "title": title,
+            "extension_type": extension_type,
+            "chars_added": len(new_section),
+            "total_extensions": len(extensions),
+        }
+    except Exception as e:
+        yield {"event": "error", "message": f"저장 실패: {e}"}
 
 
 def _build_generation_report(

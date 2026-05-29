@@ -16,7 +16,7 @@ from rag import chat_stream as legacy_chat_stream  # [r108] 폴백용
 from agent import run as agent_run  # [r108] Tool Use 에이전트
 from retriever import retrieve, SIMILARITY_THRESHOLD
 from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints, _is_empty_template_chunk
-from wiki_generator import generate_wiki  # [r113] Deep Wiki 자동 위키
+from wiki_generator import generate_wiki, extend_wiki_page  # [r113] 자동 위키 + [r132] 페이지 확장
 from wiki_auditor import audit_wiki  # [r115] 기획 대조 2차 MD
 
 
@@ -534,6 +534,36 @@ async def wiki_pages_delete(project_id: str):
 # ─────────────────────────────────────────────
 # [r115] Phase C — 기획 대조 감사 보고서
 # ─────────────────────────────────────────────
+
+# [r132] 기존 페이지 확장 — 새 섹션 LLM 으로 추가
+class WikiExtendRequest(BaseModel):
+    project_id: str
+    slug: str
+    extension_type: str  # 'deep_dive' | 'performance' | 'pitfalls' | 'examples' | 'testing' | 'custom'
+    custom_prompt: Optional[str] = None
+    model: Optional[str] = None
+
+
+@app.post("/wiki/extend")
+async def wiki_extend(req: WikiExtendRequest):
+    """[r132] 기존 위키 페이지에 LLM 으로 새 섹션 추가. SSE 진행률 + 본문에 append."""
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    return _sse_indexer(
+        extend_wiki_page(
+            project_id=req.project_id,
+            slug=req.slug,
+            extension_type=req.extension_type,
+            custom_prompt=req.custom_prompt,
+            model=req.model,
+        ),
+        busy_kind="wiki_extend",
+        busy_project=req.project_id,
+    )
+
 
 @app.post("/wiki/audit")
 async def wiki_audit(req: WikiAuditRequest):
