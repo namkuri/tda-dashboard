@@ -109,8 +109,8 @@ def _classify_file(rel_path: str) -> Optional[Tuple[str, str, int]]:
     return None
 
 
-def _scan_repo(repo_path: Path, max_files_per_category: int = 15) -> Dict[str, Dict[str, Any]]:
-    """[r122] 파일 트리 → 시스템 카테고리 분류."""
+def _scan_repo(repo_path: Path, max_files_per_category: int = 25) -> Dict[str, Dict[str, Any]]:
+    """[r122→r141] 파일 트리 → 시스템 카테고리 분류 — 카테고리당 파일 15→25 (더 풍부한 분석)."""
     categories: Dict[str, Dict[str, Any]] = {}
     for path in repo_path.rglob("*"):
         if not path.is_file():
@@ -157,7 +157,7 @@ def _scan_repo(repo_path: Path, max_files_per_category: int = 15) -> Dict[str, D
     return categories
 
 
-def _read_file_truncated(abs_path: str, max_chars: int = 4500) -> str:
+def _read_file_truncated(abs_path: str, max_chars: int = 6500) -> str:
     """파일 본문 읽기. 너무 크면 잘라냄."""
     try:
         with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -472,7 +472,7 @@ def _build_files_block(files: List[Dict[str, Any]]) -> str:
     """LLM에 첨부할 파일 본문 블록 + 라인 정보."""
     blocks = []
     for f in files:
-        text = _read_file_truncated(f["abs"], max_chars=4500)
+        text = _read_file_truncated(f["abs"], max_chars=6500)
         lines = f.get("lines", 0)
         blocks.append(f"### `{f['path']}` ({lines}줄, {f['size']} bytes)\n```\n{text}\n```")
     return "\n\n---\n\n".join(blocks)
@@ -509,20 +509,44 @@ async def _llm_generate_category_page(
         files_block=_build_files_block(cat["files"]),
     )
     ollama = get_ollama()
+    # [r141] 시스템 프롬프트 — 더 깊은 분석·디테일·길이 강제
     system_msg = (
         "당신은 시니어 소프트웨어 아키텍트 + 테크니컬 라이터입니다. "
-        "DeepWiki(deepwiki.com)와 동등한 수준의 코드 위키를 작성합니다.\n"
-        "🚨 규칙:\n"
+        "DeepWiki(deepwiki.com)와 **동등하거나 더 높은** 수준의 코드 위키를 작성합니다.\n"
+        "🚨 절대 규칙 (위반 시 페이지 거부):\n"
         "1. 반드시 한국어. 영문 응답 금지. 식별자·경로·코드만 원문 유지.\n"
         "2. 사용자가 지정한 7섹션(Overview / System Architecture / Core Components / Data Flow / Key Features / Code References / Sources) 정확히 따를 것.\n"
-        "3. 모든 클래스·메서드 언급 시 [path/file.cs:N-M] 형태 Sources 인용 추가.\n"
-        "4. Mermaid 다이어그램(graph/sequenceDiagram/stateDiagram) 최소 2개 포함.\n"
-        "5. 코드에 명시되지 않은 정보 만들지 말 것."
+        "3. 모든 클래스·메서드·필드·이벤트 언급 시 [path/file.cs:N-M] 형태 Sources 인용 추가. 인용 없는 식별자 절대 금지.\n"
+        "4. Mermaid 다이어그램 **최소 3개** (graph/sequenceDiagram/stateDiagram 중) 포함.\n"
+        "5. 코드에 명시되지 않은 정보 만들지 말 것. 추측은 '~로 보입니다' 명시.\n"
+        "\n"
+        "📏 깊이·길이 강제:\n"
+        "- **전체 분량 2500~4000자** (시니어 엔지니어가 읽기에 부족함 없는 디테일)\n"
+        "- Overview 6~10문장 (단순 한 줄 요약 금지)\n"
+        "- System Architecture: Mermaid 1개 + 노드별 책임 1~2줄씩 설명 + 디자인 패턴 명시\n"
+        "- Core Components 표: 최소 10행, '한 줄 설명' 이 아닌 '책임/입력/출력/호출처' 4축 분석\n"
+        "- Data Flow: Mermaid sequence/state 1~2개 + 주요 흐름 단계별 한국어 설명\n"
+        "- Key Features 5~10개, 각 항목에 **어떤 시나리오에서 동작하는지** + Sources\n"
+        "- Code References: 핵심 코드 2~4개 발췌, 각 발췌에 'Why this matters' 설명\n"
+        "\n"
+        "🔍 분석 깊이 가이드:\n"
+        "- 단순히 '무엇' 이 아니라 '왜·어떻게·언제·어디서·누가' 5축 분석\n"
+        "- public/private 분리·접근 제어·캡슐화 의도 추론\n"
+        "- 사용된 디자인 패턴(싱글톤·Observer·Strategy·State·Factory 등) 명시\n"
+        "- 다른 시스템과의 결합도(coupling)·응집도(cohesion) 평가\n"
+        "- 잠재적 리팩토링 포인트·확장 포인트 식별\n"
+        "- 메모리/성능 특성 추론 (정적 할당·풀링·캐싱 등)\n"
+        "\n"
+        "❌ 금지:\n"
+        "- '이 시스템은 ...를 관리합니다' 식의 표면 한줄 요약\n"
+        "- 6섹션 미만으로 끝내기\n"
+        "- 빈 표·빈 다이어그램 (TBD/추후 작성 금지)\n"
+        "- 동일 문장 반복\n"
     )
     # [r132] Unity 프로젝트 감지되면 system 에 특화 분석 지시 추가
     if unity_mode:
         system_msg += _UNITY_PROMPT_ADDENDUM
-    # [r135] LLM 응답 통계 추적
+    # [r135→r141] LLM 응답 통계 추적 + num_ctx 32K (큰 파일 25개 분석 위해)
     content_chunks: List[str] = []
     t0 = time.time()
     async for d in ollama.chat_stream(
@@ -531,7 +555,8 @@ async def _llm_generate_category_page(
             {"role": "user", "content": prompt},
         ],
         model=model,
-        temperature=0.25,
+        temperature=0.3,  # 약간 ↑ 로 더 풍부한 표현
+        num_ctx=32768,    # [r141] 16K → 32K — 25개 파일×6500자 컨텍스트 수용
     ):
         content_chunks.append(d)
     elapsed = time.time() - t0
@@ -543,10 +568,11 @@ async def _llm_generate_category_page(
             f"LLM 빈 응답 (model={model or settings.LLM_MODEL}, chunks={len(content_chunks)}, elapsed={elapsed:.1f}s). "
             f"가능 원인: num_ctx 초과·OOM·모델 미응답"
         )
-    if len(content) < 200:
+    if len(content) < 500:
+        # [r141] 깊이 강제 — 짧은 응답은 거부 (옛 200 → 500)
         raise RuntimeError(
             f"LLM 응답 너무 짧음 ({len(content)}자, model={model or settings.LLM_MODEL}, elapsed={elapsed:.1f}s). "
-            f"카테고리 페이지는 최소 1000자 이상이어야 함. 모델 출력 정상 아님"
+            f"카테고리 페이지는 최소 1500자 이상이어야 함. 모델 출력 정상 아님"
         )
     title = cat["title"]
     first_line = content.split("\n", 1)[0].strip()
@@ -589,7 +615,7 @@ async def _llm_generate_architecture_page(
     )
     if unity_mode:
         system_msg += _UNITY_PROMPT_ADDENDUM
-    # [r135] Architecture LLM 응답 통계 + 빈 응답 감지
+    # [r135→r141] Architecture — num_ctx 32K (전체 시스템 컨텍스트 수용)
     content_chunks: List[str] = []
     t0 = time.time()
     async for d in ollama.chat_stream(
@@ -598,7 +624,8 @@ async def _llm_generate_architecture_page(
             {"role": "user", "content": prompt},
         ],
         model=model,
-        temperature=0.2,
+        temperature=0.25,
+        num_ctx=32768,  # [r141] 16K → 32K
     ):
         content_chunks.append(d)
     elapsed = time.time() - t0
