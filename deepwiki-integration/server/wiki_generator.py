@@ -21,6 +21,7 @@ import re
 import json
 import shutil
 import stat
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator, Dict, Any, List, Optional, Tuple
@@ -566,15 +567,29 @@ async def generate_wiki(
     cat_count = len(categories)
     yield {"event": "scan_done", "category_count": cat_count, "merged": merged}
 
-    # ─ 3) [r121] repo·버전 관리
+    # ─ 3) [r121→r131] repo·버전 관리 — is_latest=false 는 첫 페이지 성공 후로 지연
     repo_clean = re.sub(r"[^a-zA-Z0-9_-]", "_", repo_name)[:60] or "unknown"
     generation_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    try:
-        store.client.table("deep_wiki_pages").update({"is_latest": False}) \
-            .eq("project_id", project_id).eq("repo_name", repo_clean).execute()
-        yield {"event": "info", "message": f"기존 '{repo_clean}' 버전 → is_latest=false (보존)"}
-    except Exception as e:
-        yield {"event": "warn", "message": f"is_latest 업데이트 실패 (003 SQL 미실행?): {e}"}
+    gen_start_ts = time.time()
+    # [r131] 0-페이지 안전망: 페이지 저장 성공이 한 번이라도 일어나야 기존 latest 를 강등
+    is_latest_swapped = False
+    collected_errors: List[Dict[str, Any]] = []
+    successful_categories: List[Dict[str, Any]] = []
+    failed_categories: List[Dict[str, Any]] = []
+
+    def _swap_is_latest_once():
+        """첫 페이지 저장 성공 시 한 번만 호출 — 기존 같은 repo 의 is_latest=false."""
+        nonlocal is_latest_swapped
+        if is_latest_swapped:
+            return None
+        try:
+            store.client.table("deep_wiki_pages").update({"is_latest": False}) \
+                .eq("project_id", project_id).eq("repo_name", repo_clean) \
+                .neq("generation_id", generation_id).execute()
+            is_latest_swapped = True
+            return f"기존 '{repo_clean}' 버전 → is_latest=false (첫 새 페이지 저장 후 스왑)"
+        except Exception as e:
+            return f"is_latest 스왑 실패 (003 SQL 미실행?): {e}"
 
     # ─ 4) Architecture 페이지 먼저 (전체 시스템 다이어그램)
     yield {"event": "stage", "stage": "architecture", "message": f"🏛 Architecture 페이지 생성 중..."}
@@ -605,13 +620,19 @@ async def generate_wiki(
             "meta": {
                 "is_architecture": True,
                 "category_count": cat_count,
-                "generated_by": settings.LLM_MODEL,
+                "generated_by": model or settings.LLM_MODEL,
                 "sources": arch_page.get("sources") or [],
             },
         }).execute()
+        # [r131] 첫 페이지 저장 성공 → 이제 안전하게 is_latest 스왑
+        msg = _swap_is_latest_once()
+        if msg:
+            yield {"event": "info", "message": msg}
         yield {"event": "page_done", "slug": "_architecture", "title": "🏛 System Architecture"}
     except Exception as e:
-        yield {"event": "warn", "message": f"Architecture 페이지 실패: {e}"}
+        err_msg = f"Architecture 페이지 실패: {type(e).__name__}: {e}"
+        yield {"event": "warn", "message": err_msg}
+        collected_errors.append({"slug": "_architecture", "error": err_msg})
 
     # ─ 5) 카테고리별 페이지 (LLM 호출 N번)
     yield {"event": "stage", "stage": "generate", "message": f"LLM이 {cat_count}개 시스템 페이지 생성 중..."}
@@ -628,7 +649,10 @@ async def generate_wiki(
         try:
             page = await _llm_generate_category_page(cat=cat, model=model)
         except Exception as e:
-            yield {"event": "warn", "message": f"LLM 실패 ({cat['slug']}): {type(e).__name__}: {e}"}
+            err_msg = f"LLM 실패 ({cat['slug']}): {type(e).__name__}: {e}"
+            yield {"event": "warn", "message": err_msg}
+            collected_errors.append({"slug": cat["slug"], "title": cat["title"], "error": err_msg})
+            failed_categories.append({"slug": cat["slug"], "title": cat["title"], "reason": "LLM 실패"})
             continue
         page_id = f"dwp:{project_id}:{repo_clean}:{generation_id}:{cat['slug']}"
         try:
@@ -651,13 +675,21 @@ async def generate_wiki(
                     "total_files": cat["total_files"],
                     "files_used": [f["path"] for f in cat["files"]],
                     "sources": page.get("sources") or [],
-                    "generated_by": settings.LLM_MODEL,
+                    "generated_by": model or settings.LLM_MODEL,
                 },
             }).execute()
+            # [r131] 첫 페이지 저장 성공 → is_latest 스왑
+            msg = _swap_is_latest_once()
+            if msg:
+                yield {"event": "info", "message": msg}
             created_pages.append({"slug": cat["slug"], "title": page["title"], "summary": page["summary"]})
+            successful_categories.append({"slug": cat["slug"], "title": cat["title"]})
             yield {"event": "page_done", "slug": cat["slug"], "title": page["title"], "summary": page["summary"]}
         except Exception as e:
-            yield {"event": "warn", "message": f"DB 저장 실패 ({cat['slug']}): {e}"}
+            err_msg = f"DB 저장 실패 ({cat['slug']}): {e}"
+            yield {"event": "warn", "message": err_msg}
+            collected_errors.append({"slug": cat["slug"], "title": cat["title"], "error": err_msg})
+            failed_categories.append({"slug": cat["slug"], "title": cat["title"], "reason": "DB 저장 실패"})
 
     # ─ 6) Overview 페이지 (인덱스)
     yield {"event": "stage", "stage": "overview", "message": "📘 Overview 페이지 생성 중..."}
@@ -679,16 +711,154 @@ async def generate_wiki(
             "content": overview_content,
             "meta": {"is_overview": True, "page_count": len(created_pages) + 1, "repo": repo_clean, "generation": generation_id},
         }).execute()
+        msg = _swap_is_latest_once()
+        if msg:
+            yield {"event": "info", "message": msg}
         yield {"event": "page_done", "slug": "_overview", "title": "📘 Overview"}
     except Exception as e:
         yield {"event": "warn", "message": f"Overview 페이지 실패: {e}"}
 
+    # ─ 7) [r131] Generation Report — 항상 저장. 모든 LLM 실패해도 이게 있어서 트리에 뭔가 보임.
+    yield {"event": "stage", "stage": "report", "message": "📋 Generation Report 생성 중..."}
+    try:
+        elapsed = int(time.time() - gen_start_ts)
+        report_md = _build_generation_report(
+            repo_name=repo_clean,
+            git_url=git_url,
+            commit=commit_hash,
+            generation_id=generation_id,
+            model=model or settings.LLM_MODEL,
+            elapsed_sec=elapsed,
+            total_categories=cat_count,
+            successful=successful_categories,
+            failed=failed_categories,
+            errors=collected_errors,
+            arch_ok=any(p.get("slug") == "_architecture" for p in [{"slug": e.get("slug")} for e in [{"slug": "_architecture"}]] if not any(err.get("slug") == "_architecture" for err in collected_errors)),
+        )
+        store.client.table("deep_wiki_pages").upsert({
+            "id": f"dwp:{project_id}:{repo_clean}:{generation_id}:_report",
+            "project_id": project_id,
+            "repo_name": repo_clean,
+            "generation_id": generation_id,
+            "is_latest": True,
+            "git_url": git_url,
+            "git_commit": commit_hash,
+            "slug": "_report",
+            "title": "📋 Generation Report",
+            "parent_slug": None,
+            "sort_order": 999,  # 트리 맨 아래
+            "summary": f"성공 {len(successful_categories)} · 실패 {len(failed_categories)} · {elapsed}s · {model or settings.LLM_MODEL}",
+            "content": report_md,
+            "meta": {
+                "is_report": True,
+                "elapsed_sec": elapsed,
+                "model": model or settings.LLM_MODEL,
+                "successful_count": len(successful_categories),
+                "failed_count": len(failed_categories),
+                "errors": collected_errors[:30],
+            },
+        }).execute()
+        # 만약 위 모든 페이지가 실패했더라도 Report 라도 latest 로 만들기 — 사용자가 진단 가능
+        msg = _swap_is_latest_once()
+        if msg:
+            yield {"event": "info", "message": msg}
+        yield {"event": "page_done", "slug": "_report", "title": "📋 Generation Report"}
+    except Exception as e:
+        yield {"event": "warn", "message": f"Generation Report 실패: {e}"}
+
+    total_pages = len(created_pages) + (1 if is_latest_swapped else 0)  # 대략치
     yield {
         "event": "done",
-        "pages_created": len(created_pages) + 2,  # +arch +overview
+        "pages_created": len(created_pages) + 2,  # +arch +overview (성공한 경우)
+        "successful_categories": len(successful_categories),
+        "failed_categories": len(failed_categories),
+        "is_latest_swapped": is_latest_swapped,
         "repo_name": repo_clean,
         "generation_id": generation_id,
+        "elapsed_sec": int(time.time() - gen_start_ts),
     }
+
+
+def _build_generation_report(
+    repo_name: str,
+    git_url: str,
+    commit: Optional[str],
+    generation_id: str,
+    model: str,
+    elapsed_sec: int,
+    total_categories: int,
+    successful: List[Dict[str, Any]],
+    failed: List[Dict[str, Any]],
+    errors: List[Dict[str, Any]],
+    arch_ok: bool,
+) -> str:
+    """[r131] Generation Report 마크다운. 어떤 카테고리가 성공/실패했는지 + 에러 메시지."""
+    today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    success_rate = (len(successful) / total_categories * 100) if total_categories else 0
+    if len(successful) == 0 and not arch_ok:
+        status_banner = "## ❌ 생성 실패 — 모든 페이지 LLM 실패"
+        status_detail = "한 페이지도 저장되지 못했습니다. 아래 에러를 확인하고 모델/설정 점검 후 재시도."
+    elif len(failed) == 0 and arch_ok:
+        status_banner = "## ✅ 생성 성공"
+        status_detail = f"모든 카테고리({total_categories}개) 가 정상 생성되었습니다."
+    else:
+        status_banner = "## ⚠ 부분 성공"
+        status_detail = f"{len(successful)}/{total_categories} 카테고리 성공 ({success_rate:.0f}%). 실패 항목은 아래 참고."
+
+    lines = [
+        f"# 📋 Generation Report — {repo_name}",
+        "",
+        status_banner,
+        "",
+        status_detail,
+        "",
+        "## 🧾 메타",
+        "",
+        f"- **레포**: [{git_url}]({git_url})",
+        f"- **커밋**: `{commit or '?'}`",
+        f"- **생성 ID**: `{generation_id}`",
+        f"- **LLM 모델**: `{model}`",
+        f"- **소요 시간**: {elapsed_sec}초",
+        f"- **완료 시각**: {today}",
+        f"- **Architecture 페이지**: {'✅ 성공' if arch_ok else '❌ 실패'}",
+        f"- **카테고리 성공**: {len(successful)} / {total_categories}",
+        f"- **카테고리 실패**: {len(failed)}",
+        "",
+    ]
+    if successful:
+        lines.append("## ✅ 성공한 카테고리")
+        lines.append("")
+        for s in successful:
+            lines.append(f"- **[{s['title']}](?slug={s['slug']})**")
+        lines.append("")
+    if failed:
+        lines.append("## ❌ 실패한 카테고리")
+        lines.append("")
+        for f in failed:
+            lines.append(f"- **{f['title']}** (`{f['slug']}`) — {f.get('reason', '?')}")
+        lines.append("")
+    if errors:
+        lines.append("## 🪲 에러 상세")
+        lines.append("")
+        for e in errors[:20]:
+            lines.append(f"### `{e.get('slug', '?')}`")
+            lines.append("")
+            lines.append("```")
+            lines.append(str(e.get("error", "?"))[:500])
+            lines.append("```")
+            lines.append("")
+    lines.extend([
+        "## 🛠 대처",
+        "",
+        "1. **Ollama 콘솔 확인** — `run.bat` 창에서 LLM 호출 에러 로그",
+        "2. **모델 로드 확인** — 32B 모델 첫 호출은 콜드 스타트(2~5분) 시간 필요. 다시 실행하면 빠름",
+        "3. **모델 다운로드** — `ollama list` 로 설정한 모델이 있는지 확인. 없으면 `ollama pull <모델명>`",
+        "4. **메모리 확인** — 32B 모델은 RAM 32GB+ 또는 VRAM 22GB+ 필요. 부족하면 14B / 7B 로 변경 (⚙ 설정)",
+        "5. **재시도** — 좌측 ✦ 위키 자동 생성 다시 실행. 모델이 메모리에 올라가 있으면 빠르게 진행",
+        "",
+        "_이 페이지는 매 생성 시 자동으로 저장됩니다 — 결과 확인 + 진단용._",
+    ])
+    return "\n".join(lines)
 
 
 def _build_overview_page(
