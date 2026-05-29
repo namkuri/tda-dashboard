@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- BUILD: 2026-05-29 r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
+<!-- BUILD: 2026-05-29 r124 (publishable key 호환성 픽스: ① 프론트 SQL 마이그레이션에 코어 테이블 RLS off 추가 — wiki_docs/docs/reviews 등 publishable key 사용 시 INSERT 차단되던 21개 코어 테이블 명시적 disable row level security with if exists 가드 ② 백엔드 requirements.txt: supabase>=2.18.0 — 2.9.1 의 JWT 정규식 검증 제거되어 sb_secret_* 키 허용) | r122 (DeepWiki-Open 본격 이식 + 보안: r120/r121은 너무 단순한 위키였음. r122에서 deepwiki.com 수준으로 본격 재작성. wiki_generator.py 전면 재설계 — ① 21개 → 50+개 세분화된 시스템 카테고리(Player Manager, Stats Management, Movement, Combat 분리) ② Architecture 페이지 별도 LLM 호출(전체 시스템 관계 Mermaid graph TB + subgraph + Data Flow sequenceDiagram 2~3개) ③ 각 카테고리 페이지에 7섹션 (Overview / System Architecture / Core Components 표 / Data Flow / Key Features / Code References / Sources) 강제 ④ Sources 인용 [path/file.cs:N-M] 정규식 자동 추출 + 메타 저장 ⑤ 프론트 _dwpAttachLinkHandlers: 본문의 [path:N-M] 패턴을 GitHub blob URL #L표시로 자동 변환된 클릭 배지 ⑥ 보안: .env.example 키 placeholder로 복원, SECURITY_KEY_ROTATION.md 작성(키 로테이션 + history 정화 옵션 안내)) -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -12747,6 +12747,19 @@ return data;
             lines.push('-- [r85] RLS 비활성화 — 신규 테이블 INSERT 차단 해제 (기존 테이블과 동일한 정책)');
             DB_OPTIONAL_TABLES.forEach(function (t) {
                 lines.push('alter table ' + t[0] + ' disable row level security;');
+            });
+            // [r124] publishable key 마이그레이션으로 anon RLS 우회가 사라짐 → 코어 테이블도 명시적으로 RLS off.
+            //   if exists 가드로 미존재 테이블은 NOTICE 만 출력하고 진행.
+            var DB_CORE_RLS_TABLES = [
+                'wiki_docs', 'docs', 'reviews', 'kanban_categories', 'tasks', 'sprints',
+                'projects', 'users', 'comments', 'change_logs', 'doc_chunks',
+                'deep_wiki_pages', 'deep_wiki_audits', 'graph_nodes', 'graph_edges',
+                'dashboard_widgets', 'memo_widgets', 'photo_widgets',
+                'storage_assets', 'doc_versions', 'asset_versions'
+            ];
+            lines.push('-- [r124] 코어 테이블 RLS 비활성화 (publishable key 가 anon JWT 와 달리 RLS 우회 안 함)');
+            DB_CORE_RLS_TABLES.forEach(function (t) {
+                lines.push('do $$ begin if exists (select 1 from pg_tables where tablename = \'' + t + '\') then execute \'alter table ' + t + ' disable row level security\'; end if; end $$;');
             });
             lines.push('');
             lines.push('-- [컬럼] 기존 테이블에 없는 컬럼 추가');
