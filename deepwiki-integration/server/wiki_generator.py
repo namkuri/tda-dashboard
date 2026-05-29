@@ -22,6 +22,7 @@ import json
 import shutil
 import stat
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator, Dict, Any, List, Optional, Tuple
@@ -631,8 +632,31 @@ async def generate_wiki(
     store = get_store()
     ollama = get_ollama()
     if not await ollama.ping():
-        yield {"event": "error", "message": "Ollama 연결 실패"}
+        yield {"event": "error", "message": "Ollama 연결 실패 — Ollama 가 실행 중인지 확인 (ollama serve)"}
         return
+
+    # [r133] 모델 설치 확인 — 안 깔린 모델로 시도하면 LLM 첫 호출에서 실패
+    effective_model = model or settings.LLM_MODEL
+    try:
+        installed = await ollama.list_models()
+        # 'qwen2.5-coder:32b' 가 'qwen2.5-coder:32b-instruct' 같은 변형으로 깔려있을 수도 있어 prefix 매치
+        base = effective_model.split(":")[0]
+        tag = effective_model.split(":", 1)[1] if ":" in effective_model else None
+        exact = effective_model in installed
+        loose = any(m == effective_model or m.startswith(effective_model + ":") or (tag and m.startswith(base + ":" + tag)) for m in installed)
+        if not (exact or loose):
+            msg = (
+                f"❌ 모델 '{effective_model}' 가 Ollama 에 설치되어 있지 않습니다.\n"
+                f"설치된 모델: {', '.join(installed[:20]) or '(없음)'}\n"
+                f"해결: ollama pull {effective_model}"
+            )
+            print(f"[wiki_generator] {msg}")
+            yield {"event": "error", "message": msg, "installed_models": installed[:30]}
+            return
+        else:
+            yield {"event": "info", "message": f"✓ LLM 모델 '{effective_model}' 확인됨 ({len(installed)}개 설치됨)"}
+    except Exception as e:
+        yield {"event": "warn", "message": f"모델 목록 조회 실패(진행 계속): {e}"}
 
     # ─ 1) Git clone
     clone_dir = Path(settings.GIT_CLONE_DIR)
@@ -761,9 +785,12 @@ async def generate_wiki(
             yield {"event": "info", "message": msg}
         yield {"event": "page_done", "slug": "_architecture", "title": "🏛 System Architecture"}
     except Exception as e:
+        tb = traceback.format_exc()
         err_msg = f"Architecture 페이지 실패: {type(e).__name__}: {e}"
-        yield {"event": "warn", "message": err_msg}
-        collected_errors.append({"slug": "_architecture", "error": err_msg})
+        # [r133] 콘솔에 풀 traceback — run.bat 에 보임
+        print(f"[wiki_generator] ❌ ARCHITECTURE ERROR\n{tb}")
+        yield {"event": "warn", "message": err_msg, "traceback": tb.splitlines()[-8:]}
+        collected_errors.append({"slug": "_architecture", "error": err_msg, "traceback": tb.splitlines()[-12:]})
 
     # ─ 5) 카테고리별 페이지 (LLM 호출 N번)
     yield {"event": "stage", "stage": "generate", "message": f"LLM이 {cat_count}개 시스템 페이지 생성 중..."}
@@ -780,10 +807,12 @@ async def generate_wiki(
         try:
             page = await _llm_generate_category_page(cat=cat, model=model, unity_mode=unity_mode)
         except Exception as e:
+            tb = traceback.format_exc()
             err_msg = f"LLM 실패 ({cat['slug']}): {type(e).__name__}: {e}"
-            yield {"event": "warn", "message": err_msg}
-            collected_errors.append({"slug": cat["slug"], "title": cat["title"], "error": err_msg})
-            failed_categories.append({"slug": cat["slug"], "title": cat["title"], "reason": "LLM 실패"})
+            print(f"[wiki_generator] ❌ CATEGORY {cat['slug']} ERROR\n{tb}")
+            yield {"event": "warn", "message": err_msg, "traceback": tb.splitlines()[-8:]}
+            collected_errors.append({"slug": cat["slug"], "title": cat["title"], "error": err_msg, "traceback": tb.splitlines()[-12:]})
+            failed_categories.append({"slug": cat["slug"], "title": cat["title"], "reason": f"LLM 실패: {type(e).__name__}"})
             continue
         page_id = f"dwp:{project_id}:{repo_clean}:{generation_id}:{cat['slug']}"
         try:

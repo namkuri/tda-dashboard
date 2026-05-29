@@ -49,6 +49,21 @@ def _busy_clear():
     })
 
 
+# [r133] 마지막 wiki 생성 진단 로그 — SSE 죽어서 사용자가 못 본 에러를 retrieve 가능
+LAST_GENERATION_LOG: Dict[str, Any] = {
+    "kind": None,
+    "project_id": None,
+    "started_at": None,
+    "ended_at": None,
+    "events": [],         # 모든 SSE 이벤트 (warn / error / info / done 등)
+    "summary": None,
+}
+
+
+def _diag_clear():
+    LAST_GENERATION_LOG.update({"kind": None, "project_id": None, "started_at": None, "ended_at": None, "events": [], "summary": None})
+
+
 def _busy_human() -> str:
     """현재 busy 상태를 한국어 한 줄로."""
     if not LLM_BUSY_STATE["running"]:
@@ -239,12 +254,25 @@ def _sse_indexer(gen, *, busy_kind: Optional[str] = None, busy_project: Optional
 
     [r126] busy_kind 가 주어지면 LLM_BUSY_STATE 를 업데이트해 /chat 게이트가 알 수 있게 한다.
     event 의 stage/current/total/category 를 자동으로 state 에 흘림.
+    [r133] busy_kind 가 wiki_generate/wiki_extend/wiki_audit 이면 모든 이벤트를 LAST_GENERATION_LOG 에 보존
+      → SSE 끊겨도 /diag/last_generation 으로 사용자가 무엇이 일어났는지 확인 가능.
     """
+    capture_kinds = ("wiki_generate", "wiki_extend", "wiki_audit")
+    do_capture = busy_kind in capture_kinds
+
     async def stream():
         if busy_kind:
             _busy_set(running=True, kind=busy_kind, project_id=busy_project, started_at=time.time(),
                       stage="시작", current=0, total=0, category=None,
                       message=f"{busy_kind} 시작…")
+        if do_capture:
+            _diag_clear()
+            LAST_GENERATION_LOG.update({
+                "kind": busy_kind,
+                "project_id": busy_project,
+                "started_at": datetime.now().isoformat(),
+                "events": [],
+            })
         try:
             async for event in gen:
                 # state 업데이트 — event 키에 따라 자동 매핑
@@ -259,10 +287,28 @@ def _sse_indexer(gen, *, busy_kind: Optional[str] = None, busy_project: Optional
                                   category=event.get("category") or LLM_BUSY_STATE["category"])
                     elif et in ("done", "error"):
                         pass  # finally 에서 clear
+                if do_capture:
+                    LAST_GENERATION_LOG["events"].append({
+                        "ts": datetime.now().isoformat(),
+                        **event,
+                    })
+                    # 너무 크지 않게 — 마지막 500 이벤트만
+                    if len(LAST_GENERATION_LOG["events"]) > 500:
+                        LAST_GENERATION_LOG["events"] = LAST_GENERATION_LOG["events"][-500:]
+                    if event.get("event") == "done":
+                        LAST_GENERATION_LOG["summary"] = {k: v for k, v in event.items() if k != "event"}
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'event': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+            import traceback as _tb
+            err_tb = _tb.format_exc()
+            print(f"[main] ❌ SSE generator exception\n{err_tb}")
+            err_ev = {"event": "error", "message": str(e), "traceback": err_tb.splitlines()[-8:]}
+            if do_capture:
+                LAST_GENERATION_LOG["events"].append({"ts": datetime.now().isoformat(), **err_ev})
+            yield f"data: {json.dumps(err_ev, ensure_ascii=False)}\n\n"
         finally:
+            if do_capture:
+                LAST_GENERATION_LOG["ended_at"] = datetime.now().isoformat()
             if busy_kind:
                 _busy_clear()
         yield "data: [DONE]\n\n"
@@ -542,6 +588,31 @@ class WikiExtendRequest(BaseModel):
     extension_type: str  # 'deep_dive' | 'performance' | 'pitfalls' | 'examples' | 'testing' | 'custom'
     custom_prompt: Optional[str] = None
     model: Optional[str] = None
+
+
+@app.get("/diag/last_generation")
+async def diag_last_generation():
+    """[r133] 마지막 wiki 생성/감사/확장 작업의 모든 SSE 이벤트 + traceback 반환.
+
+    SSE 연결이 끊겨서 사용자가 에러를 못 본 경우 retrieve 용도. 새로고침 직후 자동 호출 권장.
+    """
+    log = dict(LAST_GENERATION_LOG)
+    # 요약: 이벤트별 카운트 + 에러/경고만 추출
+    events = log.get("events") or []
+    errors = [e for e in events if e.get("event") == "error"]
+    warns = [e for e in events if e.get("event") == "warn"]
+    stages = [e for e in events if e.get("event") == "stage"]
+    return {
+        **log,
+        "stats": {
+            "total_events": len(events),
+            "errors": len(errors),
+            "warns": len(warns),
+            "stages": len(stages),
+        },
+        "errors": errors[-10:],
+        "warns": warns[-20:],
+    }
 
 
 @app.post("/wiki/extend")

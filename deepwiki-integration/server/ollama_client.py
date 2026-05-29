@@ -132,11 +132,14 @@ class OllamaClient:
         messages: List[dict],
         model: str = None,
         temperature: float = 0.3,
+        num_ctx: int = 16384,  # [r133] 8192 → 16384 — 큰 카테고리 프롬프트 안 잘리게
     ) -> AsyncIterator[str]:
         """LLM 채팅 스트리밍 (텍스트 전용).
 
         messages: [{"role": "system|user|assistant", "content": "..."}]
         yields: 응답 텍스트 청크 (delta only).
+
+        [r133] num_ctx 인자로 호출별 컨텍스트 크기 지정 가능 (기본 16K).
         """
         model = model or settings.LLM_MODEL
         async with self.client.stream(
@@ -146,7 +149,7 @@ class OllamaClient:
                 "model": model,
                 "messages": messages,
                 "stream": True,
-                "options": {"temperature": temperature, "num_ctx": 8192},
+                "options": {"temperature": temperature, "num_ctx": num_ctx},
                 "keep_alive": "30m",
             },
         ) as response:
