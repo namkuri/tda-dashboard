@@ -21402,7 +21402,7 @@ ${intrLog}
         // ===================================================================
         // [r161] 라이브 협업 — 화면 공유 + 커서 + 포커스 + 핑/박스
         // ===================================================================
-        var _liveJoined = false, _liveChannel = null, _liveViewLock = false, _liveMode = null, _liveJustJoined = false, _liveModalLock = false, _liveInputTs = 0;
+        var _liveJoined = false, _liveChannel = null, _liveViewLock = false, _liveMode = null, _liveJustJoined = false, _liveModalLock = false, _liveInputTs = 0, _liveSuppress = false, _liveClickTs = 0;
         var _liveColors = {}, _liveCursors = {}, _liveFocusEls = {}, _liveMouseTs = 0;
         // [r166] 공유 가능한 상세 모달 오프너 — 원격에서 동일 모달을 띄움
         var LIVE_OPENERS = {
@@ -21474,7 +21474,7 @@ ${intrLog}
             _liveUpdateNav();
             showToast('라이브 협업 퇴장', 'info');
         }
-        function _liveBroadcast(p) { if (!_liveJoined || !_liveChannel) return; p.by = myClientId; p.name = myNickname; p.color = _liveColor(myClientId); try { _liveChannel.send({ type: 'broadcast', event: 'live', payload: p }); } catch (e) {} }
+        function _liveBroadcast(p) { if (!_liveJoined || !_liveChannel || _liveSuppress) return; p.by = myClientId; p.name = myNickname; p.color = _liveColor(myClientId); try { _liveChannel.send({ type: 'broadcast', event: 'live', payload: p }); } catch (e) {} }
         function _liveBroadcastView(view) { if (_liveViewLock) return; _liveBroadcast({ type: 'view', view: view, proj: activeProjectId }); }
         function _liveApplyRemoteView(p, silent) {
             _liveViewLock = true;
@@ -21493,6 +21493,7 @@ ${intrLog}
             else if (p.type === 'ping') _livePing(p);
             else if (p.type === 'box') _liveBox(p);
             else if (p.type === 'input') _liveApplyInput(p);
+            else if (p.type === 'click') { var cel; try { cel = document.querySelector(p.loc); } catch (e) {} if (cel) { _liveSuppress = true; try { cel.click(); } finally { setTimeout(function () { _liveSuppress = false; }, 0); } } }
             else if (p.type === 'open') { if (LIVE_OPENERS[p.kind]) { _liveModalLock = true; try { LIVE_OPENERS[p.kind](p.id); } finally { setTimeout(function () { _liveModalLock = false; }, 0); } } }
             else if (p.type === 'close') { _liveModalLock = true; try { if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); if (typeof closeCardModal === 'function') closeCardModal(); if (p.id && typeof closeModal === 'function') closeModal(p.id); } finally { setTimeout(function () { _liveModalLock = false; }, 0); } }
             else if (p.type === 'bye') _liveRemoveCursor(p.by);
@@ -21550,8 +21551,22 @@ ${intrLog}
         function _liveOnFocusIn(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable)) return; _liveBroadcast({ type: 'focus', loc: _liveLocator(t) }); }
         function _liveOnFocusOut() { _liveBroadcast({ type: 'focus', loc: null }); }
         function _liveOnInput(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable)) return; if (t.type === 'password') return; var now = Date.now(); if (t.tagName !== 'SELECT' && now - _liveInputTs < 90) return; _liveInputTs = now; _liveBroadcast({ type: 'input', loc: _liveLocator(t), value: t.isContentEditable ? t.innerHTML : t.value }); }
-        function _liveAttachLocal() { document.addEventListener('mousemove', _liveOnMouseMove, true); document.addEventListener('focusin', _liveOnFocusIn, true); document.addEventListener('focusout', _liveOnFocusOut, true); document.addEventListener('input', _liveOnInput, true); }
-        function _liveDetachLocal() { document.removeEventListener('mousemove', _liveOnMouseMove, true); document.removeEventListener('focusin', _liveOnFocusIn, true); document.removeEventListener('focusout', _liveOnFocusOut, true); document.removeEventListener('input', _liveOnInput, true); }
+        // [r169] 일반 클릭 미러링 — 토글/펼침 등 로컬 상호작용을 같은 요소 클릭으로 재생(이미 동기화되는 항목은 제외)
+        function _liveOnClick(e) {
+            if (!_liveJoined || _liveSuppress) return;
+            var t = e.target; if (!t || t.nodeType !== 1) return;
+            var now = Date.now(); if (now - _liveClickTs < 30) return; _liveClickTs = now;
+            // 입력류(=입력 동기화 담당) 제외
+            if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
+            if (t.closest && t.closest('input,textarea,select,[contenteditable="true"]')) return;
+            // 라이브 UI / 전역 전환(뷰) / 모달 오픈 트리거 / 전역 컨텍스트메뉴·툴팁(클라이언트별 전용) 제외
+            if (t.closest && t.closest('#live-tools,#live-capture,#live-layer,#tree-context-menu,#wbs-tip,#claude-sidebar,.cs-nav')) return;
+            if (t.closest && t.closest('[onclick*="openCardModal"],[onclick*="wbsOpenNode"],[onclick*="issEditIssue"],[onclick*="amEditAsset"],[onclick*="calOpenEditEvent"]')) return;
+            var loc = _liveLocator(t); if (!loc) return;
+            _liveBroadcast({ type: 'click', loc: loc });
+        }
+        function _liveAttachLocal() { document.addEventListener('mousemove', _liveOnMouseMove, true); document.addEventListener('focusin', _liveOnFocusIn, true); document.addEventListener('focusout', _liveOnFocusOut, true); document.addEventListener('input', _liveOnInput, true); document.addEventListener('click', _liveOnClick, true); }
+        function _liveDetachLocal() { document.removeEventListener('mousemove', _liveOnMouseMove, true); document.removeEventListener('focusin', _liveOnFocusIn, true); document.removeEventListener('focusout', _liveOnFocusOut, true); document.removeEventListener('input', _liveOnInput, true); document.removeEventListener('click', _liveOnClick, true); }
         // 핑/박스 플로팅 메뉴 + 캡처
         function _liveEnsureUI() { var t = document.getElementById('live-tools'); if (t) { t.style.display = 'flex'; return; } t = document.createElement('div'); t.id = 'live-tools'; t.innerHTML = '<button id="live-tool-ping" onclick="_liveSetMode(\'ping\')" title="핑 — 클릭한 위치를 3초간 강조">📍<span>핑</span></button><button id="live-tool-box" onclick="_liveSetMode(\'box\')" title="박스 — 드래그한 영역을 3초간 강조">▢<span>박스</span></button>'; document.body.appendChild(t); }
         function _liveSetMode(m) {
