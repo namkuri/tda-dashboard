@@ -15470,6 +15470,7 @@ return data;
                     rebuildWikiAnnotations(); // [r34] doc.meta.annotations에서 복원(+레거시 이관)
                     requestAnimationFrame(function() {
                         renderBoard(); renderProgress(); updateProjectTitle(); renderDocTree();
+                        if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView(); // [r158]
                     });
                 } catch(ex) { console.warn('local cache parse error:', ex); }
             }
@@ -15564,6 +15565,8 @@ return data;
                 statusEl.onclick = null;
                 updateSaveIndicator('db');
                 updateJsonEditorView(); renderBoard(); renderProgress(); renderCommentsSidebar(); updateProjectTitle(); renderDocTree();
+                // [r158] DB 로드 후 현재 보고 있는 WBS 화면 재렌더 — 루트(프로젝트명)·하위 노드 즉시 표시
+                if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView();
 
                 // [v40 청크 3] 빈 프로젝트면 5종 위키 폴더 자동 시드
                 await seedWikiFoldersIfEmpty();
@@ -15986,6 +15989,7 @@ return data;
                 let localData = _localCacheData || { categories: [], tasks: [], tagColors: {}, docs: [], projects: [] };
                 currentData = validateData(localData);
                 updateJsonEditorView(); renderBoard(); renderProgress(); updateProjectTitle(); renderDocTree();
+                if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView(); // [r158]
             }
         }
 
