@@ -421,8 +421,12 @@
         .wbs-node-avs > span { margin-left: -6px; border: 1.5px solid var(--c-card); border-radius: 50%; display: inline-flex; }
         .wbs-node-avs > span:first-child { margin-left: 0; }
         .wbs-av-more { font-size: 9px; font-weight: 800; color: var(--c-text3); margin-left: 2px; }
-        .wbs-add-side { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--c-border); background: var(--c-card); color: var(--c-accent); font-weight: 800; cursor: pointer; opacity: 0; transition: opacity .12s; z-index: 4; line-height: 1; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center; padding: 0; }
-        .wbs-node:hover .wbs-add-side { opacity: 1; }
+        .wbs-add-side { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--c-border); background: var(--c-card); color: var(--c-accent); font-weight: 800; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 4; line-height: 1; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center; padding: 0; }
+        /* [r159] 마우스가 가까운 모서리의 버튼 하나만 표시 */
+        .wbs-node[data-edge="top"] .wbs-add-top,
+        .wbs-node[data-edge="bottom"] .wbs-add-bottom,
+        .wbs-node[data-edge="left"] .wbs-add-left,
+        .wbs-node[data-edge="right"] .wbs-add-right { opacity: 1; pointer-events: auto; }
         .wbs-add-side:hover { background: var(--c-accent); color: #fff; }
         .wbs-add-top { top: -11px; left: 50%; transform: translateX(-50%); }
         .wbs-add-bottom { bottom: -11px; left: 50%; transform: translateX(-50%); }
@@ -435,6 +439,33 @@
         .wbs-tip-item { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid var(--c-border); border-radius: 7px; margin-bottom: 4px; background: var(--c-card); cursor: default; }
         .wbs-tip-item:hover { border-color: var(--c-accent); background: var(--ios-fill); }
         .wbs-tip-detail { margin-top: 6px; padding: 8px; border: 1px dashed var(--c-border); border-radius: 8px; background: var(--c-card); font-size: 11.5px; line-height: 1.6; }
+        /* [r159] 타임라인 (Jira 스타일) */
+        html.is-desktop #timeline-view { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+        .tl-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+        .tl-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 4px 4px 12px; flex-shrink: 0; }
+        .tl-bc { font-size: 11px; color: var(--c-text3); margin-bottom: 2px; }
+        .tl-scale { display: inline-flex; border: 1px solid var(--c-border); border-radius: 8px; overflow: hidden; }
+        .tl-scale button { border: none; background: var(--c-card); color: var(--c-text2); font-size: 12px; font-weight: 700; padding: 5px 12px; cursor: pointer; }
+        .tl-scale button.on { background: var(--c-accent); color: #fff; }
+        .tl-body { flex: 1; min-height: 0; display: flex; border: 1px solid var(--c-border); border-radius: 12px; overflow: hidden; background: var(--c-paper); }
+        .tl-left { width: 280px; flex-shrink: 0; overflow: hidden; border-right: 1px solid var(--c-border); background: var(--c-card); }
+        .tl-left-hdr { height: 34px; display: flex; align-items: center; padding: 0 12px; font-size: 11px; font-weight: 800; color: var(--c-text3); border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-card); z-index: 2; }
+        .tl-row { height: 40px; box-sizing: border-box; }
+        .tl-left-row { display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--c-border); cursor: pointer; padding-right: 8px; }
+        .tl-left-row:hover { background: var(--ios-fill); }
+        .tl-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .tl-row-title { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tl-row-st { font-size: 10px; font-weight: 800; flex-shrink: 0; }
+        .tl-right { flex: 1; min-width: 0; overflow: auto; }
+        .tl-grid { position: relative; }
+        .tl-axis { height: 34px; display: flex; border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-card); z-index: 2; }
+        .tl-mcol { box-sizing: border-box; border-right: 1px solid var(--c-border); display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 700; color: var(--c-text2); flex-shrink: 0; }
+        .tl-bar-row { position: relative; border-bottom: 1px solid var(--c-border); }
+        .tl-bar { position: absolute; top: 7px; height: 26px; border: 1.5px solid; border-radius: 7px; overflow: hidden; cursor: pointer; display: flex; align-items: center; }
+        .tl-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; opacity: .55; border-radius: 6px 0 0 6px; }
+        .tl-bar-label { position: relative; z-index: 1; font-size: 11px; font-weight: 700; color: var(--c-text); padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tl-bar-none { position: relative; top: 9px; left: 8px; height: 22px; width: auto; display: inline-flex; align-items: center; padding: 0 10px; border: 1px dashed var(--c-border); color: var(--c-text3); font-size: 11px; background: transparent; }
+        .tl-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--c-accent); z-index: 1; }
         .wbs-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--ios-fill); border: 1px solid var(--c-border); border-radius: 8px; padding: 3px 8px; font-size: 11.5px; color: var(--c-text); margin: 0 5px 5px 0; }
         .wbs-chip button { background: none; border: none; color: var(--c-text3); cursor: pointer; font-size: 12px; line-height: 1; }
         .wbs-chip button:hover { color: var(--ios-red, #d2393d); }
@@ -3674,6 +3705,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button class="cs-grp-head" onclick="toggleNavGroup('ops')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">운영</span></button>
                 <div class="cs-grp-items" data-grp="ops">
                     <button class="cs-nav" data-nav="wbs" id="cs-nav-wbs" onclick="switchView('wbs')" title="작업 구조화 (WBS)"><span class="cs-ico">🗂️</span><span class="cs-label">작업 구조화</span></button>
+                    <button class="cs-nav" data-nav="timeline" id="cs-nav-timeline" onclick="switchView('timeline')" title="타임라인 (WBS 노드 간트)"><span class="cs-ico">📊</span><span class="cs-label">타임라인</span></button>
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
                     <button class="cs-nav" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
@@ -3703,7 +3735,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="drive" id="cs-nav-drive" onclick="switchView('drive')" title="공용 드라이브"><span class="cs-ico">🗂️</span><span class="cs-label">공용 드라이브</span></button>
                     <button class="cs-nav" data-nav="history" id="cs-nav-history" onclick="switchView('history')" title="히스토리 (활동 기록)"><span class="cs-ico">🗓️</span><span class="cs-label">히스토리</span></button>
                     <button class="cs-nav" data-nav="git" id="cs-nav-git" onclick="switchView('git')" title="Git"><span class="cs-ico">📦</span><span class="cs-label">Git</span></button>
-                    <button class="cs-nav" data-nav="gview" id="cs-nav-gview" onclick="switchView('gview')" title="그래프 뷰 (전역 지식 그래프)"><span class="cs-ico">🕸️</span><span class="cs-label">그래프 뷰</span></button>
                 </div>
             </div>
             <div class="cs-group" data-grp="tools">
@@ -3712,13 +3743,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <!-- [r81 #3] DB 도구는 서버 상태 페이지 안으로 병합 -->
                     <!-- [r86 #5] 탐색기 — 통합 검색 + 미리보기 -->
                     <button class="cs-nav" data-nav="explorer" id="cs-nav-explorer" onclick="switchView('explorer')" title="탐색기 (전체 콘텐츠 통합 검색·미리보기·바로가기)"><span class="cs-ico">🔍</span><span class="cs-label">탐색기</span></button>
-                    <!-- [r140→r141] GPU 서비스 사이드바 항목 제거 — AI Agent / Deep Wiki 화면 내부 버튼으로 이동 -->
-                    <!-- [r112] r89 "Deep Wiki" → "AI Agent"로 리네임 (실제로는 Qwen Tool Use 챗봇). 진짜 Deep Wiki는 별도 자료 카테고리에 -->
+                    <!-- [r159] 그래프 뷰를 도구 그룹(탐색기 아래)으로 이동 -->
+                    <button class="cs-nav" data-nav="gview" id="cs-nav-gview" onclick="switchView('gview')" title="그래프 뷰 (전역 지식 그래프)"><span class="cs-ico">🕸️</span><span class="cs-label">그래프 뷰</span></button>
                     <button class="cs-nav" data-nav="deepwiki" id="cs-nav-deepwiki" onclick="switchView('deepwiki')" title="AI Agent — Tool Use 기반 라이브 데이터 능동 조회 (모델 선택 가능)"><span class="cs-ico">✦</span><span class="cs-label">AI Agent</span></button>
-                    <button class="cs-nav" data-nav="status" id="cs-nav-status" onclick="switchView('status')" title="서버 상태 (DB 편집 포함)"><span class="cs-ico">📡</span><span class="cs-label">서버 상태</span></button>
-                    <button class="cs-nav" data-nav="bugReport" id="cs-nav-bug-report" onclick="switchView('bugReport')" title="버그 리포트 (앱 이슈 제보 + 관리자 검토)"><span class="cs-ico">🐞</span><span class="cs-label">버그 리포트</span></button>
-                    <button class="cs-nav" data-nav="changelog" onclick="openChangeLog()" title="변경 로그 (미사용)"><span class="cs-ico">🕓</span><span class="cs-label">변경 로그 <span style="opacity:.5;font-size:10px;">(미사용)</span></span></button>
-                    <button class="cs-nav" data-nav="settings" onclick="toggleSettings()" title="화면 설정 (테마 포함)"><span class="cs-ico">⚙️</span><span class="cs-label">화면 설정</span></button>
+                    <!-- [r159] 설정 허브 — 버그 리포트 / 화면 설정 / 서버 상태 통합 -->
+                    <button class="cs-nav" data-nav="settingsHub" id="cs-nav-settings-hub" onclick="openSettingsHub(event)" title="설정 (화면 설정·서버 상태·버그 리포트)"><span class="cs-ico">⚙️</span><span class="cs-label">설정</span></button>
                 </div>
             </div>
             <div class="cs-spacer"></div>
@@ -3841,6 +3870,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         <div id="sprint-view" class="hidden" onclick="event.stopPropagation()"></div>
         <!-- [r155] 작업 구조화 (WBS) -->
         <div id="wbs-view" class="hidden" onclick="event.stopPropagation()"></div>
+        <!-- [r159] 타임라인 (WBS 노드 간트) -->
+        <div id="timeline-view" class="hidden" onclick="event.stopPropagation()"></div>
 
         <!-- [r49] 히스토리(활동 기록) 페이지 -->
         <div id="history-view" class="hidden" onclick="event.stopPropagation()"></div>
@@ -13957,6 +13988,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r155] 작업 구조화(WBS) 페이지 토글
             var _csWbs = document.getElementById('cs-nav-wbs'); if (_csWbs) _csWbs.classList.toggle('active', viewName === 'wbs');
             var _wbsvw = document.getElementById('wbs-view'); if (_wbsvw) { _wbsvw.classList.toggle('hidden', viewName !== 'wbs'); _wbsvw.classList.toggle('block', viewName === 'wbs'); }
+            // [r159] 타임라인 페이지 토글
+            var _csTl = document.getElementById('cs-nav-timeline'); if (_csTl) _csTl.classList.toggle('active', viewName === 'timeline');
+            var _tlvw = document.getElementById('timeline-view'); if (_tlvw) { _tlvw.classList.toggle('hidden', viewName !== 'timeline'); _tlvw.classList.toggle('block', viewName === 'timeline'); }
             // [그래프] 페이지 토글
             var _csGr = document.getElementById('cs-nav-graph'); if (_csGr) _csGr.classList.toggle('active', viewName === 'graph');
             var _gvw = document.getElementById('graph-view'); if (_gvw) _gvw.classList.toggle('hidden', viewName !== 'graph');
@@ -14095,6 +14129,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 var _gpw = document.getElementById('gif-picker'); if (_gpw) _gpw.style.display = 'none';
                 if (typeof renderWbsView === 'function') renderWbsView();
+            } else if (viewName === 'timeline') {
+                // [r159] 타임라인
+                var _kvtl = document.getElementById('kanban-view'); if (_kvtl) { _kvtl.classList.add('hidden'); _kvtl.classList.remove('block'); }
+                var _dvtl = document.getElementById('docs-view'); if (_dvtl) { _dvtl.classList.add('hidden'); _dvtl.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gptl = document.getElementById('gif-picker'); if (_gptl) _gptl.style.display = 'none';
+                if (typeof renderTimelineView === 'function') renderTimelineView();
             } else if (viewName === 'graph') {
                 // [그래프] 다이어그램 페이지
                 var _kvg = document.getElementById('kanban-view'); if (_kvg) { _kvg.classList.add('hidden'); _kvg.classList.remove('block'); }
@@ -15424,6 +15465,7 @@ return data;
                     progress: typeof n.progress === 'number' ? n.progress : 0,
                     links: n.links || {}, attachments: n.attachments || [],
                     assignees: Array.isArray(n.assignees) ? n.assignees : [],
+                    startDate: (n.links && n.links._start) || null, dueDate: (n.links && n.links._due) || null,
                     ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null,
                     sortOrder: n.sort_order || 0,
                     createdAt: n.created_at ? new Date(n.created_at).getTime() : null,
@@ -15471,6 +15513,7 @@ return data;
                     requestAnimationFrame(function() {
                         renderBoard(); renderProgress(); updateProjectTitle(); renderDocTree();
                         if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView(); // [r158]
+                if (currentView === 'timeline' && typeof renderTimelineView === 'function') renderTimelineView(); // [r159]
                     });
                 } catch(ex) { console.warn('local cache parse error:', ex); }
             }
@@ -15783,7 +15826,7 @@ return data;
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'wbs_nodes' }, (payload) => {
                         const ev = payload.eventType;
                         if (!currentData.wbsNodes) currentData.wbsNodes = [];
-                        const map = function (n) { return { id: n.id, projectId: n.project_id || null, parentId: n.parent_id || null, title: n.title || '', desc: n.description || '', status: n.status || 'todo', progress: typeof n.progress === 'number' ? n.progress : 0, links: n.links || {}, attachments: n.attachments || [], assignees: Array.isArray(n.assignees) ? n.assignees : [], ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null, sortOrder: n.sort_order || 0, createdAt: n.created_at ? new Date(n.created_at).getTime() : null, updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : null }; };
+                        const map = function (n) { return { id: n.id, projectId: n.project_id || null, parentId: n.parent_id || null, title: n.title || '', desc: n.description || '', status: n.status || 'todo', progress: typeof n.progress === 'number' ? n.progress : 0, links: n.links || {}, attachments: n.attachments || [], assignees: Array.isArray(n.assignees) ? n.assignees : [], startDate: (n.links && n.links._start) || null, dueDate: (n.links && n.links._due) || null, ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null, sortOrder: n.sort_order || 0, createdAt: n.created_at ? new Date(n.created_at).getTime() : null, updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : null }; };
                         if (ev === 'INSERT') {
                             const n = payload.new;
                             if (!currentData.wbsNodes.find(x => x.id === n.id)) currentData.wbsNodes.push(map(n));
@@ -15794,6 +15837,7 @@ return data;
                             currentData.wbsNodes = currentData.wbsNodes.filter(x => x.id !== payload.old.id);
                         }
                         if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView();
+                        if (currentView === 'timeline' && typeof renderTimelineView === 'function') renderTimelineView();
                         _safeLocalCache(currentData);
                     }).subscribe(function(status, err) {
                         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[rt-wbs-nodes] 연결 끊김:', status, err);
@@ -15990,6 +16034,7 @@ return data;
                 currentData = validateData(localData);
                 updateJsonEditorView(); renderBoard(); renderProgress(); updateProjectTitle(); renderDocTree();
                 if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView(); // [r158]
+                if (currentView === 'timeline' && typeof renderTimelineView === 'function') renderTimelineView(); // [r159]
             }
         }
 
@@ -21296,7 +21341,16 @@ ${intrLog}
             if (view === 'review' && typeof openReviewInbox === 'function') { openReviewInbox(); return; }
             if (view === 'changelog' && typeof openChangeLog === 'function') { openChangeLog(); return; }
             if (view === 'settings' && typeof toggleSettings === 'function') { toggleSettings(); return; }
+            if (view === 'settingsHub') { openSettingsHub(); return; }
             if (typeof switchView === 'function') switchView(view);
+        }
+        // [r159] 설정 허브 — 화면 설정 / 서버 상태 / 버그 리포트 통합 메뉴
+        function openSettingsHub(e) {
+            var anchor = e || { currentTarget: document.getElementById('cs-nav-settings-hub') };
+            _openCardMenu(anchor,
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();toggleSettings()"><span>⚙️</span> 화면 설정 (테마 포함)</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();switchView(\'status\')"><span>📡</span> 서버 상태 (DB 편집)</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();switchView(\'bugReport\')"><span>🐞</span> 버그 리포트</div>');
         }
         function sidebarNavAction(view, idx) {
             hideTreeContextMenu();
@@ -21367,7 +21421,8 @@ ${intrLog}
         function _wbsCommentCount(id) { return (currentData.entityComments || []).filter(function (c) { return !c.deleted && c.targetType === 'wbs' && c.targetId === id; }).length; }
         async function dbUpsertWbsNode(n) {
             if (!supabaseClient) return;
-            var payload = { id: n.id, project_id: n.projectId || activeProjectId, parent_id: n.parentId || null, title: n.title || '', description: n.desc || '', status: n.status || 'todo', progress: n.progress || 0, links: n.links || {}, attachments: n.attachments || [], assignees: n.assignees || [], owner_user_id: (n.assignees && n.assignees[0]) || n.ownerUserId || null, created_by: n.createdBy || null, sort_order: n.sortOrder || 0, created_at: n.createdAt ? new Date(n.createdAt).toISOString() : null, updated_at: n.updatedAt ? new Date(n.updatedAt).toISOString() : null };
+            var _links = Object.assign({}, n.links || {}, { _start: n.startDate || null, _due: n.dueDate || null }); // [r159] 일정은 links jsonb에 보관(추가 컬럼 불필요)
+            var payload = { id: n.id, project_id: n.projectId || activeProjectId, parent_id: n.parentId || null, title: n.title || '', description: n.desc || '', status: n.status || 'todo', progress: n.progress || 0, links: _links, attachments: n.attachments || [], assignees: n.assignees || [], owner_user_id: (n.assignees && n.assignees[0]) || n.ownerUserId || null, created_by: n.createdBy || null, sort_order: n.sortOrder || 0, created_at: n.createdAt ? new Date(n.createdAt).toISOString() : null, updated_at: n.updatedAt ? new Date(n.updatedAt).toISOString() : null };
             var { error } = await supabaseClient.from('wbs_nodes').upsert(payload);
             if (error && _isMissingCol(error, 'assignees')) { delete payload.assignees; ({ error } = await supabaseClient.from('wbs_nodes').upsert(payload)); } // [r157] 구버전 DB(assignees 컬럼 없음) 폴백
             if (error && _isIntOverflow(error)) { if (typeof payload.sort_order === 'number' && payload.sort_order > 2147483647) payload.sort_order = Math.floor(payload.sort_order / 1000); ({ error } = await supabaseClient.from('wbs_nodes').upsert(payload)); }
@@ -21393,7 +21448,8 @@ ${intrLog}
             var inner = '<div class="wbs-subtree wbs-st-root">' + rootBox + rootKids + '</div>';
             host.innerHTML =
                 '<div class="wbs-wrap">'
-                + '<header class="wbs-head"><div><h2 class="wbs-title">🗂️ 작업 구조화 (WBS)</h2><div class="wbs-sub">노드 클릭=상세 · 우클릭=메뉴 · 드래그=계층이동 · 휠=확대/축소 · 휠클릭드래그=이동 · 노드 상하좌우 ＋ 로 추가</div></div></header>'
+                + '<header class="wbs-head"><div><h2 class="wbs-title">🗂️ 작업 구조화 (WBS)</h2><div class="wbs-sub">노드 클릭=상세 · 우클릭=메뉴 · 드래그=계층이동 · 휠=확대/축소 · 휠클릭드래그=이동 · 노드 모서리 ＋ 로 추가</div></div>'
+                + '<button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);" onclick="switchView(\'timeline\')">📊 타임라인으로</button></header>'
                 + '<div class="wbs-canvas" onwheel="wbsWheel(event)" onmousedown="wbsCanvasMouseDown(event)"><div id="wbs-zoom"><svg id="wbs-svg" class="wbs-svg"></svg>' + inner + '</div></div>'
                 + '</div>';
             _wbsApplyZoom();
@@ -21419,8 +21475,8 @@ ${intrLog}
             var av = isRoot ? _wbsAvatarsHtml(rootAssignees) : _wbsAvatarsHtml(n.assignees);
             var did = isRoot ? '__root__' : n.id;
             var handlers = isRoot
-                ? 'ondragover="wbsDragOver(event)" ondragleave="wbsDragLeave(event)" ondrop="wbsDrop(event,null)" oncontextmenu="wbsRootCtx(event)"'
-                : 'draggable="true" ondragstart="wbsDragStart(event,\'' + n.id + '\')" ondragover="wbsDragOver(event)" ondragleave="wbsDragLeave(event)" ondrop="wbsDrop(event,\'' + n.id + '\')" onclick="wbsOpenNode(\'' + n.id + '\')" oncontextmenu="wbsNodeCtx(event,\'' + n.id + '\')" onmouseenter="wbsTipShow(event,\'' + n.id + '\')" onmouseleave="wbsTipHide()"';
+                ? 'ondragover="wbsDragOver(event)" ondragleave="wbsDragLeave(event)" ondrop="wbsDrop(event,null)" oncontextmenu="wbsRootCtx(event)" onmousemove="wbsNodeEdge(event,this)" onmouseleave="this.removeAttribute(\'data-edge\')"'
+                : 'draggable="true" ondragstart="wbsDragStart(event,\'' + n.id + '\')" ondragover="wbsDragOver(event)" ondragleave="wbsDragLeave(event)" ondrop="wbsDrop(event,\'' + n.id + '\')" onclick="wbsOpenNode(\'' + n.id + '\')" oncontextmenu="wbsNodeCtx(event,\'' + n.id + '\')" onmousemove="wbsNodeEdge(event,this)" onmouseenter="wbsTipShow(event,\'' + n.id + '\')" onmouseleave="wbsTipHide();this.removeAttribute(\'data-edge\')"';
             var addBtns = isRoot
                 ? '<button class="wbs-add-side wbs-add-bottom" title="하위 추가" onclick="event.stopPropagation();wbsAddAt(\'\',\'child\')">＋</button>'
                 : '<button class="wbs-add-side wbs-add-top" title="위에 추가" onclick="event.stopPropagation();wbsAddAt(\'' + n.id + '\',\'before\')">＋</button>'
@@ -21457,6 +21513,15 @@ ${intrLog}
             svg.setAttribute('width', zoom.scrollWidth); svg.setAttribute('height', zoom.scrollHeight);
             svg.style.width = zoom.scrollWidth + 'px'; svg.style.height = zoom.scrollHeight + 'px';
             svg.innerHTML = paths;
+        }
+        // [r159] 마우스가 가까운 모서리만 추가버튼 노출
+        function wbsNodeEdge(e, el) {
+            var r = el.getBoundingClientRect();
+            var x = e.clientX - r.left, y = e.clientY - r.top;
+            var dl = x, dr = r.width - x, dt = y, db = r.height - y;
+            var m = Math.min(dl, dr, dt, db);
+            var edge = (m === dt) ? 'top' : (m === db ? 'bottom' : (m === dl ? 'left' : 'right'));
+            if (el.dataset.edge !== edge) el.dataset.edge = edge;
         }
         function wbsRingClick(id) { var n = _wbsNode(id); if (!n) return; var p = (n.progress || 0) + 25; if (p > 100) p = 0; n.progress = p; if (p === 100) n.status = 'done'; else if (n.status === 'done') n.status = 'doing'; else if (p > 0 && n.status === 'todo') n.status = 'doing'; n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderWbsView(); }
         // [r157] 위치 지정 추가 — pos: child | before | after
@@ -21651,6 +21716,91 @@ ${intrLog}
             else n[field] = val;
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderWbsView();
         }
+        function wbsSetDate(id, which, val) { var n = _wbsNode(id); if (!n) return; if (which === 'start') n.startDate = val || null; else n.dueDate = val || null; n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); if (currentView === 'timeline' && typeof renderTimelineView === 'function') renderTimelineView(); }
+        // ===================================================================
+        // [r159] 타임라인 (WBS 노드 간트, Jira 스타일)
+        // ===================================================================
+        var _tlScale = 'months'; // weeks | months | quarters
+        function _tlPxPerDay() { return _tlScale === 'weeks' ? 22 : (_tlScale === 'quarters' ? 1.7 : 5.2); }
+        function _tlParseDate(s) { if (!s) return null; var d = new Date(s + (/T/.test(s) ? '' : 'T00:00:00')); return isNaN(d) ? null : d; }
+        function _tlDayDiff(a, b) { return Math.round((b - a) / 86400000); }
+        function _tlOrderedNodes() {
+            // 트리 순서(깊이 우선) + depth
+            var out = [];
+            (function walk(parentId, depth) {
+                _wbsChildren(parentId).forEach(function (n) { out.push({ n: n, depth: depth }); walk(n.id, depth + 1); });
+            })(null, 0);
+            return out;
+        }
+        function renderTimelineView() {
+            var host = document.getElementById('timeline-view'); if (!host) return;
+            var proj = (currentData.projects || []).find(function (p) { return p.id === activeProjectId; });
+            var projName = (proj && proj.name) || (typeof _driveProjectName === 'function' ? _driveProjectName() : '프로젝트');
+            var rows = _tlOrderedNodes();
+            // 날짜 범위 계산
+            var today = new Date(); today.setHours(0, 0, 0, 0);
+            var minD = null, maxD = null;
+            rows.forEach(function (r) { var s = _tlParseDate(r.n.startDate), d = _tlParseDate(r.n.dueDate); if (s) { if (!minD || s < minD) minD = s; if (!maxD || s > maxD) maxD = s; } if (d) { if (!minD || d < minD) minD = d; if (!maxD || d > maxD) maxD = d; } });
+            if (!minD) minD = new Date(today); if (!maxD) maxD = new Date(today);
+            // 패딩: 시작 월 1일, 끝 +1.5개월
+            var rangeStart = new Date(minD.getFullYear(), minD.getMonth(), 1);
+            if (today < rangeStart) rangeStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            var endRef = maxD > today ? maxD : today;
+            var rangeEnd = new Date(endRef.getFullYear(), endRef.getMonth() + 2, 0);
+            var ppd = _tlPxPerDay();
+            var totalDays = _tlDayDiff(rangeStart, rangeEnd) + 1;
+            var gridW = Math.max(600, Math.round(totalDays * ppd));
+            // 월 컬럼 헤더
+            var months = []; var cur = new Date(rangeStart);
+            while (cur <= rangeEnd) { var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1); var segEnd = next <= rangeEnd ? next : new Date(rangeEnd.getTime() + 86400000); var days = _tlDayDiff(cur, segEnd); months.push({ label: (cur.getFullYear() % 100) + '.' + (cur.getMonth() + 1), w: days * ppd }); cur = next; }
+            var monthHdr = months.map(function (m) { return '<div class="tl-mcol" style="width:' + m.w + 'px;">' + m.label + '</div>'; }).join('');
+            var todayLeft = _tlDayDiff(rangeStart, today) * ppd;
+            // 행
+            var leftRows = '', barRows = '';
+            if (!rows.length) {
+                host.innerHTML = '<div class="tl-wrap"><header class="tl-head"><div><div class="tl-bc">' + _sprintEsc(projName) + ' / 타임라인</div><h2 class="wbs-title">📊 타임라인</h2></div><button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);" onclick="switchView(\'wbs\')">🗂️ 작업 구조화로</button></header><div class="wbs-empty" style="margin-top:40px;">작업 구조화(WBS)에서 노드를 만들고 시작/마감일을 설정하면 여기에 타임라인이 그려집니다.</div></div>';
+                return;
+            }
+            var STC = { todo: 'var(--c-text3)', doing: '#d49a1c', done: '#2e9e5b' };
+            rows.forEach(function (r) {
+                var n = r.n; var st = WBS_STATUS[n.status] || WBS_STATUS.todo;
+                leftRows += '<div class="tl-row tl-left-row" style="padding-left:' + (12 + r.depth * 16) + 'px;" onclick="wbsOpenNode(\'' + n.id + '\')" title="클릭=상세">'
+                    + '<span class="tl-row-dot" style="background:' + (STC[n.status] || STC.todo) + ';"></span>'
+                    + '<span class="tl-row-title">' + _sprintEsc(n.title || '(제목 없음)') + '</span>'
+                    + '<span class="tl-row-st" style="color:' + st.c + ';">' + st.l + '</span></div>';
+                var s = _tlParseDate(n.startDate), d = _tlParseDate(n.dueDate);
+                var bar = '';
+                if (s || d) {
+                    var bs = s || d, be = d || s; if (be < bs) be = bs;
+                    var left = _tlDayDiff(rangeStart, bs) * ppd;
+                    var w = Math.max(ppd * 1, (_tlDayDiff(bs, be) + 1) * ppd);
+                    var prog = Math.max(0, Math.min(100, n.progress || 0));
+                    bar = '<div class="tl-bar" style="left:' + left + 'px;width:' + w + 'px;background:' + (STC[n.status] || STC.todo) + '22;border-color:' + (STC[n.status] || STC.todo) + ';" onclick="wbsOpenNode(\'' + n.id + '\')" title="' + _sprintEsc(n.title) + ' · ' + (n.startDate || '?') + ' ~ ' + (n.dueDate || '?') + '">'
+                        + '<div class="tl-bar-fill" style="width:' + prog + '%;background:' + (STC[n.status] || STC.todo) + ';"></div>'
+                        + '<span class="tl-bar-label">' + _sprintEsc(n.title) + '</span></div>';
+                } else {
+                    bar = '<div class="tl-bar tl-bar-none" onclick="wbsOpenNode(\'' + n.id + '\')" title="기간 미설정 — 클릭하여 설정">기간 미설정</div>';
+                }
+                barRows += '<div class="tl-row tl-bar-row">' + bar + '</div>';
+            });
+            host.innerHTML =
+                '<div class="tl-wrap">'
+                + '<header class="tl-head"><div><div class="tl-bc">' + _sprintEsc(projName) + ' / 타임라인</div><h2 class="wbs-title">📊 타임라인</h2></div>'
+                + '<div style="display:flex;gap:8px;align-items:center;"><div class="tl-scale"><button class="' + (_tlScale === 'weeks' ? 'on' : '') + '" onclick="_tlSetScale(\'weeks\')">주</button><button class="' + (_tlScale === 'months' ? 'on' : '') + '" onclick="_tlSetScale(\'months\')">월</button><button class="' + (_tlScale === 'quarters' ? 'on' : '') + '" onclick="_tlSetScale(\'quarters\')">분기</button></div>'
+                + '<button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);" onclick="switchView(\'wbs\')">🗂️ 작업 구조화로</button></div></header>'
+                + '<div class="tl-body">'
+                + '<div class="tl-left"><div class="tl-left-hdr">작업</div>' + leftRows + '</div>'
+                + '<div class="tl-right" id="tl-right"><div class="tl-grid" style="width:' + gridW + 'px;">'
+                + '<div class="tl-axis">' + monthHdr + '</div>'
+                + '<div class="tl-rows" style="position:relative;">' + barRows
+                + '<div class="tl-today" style="left:' + todayLeft + 'px;"></div>'
+                + '</div></div></div>'
+                + '</div></div>';
+            // 세로 스크롤 동기화(우측→좌측)
+            var tr = document.getElementById('tl-right'); var tll = host.querySelector('.tl-left');
+            if (tr && tll) tr.onscroll = function () { tll.scrollTop = tr.scrollTop; };
+        }
+        function _tlSetScale(s) { _tlScale = s; renderTimelineView(); }
         function _wbsLinkChips(n, kind) {
             var key = _WBS_LINK_KEY[kind];
             var ids = (n.links && n.links[key]) || [];
@@ -21676,6 +21826,8 @@ ${intrLog}
                 '<div class="wbs-fld"><span>제목</span><input type="text" value="' + _sprintEsc(n.title || '').replace(/"/g, '&quot;') + '" onchange="wbsUpdateField(\'' + id + '\',\'title\',this.value)"></div>'
                 + '<div style="display:flex;gap:10px;"><div class="wbs-fld" style="flex:1;"><span>상태</span><select onchange="wbsUpdateField(\'' + id + '\',\'status\',this.value)">' + stOpts + '</select></div>'
                 + '<div class="wbs-fld" style="flex:1.4;"><span>진척률 <span id="wbs-prog-label" style="color:var(--c-accent);">' + (n.progress || 0) + '%</span></span><input type="range" min="0" max="100" step="5" value="' + (n.progress || 0) + '" style="width:100%;" oninput="wbsUpdateField(\'' + id + '\',\'progress\',this.value)"></div></div>'
+                + '<div style="display:flex;gap:10px;"><div class="wbs-fld" style="flex:1;"><span>📅 시작일</span><input type="date" value="' + (n.startDate || '') + '" onchange="wbsSetDate(\'' + id + '\',\'start\',this.value)"></div>'
+                + '<div class="wbs-fld" style="flex:1;"><span>📅 마감일</span><input type="date" value="' + (n.dueDate || '') + '" onchange="wbsSetDate(\'' + id + '\',\'due\',this.value)"></div></div>'
                 + '<div class="wbs-fld"><span>👤 담당자 <button class="wbs-mini-btn" onclick="wbsAssigneePicker(\'' + id + '\')">＋ 추가/변경</button></span><div>' + _wbsAssigneeChips(n) + '</div></div>'
                 + '<div class="wbs-fld"><span>내용 (Markdown)</span><textarea rows="5" placeholder="작업 설명·체크리스트·메모…" onchange="wbsUpdateField(\'' + id + '\',\'desc\',this.value)">' + _sprintEsc(n.desc || '') + '</textarea></div>'
                 + '<div class="wbs-fld"><span>🏃 스프린트 <button class="wbs-mini-btn" onclick="wbsDeriveSprint(\'' + id + '\')">파생</button><button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + id + '\',\'sprint\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'sprint') + '</div></div>'
