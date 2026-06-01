@@ -21395,7 +21395,7 @@ ${intrLog}
         // ===================================================================
         // [r161] 라이브 협업 — 화면 공유 + 커서 + 포커스 + 핑/박스
         // ===================================================================
-        var _liveJoined = false, _liveChannel = null, _liveViewLock = false, _liveMode = null;
+        var _liveJoined = false, _liveChannel = null, _liveViewLock = false, _liveMode = null, _liveJustJoined = false;
         var _liveColors = {}, _liveCursors = {}, _liveFocusEls = {}, _liveMouseTs = 0;
         var LIVE_VIEW_LABELS = { dashboard: '대시보드', wbs: '작업 구조화', timeline: '타임라인', sprint: '스프린트', kanban: '칸반 보드', canon: '프로젝트 위키', issues: '이슈 트래커', calendar: '캘린더', review: '리뷰함', docs: '문서', assets: '에셋 매니저', personal: '개인 문서', graph: '그래프', deepwikiPages: 'Deep Wiki', drive: '공용 드라이브', history: '히스토리', git: 'Git', gview: '그래프 뷰', explorer: '탐색기', deepwiki: 'AI Agent', status: '서버 상태', bugReport: '버그 리포트' };
         function _liveColor(id) { if (_liveColors[id]) return _liveColors[id]; var h = 0, s = String(id || ''); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; var c = 'hsl(' + h + ',72%,55%)'; _liveColors[id] = c; return c; }
@@ -21416,7 +21416,7 @@ ${intrLog}
         function _liveEnsureChannel() {
             if (_liveChannel) return _liveChannel;
             if (!supabaseClient || typeof myClientId === 'undefined' || !myClientId) return null;
-            var ch = supabaseClient.channel('live_pb3_' + (activeProjectId || 'default'), { config: { presence: { key: myClientId }, broadcast: { self: false } } });
+            var ch = supabaseClient.channel('live_pb3_room', { config: { presence: { key: myClientId }, broadcast: { self: false } } }); // [r165] 워크스페이스 전역 라이브 룸(프로젝트 무관 공유)
             ch.on('presence', { event: 'sync' }, function () {
                 var st = ch.presenceState(); var users = [];
                 for (var k in st) { (st[k] || []).forEach(function (u) { if (u && u.client_id) users.push({ client_id: u.client_id, nickname: u.nickname, user_id: u.user_id || null }); }); }
@@ -21433,7 +21433,7 @@ ${intrLog}
             if (_liveJoined) return;
             if (!supabaseClient) { showToast('로그인(DB 연결)이 필요합니다. 우상단에서 로그인 후 다시 시도하세요.', 'alert'); return; }
             if (typeof myClientId === 'undefined' || !myClientId) { showToast('클라이언트 식별자가 없어 라이브를 시작할 수 없습니다.', 'alert'); return; }
-            _liveJoined = true;
+            _liveJoined = true; _liveJustJoined = true; setTimeout(function () { _liveJustJoined = false; }, 4000);
             var ch = _liveEnsureChannel();
             if (!ch) { _liveJoined = false; showToast('실시간 채널 생성 실패 — 잠시 후 다시 시도하세요.', 'alert'); return; }
             if (_liveSubscribed) { _liveTrack(); _liveBroadcast({ type: 'hello' }); } // 이미 구독돼 있으면 즉시 / 아니면 subscribe 콜백이 처리
@@ -21450,17 +21450,26 @@ ${intrLog}
             showToast('라이브 협업 퇴장', 'info');
         }
         function _liveBroadcast(p) { if (!_liveJoined || !_liveChannel) return; p.by = myClientId; p.name = myNickname; p.color = _liveColor(myClientId); try { _liveChannel.send({ type: 'broadcast', event: 'live', payload: p }); } catch (e) {} }
-        function _liveBroadcastView(view) { if (_liveViewLock) return; _liveBroadcast({ type: 'view', view: view }); }
+        function _liveBroadcastView(view) { if (_liveViewLock) return; _liveBroadcast({ type: 'view', view: view, proj: activeProjectId }); }
+        function _liveApplyRemoteView(p, silent) {
+            _liveViewLock = true;
+            try {
+                if (p.proj && p.proj !== activeProjectId && typeof switchProject === 'function') { switchProject(p.proj); }
+                if (typeof switchView === 'function') switchView(p.view);
+            } finally { setTimeout(function () { _liveViewLock = false; }, 0); }
+            if (!silent) showToast('👁 ' + (p.name || '팀원') + '님이 ' + (LIVE_VIEW_LABELS[p.view] || p.view) + ' 페이지로 접속', 'info');
+        }
         function _liveOnMsg(p) {
             if (!p || p.by === myClientId) return;
             if (!_liveJoined) return; // [r164] 참여하지 않은 사용자는 화면공유/커서/핑을 따르지 않음(LED만)
-            if (p.type === 'view') { _liveViewLock = true; try { if (typeof switchView === 'function') switchView(p.view); } finally { setTimeout(function () { _liveViewLock = false; }, 0); } showToast('👁 ' + (p.name || '팀원') + '님이 ' + (LIVE_VIEW_LABELS[p.view] || p.view) + ' 페이지로 접속', 'info'); }
+            if (p.type === 'view') { _liveApplyRemoteView(p, false); }
             else if (p.type === 'cursor') _liveRenderCursor(p);
             else if (p.type === 'focus') _liveRenderFocus(p);
             else if (p.type === 'ping') _livePing(p.x, p.y, p.color);
             else if (p.type === 'box') _liveBox(p.x, p.y, p.w, p.h, p.color);
             else if (p.type === 'bye') _liveRemoveCursor(p.by);
-            else if (p.type === 'hello') _liveBroadcast({ type: 'cursor', x: 0.5, y: 0.5 }); // 신규 참가자에게 존재 알림
+            else if (p.type === 'hello') { _liveBroadcast({ type: 'curview', view: currentView, proj: activeProjectId }); } // 신규 참가자에게 현재 공유 화면 알림
+            else if (p.type === 'curview') { if (_liveJustJoined) { _liveJustJoined = false; _liveApplyRemoteView(p, true); } } // 막 접속한 사람만 현재 화면으로 동기화
         }
         function _liveLayer() { var l = document.getElementById('live-layer'); if (!l) { l = document.createElement('div'); l.id = 'live-layer'; document.body.appendChild(l); } return l; }
         function _liveRenderCursor(p) {
