@@ -15999,10 +15999,6 @@ return data;
                         });
                     }
                     window._presenceUsers = nextPresence;
-                    // [r161] 라이브 협업 세션 감지 — live=true 인 참가자 수집
-                    var liveUsers = []; for (const id in newState) { newState[id].forEach(function (u) { if (u && u.live) liveUsers.push({ client_id: u.client_id, nickname: u.nickname, user_id: u.user_id || null }); }); }
-                    window._liveUsers = liveUsers;
-                    if (typeof _liveUpdateNav === 'function') _liveUpdateNav();
                     document.getElementById('online-count').innerText = count; document.getElementById('header-online-count').innerText = count; var pcC = document.getElementById('header-online-count-pc'); if (pcC) pcC.innerText = count; var csO = document.getElementById('cs-online'); if (csO) csO.innerText = count;
                     // [r136] 호버 스택 갱신 (호버 상태면 즉시 재렌더)
                     if (typeof _presenceMaybeRender === 'function') _presenceMaybeRender();
@@ -16054,10 +16050,11 @@ return data;
                             user_id: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null,
                             active_task_ids: (window._myActiveTaskIds || []),
                             online_at: new Date().toISOString(),
-                            live: !!window._liveJoined, // [r161] 라이브 협업 참여 여부
                         });
                         // [r140] GPU 호스트 시스템 부팅 — 공유 ON 이면 heartbeat 시작, 목록·realtime 구독
                         if (typeof _gpuBootstrap === 'function') _gpuBootstrap();
+                        // [r164] 라이브 협업 채널 구독(LED 공유용) — 참여 전에도 다른 사람의 라이브 세션 감지
+                        if (typeof _liveEnsureChannel === 'function') _liveEnsureChannel();
                     }
                 });
 
@@ -21414,33 +21411,49 @@ ${intrLog}
             nav.title = active ? ('🔴 라이브 ON · ' + n + '명 참여 중') : '라이브 협업 시작 (화면 공유·커서·핑)';
         }
         function liveSidebarClick() { if (_liveJoined) liveLeave(); else liveJoin(); }
+        var _liveSubscribed = false;
+        // [r164] 라이브 전용 채널 — 자체 presence로 참가자/세션 관리 (globalRoom 비의존). 앱 로드시 1회 구독해 LED 공유.
+        function _liveEnsureChannel() {
+            if (_liveChannel) return _liveChannel;
+            if (!supabaseClient || typeof myClientId === 'undefined' || !myClientId) return null;
+            var ch = supabaseClient.channel('live_pb3_' + (activeProjectId || 'default'), { config: { presence: { key: myClientId }, broadcast: { self: false } } });
+            ch.on('presence', { event: 'sync' }, function () {
+                var st = ch.presenceState(); var users = [];
+                for (var k in st) { (st[k] || []).forEach(function (u) { if (u && u.client_id) users.push({ client_id: u.client_id, nickname: u.nickname, user_id: u.user_id || null }); }); }
+                window._liveUsers = users; _liveUpdateNav();
+                var ids = {}; users.forEach(function (u) { ids[u.client_id] = 1; });
+                for (var c in _liveCursors) { if (!ids[c]) _liveRemoveCursor(c); }
+            });
+            ch.on('broadcast', { event: 'live' }, function (m) { _liveOnMsg(m.payload); });
+            ch.subscribe(function (status) { if (status === 'SUBSCRIBED') { _liveSubscribed = true; if (_liveJoined) { _liveTrack(); _liveBroadcast({ type: 'hello' }); } } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { _liveSubscribed = false; } });
+            _liveChannel = ch; return ch;
+        }
+        function _liveTrack() { try { if (_liveChannel && _liveSubscribed) _liveChannel.track({ client_id: myClientId, nickname: myNickname, user_id: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null, at: new Date().toISOString() }); } catch (e) {} }
         function liveJoin() {
             if (_liveJoined) return;
-            // [r162] 가드 수정 — 클라이언트 ID는 전역 myClientId(window.* 아님). 미연결이면 globalRoom 부재로 판단.
             if (!supabaseClient) { showToast('로그인(DB 연결)이 필요합니다. 우상단에서 로그인 후 다시 시도하세요.', 'alert'); return; }
-            if (typeof globalRoom === 'undefined' || !globalRoom) { showToast('실시간 채널 연결 중입니다. 잠시 후 다시 시도하세요.', 'alert'); return; }
             if (typeof myClientId === 'undefined' || !myClientId) { showToast('클라이언트 식별자가 없어 라이브를 시작할 수 없습니다.', 'alert'); return; }
-            _liveJoined = true; _liveReannounce();
-            _liveChannel = supabaseClient.channel('live_pb3_' + (activeProjectId || 'default'), { config: { broadcast: { self: false } } });
-            _liveChannel.on('broadcast', { event: 'live' }, function (m) { _liveOnMsg(m.payload); });
-            _liveChannel.subscribe(function (status) { if (status === 'SUBSCRIBED') _liveBroadcast({ type: 'hello' }); });
+            _liveJoined = true;
+            var ch = _liveEnsureChannel();
+            if (!ch) { _liveJoined = false; showToast('실시간 채널 생성 실패 — 잠시 후 다시 시도하세요.', 'alert'); return; }
+            if (_liveSubscribed) { _liveTrack(); _liveBroadcast({ type: 'hello' }); } // 이미 구독돼 있으면 즉시 / 아니면 subscribe 콜백이 처리
             _liveAttachLocal(); _liveEnsureUI(); _liveUpdateNav();
             showToast('🔴 라이브 협업 접속 — 같은 화면을 공유합니다', 'success');
         }
         function liveLeave() {
             if (!_liveJoined) return;
             _liveBroadcast({ type: 'bye' }); _liveJoined = false;
-            try { if (_liveChannel) supabaseClient.removeChannel(_liveChannel); } catch (e) {}
-            _liveChannel = null; _liveDetachLocal(); _liveClearOverlays(); _liveSetMode(null);
+            try { if (_liveChannel && _liveSubscribed) _liveChannel.untrack(); } catch (e) {}
+            _liveDetachLocal(); _liveClearOverlays(); _liveSetMode(null);
             var tools = document.getElementById('live-tools'); if (tools) tools.style.display = 'none';
-            _liveReannounce(); _liveUpdateNav();
+            _liveUpdateNav();
             showToast('라이브 협업 퇴장', 'info');
         }
-        function _liveReannounce() { try { if (typeof globalRoom !== 'undefined' && globalRoom) globalRoom.track({ client_id: myClientId, nickname: myNickname, user_id: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null, active_task_ids: (window._myActiveTaskIds || []), online_at: new Date().toISOString(), live: _liveJoined }); } catch (e) {} }
         function _liveBroadcast(p) { if (!_liveJoined || !_liveChannel) return; p.by = myClientId; p.name = myNickname; p.color = _liveColor(myClientId); try { _liveChannel.send({ type: 'broadcast', event: 'live', payload: p }); } catch (e) {} }
         function _liveBroadcastView(view) { if (_liveViewLock) return; _liveBroadcast({ type: 'view', view: view }); }
         function _liveOnMsg(p) {
             if (!p || p.by === myClientId) return;
+            if (!_liveJoined) return; // [r164] 참여하지 않은 사용자는 화면공유/커서/핑을 따르지 않음(LED만)
             if (p.type === 'view') { _liveViewLock = true; try { if (typeof switchView === 'function') switchView(p.view); } finally { setTimeout(function () { _liveViewLock = false; }, 0); } showToast('👁 ' + (p.name || '팀원') + '님이 ' + (LIVE_VIEW_LABELS[p.view] || p.view) + ' 페이지로 접속', 'info'); }
             else if (p.type === 'cursor') _liveRenderCursor(p);
             else if (p.type === 'focus') _liveRenderFocus(p);
