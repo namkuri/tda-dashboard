@@ -488,6 +488,8 @@
         .live-ping::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid currentColor; animation: livePingA 1s ease-out infinite; }
         @keyframes livePingA { 0% { transform: scale(.5); opacity: .9; } 100% { transform: scale(2.4); opacity: 0; } }
         .live-box-hi { position: fixed; border: 2px solid; border-radius: 6px; background: rgba(255,255,255,.07); pointer-events: none; z-index: 100001; box-shadow: 0 0 0 9999px rgba(0,0,0,0.001); }
+        .live-mark-pill { position: absolute; left: 50%; top: -16px; transform: translateX(-50%); font-size: 9px; font-weight: 800; color: #fff; padding: 1px 6px; border-radius: 7px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+        .live-mark-pill-box { left: 0; top: -16px; transform: none; }
         #live-capture { position: fixed; inset: 0; z-index: 100050; cursor: crosshair; }
         #live-tools { position: fixed; right: 18px; bottom: 86px; z-index: 100060; display: flex; flex-direction: column; gap: 8px; }
         #live-tools button { width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--c-border); background: var(--c-card); color: var(--c-text); cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.28); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 17px; gap: 0; }
@@ -11371,6 +11373,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             document.getElementById('am-e-del').classList.remove('hidden');
             mountEntityComments('am-e-comments', 'asset', id); // [r150] 코멘트
             openModal('am-edit-modal');
+            if (typeof _liveShareOpen === 'function') _liveShareOpen('asset', id);
         }
         async function amSaveAsset() {
             var name = document.getElementById('am-e-name').value.trim();
@@ -11592,6 +11595,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             document.getElementById('iss-e-del').classList.remove('hidden');
             mountEntityComments('iss-e-comments', 'issue', id); // [r150] 코멘트
             openModal('iss-edit-modal');
+            if (typeof _liveShareOpen === 'function') _liveShareOpen('issue', id);
         }
         async function issSaveIssue() {
             var title = document.getElementById('iss-e-title').value.trim();
@@ -13134,6 +13138,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             document.getElementById('cal-ev-del').classList.remove('hidden');
             mountEntityComments('cal-ev-comments', 'event', id); // [r150] 코멘트
             openModal('cal-event-modal');
+            if (typeof _liveShareOpen === 'function') _liveShareOpen('event', id);
         }
         async function calSaveEvent() {
             var title = document.getElementById('cal-ev-title').value.trim();
@@ -17953,7 +17958,7 @@ addEventListener("resize",sendPos);
             ov.innerHTML = '<div class="simple-modal-box"><div class="simple-modal-head"><span>' + title + '</span><button onclick="_closeSimpleModal()" class="simple-modal-x">✕</button></div><div class="simple-modal-body">' + bodyHtml + '</div></div>';
             ov.style.display = 'flex';
         }
-        function _closeSimpleModal() { var ov = document.getElementById('simple-modal-overlay'); if (ov) ov.style.display = 'none'; }
+        function _closeSimpleModal() { var ov = document.getElementById('simple-modal-overlay'); if (ov) ov.style.display = 'none'; if (typeof _liveShareClose === 'function') _liveShareClose(); }
 
         async function moveAllDocsToCurrentProject() {
             if(!currentData || !currentData.docs) return;
@@ -18247,10 +18252,12 @@ addEventListener("resize",sendPos);
             var body = document.getElementById('card-modal-body');
             if (body) body.innerHTML = _cardDetailHtml(task);
             if (typeof openModal === 'function') openModal('card-modal');
+            if (typeof _liveShareOpen === 'function') _liveShareOpen('card', taskId);
         }
         function closeCardModal() {
             _cardModalId = null;
             if (typeof closeModal === 'function') closeModal('card-modal');
+            if (typeof _liveShareClose === 'function') _liveShareClose('card-modal');
         }
         function _refreshOpenCardModal() {
             if (!_cardModalId) return;
@@ -21395,8 +21402,26 @@ ${intrLog}
         // ===================================================================
         // [r161] 라이브 협업 — 화면 공유 + 커서 + 포커스 + 핑/박스
         // ===================================================================
-        var _liveJoined = false, _liveChannel = null, _liveViewLock = false, _liveMode = null, _liveJustJoined = false;
+        var _liveJoined = false, _liveChannel = null, _liveViewLock = false, _liveMode = null, _liveJustJoined = false, _liveModalLock = false, _liveInputTs = 0;
         var _liveColors = {}, _liveCursors = {}, _liveFocusEls = {}, _liveMouseTs = 0;
+        // [r166] 공유 가능한 상세 모달 오프너 — 원격에서 동일 모달을 띄움
+        var LIVE_OPENERS = {
+            card: function (id) { if (typeof openCardModal === 'function') openCardModal(id); },
+            wbs: function (id) { if (typeof wbsOpenNode === 'function') wbsOpenNode(id); },
+            issue: function (id) { if (typeof issEditIssue === 'function') issEditIssue(id); },
+            asset: function (id) { if (typeof amEditAsset === 'function') amEditAsset(id); },
+            event: function (id) { if (typeof calOpenEditEvent === 'function') calOpenEditEvent(id); }
+        };
+        // [r166] 상세 모달 열림 공유 — 각 오프너에서 호출
+        function _liveShareOpen(kind, id) { if (_liveJoined && !_liveModalLock) _liveBroadcast({ type: 'open', kind: kind, id: id }); }
+        function _liveShareClose(id) { if (_liveJoined && !_liveModalLock) _liveBroadcast({ type: 'close', id: id || null }); }
+        // [r166] 텍스트 입력 동기화
+        function _liveApplyInput(p) {
+            if (!p.loc) return; var el; try { el = document.querySelector(p.loc); } catch (e) {}
+            if (!el) return;
+            if (el.isContentEditable) { if (el.innerHTML !== p.value) el.innerHTML = p.value; }
+            else if ('value' in el) { if (el.value !== p.value) el.value = p.value; }
+        }
         var LIVE_VIEW_LABELS = { dashboard: '대시보드', wbs: '작업 구조화', timeline: '타임라인', sprint: '스프린트', kanban: '칸반 보드', canon: '프로젝트 위키', issues: '이슈 트래커', calendar: '캘린더', review: '리뷰함', docs: '문서', assets: '에셋 매니저', personal: '개인 문서', graph: '그래프', deepwikiPages: 'Deep Wiki', drive: '공용 드라이브', history: '히스토리', git: 'Git', gview: '그래프 뷰', explorer: '탐색기', deepwiki: 'AI Agent', status: '서버 상태', bugReport: '버그 리포트' };
         function _liveColor(id) { if (_liveColors[id]) return _liveColors[id]; var h = 0, s = String(id || ''); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; var c = 'hsl(' + h + ',72%,55%)'; _liveColors[id] = c; return c; }
         function _liveSessionActive() { return (window._liveUsers || []).length > 0; }
@@ -21465,8 +21490,11 @@ ${intrLog}
             if (p.type === 'view') { _liveApplyRemoteView(p, false); }
             else if (p.type === 'cursor') _liveRenderCursor(p);
             else if (p.type === 'focus') _liveRenderFocus(p);
-            else if (p.type === 'ping') _livePing(p.x, p.y, p.color);
-            else if (p.type === 'box') _liveBox(p.x, p.y, p.w, p.h, p.color);
+            else if (p.type === 'ping') _livePing(p.x, p.y, p.color, p.name);
+            else if (p.type === 'box') _liveBox(p.x, p.y, p.w, p.h, p.color, p.name);
+            else if (p.type === 'input') _liveApplyInput(p);
+            else if (p.type === 'open') { if (LIVE_OPENERS[p.kind]) { _liveModalLock = true; try { LIVE_OPENERS[p.kind](p.id); } finally { setTimeout(function () { _liveModalLock = false; }, 0); } } }
+            else if (p.type === 'close') { _liveModalLock = true; try { if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); if (typeof closeCardModal === 'function') closeCardModal(); if (p.id && typeof closeModal === 'function') closeModal(p.id); } finally { setTimeout(function () { _liveModalLock = false; }, 0); } }
             else if (p.type === 'bye') _liveRemoveCursor(p.by);
             else if (p.type === 'hello') { _liveBroadcast({ type: 'curview', view: currentView, proj: activeProjectId }); } // 신규 참가자에게 현재 공유 화면 알림
             else if (p.type === 'curview') { if (_liveJustJoined) { _liveJustJoined = false; _liveApplyRemoteView(p, true); } } // 막 접속한 사람만 현재 화면으로 동기화
@@ -21484,14 +21512,15 @@ ${intrLog}
         function _liveLocator(el) { if (!el) return null; try { if (el.id) return '#' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id); } catch (e) {} var path = [], e2 = el, g = 0; while (e2 && e2.nodeType === 1 && e2 !== document.body && g++ < 6) { var ix = 1, sib = e2; while (sib = sib.previousElementSibling) { if (sib.tagName === e2.tagName) ix++; } path.unshift(e2.tagName.toLowerCase() + ':nth-of-type(' + ix + ')'); e2 = e2.parentElement; } return path.join('>'); }
         function _liveRenderFocus(p) { _liveRemoveFocus(p.by); if (!p.loc) return; var el; try { el = document.querySelector(p.loc); } catch (e) {} if (!el) return; el.style.outline = '2px solid ' + p.color; el.style.outlineOffset = '1px'; _liveFocusEls[p.by] = el; }
         function _liveRemoveFocus(by) { var el = _liveFocusEls[by]; if (el) { el.style.outline = ''; el.style.outlineOffset = ''; delete _liveFocusEls[by]; } }
-        function _livePing(nx, ny, color) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-ping'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.color = color; d.style.background = color; layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
-        function _liveBox(nx, ny, nw, nh, color) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-box-hi'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.width = (nw * window.innerWidth) + 'px'; d.style.height = (nh * window.innerHeight) + 'px'; d.style.borderColor = color; layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
+        function _livePing(nx, ny, color, name) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-ping'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.color = color; d.style.background = color; if (name) { var t = document.createElement('span'); t.className = 'live-mark-pill'; t.style.background = color; t.textContent = name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
+        function _liveBox(nx, ny, nw, nh, color, name) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-box-hi'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.width = (nw * window.innerWidth) + 'px'; d.style.height = (nh * window.innerHeight) + 'px'; d.style.borderColor = color; if (name) { var t = document.createElement('span'); t.className = 'live-mark-pill live-mark-pill-box'; t.style.background = color; t.textContent = name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
         function _liveClearOverlays() { var l = document.getElementById('live-layer'); if (l) l.innerHTML = ''; for (var k in _liveCursors) { clearTimeout(_liveCursors[k].timer); } _liveCursors = {}; for (var f in _liveFocusEls) _liveRemoveFocus(f); }
         function _liveOnMouseMove(e) { var now = Date.now(); if (now - _liveMouseTs < 55) return; _liveMouseTs = now; _liveBroadcast({ type: 'cursor', x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight }); }
         function _liveOnFocusIn(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable)) return; _liveBroadcast({ type: 'focus', loc: _liveLocator(t) }); }
         function _liveOnFocusOut() { _liveBroadcast({ type: 'focus', loc: null }); }
-        function _liveAttachLocal() { document.addEventListener('mousemove', _liveOnMouseMove, true); document.addEventListener('focusin', _liveOnFocusIn, true); document.addEventListener('focusout', _liveOnFocusOut, true); }
-        function _liveDetachLocal() { document.removeEventListener('mousemove', _liveOnMouseMove, true); document.removeEventListener('focusin', _liveOnFocusIn, true); document.removeEventListener('focusout', _liveOnFocusOut, true); }
+        function _liveOnInput(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA)$/.test(t.tagName) && !t.isContentEditable)) return; if (t.type === 'password') return; var now = Date.now(); if (now - _liveInputTs < 90) return; _liveInputTs = now; _liveBroadcast({ type: 'input', loc: _liveLocator(t), value: t.isContentEditable ? t.innerHTML : t.value }); }
+        function _liveAttachLocal() { document.addEventListener('mousemove', _liveOnMouseMove, true); document.addEventListener('focusin', _liveOnFocusIn, true); document.addEventListener('focusout', _liveOnFocusOut, true); document.addEventListener('input', _liveOnInput, true); }
+        function _liveDetachLocal() { document.removeEventListener('mousemove', _liveOnMouseMove, true); document.removeEventListener('focusin', _liveOnFocusIn, true); document.removeEventListener('focusout', _liveOnFocusOut, true); document.removeEventListener('input', _liveOnInput, true); }
         // 핑/박스 플로팅 메뉴 + 캡처
         function _liveEnsureUI() { var t = document.getElementById('live-tools'); if (t) { t.style.display = 'flex'; return; } t = document.createElement('div'); t.id = 'live-tools'; t.innerHTML = '<button id="live-tool-ping" onclick="_liveSetMode(\'ping\')" title="핑 — 클릭한 위치를 3초간 강조">📍<span>핑</span></button><button id="live-tool-box" onclick="_liveSetMode(\'box\')" title="박스 — 드래그한 영역을 3초간 강조">▢<span>박스</span></button>'; document.body.appendChild(t); }
         function _liveSetMode(m) {
@@ -21503,12 +21532,12 @@ ${intrLog}
         function _liveStartCapture() {
             var cap = document.createElement('div'); cap.id = 'live-capture'; document.body.appendChild(cap);
             if (_liveMode === 'ping') {
-                cap.addEventListener('mousedown', function (e) { var nx = e.clientX / window.innerWidth, ny = e.clientY / window.innerHeight; _livePing(nx, ny, _liveColor(myClientId)); _liveBroadcast({ type: 'ping', x: nx, y: ny }); _liveSetMode(null); });
+                cap.addEventListener('mousedown', function (e) { var nx = e.clientX / window.innerWidth, ny = e.clientY / window.innerHeight; _livePing(nx, ny, _liveColor(myClientId), myNickname); _liveBroadcast({ type: 'ping', x: nx, y: ny }); _liveSetMode(null); });
             } else {
                 var sx, sy, box = null;
                 cap.addEventListener('mousedown', function (e) { sx = e.clientX; sy = e.clientY; box = document.createElement('div'); box.className = 'live-box-hi'; box.style.borderColor = _liveColor(myClientId); document.body.appendChild(box); });
                 cap.addEventListener('mousemove', function (e) { if (!box) return; var l = Math.min(sx, e.clientX), tp = Math.min(sy, e.clientY); box.style.left = l + 'px'; box.style.top = tp + 'px'; box.style.width = Math.abs(e.clientX - sx) + 'px'; box.style.height = Math.abs(e.clientY - sy) + 'px'; });
-                cap.addEventListener('mouseup', function (e) { if (box && box.parentNode) box.parentNode.removeChild(box); box = null; var l = Math.min(sx, e.clientX), tp = Math.min(sy, e.clientY), w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy); if (w < 4 && h < 4) { _liveSetMode(null); return; } var nx = l / window.innerWidth, ny = tp / window.innerHeight, nw = w / window.innerWidth, nh = h / window.innerHeight; _liveBox(nx, ny, nw, nh, _liveColor(myClientId)); _liveBroadcast({ type: 'box', x: nx, y: ny, w: nw, h: nh }); _liveSetMode(null); });
+                cap.addEventListener('mouseup', function (e) { if (box && box.parentNode) box.parentNode.removeChild(box); box = null; var l = Math.min(sx, e.clientX), tp = Math.min(sy, e.clientY), w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy); if (w < 4 && h < 4) { _liveSetMode(null); return; } var nx = l / window.innerWidth, ny = tp / window.innerHeight, nw = w / window.innerWidth, nh = h / window.innerHeight; _liveBox(nx, ny, nw, nh, _liveColor(myClientId), myNickname); _liveBroadcast({ type: 'box', x: nx, y: ny, w: nw, h: nh }); _liveSetMode(null); });
             }
         }
         function sidebarNavAction(view, idx) {
@@ -22142,6 +22171,7 @@ ${intrLog}
                 + '</div>';
             _openSimpleModal('🗂️ 작업 노드 — ' + _sprintEsc(n.title || ''), body);
             if (typeof mountEntityComments === 'function') setTimeout(function () { mountEntityComments('wbs-cmts', 'wbs', id); }, 0);
+            if (typeof _liveShareOpen === 'function') _liveShareOpen('wbs', id);
         }
         function wbsApplyEdit() { _wbsSnap = null; if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); }
         function wbsCancelEdit(id) {
