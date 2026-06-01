@@ -14698,9 +14698,15 @@ return data;
             }
             if (error) console.error('[dbUpsertProject]', error);
         }
+        // [r148] updated_at은 ms 타임스탬프(13자리)라 bigint 컬럼이어야 함. 구버전 DB에서 integer로 생성된 경우
+        //   "out of range for type integer" 로 저장 전체가 실패→새 문서가 사라짐. 오버플로 감지 시 updated_at 없이 재저장.
+        function _isIntOverflow(error) {
+            var m = (error && (error.message || error.code || '')) + '';
+            return /out of range for type integer|22003|numeric_value_out_of_range/i.test(m);
+        }
         async function dbUpsertDoc(doc) {
             if (!supabaseClient) return;
-            const { error } = await supabaseClient.from('wiki_docs').upsert({
+            const payload = {
                 id: doc.id, project_id: doc.projectId || activeProjectId,
                 parent_id: doc.parentId || null, title: doc.title,
                 content: doc.content || '', emoji: doc.emoji || '📄',
@@ -14715,7 +14721,15 @@ return data;
                 kind: doc.kind || 'wiki', // [통합 문서엔진] 문서/게임위키 구분
                 meta: doc.meta || {}, // [게임위키] 버전/승인 등
                 updated_at: Date.now()
-            });
+            };
+            let { error } = await supabaseClient.from('wiki_docs').upsert(payload);
+            if (error && _isIntOverflow(error)) {
+                // [r148] integer 컬럼 오버플로 — updated_at 제외하고 문서 본체는 반드시 저장(손실 방지)
+                console.warn('[dbUpsertDoc] updated_at integer 오버플로 — updated_at 제외 재저장. SQL: alter table wiki_docs alter column updated_at type bigint;');
+                delete payload.updated_at;
+                ({ error } = await supabaseClient.from('wiki_docs').upsert(payload));
+                if (!error && typeof showToast === 'function') showToast('⚠️ 문서는 저장됨 — DB의 updated_at 컬럼이 구형(integer)입니다. 설정 > DB 스키마 점검의 SQL을 실행하세요.', 'alert');
+            }
             if (error) {
                 console.error('[dbUpsertDoc]', error);
                 if (typeof showToast === 'function') showToast('⚠️ 문서 저장 실패: ' + (error.message||''), 'alert');
@@ -14941,6 +14955,11 @@ return data;
             lines.push('');
             lines.push('-- [컬럼] 기존 테이블에 없는 컬럼 추가');
             DB_OPTIONAL_COLUMNS.forEach(function (c) { lines.push('alter table ' + c[0] + ' add column if not exists ' + c[1] + ' ' + c[2] + ';'); });
+            // [r148] 타입 교정 — wiki_docs.updated_at 은 ms 타임스탬프(13자리)라 bigint 여야 함.
+            //   구버전 DB에서 integer로 생성되면 "value ... out of range for type integer" 로 문서 저장이 실패함.
+            lines.push('');
+            lines.push('-- [r148] updated_at 타입 교정 (ms 타임스탬프는 integer 범위 초과 → bigint)');
+            lines.push("do $$ begin if exists (select 1 from information_schema.columns where table_name='wiki_docs' and column_name='updated_at' and data_type='integer') then execute 'alter table wiki_docs alter column updated_at type bigint'; end if; end $$;");
             return lines.join('\n');
         }
         // 각 선택 컬럼/테이블을 select 시도해 누락분을 찾아 보고
@@ -16690,14 +16709,22 @@ return data;
 
             if(supabaseClient) {
                 // ★ 핵심: 전체 JSON이 아닌 wiki_docs의 이 Row 1개만 UPDATE
-                supabaseClient.from('wiki_docs')
-                    .update({
-                        content:    content,
-                        title:      doc.title,
-                        meta:       doc.meta || {},
-                        updated_at: Date.now()
+                // [r148] updated_at은 ms 타임스탬프(bigint 컬럼 필요). 구형 integer 컬럼이면 오버플로로 저장이 통째로 실패하므로
+                //   본문 저장만이라도 살리기 위해 updated_at 제외하고 재시도.
+                var _doUpdate = function(includeUpdatedAt) {
+                    var patch = { content: content, title: doc.title, meta: doc.meta || {} };
+                    if (includeUpdatedAt) patch.updated_at = Date.now();
+                    return supabaseClient.from('wiki_docs').update(patch).eq('id', activeDocId);
+                };
+                _doUpdate(true)
+                    .then(function(res) {
+                        // [r148] integer 오버플로면 updated_at 제외하고 재시도 후 그 결과로 진행
+                        if (res && res.error && _isIntOverflow(res.error)) {
+                            console.warn('[saveDoc] updated_at integer 오버플로 — updated_at 제외 재저장. SQL: alter table wiki_docs alter column updated_at type bigint;');
+                            return _doUpdate(false);
+                        }
+                        return res;
                     })
-                    .eq('id', activeDocId)
                     .then(function(res) {
                         // Supabase는 then에서 { data, error } 형태를 줄 수도 있음 — error 체크
                         if(res && res.error) {
