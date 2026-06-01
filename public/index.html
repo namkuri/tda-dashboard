@@ -15905,6 +15905,17 @@ return data;
                             currentData.sprints = currentData.sprints.filter(x => x.id !== payload.old.id);
                         }
                         if (typeof renderSprintBand === 'function') renderSprintBand();
+                        // [r170] 다른 사용자의 스프린트 진행사항(상태·목표·체크리스트·참여자·섹션 등) 변경을 스프린트 페이지에 즉시 반영.
+                        // 단, 현재 사용자가 스프린트 뷰 안의 입력 요소에 포커스/편집 중이면 echo 재렌더로 입력이 끊기지 않도록 건너뜀.
+                        if (currentView === 'sprint' && typeof renderSprintView === 'function') {
+                            var _ae = document.activeElement;
+                            var _editingInSprint = _ae && (_ae.tagName === 'INPUT' || _ae.tagName === 'TEXTAREA' || _ae.tagName === 'SELECT' || _ae.isContentEditable)
+                                && _ae.closest && _ae.closest('#sprint-view');
+                            if (!_editingInSprint) renderSprintView();
+                        }
+                        if (typeof renderProgress === 'function' && currentView === 'kanban') renderProgress();
+                        if (typeof renderBoardSprintPicker === 'function') renderBoardSprintPicker();
+                        if (typeof renderBoard === 'function' && currentView === 'kanban') renderBoard();
                         _safeLocalCache(currentData);
                     }).subscribe(function(status, err) {
                         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -18750,7 +18761,10 @@ addEventListener("resize",sendPos);
             } else {
                 var stChip = viewed.status === 'closed' ? ['종료', 'var(--ios-fill)', 'var(--c-text3)'] : ['예정', 'var(--ios-fill2)', 'var(--c-text2)'];
                 html += '<span style="font-size:10px;font-weight:700;color:' + stChip[2] + ';background:' + stChip[1] + ';border-radius:8px;padding:1px 8px;">' + stChip[0] + '</span>';
-                if (!getActiveSprint()) html += '<button onclick="startSprint()" style="font-size:11px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:7px;padding:3px 9px;cursor:pointer;">+ 시작</button>';
+                // [r170] 다중 활성 허용 — 이번 주 스프린트가 아직 진행 중이 아니면 빠른 시작 버튼 노출(다른 활성 스프린트 유무와 무관)
+                var _thisWeekId = (typeof sprintIdForDate === 'function') ? sprintIdForDate(new Date()) : null;
+                var _thisWeekActive = (currentData.sprints || []).find(function (s) { return s.id === _thisWeekId && s.status === 'active' && (!s.projectId || s.projectId === activeProjectId); });
+                if (!_thisWeekActive) html += '<button onclick="startSprint()" style="font-size:11px;font-weight:700;color:#fff;background:var(--c-accent);border:none;border-radius:7px;padding:3px 9px;cursor:pointer;">+ 시작</button>';
             }
             el.innerHTML = html;
         }
@@ -18776,11 +18790,12 @@ addEventListener("resize",sendPos);
 
         async function startSprint() {
             if (!currentUser) { showToast('로그인이 필요합니다.', 'alert'); return; }
-            const existing = getActiveSprint();
-            if (existing) { showToast('이미 활성 스프린트가 있습니다: ' + existing.weekLabel, 'alert'); return; }
             const now = new Date();
             const { year, week } = getISOWeek(now);
             const id = sprintIdForDate(now);
+            // [r170] 단일 활성 규칙 제거 — 여러 스프린트 동시 진행 허용. 이번 주 스프린트가 이미 진행 중일 때만 중복 시작 차단.
+            const alreadyActiveThisWeek = (currentData.sprints || []).find(function (s) { return s.id === id && s.status === 'active' && (!s.projectId || s.projectId === activeProjectId); });
+            if (alreadyActiveThisWeek) { showToast('이번 주 스프린트가 이미 진행 중입니다: ' + alreadyActiveThisWeek.weekLabel, 'alert'); return; }
             const mon = isoWeekMonday(now);
             const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
             const rangeLabel = `${mon.getMonth() + 1}/${mon.getDate()}~${sun.getMonth() + 1}/${sun.getDate()}`;
@@ -19656,26 +19671,14 @@ addEventListener("resize",sendPos);
             if (typeof renderSprintBand === 'function') renderSprintBand();
             showToast('🗑 스프린트 삭제됨', 'info');
         }
-        // [#5] 상태 순환 변경: 예정 → 진행 중 → 종료 → 예정 (단일 활성 규칙)
+        // [#5] 상태 순환 변경: 예정 → 진행 중 → 종료 → 예정
+        // [r170] 단일 활성 규칙 제거 — 여러 스프린트가 동시에 '진행 중'일 수 있음(다른 활성 스프린트 자동 종료 안 함).
         async function cycleSprintStatus(sid) {
             var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!s) return;
             var labelMap = { planned: '📋 예정', active: '🏃 진행 중', closed: '🏁 종료' };
             var order = ['planned', 'active', 'closed'];
             var cur = order.indexOf(s.status); if (cur < 0) cur = 0;
             var next = order[(cur + 1) % order.length];
-            // 진행 중으로 전환 시: 같은 프로젝트에 이미 활성 스프린트가 있으면 자동 종료(단일 활성)
-            if (next === 'active') {
-                var others = (currentData.sprints || []).filter(function (x) { return x.id !== sid && (x.projectId || 'default') === (s.projectId || 'default') && x.status === 'active'; });
-                if (others.length) {
-                    var ok = await uiConfirm({ title: '활성 스프린트 교체', message: '이미 진행 중인 스프린트(' + others.map(function (o) { return o.weekLabel || o.id; }).join(', ') + ')가 있습니다.\n기존 스프린트를 종료하고 이 스프린트를 진행 중으로 바꿀까요?', confirmText: '교체' });
-                    if (!ok) return;
-                    others.forEach(function (o) {
-                        o.status = 'closed'; o.closedAt = new Date().toISOString();
-                        _sprintLogHist(o, 'status', '진행 중 → 종료 (다른 스프린트 시작으로 자동 종료)');
-                        dbUpsertSprint(o);
-                    });
-                }
-            }
             var fromL = labelMap[s.status] || s.status;
             s.status = next;
             if (next === 'closed') s.closedAt = new Date().toISOString();
