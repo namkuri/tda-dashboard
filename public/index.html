@@ -22092,12 +22092,23 @@ ${intrLog}
                     var trc = tgtBar.getBoundingClientRect();
                     var x1 = sr.right - rr.left, y1 = sr.top + sr.height / 2 - rr.top;
                     var x2 = trc.left - rr.left, y2 = trc.top + trc.height / 2 - rr.top;
-                    var mx = x1 + Math.max(12, (x2 - x1) / 2);
-                    paths += '<path d="M' + x1 + ' ' + y1 + ' H' + mx + ' V' + y2 + ' H' + (x2 - 6) + '" fill="none" stroke="var(--c-accent)" stroke-width="1.6"/>'
+                    paths += '<path d="' + _tlDepRoute(x1, y1, x2, y2) + '" fill="none" stroke="var(--c-accent)" stroke-width="1.6"/>'
                         + '<path d="M' + (x2 - 6) + ' ' + (y2 - 4) + ' L' + x2 + ' ' + y2 + ' L' + (x2 - 6) + ' ' + (y2 + 4) + '" fill="var(--c-accent)"/>';
                 });
             });
             svg.style.width = rowsEl.scrollWidth + 'px'; svg.style.height = rowsEl.scrollHeight + 'px'; svg.innerHTML = paths;
+        }
+        // [r171] 의존선 직각 라우팅. 타깃이 충분히 우측이면 기존 1단 꺾임,
+        //   타깃이 좌측(역방향)·너무 가까우면 노드 위 레인을 거쳐 두 번 꺾여 좌측에서 진입(노드 관통 방지).
+        function _tlDepRoute(x1, y1, x2, y2) {
+            var stub = 14, arrow = 6;
+            if (x2 >= x1 + stub * 2) {
+                var mx = x1 + Math.max(stub, (x2 - x1) / 2);
+                return 'M' + x1 + ' ' + y1 + ' H' + mx + ' V' + y2 + ' H' + (x2 - arrow);
+            }
+            var lane = Math.min(y1, y2) - 20;        // 두 막대 중 위쪽 막대 상단 위 여백(행 간격 14px 안)
+            var ax1 = x1 + stub, ax2 = x2 - stub;     // 소스에서 살짝 나간 뒤 / 타깃 앞에서 내려오는 지점
+            return 'M' + x1 + ' ' + y1 + ' H' + ax1 + ' V' + lane + ' H' + ax2 + ' V' + y2 + ' H' + (x2 - arrow);
         }
         // 막대 드래그 — 이동 / 좌우 모서리 기간 조절
         var _tlDrag = null;
@@ -22135,10 +22146,20 @@ ${intrLog}
         function _tlLinkUp(e) {
             window.removeEventListener('mouseup', _tlLinkUp); document.body.style.cursor = '';
             var lk = _tlLink; _tlLink = null; if (!lk) return;
+            var n = _wbsNode(lk.from); if (!n) return;
             var tgt = document.elementFromPoint(e.clientX, e.clientY);
-            var row = tgt && tgt.closest ? tgt.closest('[data-tl-id]') : null; if (!row) return;
+            var row = tgt && tgt.closest ? tgt.closest('[data-tl-id]') : null;
+            // [r171] 작업 행이 아닌 허공에 드롭 → 이 작업의 나가는 연결(의존선) 삭제. 삭제 기능이 따로 없으므로 이 제스처로 해제.
+            if (!row) {
+                var had = (n.links && Array.isArray(n.links.linkIds)) ? n.links.linkIds.length : 0;
+                if (!had) return; // 연결이 없으면 무동작(빈 곳 미스 클릭 안전)
+                n.links.linkIds = [];
+                n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
+                showToast(had > 1 ? ('🔗 연결 ' + had + '개 해제됨') : '🔗 연결이 해제되었습니다', 'info');
+                return;
+            }
             var toId = row.getAttribute('data-tl-id'); if (!toId || toId === lk.from) return;
-            var n = _wbsNode(lk.from); if (!n) return; if (!n.links) n.links = {}; if (!Array.isArray(n.links.linkIds)) n.links.linkIds = [];
+            if (!n.links) n.links = {}; if (!Array.isArray(n.links.linkIds)) n.links.linkIds = [];
             if (n.links.linkIds.indexOf(toId) < 0) n.links.linkIds.push(toId);
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
             showToast('🔗 작업이 연결되었습니다', 'success');
