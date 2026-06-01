@@ -13882,6 +13882,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 window._brPrevView = (currentView && currentView !== 'bugReport') ? currentView : 'dashboard';
             }
             currentView = viewName;
+            // [r153] 마지막 페이지 기억 — 새로고침 시 복원 (bugReport 모달 등 비페이지 전환은 위에서 이미 return)
+            try { localStorage.setItem('pb3_last_view', viewName); } catch (e) {}
             updateMobNav(viewName);
             hideToolbar();
             // [v40] 좌측 사이드바 활성 네비 표시
@@ -14117,6 +14119,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var _dvdw = document.getElementById('docs-view'); if (_dvdw) { _dvdw.classList.add('hidden'); _dvdw.classList.remove('flex-show'); }
                 previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
                 if (typeof dwInit === 'function') dwInit();
+            } else if (viewName === 'deepwikiPages') {
+                // [r153] Deep Wiki 페이지 뷰 — docs-view(문서 에디터)가 하단에 노출되던 버그 수정: 명시적으로 숨김
+                var _kvdwp = document.getElementById('kanban-view'); if (_kvdwp) { _kvdwp.classList.add('hidden'); _kvdwp.classList.remove('block'); }
+                var _dvdwp = document.getElementById('docs-view'); if (_dvdwp) { _dvdwp.classList.add('hidden'); _dvdwp.classList.remove('flex-show'); }
+                previewBtn.classList.add('hidden'); editorBtn.classList.add('hidden'); gifBtn.classList.add('hidden');
+                var _gpdwp = document.getElementById('gif-picker'); if (_gpdwp) _gpdwp.style.display = 'none';
             } else if (viewName === 'personal') {
                 // [개인문서] docs-view 재사용 (kind='personal')
                 if (currentDocKind !== 'personal') { activeDocIdByKind[currentDocKind] = activeDocId; currentDocKind = 'personal'; activeDocId = activeDocIdByKind.personal || null; }
@@ -15918,19 +15926,14 @@ return data;
             updateDocEditorUI();
             updateProjectTitle();
             renderDocTree();
-            if (currentView === 'canon' && typeof renderCanonView === 'function') renderCanonView();
-            // [v40] 칸반/진척/스프린트/리뷰도 프로젝트 단위로 갱신
+            // [v40] 칸반/진척/스프린트/리뷰 등 전역 패널 갱신
             if (typeof renderBoard === 'function') renderBoard();
             if (typeof renderProgress === 'function') renderProgress();
             if (typeof renderSprintBand === 'function') renderSprintBand();
             if (typeof renderReviewBadge === 'function') renderReviewBadge();
-            // [r44] 현재 보고 있는 페이지형 뷰도 즉시 갱신 (이전엔 sprint/graph/git/review/drive 등이 새로고침 전까지 안 바뀜)
-            if (currentView === 'sprint' && typeof renderSprintView === 'function') renderSprintView();
-            else if (currentView === 'graph' && typeof gphRender === 'function') gphRender();
-            else if (currentView === 'git' && typeof gitRender === 'function') gitRender();
-            else if (currentView === 'review' && typeof renderReviewPage === 'function') renderReviewPage();
-            else if (currentView === 'drive' && typeof renderDriveView === 'function') renderDriveView();
-            else if (currentView === 'status' && typeof renderStatusView === 'function') renderStatusView();
+            // [r153] 현재 보고 있는 페이지형 뷰를 무조건 재렌더 — switchView가 뷰별 render를 호출하므로
+            //   대시보드·캘린더·이슈·에셋·딥위키 등 모든 페이지가 프로젝트 전환 시 즉시 갱신됨(기존엔 일부만 갱신)
+            if (currentView && typeof switchView === 'function') switchView(currentView);
             closeProjectModal();
             // 새 프로젝트면 위키 5종 폴더 자동 시드(기존 프로젝트는 no-op)
             if (typeof seedWikiFoldersIfEmpty === 'function') {
@@ -17606,7 +17609,7 @@ addEventListener("resize",sendPos);
             if (currentDocKind === 'personal' && currentUser) personalViewUserId = currentUser.id; // 새 개인문서는 내 소유 → 내 뷰로
             var _newEmoji = isFolder ? '📁' : (currentDocKind === 'canon' ? '📜' : (currentDocKind === 'personal' ? '🔒' : '📄'));
             // [r83 #2] sortOrder를 Date.now()로 부여 → 생성 순서대로 정렬 안정화 (수동 드래그 전까지)
-            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), emoji: _newEmoji, isCollapsed: false, content: isFolder ? '' : ('# ' + title + '\n\n여기에 내용을 작성하세요...'), createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta, sortOrder: Date.now() };
+            const newDoc = { id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), emoji: _newEmoji, isCollapsed: false, content: isFolder ? '' : ('# ' + title + '\n\n여기에 내용을 작성하세요...'), createdAt: Date.now(), updatedAt: Date.now(), kind: currentDocKind, meta: _newMeta, sortOrder: Date.now(), createdBy: (currentUser && currentUser.id) || null, updatedBy: (currentUser && currentUser.id) || null }; // [r153] 작성자 기록(히스토리 표시용)
             currentData.docs.push(newDoc); saveData(); dbUpsertDoc(newDoc);
             if (typeof logActivity === 'function') { var _dc = currentDocKind === 'canon' ? 'wiki' : 'doc'; logActivity(_dc, 'create', { targetId: newDoc.id, targetLabel: newDoc.title, detail: (isFolder ? '폴더' : (currentDocKind === 'canon' ? '프로젝트위키' : (currentDocKind === 'personal' ? '개인문서' : '문서'))) + ' 생성' }); }
             if (isFolder) {
@@ -17652,25 +17655,28 @@ addEventListener("resize",sendPos);
             var doc = currentData.docs.find(function (d) { return d.id === docId; });
             if (!doc) { showToast('문서를 찾을 수 없습니다.', 'alert'); return; }
             var esc = _sprintEsc;
-            var uName = function (uid) { if (!uid) return '?'; var u = (currentData.users || []).find(function (x) { return x.id === uid; }); return u ? (u.displayName || u.email || uid) : uid; };
+            // [r153] uid→이름: 사용자 목록에 있으면 이름, 없으면 null (호출부에서 활동로그 actor_name으로 폴백)
+            var uName = function (uid) { if (!uid) return null; var u = (currentData.users || []).find(function (x) { return x.id === uid; }); return u ? (u.displayName || u.email || null) : null; };
             var toMs = function (x) { if (!x) return 0; if (typeof x === 'number') return x; var t = new Date(x).getTime(); return isNaN(t) ? 0 : t; };
             var fmt = function (ms) { return ms ? new Date(ms).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'; };
+            var docActs = (currentData.activity || []).filter(function (a) { return a.target_id === docId; }).sort(function (a, b) { return toMs(a.at) - toMs(b.at); });
+            var createAct = docActs.filter(function (a) { return a.action === 'create'; })[0];
+            var lastAct = docActs.length ? docActs[docActs.length - 1] : null;
+            // [r153] 작성자/최종수정자 — doc 필드 우선, 없으면 활동로그 actor_name 폴백 (새로고침 후에도 '?' 대신 실제 이름)
+            var authorName = uName(doc.createdBy) || (createAct && createAct.actor_name) || (doc.meta && doc.meta.versionHistory && doc.meta.versionHistory[0] && doc.meta.versionHistory[0].byName) || '?';
+            var editorName = uName(doc.updatedBy) || (lastAct && lastAct.actor_name) || authorName;
             var events = [];
-            // 작성 / 최종 수정
-            if (doc.createdAt) events.push({ ms: toMs(doc.createdAt), icon: '🆕', label: '문서 생성', who: uName(doc.createdBy), detail: '' });
-            if (doc.updatedAt) events.push({ ms: toMs(doc.updatedAt), icon: '✏️', label: '최종 수정', who: uName(doc.updatedBy || doc.createdBy), detail: '' });
-            // 활동 로그 (생성/수정/버전/잠금 등)
-            var ACT = { create: { i: '🆕', l: '생성' }, edit: { i: '✏️', l: '수정' }, version: { i: '📌', l: '버전' }, lock: { i: '🔒', l: '잠금' }, unlock: { i: '🔓', l: '잠금 해제' }, rename: { i: '🏷', l: '이름변경' }, move: { i: '📁', l: '이동' } };
-            (currentData.activity || []).forEach(function (a) {
-                if (a.target_id !== docId) return;
+            if (doc.createdAt) events.push({ ms: toMs(doc.createdAt), icon: '🆕', label: '문서 생성', who: authorName, detail: '' });
+            if (doc.updatedAt) events.push({ ms: toMs(doc.updatedAt), icon: '✏️', label: '최종 수정', who: editorName, detail: '' });
+            var ACT = { create: { i: '🆕', l: '생성' }, edit: { i: '✏️', l: '수정' }, version: { i: '📌', l: '버전' }, lock: { i: '🔒', l: '잠금' }, unlock: { i: '🔓', l: '잠금 해제' }, rename: { i: '🏷', l: '이름변경' }, move: { i: '📁', l: '이동' }, assign: { i: '👤', l: '담당자' } };
+            docActs.forEach(function (a) {
                 var m = ACT[a.action] || { i: '•', l: a.action || '활동' };
                 events.push({ ms: toMs(a.at), icon: m.i, label: m.l, who: a.actor_name || '?', detail: a.detail || '' });
             });
-            // 버전 스냅샷
+            // 버전 스냅샷 — 클릭 시 해당 버전 내용 미리보기
             ((doc.meta && doc.meta.versionHistory) || []).forEach(function (h) {
-                events.push({ ms: toMs(h.at), icon: '📌', label: 'v' + h.version + ' 스냅샷', who: h.byName || '?', detail: h.note || '' });
+                events.push({ ms: toMs(h.at), icon: '📌', label: 'v' + h.version + ' 스냅샷', who: h.byName || '?', detail: h.note || '', verNum: h.version });
             });
-            // 리뷰
             (currentData.reviews || []).forEach(function (r) {
                 if (r.targetDocId !== docId || r.deleted) return;
                 var stLabel = { pending: '⏳ 대기', approved: '✅ 승인', rejected: '❌ 반려' }[r.status] || (r.status || '');
@@ -17679,17 +17685,37 @@ addEventListener("resize",sendPos);
             events.sort(function (a, b) { return (b.ms || 0) - (a.ms || 0); });
             var curV = (doc.meta && doc.meta.version) || 1;
             var summary = '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 12px;margin-bottom:10px;background:var(--c-accent-soft);border:1px solid var(--c-border);border-radius:10px;font-size:12px;color:var(--c-text2);">'
-                + '<span>📝 작성: <b style="color:var(--c-text);">' + esc(uName(doc.createdBy)) + '</b> · ' + fmt(toMs(doc.createdAt)) + '</span>'
-                + '<span>✏️ 최종수정: <b style="color:var(--c-text);">' + esc(uName(doc.updatedBy || doc.createdBy)) + '</b> · ' + fmt(toMs(doc.updatedAt)) + '</span>'
+                + '<span>📝 작성: <b style="color:var(--c-text);">' + esc(authorName) + '</b> · ' + fmt(toMs(doc.createdAt)) + '</span>'
+                + '<span>✏️ 최종수정: <b style="color:var(--c-text);">' + esc(editorName) + '</b> · ' + fmt(toMs(doc.updatedAt)) + '</span>'
                 + '<span>📌 현재 버전: <b style="color:var(--c-text);">v' + curV + '</b></span>'
                 + '<span>' + (doc.isLocked ? '🔒 잠김' : '🔓 잠금 안 됨') + '</span>'
                 + '</div>';
             var rows = events.length ? events.map(function (e) {
-                return '<div class="dvh-row"><b style="font-family:inherit;">' + e.icon + '</b>'
-                    + '<span class="dvh-meta"><b style="color:var(--c-text);">' + esc(e.label) + '</b>' + (e.detail ? (' — ' + esc(e.detail)) : '') + '</span>'
+                var clickable = (typeof e.verNum !== 'undefined');
+                var attrs = clickable ? (' style="cursor:pointer;" title="이 버전 내용 보기" onclick="viewDocVersionContent(\'' + docId + '\',' + e.verNum + ')"') : '';
+                return '<div class="dvh-row"' + attrs + '><b style="font-family:inherit;">' + e.icon + '</b>'
+                    + '<span class="dvh-meta"><b style="color:var(--c-text);">' + esc(e.label) + '</b>' + (e.detail ? (' — ' + esc(e.detail)) : '') + (clickable ? ' <span style="color:var(--c-accent);font-size:11px;">📄 보기</span>' : '') + '</span>'
                     + '<span class="dvh-by">' + esc(e.who) + ' · ' + fmt(e.ms) + '</span></div>';
             }).join('') : '<div class="dvh-row" style="color:var(--c-text3);">기록된 활동이 없습니다.</div>';
             _openSimpleModal('🕘 문서 히스토리 — ' + esc(doc.title), summary + '<div class="dvh-list">' + rows + '</div>');
+        }
+        // [r153] 특정 버전 스냅샷 내용 미리보기 (+되돌리기)
+        function viewDocVersionContent(docId, version) {
+            var doc = currentData.docs.find(function (d) { return d.id === docId; }); if (!doc || !doc.meta) return;
+            var h = (doc.meta.versionHistory || []).find(function (x) { return x.version === version; });
+            if (!h) { showToast('해당 버전 내용을 찾을 수 없습니다.', 'alert'); return; }
+            var bodyHtml;
+            try {
+                bodyHtml = (typeof parseMarkdownWithTables === 'function' && typeof DOMPurify !== 'undefined')
+                    ? DOMPurify.sanitize(parseMarkdownWithTables(h.content || ''), (typeof domPurifyConfig !== 'undefined' ? domPurifyConfig : undefined))
+                    : ('<pre style="white-space:pre-wrap;word-break:break-word;">' + _sprintEsc(h.content || '') + '</pre>');
+            } catch (e) { bodyHtml = '<pre style="white-space:pre-wrap;word-break:break-word;">' + _sprintEsc(h.content || '') + '</pre>'; }
+            var when = h.at ? new Date(h.at).toLocaleString('ko-KR') : '';
+            var head = '<div style="font-size:11.5px;color:var(--c-text3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">'
+                + '<span>v' + version + ' · ' + _sprintEsc(h.byName || '') + ' · ' + when + (h.note ? (' · ' + _sprintEsc(h.note)) : '') + '</span>'
+                + '<span style="display:flex;gap:6px;"><button onclick="openDocHistory(\'' + docId + '\')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;">← 히스토리</button>'
+                + '<button onclick="restoreDocVersion(\'' + docId + '\',' + version + ')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--c-border);background:var(--c-accent);color:#fff;cursor:pointer;">↩ 이 버전으로 되돌리기</button></span></div>';
+            _openSimpleModal('📄 v' + version + ' 미리보기 — ' + _sprintEsc(doc.title), head + '<div class="markdown-body" style="max-height:55vh;overflow-y:auto;border:1px solid var(--c-border);border-radius:8px;padding:12px;">' + bodyHtml + '</div>');
         }
         async function restoreDocVersion(docId, version) {
             var doc = currentData.docs.find(function (d) { return d.id === docId; }); if (!doc || !doc.meta) return;
@@ -18679,6 +18705,7 @@ addEventListener("resize",sendPos);
             var menu = document.getElementById('tree-context-menu'); if (!menu) return;
             if (menu.parentNode !== document.body) document.body.appendChild(menu);
             menu.innerHTML =
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openCardModal(\'' + taskId + '\')"><span>🗂</span> 상세 설정 (카드 열기)</div>' +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();spvEditTitle(null,\'' + taskId + '\')"><span>✏️</span> 이름 변경</div>' +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();toggleSprintCard(\'' + taskId + '\')"><span>📝</span> 설명/코멘트 펼치기</div>' +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openAssigneePicker(event,\'' + taskId + '\',\'sprint\')"><span>👤</span> 담당자 변경</div>' +
@@ -18686,12 +18713,9 @@ addEventListener("resize",sendPos);
                 '<div class="ctx-menu-sep"></div>' +
                 '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();spvDeleteCard(\'' + taskId + '\')"><span>🗑</span> 카드 삭제</div>';
             var x = Math.min(e.clientX, window.innerWidth - 230);
-            var y = Math.min(e.clientY, window.innerHeight - 220);
+            var y = Math.min(e.clientY, window.innerHeight - 240);
             menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block';
-            setTimeout(function () {
-                document.addEventListener('click', hideTreeContextMenu, { once: true });
-                document.addEventListener('keydown', hideTreeContextMenu, { once: true });
-            }, 10);
+            _attachCtxDismiss(); // [r153] 통일된 해제 (바깥클릭/Esc/휠 등)
         }
         function toggleSprintExpand(id) { _sprintExpanded[id] = !_sprintExpanded[id]; renderSprintView(); }
         function toggleSprintCard(id) { _sprintCardOpen[id] = !_sprintCardOpen[id]; renderSprintView(); }
@@ -21025,21 +21049,29 @@ ${intrLog}
             if (menu.parentNode !== document.body) document.body.appendChild(menu);
             menu.innerHTML = innerHtml;
             menu.style.display = 'block';
+            // [r153] 앵커 요소가 이미 숨겨진(컨텍스트 메뉴 항목 클릭 후) 경우 getBoundingClientRect()가 0,0 →
+            //   좌상단 표시 버그. rect가 유효할 때만 앵커 기준, 아니면 클릭 좌표(e.clientX/Y) 사용.
             var anchor = (e && e.currentTarget && e.currentTarget.getBoundingClientRect) ? e.currentTarget.getBoundingClientRect() : null;
+            var anchorValid = anchor && (anchor.width > 0 || anchor.height > 0);
             var mw = menu.offsetWidth || 220, mh = menu.offsetHeight || 200;
-            var x = anchor ? anchor.left : (e ? e.clientX : 100);
-            var y = anchor ? (anchor.bottom + 4) : (e ? e.clientY : 100);
+            var x = anchorValid ? anchor.left : ((e && e.clientX) ? e.clientX : 100);
+            var y = anchorValid ? (anchor.bottom + 4) : ((e && e.clientY) ? e.clientY : 100);
             x = Math.min(x, window.innerWidth - mw - 8); if (x < 6) x = 6;
             y = Math.min(y, window.innerHeight - mh - 8); if (y < 6) y = 6;
             menu.style.left = x + 'px'; menu.style.top = y + 'px';
+            _attachCtxDismiss();
+        }
+        function _ctxOutsideClose(ev) { var m = document.getElementById('tree-context-menu'); if (m && m.contains(ev.target)) return; hideTreeContextMenu(); }
+        // [r153] 컨텍스트 메뉴 공용 해제 — 바깥 mousedown(캡처)/키/휠/포커스아웃/리사이즈 시 닫힘 (전 메뉴 통일)
+        function _attachCtxDismiss() {
             setTimeout(function () {
-                // [수정] 캡처 단계 mousedown — 메뉴 밖 클릭 시 stopPropagation에 막히지 않고 닫힘
                 document.addEventListener('mousedown', _ctxOutsideClose, true);
                 document.addEventListener('keydown', hideTreeContextMenu, { once: true });
                 document.addEventListener('wheel', hideTreeContextMenu, { once: true, passive: true });
-            }, 10);
+                window.addEventListener('blur', hideTreeContextMenu, { once: true });
+                window.addEventListener('resize', hideTreeContextMenu, { once: true });
+            }, 0);
         }
-        function _ctxOutsideClose(ev) { var m = document.getElementById('tree-context-menu'); if (m && m.contains(ev.target)) return; hideTreeContextMenu(); }
         // [#4] 담당자(실 계정) 피커 — board/sprint 공용
         function openAssigneePicker(e, taskId, ctx) {
             var task = currentData.tasks.find(function (t) { return t.id === taskId; }); if (!task) return;
@@ -22098,7 +22130,7 @@ ${intrLog}
             const y = Math.min(e.clientY, window.innerHeight - 170);
             menu.style.left = x + 'px';
             menu.style.top = Math.max(0, y) + 'px';
-            setTimeout(() => document.addEventListener('click', hideTreeContextMenu, { once: true }), 10);
+            _attachCtxDismiss(); // [r153] 통일된 해제
         }
         // [에디터 우클릭] 코드/문서 삽입 피커
         async function openGitInsertPicker(mode) {
@@ -23509,12 +23541,7 @@ ${intrLog}
             var y = Math.min(e.clientY, window.innerHeight - 200);
             if (y < 0) y = 0;
             menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block';
-            setTimeout(function () {
-                document.addEventListener('click', hideTreeContextMenu, { once: true });
-                document.addEventListener('keydown', hideTreeContextMenu, { once: true });
-                document.addEventListener('wheel', hideTreeContextMenu, { once: true, passive: true });
-                window.addEventListener('blur', hideTreeContextMenu, { once: true });
-            }, 10);
+            _attachCtxDismiss(); // [r153] 통일된 해제
         }
 
         function hideTreeContextMenu() {
@@ -25616,14 +25643,14 @@ ${intrLog}
             if(menu.parentNode !== document.body) document.body.appendChild(menu);
             menu.innerHTML =
                 '<div style="padding:6px 14px 4px;font-size:11px;font-weight:700;color:#9b968a;">복사 형식 선택</div>' +
-                '<div class="ctx-menu-item" data-fmt="txt" onclick="copyDocAs(this.dataset.fmt)"><span>📄</span> 텍스트 (.txt)</div>' +
-                '<div class="ctx-menu-item" data-fmt="md" onclick="copyDocAs(this.dataset.fmt)"><span>📝</span> 마크다운 (.md)</div>' +
-                '<div class="ctx-menu-item" data-fmt="html" onclick="copyDocAs(this.dataset.fmt)"><span>🌐</span> HTML 원본</div>';
+                '<div class="ctx-menu-item" data-fmt="txt" onclick="hideTreeContextMenu();copyDocAs(this.dataset.fmt)"><span>📄</span> 텍스트 (.txt)</div>' +
+                '<div class="ctx-menu-item" data-fmt="md" onclick="hideTreeContextMenu();copyDocAs(this.dataset.fmt)"><span>📝</span> 마크다운 (.md)</div>' +
+                '<div class="ctx-menu-item" data-fmt="html" onclick="hideTreeContextMenu();copyDocAs(this.dataset.fmt)"><span>🌐</span> HTML 원본</div>';
             var x = Math.min(e.clientX, window.innerWidth - 200);
             var y = Math.min(e.clientY, window.innerHeight - 120);
             menu.style.left = x + 'px'; menu.style.top = y + 'px';
             menu.style.display = 'block';
-            setTimeout(function(){ document.addEventListener('click', hideTreeContextMenu, { once: true }); }, 10);
+            _attachCtxDismiss(); // [r153] 통일된 해제
         }
 
         // [v33 FIX-COPY-MD] Turndown 보장 헬퍼 — 이미 로드되어 있으면 즉시 ok 콜백, 아니면 동적 로드 후 ok 또는 fail
@@ -25793,14 +25820,14 @@ ${intrLog}
             if(menu.parentNode !== document.body) document.body.appendChild(menu);
             menu.innerHTML =
                 '<div style="padding:6px 14px 4px;font-size:11px;font-weight:700;color:#9b968a;">다운로드 형식 선택</div>' +
-                '<div class="ctx-menu-item" data-fmt="md" onclick="downloadDocAs(this.dataset.fmt)"><span>📝</span> 마크다운 (.md)</div>' +
-                '<div class="ctx-menu-item" data-fmt="txt" onclick="downloadDocAs(this.dataset.fmt)"><span>📄</span> 텍스트 (.txt)</div>' +
-                '<div class="ctx-menu-item" data-fmt="docx" onclick="downloadDocAs(this.dataset.fmt)"><span>📘</span> Word 문서 (.docx)</div>';
+                '<div class="ctx-menu-item" data-fmt="md" onclick="hideTreeContextMenu();downloadDocAs(this.dataset.fmt)"><span>📝</span> 마크다운 (.md)</div>' +
+                '<div class="ctx-menu-item" data-fmt="txt" onclick="hideTreeContextMenu();downloadDocAs(this.dataset.fmt)"><span>📄</span> 텍스트 (.txt)</div>' +
+                '<div class="ctx-menu-item" data-fmt="docx" onclick="hideTreeContextMenu();downloadDocAs(this.dataset.fmt)"><span>📘</span> Word 문서 (.docx)</div>';
             var x = Math.min(e.clientX, window.innerWidth - 210);
             var y = Math.min(e.clientY, window.innerHeight - 140);
             menu.style.left = x + 'px'; menu.style.top = y + 'px';
             menu.style.display = 'block';
-            setTimeout(function(){ document.addEventListener('click', hideTreeContextMenu, { once: true }); }, 10);
+            _attachCtxDismiss(); // [r153] 통일된 해제
         }
 
         function downloadDocAs(fmt) {
@@ -26004,10 +26031,10 @@ ${intrLog}
             applyDarkModeState();
             applySettingsToDOM();
             applyHeaderCollapse();
-            // [r79] 첫 로드 시 대시보드로 진입(미인증/인증 모두 동일)
-            // [r152] 화면 설정 저장(키 변경)으로 인한 새로고침이면 직전 화면 복원
+            // [r153] 새로고침 시 마지막으로 보던 페이지 복원 (pb3_restore_view: 설정 저장 새로고침 우선, 없으면 pb3_last_view)
             var _restoreView = '';
             try { _restoreView = localStorage.getItem('pb3_restore_view') || ''; if (_restoreView) localStorage.removeItem('pb3_restore_view'); } catch (e) {}
+            if (!_restoreView) { try { _restoreView = localStorage.getItem('pb3_last_view') || ''; } catch (e) {} }
             if (typeof switchView === 'function') switchView(_restoreView || 'dashboard');
             // [v40] 인증 체크 — 통과 시에만 initSupabase, 미인증이면 로그인 모달이 데이터 로드 차단
             checkAuthOnLoad().then(function(isAuthenticated) {
