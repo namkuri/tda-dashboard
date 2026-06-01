@@ -15043,6 +15043,10 @@ return data;
             lines.push('');
             lines.push('-- [r150] entity_comments 실시간(publication) 등록');
             lines.push("do $$ begin alter publication supabase_realtime add table entity_comments; exception when duplicate_object then null; when undefined_object then null; end $$;");
+            // [r151] PostgREST 스키마 캐시 즉시 갱신 — 새 테이블/컬럼 생성 직후 "schema cache" 오류 방지
+            lines.push('');
+            lines.push('-- [r151] PostgREST 스키마 캐시 리로드 (이게 없으면 방금 만든 테이블이 잠시 안 보일 수 있음)');
+            lines.push("notify pgrst, 'reload schema';");
             return lines.join('\n');
         }
         // 각 선택 컬럼/테이블을 select 시도해 누락분을 찾아 보고
