@@ -21418,7 +21418,7 @@ ${intrLog}
             if (_liveJoined) return;
             // [r162] 가드 수정 — 클라이언트 ID는 전역 myClientId(window.* 아님). 미연결이면 globalRoom 부재로 판단.
             if (!supabaseClient) { showToast('로그인(DB 연결)이 필요합니다. 우상단에서 로그인 후 다시 시도하세요.', 'alert'); return; }
-            if (!window.globalRoom) { showToast('실시간 채널 연결 중입니다. 잠시 후 다시 시도하세요.', 'alert'); return; }
+            if (typeof globalRoom === 'undefined' || !globalRoom) { showToast('실시간 채널 연결 중입니다. 잠시 후 다시 시도하세요.', 'alert'); return; }
             if (typeof myClientId === 'undefined' || !myClientId) { showToast('클라이언트 식별자가 없어 라이브를 시작할 수 없습니다.', 'alert'); return; }
             _liveJoined = true; _liveReannounce();
             _liveChannel = supabaseClient.channel('live_pb3_' + (activeProjectId || 'default'), { config: { broadcast: { self: false } } });
@@ -21436,7 +21436,7 @@ ${intrLog}
             _liveReannounce(); _liveUpdateNav();
             showToast('라이브 협업 퇴장', 'info');
         }
-        function _liveReannounce() { try { if (window.globalRoom) globalRoom.track({ client_id: myClientId, nickname: myNickname, user_id: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null, active_task_ids: (window._myActiveTaskIds || []), online_at: new Date().toISOString(), live: _liveJoined }); } catch (e) {} }
+        function _liveReannounce() { try { if (typeof globalRoom !== 'undefined' && globalRoom) globalRoom.track({ client_id: myClientId, nickname: myNickname, user_id: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null, active_task_ids: (window._myActiveTaskIds || []), online_at: new Date().toISOString(), live: _liveJoined }); } catch (e) {} }
         function _liveBroadcast(p) { if (!_liveJoined || !_liveChannel) return; p.by = myClientId; p.name = myNickname; p.color = _liveColor(myClientId); try { _liveChannel.send({ type: 'broadcast', event: 'live', payload: p }); } catch (e) {} }
         function _liveBroadcastView(view) { if (_liveViewLock) return; _liveBroadcast({ type: 'view', view: view }); }
         function _liveOnMsg(p) {
