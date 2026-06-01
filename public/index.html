@@ -3970,6 +3970,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <label class="cal-fld"><span>캘린더</span><select id="cal-ev-calId"></select></label>
                     <label class="cal-fld"><span>설명</span><textarea id="cal-ev-desc" rows="3" placeholder="설명(선택)"></textarea></label>
                     <label class="cal-fld-inline"><input type="checkbox" id="cal-ev-public"> 팀원에게 공개 (개인 캘린더 일정에 적용 · 체크 안 하면 "비공개"로 표시)</label>
+                    <div id="cal-ev-comments" style="display:none;"></div>
                 </div>
                 <div class="cal-modal-foot">
                     <button onclick="calDeleteEvent()" id="cal-ev-del" class="cal-btn-danger">삭제</button>
@@ -4554,6 +4555,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <button onclick="amPickDriveFile()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);">🗂️ 드라이브</button>
                         </div>
                     </label>
+                    <div id="am-e-comments" style="display:none;"></div>
                 </div>
                 <div class="cal-modal-foot">
                     <button onclick="amDeleteAsset()" id="am-e-del" class="cal-btn-danger">삭제</button>
@@ -4630,6 +4632,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <label class="cal-fld cal-fld-half"><span>납기</span><input id="iss-e-due" type="date"></label>
                     </div>
                     <label class="cal-fld"><span>대상 (선택)</span><input id="iss-e-target" type="text" placeholder="예: 카드 ID, 문서 ID, 에셋명, 기능명"></label>
+                    <div id="iss-e-comments" style="display:none;"></div>
                 </div>
                 <div class="cal-modal-foot">
                     <button onclick="issDeleteIssue()" id="iss-e-del" class="cal-btn-danger">삭제</button>
@@ -10464,17 +10467,66 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
 
         // [r115] 기획 대조 감사 — 실 구현
+        // [r150] 기획 대조(2차) 대상 선택 모달 — 대조할 canon 문서를 직접 고름. 선택 ids 배열 또는 취소 시 null 반환.
+        function _dwpPickAuditScope() {
+            return new Promise(function (resolve) {
+                var canons = (currentData.docs || []).filter(function (d) {
+                    return d.kind === 'canon' && (d.projectId || 'default') === activeProjectId && !(d.meta && d.meta.isFolder);
+                });
+                if (!canons.length) {
+                    showToast('대조할 기획(canon) 문서가 없습니다. 프로젝트 위키에서 기획 문서를 작성하세요.', 'alert');
+                    resolve(null); return;
+                }
+                var folders = (currentData.docs || []).filter(function (d) {
+                    return d.kind === 'canon' && (d.projectId || 'default') === activeProjectId && (d.meta && d.meta.isFolder);
+                });
+                var fname = {}; folders.forEach(function (f) { fname[f.id] = (f.emoji || '📁') + ' ' + (f.title || '폴더'); });
+                var groups = {}, order = [];
+                canons.forEach(function (d) {
+                    var p = (d.parentId && fname[d.parentId]) ? d.parentId : '__root__';
+                    if (!groups[p]) { groups[p] = []; order.push(p); }
+                    groups[p].push(d);
+                });
+                var esc = _annEsc;
+                var rows = order.map(function (p) {
+                    var label = p === '__root__' ? '📂 (최상위)' : fname[p];
+                    var items = groups[p].sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); }).map(function (d) {
+                        return '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--c-text);" onmouseover="this.style.background=\'var(--ios-fill)\'" onmouseout="this.style.background=\'\'">'
+                            + '<input type="checkbox" class="dwp-audit-chk" value="' + d.id + '" checked style="width:15px;height:15px;flex-shrink:0;">'
+                            + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (d.emoji || '📄') + ' ' + esc(d.title || '(제목 없음)') + '</span></label>';
+                    }).join('');
+                    return '<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:800;color:var(--c-text2);margin:4px 0;">' + esc(label) + '</div>' + items + '</div>';
+                }).join('');
+                var ov = document.createElement('div');
+                ov.id = 'dwp-audit-scope-modal';
+                ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9500;display:flex;align-items:center;justify-content:center;';
+                ov.innerHTML = '<div style="background:var(--c-paper);color:var(--c-text);border:1px solid var(--c-border);border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.45);width:460px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;">'
+                    + '<div style="padding:14px 18px;border-bottom:1px solid var(--c-border);"><h3 style="font-size:14px;font-weight:800;">📊 기획 대조 대상 선택</h3><div style="font-size:11px;color:var(--c-text3);margin-top:3px;">대조할 기획(canon) 문서를 선택하세요. 선택한 문서만 2차 보고서를 생성/갱신합니다.</div></div>'
+                    + '<div style="padding:8px 14px;border-bottom:1px solid var(--c-border);display:flex;gap:8px;"><button id="dwp-audit-all" class="util-btn" style="font-size:11px;background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">전체 선택</button><button id="dwp-audit-none" class="util-btn" style="font-size:11px;background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">전체 해제</button></div>'
+                    + '<div style="padding:12px 16px;overflow-y:auto;flex:1;">' + rows + '</div>'
+                    + '<div style="padding:12px 18px;border-top:1px solid var(--c-border);display:flex;gap:8px;justify-content:flex-end;"><button id="dwp-audit-cancel" class="util-btn" style="font-size:12px;background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">취소</button><button id="dwp-audit-go" class="util-btn" style="font-size:12px;background:var(--c-accent);color:#fff;">시작</button></div>'
+                    + '</div>';
+                document.body.appendChild(ov);
+                var close = function (val) { try { document.body.removeChild(ov); } catch (e) {} resolve(val); };
+                ov.addEventListener('click', function (e) { if (e.target === ov) close(null); });
+                ov.querySelector('#dwp-audit-cancel').onclick = function () { close(null); };
+                ov.querySelector('#dwp-audit-all').onclick = function () { ov.querySelectorAll('.dwp-audit-chk').forEach(function (c) { c.checked = true; }); };
+                ov.querySelector('#dwp-audit-none').onclick = function () { ov.querySelectorAll('.dwp-audit-chk').forEach(function (c) { c.checked = false; }); };
+                ov.querySelector('#dwp-audit-go').onclick = function () {
+                    var ids = Array.prototype.slice.call(ov.querySelectorAll('.dwp-audit-chk:checked')).map(function (c) { return c.value; });
+                    if (!ids.length) { showToast('대조할 기획 문서를 1개 이상 선택하세요', 'info'); return; }
+                    close(ids);
+                };
+            });
+        }
         async function dwpAudit() {
             if (_dwpState.isRunning) { showToast('이미 위키 생성/감사 작업이 진행 중입니다', 'info'); return; }
             var url = _dwpBackendUrl();
             if (!url) { showToast('⚙️ AI Agent 설정에서 백엔드 URL 먼저', 'alert'); return; }
             if (!activeProjectId) { showToast('프로젝트가 선택되어 있지 않습니다', 'alert'); return; }
-            var ok = await uiConfirm({
-                title: '📊 기획 대조 보고서 생성',
-                message: '프로젝트의 기획 문서(canon kind) 각각에 대해 자동 위키 페이지와 대조 분석합니다.\n\nLLM 호출이 canon 수만큼 일어나며 약 1~3분 소요. 진행 OK?',
-                confirmText: '시작',
-            });
-            if (!ok) return;
+            // [r150] 대조 대상(기획) 직접 선택 — 취소 시 중단
+            var _auditCanonIds = await _dwpPickAuditScope();
+            if (_auditCanonIds === null) return;
             _dwpSetRunning(true);
             _dwpProgress('🔄 시작 중...');
             _dwpClearLogs();
@@ -10490,7 +10542,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var res = await fetch(url + '/wiki/audit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: activeProjectId, model: _sa.auditModel || null }),
+                    body: JSON.stringify({ project_id: activeProjectId, model: _sa.auditModel || null, canon_ids: _auditCanonIds }),
                 });
                 if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
                 var reader = res.body.getReader();
@@ -11168,6 +11220,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var asgnSel = document.getElementById('am-e-assignee');
             asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
             document.getElementById('am-e-del').classList.add('hidden');
+            mountEntityComments('am-e-comments', 'asset', null); // [r150] 신규 에셋은 저장 전 코멘트 숨김
             openModal('am-edit-modal');
             setTimeout(function () { document.getElementById('am-e-name').focus(); }, 30);
         }
@@ -11190,6 +11243,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
             asgnSel.value = a.assigneeId || '';
             document.getElementById('am-e-del').classList.remove('hidden');
+            mountEntityComments('am-e-comments', 'asset', id); // [r150] 코멘트
             openModal('am-edit-modal');
         }
         async function amSaveAsset() {
@@ -11384,6 +11438,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var asgnSel = document.getElementById('iss-e-assignee');
             asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
             document.getElementById('iss-e-del').classList.add('hidden');
+            mountEntityComments('iss-e-comments', 'issue', null); // [r150] 신규 이슈는 저장 전 코멘트 숨김
             openModal('iss-edit-modal');
             setTimeout(function () { document.getElementById('iss-e-title').focus(); }, 30);
         }
@@ -11402,6 +11457,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             asgnSel.innerHTML = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '">' + _annEsc(m.displayName || m.email) + '</option>'; }).join('');
             asgnSel.value = i.assigneeId || '';
             document.getElementById('iss-e-del').classList.remove('hidden');
+            mountEntityComments('iss-e-comments', 'issue', id); // [r150] 코멘트
             openModal('iss-edit-modal');
         }
         async function issSaveIssue() {
@@ -12910,6 +12966,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var endBase = new Date(base); endBase.setHours(endBase.getHours() + 1);
             document.getElementById('cal-ev-end').value = fmt(endBase);
             document.getElementById('cal-ev-del').classList.add('hidden');
+            mountEntityComments('cal-ev-comments', 'event', null); // [r150] 신규 일정은 저장 전 코멘트 숨김
             openModal('cal-event-modal');
             setTimeout(function () { document.getElementById('cal-ev-title').focus(); }, 30);
         }
@@ -12942,6 +12999,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             document.getElementById('cal-ev-start').value = toDtLocal(ev.start);
             document.getElementById('cal-ev-end').value = toDtLocal(ev.end);
             document.getElementById('cal-ev-del').classList.remove('hidden');
+            mountEntityComments('cal-ev-comments', 'event', id); // [r150] 코멘트
             openModal('cal-event-modal');
         }
         async function calSaveEvent() {
@@ -14409,6 +14467,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!data.users) data.users = [];     // [v40 Day3 청크 2]
             if (!data.reviews) data.reviews = []; // [v40 Day3 청크 2]
             if (!data.canon) data.canon = [];     // [v40 B3] 게임 정전
+            if (!data.entityComments) data.entityComments = []; // [r150] 범용 코멘트
             if (!data.wikiAnnotations) data.wikiAnnotations = {};
 
             const docIds = new Set(data.docs.map(d => d.id));
@@ -14704,6 +14763,11 @@ return data;
             var m = (error && (error.message || error.code || '')) + '';
             return /out of range for type integer|22003|numeric_value_out_of_range/i.test(m);
         }
+        // [r150] 특정 컬럼이 DB에 없을 때(마이그레이션 전) 발생하는 오류 감지 — 해당 컬럼 제외하고 재저장용
+        function _isMissingCol(error, col) {
+            var m = (error && (error.message || error.code || '')) + '';
+            return new RegExp("'?" + col + "'?", 'i').test(m) && /does not exist|could not find|schema cache|42703|PGRST204/i.test(m);
+        }
         async function dbUpsertDoc(doc) {
             if (!supabaseClient) return;
             const payload = {
@@ -14720,9 +14784,16 @@ return data;
                 is_locked: doc.isLocked || false, // [v40 Day4 §5.4]
                 kind: doc.kind || 'wiki', // [통합 문서엔진] 문서/게임위키 구분
                 meta: doc.meta || {}, // [게임위키] 버전/승인 등
-                updated_at: Date.now()
+                updated_at: Date.now(),
+                updated_by: (currentUser && currentUser.id) || null // [r150] 수정자 기록 — realtime 자기수정 알람 제외용
             };
             let { error } = await supabaseClient.from('wiki_docs').upsert(payload);
+            // [r150] updated_by 컬럼이 없는 구버전 DB → 해당 컬럼 제외하고 재시도(문서 본체는 저장)
+            if (error && _isMissingCol(error, 'updated_by')) {
+                console.warn('[dbUpsertDoc] updated_by 컬럼 없음 — 제외 재저장. SQL: alter table wiki_docs add column if not exists updated_by text;');
+                delete payload.updated_by;
+                ({ error } = await supabaseClient.from('wiki_docs').upsert(payload));
+            }
             if (error && _isIntOverflow(error)) {
                 // [r148/r149] integer 컬럼 오버플로 — updated_at·sort_order 둘 다 Date.now()(ms)라 구형 integer 컬럼이면 터짐.
                 //   문서 손실 방지를 위해: updated_at 제외 + sort_order 는 초 단위(int32 안전, 2038년까지)로 낮춰 순서 보존하며 재저장.
@@ -14915,7 +14986,8 @@ return data;
             ['bug_reports', 'status', "text default 'new'"], // [r86 #2] 버그 처리 상태
             ['asset_folders', 'parent_id', 'text'],          // [r86 #3] 하위 폴더 지원
             ['wiki_docs', 'kind', "text default 'wiki'"],
-            ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"]
+            ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"],
+            ['wiki_docs', 'updated_by', 'text']              // [r150] 수정자 — realtime 자기수정 알람 제외용
         ];
         // [r84 #1] 신규 테이블 — CREATE TABLE IF NOT EXISTS (멱등)
         var DB_OPTIONAL_TABLES = [
@@ -14926,7 +14998,9 @@ return data;
             ['issues', "id text primary key, project_id text, title text, description text, priority text default 'p2', status text default 'open', assignee_id text, due_date date, target text, created_by text, created_at timestamptz, updated_at timestamptz"],
             ['bug_reports', "id text primary key, title text, description text, severity text default 'medium', view text, env text, created_by text, created_at timestamptz, updated_at timestamptz"],
             // [r140] GPU 서비스 공유 — 호스트(Ollama+Cloudflare Tunnel 가동 중인 클라이언트) 등록 + 다른 사용자들이 자동 검색·연결
-            ['gpu_hosts', "id text primary key, owner_user_id text, owner_nickname text, tunnel_url text, model_name text, embed_model text, status text default 'offline', last_seen_at timestamptz, health_data jsonb default '{}'::jsonb, current_project_id text, note text, created_at timestamptz default now(), updated_at timestamptz default now()"]
+            ['gpu_hosts', "id text primary key, owner_user_id text, owner_nickname text, tunnel_url text, model_name text, embed_model text, status text default 'offline', last_seen_at timestamptz, health_data jsonb default '{}'::jsonb, current_project_id text, note text, created_at timestamptz default now(), updated_at timestamptz default now()"],
+            // [r150] 범용 코멘트 — 이슈/일정/에셋(+대댓글). target_type: issue|event|asset|task, parent_id: 대댓글이면 부모 코멘트 키
+            ['entity_comments', "id text primary key, project_id text, target_type text, target_id text, parent_id text, author text, author_name text, content text, ts bigint, deleted boolean default false"]
         ];
         function dbMigrationSql() {
             var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존', ''];
@@ -14965,6 +15039,10 @@ return data;
             ['updated_at', 'sort_order'].forEach(function (col) {
                 lines.push("do $$ begin if exists (select 1 from information_schema.columns where table_name='wiki_docs' and column_name='" + col + "' and data_type='integer') then execute 'alter table wiki_docs alter column " + col + " type bigint'; end if; end $$;");
             });
+            // [r150] 신규 코멘트 테이블 realtime publication 등록 — 다른 사용자에게 코멘트 실시간 반영
+            lines.push('');
+            lines.push('-- [r150] entity_comments 실시간(publication) 등록');
+            lines.push("do $$ begin alter publication supabase_realtime add table entity_comments; exception when duplicate_object then null; when undefined_object then null; end $$;");
             return lines.join('\n');
         }
         // 각 선택 컬럼/테이블을 select 시도해 누락분을 찾아 보고
@@ -15090,7 +15168,7 @@ return data;
                 versionHistory: c.version_history || [], sortOrder: c.sort_order || 0
             };
         }
-        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData, usersData, reviewData, canonData, calData, calEvData, issData, amFolderData, amAssetData, brData) {
+        function _assembleCurrentData(projData, catData, taskData, docData, cmtData, tagData, sprintData, usersData, reviewData, canonData, calData, calEvData, issData, amFolderData, amAssetData, brData, ecData) {
             const cmtMap = {};
             (cmtData || []).forEach(c => {
                 if (!cmtMap[c.task_id]) cmtMap[c.task_id] = [];
@@ -15206,6 +15284,14 @@ return data;
                     createdAt: r.created_at ? new Date(r.created_at).getTime() : null,
                     updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : null
                 })),
+                // [r150] 범용 코멘트 (이슈/일정/에셋 + 대댓글)
+                entityComments: (ecData || []).map(c => ({
+                    id: c.id, projectId: c.project_id || null,
+                    targetType: c.target_type || '', targetId: c.target_id || '',
+                    parentId: c.parent_id || null,
+                    author: c.author || null, authorName: c.author_name || '익명',
+                    content: c.content || '', ts: c.ts || 0, deleted: !!c.deleted
+                })),
                 tagColors: tagColors,
                 images: {}, wikiAnnotations: {}, changeLog: []
             };
@@ -15280,7 +15366,7 @@ return data;
                 const _DOC_META_COLS = 'id, project_id, parent_id, title, emoji, sort_order, is_collapsed, is_deprecated, updated_at, linked_task_ids, linked_doc_ids, doc_type, is_locked, kind, meta'; // [v40 Day3 청크1/3·Day4] 링크·doc_type·is_locked 메타 포함 (없으면 dbUpsertDoc이 덮어씀)
                 // [r83 #1] 이슈/에셋/버그리포트도 같이 로드 (테이블 미생성 시 빈 배열 폴백)
                 var _safeQ = function (p) { return p.then(function (r) { return r; }, function (e) { return { data: [], error: e }; }); };
-                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes, canonRes, calRes, calEvRes, issRes, amFolderRes, amAssetRes, brRes] = await Promise.all([
+                const [projRes, catRes, taskRes, docRes, cmtRes, tagRes, sprintRes, usersRes, reviewRes, canonRes, calRes, calEvRes, issRes, amFolderRes, amAssetRes, brRes, ecRes] = await Promise.all([
                     supabaseClient.from('projects').select('*'),
                     supabaseClient.from('kanban_categories').select('*').order('sort_order'),
                     supabaseClient.from('tasks').select('*').order('sort_order'),
@@ -15296,7 +15382,8 @@ return data;
                     _safeQ(supabaseClient.from('issues').select('*')),          // [r83 #1] 이슈
                     _safeQ(supabaseClient.from('asset_folders').select('*')),   // [r83 #1] 에셋 폴더
                     _safeQ(supabaseClient.from('assets').select('*')),          // [r83 #1] 에셋
-                    _safeQ(supabaseClient.from('bug_reports').select('*'))      // [r83 #1] 버그 리포트
+                    _safeQ(supabaseClient.from('bug_reports').select('*')),     // [r83 #1] 버그 리포트
+                    _safeQ(supabaseClient.from('entity_comments').select('*').order('ts')) // [r150] 범용 코멘트
                 ]);
                 if (projRes.error) throw projRes.error;
                 if (taskRes.error) throw taskRes.error;
@@ -15324,7 +15411,8 @@ return data;
                     (issRes && !issRes.error ? issRes.data : []),       // [r83 #1] 이슈
                     (amFolderRes && !amFolderRes.error ? amFolderRes.data : []), // [r83 #1] 에셋 폴더
                     (amAssetRes && !amAssetRes.error ? amAssetRes.data : []),    // [r83 #1] 에셋
-                    (brRes && !brRes.error ? brRes.data : [])           // [r83 #1] 버그 리포트
+                    (brRes && !brRes.error ? brRes.data : []),          // [r83 #1] 버그 리포트
+                    (ecRes && !ecRes.error ? ecRes.data : [])           // [r150] 범용 코멘트
                 );
                 currentData = validateData(currentData);
                 wikiAnnotations = currentData.wikiAnnotations || {};
@@ -15353,6 +15441,12 @@ return data;
                         const ev = payload.eventType;
                         if (ev === 'UPDATE') {
                             const u = payload.new;
+                            // [r150] 수정자 판별 — 내가 수정한 변경(realtime echo)은 알람을 띄우지 않음
+                            const _editorId = u.updated_by || null;
+                            const _meId = (currentUser && currentUser.id) || null;
+                            const _isSelfEdit = !!(_editorId && _meId && _editorId === _meId);
+                            let _editorName = '다른 사용자';
+                            if (_editorId) { const _eu = (currentData.users || []).find(x => x.id === _editorId); if (_eu) _editorName = _eu.displayName || _editorName; }
                             const doc = currentData.docs.find(d => d.id === u.id);
                             if (doc) {
                                 // [v21 PERF B5] payload에 content가 포함된 경우에만 갱신
@@ -15386,7 +15480,8 @@ return data;
                                         const cur = ta ? ta.selectionStart : 0;
                                         if (ta) { ta.value = u.content; ta.selectionStart = ta.selectionEnd = Math.min(cur, u.content.length); }
                                         updateDocPreview(u.content);
-                                        addChangeLogEntry('다른 사용자', u.title, null, u.id, [], [], 'edit');
+                                        // [r150] 내 수정이면 알람 생략 — 다른 사용자가 수정한 경우에만 알림
+                                        if (!_isSelfEdit) addChangeLogEntry(_editorName, u.title, null, u.id, [], [], 'edit');
                                     }
                                     // [r34] 활성 문서면 코멘트 하이라이트/패널 갱신 (편집 중이 아닐 때만 — 내부 가드)
                                     if (_annSynced && activeDocId === u.id && typeof applyAnnotationHighlights === 'function') applyAnnotationHighlights();
@@ -15495,6 +15590,49 @@ return data;
                     }).subscribe(function(status, err) {
                         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                             console.warn('[rt-comments] 연결 끊김:', status, err);
+                        }
+                    });
+
+                // ★ Realtime: entity_comments 변경 감지 [r150] 이슈/일정/에셋 코멘트 + 대댓글
+                supabaseClient.channel('rt-entity-comments')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'entity_comments' }, (payload) => {
+                        const ev = payload.eventType;
+                        if (!currentData.entityComments) currentData.entityComments = [];
+                        if (ev === 'INSERT') {
+                            const c = payload.new;
+                            if (!currentData.entityComments.find(x => x.id === c.id)) {
+                                currentData.entityComments.push({
+                                    id: c.id, projectId: c.project_id || null, targetType: c.target_type || '', targetId: c.target_id || '',
+                                    parentId: c.parent_id || null, author: c.author || null, authorName: c.author_name || '익명',
+                                    content: c.content || '', ts: c.ts || 0, deleted: !!c.deleted
+                                });
+                                // 내가 쓴 코멘트는 알림 생략 (다른 사용자만 알림)
+                                const _meId = (currentUser && currentUser.id) || null;
+                                if (!(c.author && _meId && c.author === _meId)) {
+                                    const _m = ENTITY_CMT_META[c.target_type];
+                                    if (typeof playNotificationSound === 'function') { try { playNotificationSound('comment'); } catch (e) {} }
+                                    showToast('💬 새 코멘트' + (_m ? (' · ' + _m.icon + ' ' + _m.label) : ''), 'success');
+                                }
+                                _refreshEntityCommentsOpen(c.target_type, c.target_id);
+                            }
+                        } else if (ev === 'UPDATE') {
+                            const c = payload.new;
+                            const idx = currentData.entityComments.findIndex(x => x.id === c.id);
+                            if (idx > -1) {
+                                currentData.entityComments[idx].content = c.content || '';
+                                currentData.entityComments[idx].deleted = !!c.deleted;
+                                _refreshEntityCommentsOpen(c.target_type, c.target_id);
+                            }
+                        } else if (ev === 'DELETE') {
+                            const old = payload.old;
+                            const gone = currentData.entityComments.find(x => x.id === old.id);
+                            currentData.entityComments = currentData.entityComments.filter(x => x.id !== old.id);
+                            if (gone) _refreshEntityCommentsOpen(gone.targetType, gone.targetId);
+                        }
+                        _safeLocalCache(currentData);
+                    }).subscribe(function(status, err) {
+                        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                            console.warn('[rt-entity-comments] 연결 끊김:', status, err);
                         }
                     });
 
@@ -16716,12 +16854,21 @@ return data;
                 // ★ 핵심: 전체 JSON이 아닌 wiki_docs의 이 Row 1개만 UPDATE
                 // [r148] updated_at은 ms 타임스탬프(bigint 컬럼 필요). 구형 integer 컬럼이면 오버플로로 저장이 통째로 실패하므로
                 //   본문 저장만이라도 살리기 위해 updated_at 제외하고 재시도.
-                var _doUpdate = function(includeUpdatedAt) {
+                var _doUpdate = function(includeUpdatedAt, includeUpdatedBy) {
                     var patch = { content: content, title: doc.title, meta: doc.meta || {} };
+                    if (includeUpdatedBy !== false) patch.updated_by = (currentUser && currentUser.id) || null; // [r150] 수정자 기록
                     if (includeUpdatedAt) patch.updated_at = Date.now();
                     return supabaseClient.from('wiki_docs').update(patch).eq('id', activeDocId);
                 };
-                _doUpdate(true)
+                _doUpdate(true, true)
+                    .then(function(res) {
+                        // [r150] updated_by 컬럼 없는 구버전 DB → 제외하고 재시도
+                        if (res && res.error && _isMissingCol(res.error, 'updated_by')) {
+                            console.warn('[saveDoc] updated_by 컬럼 없음 — 제외 재저장. SQL: alter table wiki_docs add column if not exists updated_by text;');
+                            return _doUpdate(true, false);
+                        }
+                        return res;
+                    })
                     .then(function(res) {
                         // [r148] integer 오버플로면 updated_at 제외하고 재시도 후 그 결과로 진행
                         if (res && res.error && _isIntOverflow(res.error)) {
@@ -20861,40 +21008,178 @@ ${intrLog}
         function submitComment(taskId, inputOrButton) { const inputEl = inputOrButton.tagName === 'INPUT' ? inputOrButton : inputOrButton.previousElementSibling; const text = inputEl.value.trim(); if(!text) return; const task = currentData.tasks.find(t => t.id === taskId); const newComment = { text: text, time: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}), timestamp: Date.now(), author: myNickname }; task.comments.push(newComment); inputEl.value = ''; saveData(); dbInsertComment(taskId, newComment); playNotificationSound('comment'); showToast("코멘트가 등록되었습니다.", "success"); if(!document.getElementById('comments-sidebar').classList.contains('translate-x-full')) renderCommentsSidebar(); }
         async function deleteComment(taskId, index) { if(await uiConfirm({ title: '코멘트 삭제', message: '코멘트를 삭제할까요?', confirmText: '삭제', danger: true })) { const task = currentData.tasks.find(t => t.id === taskId); const removed = task.comments.splice(index, 1)[0]; saveData(); if(removed) dbDeleteComment(taskId, removed.timestamp); if(!document.getElementById('comments-sidebar').classList.contains('translate-x-full')) renderCommentsSidebar(); } }
 
+        // ===== [r150] 범용 코멘트 (이슈/일정/에셋 + 대댓글) =====
+        var ENTITY_CMT_META = {
+            issue: { icon: '🐛', label: '이슈', open: function (id) { if (typeof issEditIssue === 'function') issEditIssue(id); }, title: function (id) { var x = (currentData.issues || []).find(function (i) { return i.id === id; }); return x ? x.title : '(삭제된 이슈)'; } },
+            event: { icon: '📅', label: '일정', open: function (id) { if (typeof switchView === 'function') switchView('calendar'); if (typeof calOpenEditEvent === 'function') setTimeout(function () { calOpenEditEvent(id); }, 60); }, title: function (id) { var x = (currentData.calEvents || []).find(function (e) { return e.id === id; }); return x ? x.title : '(삭제된 일정)'; } },
+            asset: { icon: '🎮', label: '에셋', open: function (id) { if (typeof amEditAsset === 'function') amEditAsset(id); }, title: function (id) { var x = (currentData.assets || []).find(function (a) { return a.id === id; }); return x ? x.name : '(삭제된 에셋)'; } },
+            task: { icon: '📋', label: '카드', open: function (id) { if (typeof openCardModal === 'function') openCardModal(id); }, title: function (id) { var x = (currentData.tasks || []).find(function (t) { return t.id === id; }); return x ? x.title : '(삭제된 카드)'; } }
+        };
+        var _ecSeq = 0;
+        async function dbInsertEntityComment(c) {
+            if (!supabaseClient) return;
+            var { error } = await supabaseClient.from('entity_comments').insert({
+                id: c.id, project_id: c.projectId || activeProjectId,
+                target_type: c.targetType, target_id: c.targetId, parent_id: c.parentId || null,
+                author: c.author || null, author_name: c.authorName || '익명',
+                content: c.content || '', ts: c.ts || Date.now(), deleted: false
+            });
+            if (error) { console.error('[dbInsertEntityComment]', error); if (typeof showToast === 'function') showToast('⚠️ 코멘트 저장 실패: ' + (error.message || '') + ' (entity_comments 테이블 SQL 실행 필요 — 설정 > DB 스키마 점검)', 'alert'); }
+        }
+        async function dbDeleteEntityComment(id) {
+            if (!supabaseClient) return;
+            var { error } = await supabaseClient.from('entity_comments').delete().eq('id', id);
+            if (error) console.error('[dbDeleteEntityComment]', error);
+        }
+        function _entityComments(type, id) {
+            return (currentData.entityComments || []).filter(function (c) { return !c.deleted && c.targetType === type && c.targetId === id; }).sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+        }
+        // 단일 엔티티(이슈/일정/에셋)용 코멘트 스레드 HTML — 모달에 마운트
+        function renderEntityCommentThread(type, id) {
+            var all = _entityComments(type, id);
+            var tops = all.filter(function (c) { return !c.parentId; });
+            var meId = (currentUser && currentUser.id) || null;
+            var esc = function (s) { return (typeof _annEsc === 'function') ? _annEsc(s) : (s || ''); };
+            var whenStr = function (ts) { return ts ? ((typeof getTimeAgo === 'function') ? getTimeAgo(ts) : new Date(ts).toLocaleString('ko-KR')) : ''; };
+            var itemHtml = function (c, isReply) {
+                var canDel = !c.author || c.author === meId;
+                var replies = isReply ? [] : all.filter(function (r) { return r.parentId === c.id; });
+                return '<div style="background:var(--c-card);border:1px solid var(--c-border);border-radius:9px;padding:8px 10px;margin:' + (isReply ? '6px 0 0 18px' : '0 0 8px 0') + ';">'
+                    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:3px;">'
+                    + '<span style="font-size:11px;font-weight:700;color:var(--c-accent);">👤 ' + esc(c.authorName || '익명') + '</span>'
+                    + '<span style="font-size:9.5px;color:var(--c-text3);font-family:ui-monospace,monospace;">' + esc(whenStr(c.ts)) + '</span></div>'
+                    + '<div style="font-size:12.5px;color:var(--c-text);line-height:1.5;word-break:break-word;white-space:pre-wrap;">' + esc(c.content) + '</div>'
+                    + '<div style="display:flex;gap:10px;margin-top:4px;">'
+                    + (isReply ? '' : '<button onclick="entityCmtToggleReply(\'' + c.id + '\')" style="background:none;border:none;color:var(--c-text3);font-size:10.5px;cursor:pointer;padding:0;">↩ 답글</button>')
+                    + (canDel ? '<button onclick="entityCmtDelete(\'' + c.id + '\')" style="background:none;border:none;color:var(--c-text3);font-size:10.5px;cursor:pointer;padding:0;">✕ 삭제</button>' : '')
+                    + '</div>'
+                    + (isReply ? '' : '<div>' + replies.map(function (r) { return itemHtml(r, true); }).join('') + '</div>')
+                    + (isReply ? '' : '<div id="ec-reply-' + c.id + '" style="display:none;margin-top:6px;"><div style="display:flex;gap:6px;"><input type="text" placeholder="답글 입력..." style="flex:1;font-size:12px;padding:5px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();entityCmtSubmit(\'' + type + '\',\'' + id + '\',\'' + c.id + '\',this);}"><button onclick="entityCmtSubmit(\'' + type + '\',\'' + id + '\',\'' + c.id + '\',this.previousElementSibling)" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;">등록</button></div></div>')
+                    + '</div>';
+            };
+            var listHtml = tops.length ? tops.map(function (c) { return itemHtml(c, false); }).join('') : '<div style="font-size:12px;color:var(--c-text3);text-align:center;padding:10px 0;">아직 코멘트가 없습니다.</div>';
+            return '<div style="border-top:1px solid var(--c-border);margin-top:4px;padding-top:10px;">'
+                + '<div style="font-size:11px;font-weight:800;color:var(--c-text2);margin-bottom:8px;">💬 코멘트' + (all.length ? (' (' + all.length + ')') : '') + '</div>'
+                + '<div>' + listHtml + '</div>'
+                + '<div style="display:flex;gap:6px;margin-top:8px;"><input type="text" placeholder="코멘트 남기기..." style="flex:1;font-size:12.5px;padding:6px 9px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();entityCmtSubmit(\'' + type + '\',\'' + id + '\',null,this);}"><button onclick="entityCmtSubmit(\'' + type + '\',\'' + id + '\',null,this.previousElementSibling)" style="font-size:11.5px;font-weight:700;padding:6px 12px;border-radius:7px;border:1px solid var(--c-border);background:var(--c-accent);color:#fff;cursor:pointer;">등록</button></div>'
+                + '</div>';
+        }
+        function mountEntityComments(containerId, type, id) {
+            var el = document.getElementById(containerId); if (!el) return;
+            if (!id) { el.innerHTML = ''; el.style.display = 'none'; el.dataset.tid = ''; return; }
+            el.dataset.tid = id; el.dataset.ttype = type; el.style.display = 'block';
+            el.innerHTML = renderEntityCommentThread(type, id);
+        }
+        function entityCmtToggleReply(cid) {
+            var el = document.getElementById('ec-reply-' + cid); if (!el) return;
+            var show = el.style.display === 'none'; el.style.display = show ? 'block' : 'none';
+            if (show) { var inp = el.querySelector('input'); if (inp) inp.focus(); }
+        }
+        function entityCmtSubmit(type, id, parentId, inputEl) {
+            if (!inputEl) return;
+            var txt = (inputEl.value || '').trim(); if (!txt) return;
+            if (!id) { if (typeof showToast === 'function') showToast('먼저 저장한 뒤 코멘트를 남길 수 있습니다.', 'info'); return; }
+            var c = {
+                id: 'ec-' + Date.now() + '-' + (_ecSeq++), projectId: activeProjectId,
+                targetType: type, targetId: id, parentId: parentId || null,
+                author: (currentUser && currentUser.id) || null,
+                authorName: (typeof myNickname !== 'undefined' && myNickname) ? myNickname : '익명',
+                content: txt, ts: Date.now(), deleted: false
+            };
+            if (!currentData.entityComments) currentData.entityComments = [];
+            currentData.entityComments.push(c);
+            saveData(); dbInsertEntityComment(c);
+            inputEl.value = '';
+            if (typeof playNotificationSound === 'function') { try { playNotificationSound('comment'); } catch (e) {} }
+            _refreshEntityCommentsOpen(type, id);
+        }
+        async function entityCmtDelete(cid) {
+            if (!(await uiConfirm({ title: '코멘트 삭제', message: '이 코멘트(및 답글)를 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            var c = (currentData.entityComments || []).find(function (x) { return x.id === cid; }); if (!c) return;
+            var toDel = [cid].concat((currentData.entityComments || []).filter(function (x) { return x.parentId === cid; }).map(function (x) { return x.id; }));
+            currentData.entityComments = (currentData.entityComments || []).filter(function (x) { return toDel.indexOf(x.id) < 0; });
+            saveData(); toDel.forEach(function (idd) { dbDeleteEntityComment(idd); });
+            _refreshEntityCommentsOpen(c.targetType, c.targetId);
+        }
+        function _refreshEntityCommentsOpen(type, id) {
+            var map = { issue: 'iss-e-comments', event: 'cal-ev-comments', asset: 'am-e-comments' };
+            var cid = map[type];
+            if (cid) { var el = document.getElementById(cid); if (el && el.dataset.tid === id) el.innerHTML = renderEntityCommentThread(type, id); }
+            var sb = document.getElementById('comments-sidebar');
+            if (sb && !sb.classList.contains('translate-x-full') && typeof renderCommentsSidebar === 'function') renderCommentsSidebar();
+        }
+
         // [r88 #2] 다크 테마 가독성 + 빈 상태 가이드 + 클릭으로 해당 카드 모달 열기
+        // [r150] 통합 코멘트 히스토리 — 레거시 task 코멘트 + entity_comments(이슈/일정/에셋) 전부 + 대댓글 스레드
+        function entityCmtOpenTarget(type, id) {
+            if (typeof closeSidebars === 'function') closeSidebars();
+            var m = ENTITY_CMT_META[type];
+            if (m && m.open) setTimeout(function () { m.open(id); }, 80);
+        }
+        async function deleteTaskCommentByTs(taskId, ts) {
+            var task = (currentData.tasks || []).find(function (t) { return t.id === taskId; });
+            if (!task || !task.comments) return;
+            var idx = task.comments.findIndex(function (c) { return (c.timestamp || 0) === ts; });
+            if (idx < 0) return;
+            if (!(await uiConfirm({ title: '코멘트 삭제', message: '코멘트를 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            var removed = task.comments.splice(idx, 1)[0];
+            saveData(); if (removed) dbDeleteComment(taskId, removed.timestamp);
+            if (typeof renderBoard === 'function') renderBoard();
+            var sb = document.getElementById('comments-sidebar');
+            if (sb && !sb.classList.contains('translate-x-full')) renderCommentsSidebar();
+        }
         function renderCommentsSidebar() {
             const container = document.getElementById('comments-list-container');
             if (!container) return;
-            let allComments = [];
-            (currentData.tasks || []).forEach(task => {
-                if (task.comments && task.comments.length) {
-                    task.comments.forEach(c => {
-                        allComments.push({
-                            taskId: task.id, taskTitle: task.title, taskPriority: task.priority,
-                            text: c.text, time: c.time, timestamp: c.timestamp || 0, author: c.author || '익명'
-                        });
-                    });
-                }
+            var meId = (currentUser && currentUser.id) || null;
+            var nodes = [];
+            // 1) 레거시 task 코멘트 (task.comments) — 항상 최상위
+            (currentData.tasks || []).forEach(function (task) {
+                (task.comments || []).forEach(function (c) {
+                    var ts = c.timestamp || 0;
+                    nodes.push({ key: 'tc:' + task.id + ':' + ts, type: 'task', targetId: task.id, parentKey: null, authorName: c.author || '익명', author: null, text: c.text || '', ts: ts, isLegacy: true, legacyTs: ts });
+                });
             });
-            allComments.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            if (allComments.length === 0) {
-                container.innerHTML = '<div style="text-align:center;color:var(--c-text3);margin-top:40px;padding:20px;font-size:13px;line-height:1.6;">💬 등록된 코멘트가 없습니다.<br><span style="font-size:11.5px;opacity:.7;">칸반 카드를 열고 코멘트를 남기면 여기에 모입니다.</span></div>';
+            // 2) entity_comments (이슈/일정/에셋 + task 대댓글)
+            (currentData.entityComments || []).forEach(function (c) {
+                if (c.deleted) return;
+                nodes.push({ key: c.id, type: c.targetType, targetId: c.targetId, parentKey: c.parentId || null, authorName: c.authorName || '익명', author: c.author || null, text: c.content || '', ts: c.ts || 0, isLegacy: false });
+            });
+            if (nodes.length === 0) {
+                container.innerHTML = '<div style="text-align:center;color:var(--c-text3);margin-top:40px;padding:20px;font-size:13px;line-height:1.6;">💬 등록된 코멘트가 없습니다.<br><span style="font-size:11.5px;opacity:.7;">카드·이슈·일정·에셋에서 코멘트를 남기면 여기에 모입니다.</span></div>';
                 return;
             }
-            container.innerHTML = allComments.map(c => {
-                const pColor = c.taskPriority === 'p0' ? '#d2393d' : (c.taskPriority === 'p1' ? '#d49a1c' : 'var(--c-accent)');
-                const timeStr = c.timestamp ? (typeof getTimeAgo === 'function' ? getTimeAgo(c.timestamp) : new Date(c.timestamp).toLocaleString('ko-KR')) : (c.time || '');
-                return '<div onclick="closeSidebars();switchView(\'kanban\');setTimeout(function(){openCardModal(\'' + c.taskId + '\')},80)" style="background:var(--c-card);padding:12px;border-radius:10px;border:1px solid var(--c-border);box-shadow:0 1px 2px rgba(0,0,0,.04);display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:border-color .15s,background .15s;" onmouseover="this.style.borderColor=\'var(--c-accent)\';this.style.background=\'var(--ios-fill)\';" onmouseout="this.style.borderColor=\'var(--c-border)\';this.style.background=\'var(--c-card)\';">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
-                    '<span style="font-size:11px;font-weight:700;color:var(--c-accent);background:var(--c-accent-soft);padding:2px 8px;border-radius:9999px;">👤 ' + _annEsc(c.author) + '</span>' +
-                    '<span style="font-size:10px;color:var(--c-text3);font-family:ui-monospace,monospace;font-weight:600;">' + _annEsc(timeStr) + '</span>' +
-                    '</div>' +
-                    '<div style="font-size:13px;color:var(--c-text);line-height:1.55;word-break:break-all;">' + _annEsc(c.text) + '</div>' +
-                    '<div style="font-size:10.5px;font-weight:600;margin-top:6px;padding-top:6px;border-top:1px solid var(--c-border);color:var(--c-text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
-                    '📌 <span style="color:' + pColor + ';font-weight:800;text-transform:uppercase;">[' + (c.taskPriority || 'p2') + ']</span> ' +
-                    '<span style="color:var(--c-text2);">' + _annEsc(c.taskTitle || '(제목 없음)') + '</span>' +
-                    '</div>' +
-                    '</div>';
+            var childrenOf = {};
+            nodes.forEach(function (n) { if (n.parentKey) { (childrenOf[n.parentKey] = childrenOf[n.parentKey] || []).push(n); } });
+            Object.keys(childrenOf).forEach(function (k) { childrenOf[k].sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); }); });
+            var tops = nodes.filter(function (n) { return !n.parentKey; }).sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+            var esc = function (s) { return _annEsc(s); };
+            var whenStr = function (ts) { return ts ? ((typeof getTimeAgo === 'function') ? getTimeAgo(ts) : new Date(ts).toLocaleString('ko-KR')) : ''; };
+            var bodyHtml = function (n, isReply) {
+                var canDel = n.isLegacy ? true : (!n.author || n.author === meId);
+                var delCall = n.isLegacy ? ('deleteTaskCommentByTs(\'' + n.targetId + '\',' + (n.legacyTs || 0) + ')') : ('entityCmtDelete(\'' + n.key + '\')');
+                var replies = isReply ? [] : (childrenOf[n.key] || []);
+                return '<div style="background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:8px 10px;margin:' + (isReply ? '6px 0 0 16px' : '0') + ';">'
+                    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:3px;">'
+                    + '<span style="font-size:11px;font-weight:700;color:var(--c-accent);">👤 ' + esc(n.authorName || '익명') + '</span>'
+                    + '<span style="font-size:9.5px;color:var(--c-text3);font-family:ui-monospace,monospace;">' + esc(whenStr(n.ts)) + '</span></div>'
+                    + '<div style="font-size:12.5px;color:var(--c-text);line-height:1.5;word-break:break-word;white-space:pre-wrap;">' + esc(n.text) + '</div>'
+                    + '<div style="display:flex;gap:10px;margin-top:4px;">'
+                    + (isReply ? '' : '<button onclick="entityCmtToggleReply(\'sb-' + n.key + '\')" style="background:none;border:none;color:var(--c-text3);font-size:10.5px;cursor:pointer;padding:0;">↩ 답글</button>')
+                    + (canDel ? '<button onclick="' + delCall + '" style="background:none;border:none;color:var(--c-text3);font-size:10.5px;cursor:pointer;padding:0;">✕ 삭제</button>' : '')
+                    + '</div>'
+                    + (isReply ? '' : '<div>' + replies.map(function (r) { return bodyHtml(r, true); }).join('') + '</div>')
+                    + (isReply ? '' : '<div id="ec-reply-sb-' + n.key + '" style="display:none;margin-top:6px;"><div style="display:flex;gap:6px;"><input type="text" placeholder="답글 입력..." style="flex:1;font-size:12px;padding:5px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();entityCmtSubmit(\'' + n.type + '\',\'' + n.targetId + '\',\'' + n.key + '\',this);}"><button onclick="entityCmtSubmit(\'' + n.type + '\',\'' + n.targetId + '\',\'' + n.key + '\',this.previousElementSibling)" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;">등록</button></div></div>')
+                    + '</div>';
+            };
+            container.innerHTML = tops.map(function (n) {
+                var m = ENTITY_CMT_META[n.type] || { icon: '💬', label: '', title: function () { return ''; } };
+                var tTitle = m.title ? m.title(n.targetId) : '';
+                return '<div style="background:var(--c-paper);padding:10px;border-radius:10px;border:1px solid var(--c-border);box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:10px;">'
+                    + '<div onclick="entityCmtOpenTarget(\'' + n.type + '\',\'' + n.targetId + '\')" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:10.5px;font-weight:700;color:var(--c-text2);margin-bottom:7px;padding-bottom:6px;border-bottom:1px solid var(--c-border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="열기">'
+                    + '<span style="flex-shrink:0;">' + m.icon + ' ' + m.label + '</span><span style="color:var(--c-accent);overflow:hidden;text-overflow:ellipsis;">' + esc(tTitle || '(제목 없음)') + '</span><span style="margin-left:auto;flex-shrink:0;color:var(--c-text3);">↗</span></div>'
+                    + bodyHtml(n, false)
+                    + '</div>';
             }).join('');
         }
 

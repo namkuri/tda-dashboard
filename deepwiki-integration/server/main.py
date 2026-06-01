@@ -137,6 +137,7 @@ class WikiGenerateRequest(BaseModel):
 class WikiAuditRequest(BaseModel):
     project_id: str
     model: Optional[str] = None
+    canon_ids: Optional[List[str]] = None  # [r150] 대조 대상(기획) 직접 선택 — 없으면 전체
 
 
 class IndexWikiRequest(BaseModel):
@@ -648,7 +649,7 @@ async def wiki_audit(req: WikiAuditRequest):
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         return StreamingResponse(busy_gen(), media_type="text/event-stream")
-    return _sse_indexer(audit_wiki(project_id=req.project_id, model=req.model),
+    return _sse_indexer(audit_wiki(project_id=req.project_id, model=req.model, canon_ids=req.canon_ids),
                         busy_kind="wiki_audit", busy_project=req.project_id)
 
 

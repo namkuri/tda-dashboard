@@ -121,8 +121,12 @@ def _extract_json_meta(content: str) -> Dict[str, Any]:
 async def audit_wiki(
     project_id: str,
     model: Optional[str] = None,
+    canon_ids: Optional[List[str]] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
-    """canon 문서별로 1차 위키와 대조하는 보고서 N개 생성."""
+    """canon 문서별로 1차 위키와 대조하는 보고서 N개 생성.
+
+    canon_ids 가 주어지면 그 문서들만 대조(부분 갱신). 없으면 전체 canon 대조.
+    """
     if not project_id:
         yield {"event": "error", "message": "project_id 필수"}
         return
@@ -172,14 +176,25 @@ async def audit_wiki(
         if (c.get("content") or "").strip()
         and not (c.get("meta") or {}).get("isFolder")
     ]
+    # [r150] 사용자가 대조 대상(기획)을 직접 선택한 경우 그 문서들만 필터
+    selected_ids = set(canon_ids) if canon_ids else None
+    if selected_ids is not None:
+        canons = [c for c in canons if c.get("id") in selected_ids]
     if not canons:
-        yield {"event": "error", "message": "기획 문서(canon kind)가 없습니다. 프로젝트 위키에서 'Official' 문서를 먼저 작성하세요."}
+        if selected_ids is not None:
+            yield {"event": "error", "message": "선택한 기획 문서가 비어있거나 존재하지 않습니다."}
+        else:
+            yield {"event": "error", "message": "기획 문서(canon kind)가 없습니다. 프로젝트 위키에서 'Official' 문서를 먼저 작성하세요."}
         return
-    yield {"event": "info", "message": f"{len(canons)}개 기획 문서 로드됨"}
+    yield {"event": "info", "message": f"{len(canons)}개 기획 문서 로드됨" + (" (선택 대상)" if selected_ids is not None else "")}
 
-    # 3) 기존 감사 보고서 삭제
+    # 3) 기존 감사 보고서 삭제 — 선택 대조면 해당 문서 보고서만, 전체면 프로젝트 전부
     try:
-        store.client.table("deep_wiki_audits").delete().eq("project_id", project_id).execute()
+        if selected_ids is not None:
+            target_audit_ids = [f"dwa:{project_id}:{cid}" for cid in selected_ids]
+            store.client.table("deep_wiki_audits").delete().in_("id", target_audit_ids).execute()
+        else:
+            store.client.table("deep_wiki_audits").delete().eq("project_id", project_id).execute()
     except Exception:
         pass
 

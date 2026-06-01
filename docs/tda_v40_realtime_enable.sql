@@ -13,7 +13,8 @@ DECLARE
 BEGIN
     FOR t IN SELECT unnest(ARRAY[
         'projects', 'kanban_categories', 'tasks', 'wiki_docs',
-        'task_comments', 'tag_colors', 'users', 'sprints', 'review_requests'
+        'task_comments', 'tag_colors', 'users', 'sprints', 'review_requests',
+        'entity_comments'  -- [r150] 이슈/일정/에셋 코멘트 + 대댓글 실시간
     ])
     LOOP
         BEGIN
