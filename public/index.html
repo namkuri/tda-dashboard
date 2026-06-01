@@ -14724,11 +14724,13 @@ return data;
             };
             let { error } = await supabaseClient.from('wiki_docs').upsert(payload);
             if (error && _isIntOverflow(error)) {
-                // [r148] integer 컬럼 오버플로 — updated_at 제외하고 문서 본체는 반드시 저장(손실 방지)
-                console.warn('[dbUpsertDoc] updated_at integer 오버플로 — updated_at 제외 재저장. SQL: alter table wiki_docs alter column updated_at type bigint;');
+                // [r148/r149] integer 컬럼 오버플로 — updated_at·sort_order 둘 다 Date.now()(ms)라 구형 integer 컬럼이면 터짐.
+                //   문서 손실 방지를 위해: updated_at 제외 + sort_order 는 초 단위(int32 안전, 2038년까지)로 낮춰 순서 보존하며 재저장.
+                console.warn('[dbUpsertDoc] integer 오버플로 — updated_at 제외 + sort_order 초단위로 재저장. SQL: alter table wiki_docs alter column updated_at type bigint; alter table wiki_docs alter column sort_order type bigint;');
                 delete payload.updated_at;
+                if (typeof payload.sort_order === 'number' && payload.sort_order > 2147483647) payload.sort_order = Math.floor(payload.sort_order / 1000);
                 ({ error } = await supabaseClient.from('wiki_docs').upsert(payload));
-                if (!error && typeof showToast === 'function') showToast('⚠️ 문서는 저장됨 — DB의 updated_at 컬럼이 구형(integer)입니다. 설정 > DB 스키마 점검의 SQL을 실행하세요.', 'alert');
+                if (!error && typeof showToast === 'function') showToast('⚠️ 문서는 저장됨 — DB의 updated_at/sort_order 컬럼이 구형(integer)입니다. 설정 > DB 스키마 점검의 SQL을 실행하세요.', 'alert');
             }
             if (error) {
                 console.error('[dbUpsertDoc]', error);
@@ -14955,11 +14957,14 @@ return data;
             lines.push('');
             lines.push('-- [컬럼] 기존 테이블에 없는 컬럼 추가');
             DB_OPTIONAL_COLUMNS.forEach(function (c) { lines.push('alter table ' + c[0] + ' add column if not exists ' + c[1] + ' ' + c[2] + ';'); });
-            // [r148] 타입 교정 — wiki_docs.updated_at 은 ms 타임스탬프(13자리)라 bigint 여야 함.
-            //   구버전 DB에서 integer로 생성되면 "value ... out of range for type integer" 로 문서 저장이 실패함.
+            // [r148/r149] 타입 교정 — wiki_docs.updated_at 과 sort_order 는 둘 다 ms 타임스탬프(Date.now(), 13자리)를
+            //   저장하므로 bigint 여야 함. 구버전 DB에서 integer로 생성되면 "value ... out of range for type integer" 로
+            //   문서 저장이 실패함. (sort_order 는 [r83] 생성순 정렬 안정화를 위해 Date.now() 를 넣음)
             lines.push('');
-            lines.push('-- [r148] updated_at 타입 교정 (ms 타임스탬프는 integer 범위 초과 → bigint)');
-            lines.push("do $$ begin if exists (select 1 from information_schema.columns where table_name='wiki_docs' and column_name='updated_at' and data_type='integer') then execute 'alter table wiki_docs alter column updated_at type bigint'; end if; end $$;");
+            lines.push('-- [r148/r149] ms 타임스탬프 컬럼 타입 교정 (integer 범위 초과 → bigint)');
+            ['updated_at', 'sort_order'].forEach(function (col) {
+                lines.push("do $$ begin if exists (select 1 from information_schema.columns where table_name='wiki_docs' and column_name='" + col + "' and data_type='integer') then execute 'alter table wiki_docs alter column " + col + " type bigint'; end if; end $$;");
+            });
             return lines.join('\n');
         }
         // 각 선택 컬럼/테이블을 select 시도해 누락분을 찾아 보고
