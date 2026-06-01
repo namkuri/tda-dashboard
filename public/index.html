@@ -400,26 +400,34 @@
         .wbs-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 4px 4px 14px; flex-shrink: 0; }
         .wbs-title { font-size: 20px; font-weight: 900; color: var(--c-text); }
         .wbs-sub { font-size: 12px; color: var(--c-text3); margin-top: 3px; }
-        .wbs-canvas { flex: 1; min-height: 0; overflow: auto; padding: 30px; }
-        #wbs-zoom { transform-origin: 0 0; width: max-content; position: relative; }
+        .wbs-canvas { flex: 1; min-height: 0; overflow: auto; padding: 30px; display: flex; justify-content: safe center; align-items: flex-start; }
+        #wbs-zoom { transform-origin: 50% 0; width: max-content; position: relative; flex-shrink: 0; }
         .wbs-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; z-index: 0; }
-        /* 조직도(top-down) 레이아웃 — 부모 위, 자식들 한 줄 아래 (포도송이) */
-        .wbs-subtree { display: flex; flex-direction: column; align-items: center; position: relative; }
-        .wbs-kids { display: flex; align-items: flex-start; gap: 24px; margin-top: 40px; position: relative; }
-        .wbs-node { position: relative; z-index: 1; width: 200px; box-sizing: border-box; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; padding: 9px 11px; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+        /* 조직도 레이아웃 — 루트 중앙, 1단계 가로(.wbs-kids-h), 2단계+ 세로 스택(.wbs-kids-v) */
+        .wbs-subtree { display: flex; flex-direction: column; align-items: flex-start; position: relative; }
+        .wbs-st-root { align-items: center; }
+        .wbs-kids-h { display: flex; flex-direction: row; align-items: flex-start; gap: 26px; margin-top: 42px; position: relative; }
+        .wbs-kids-v { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; margin-top: 18px; margin-left: 34px; position: relative; }
+        .wbs-node { position: relative; z-index: 1; width: 210px; box-sizing: border-box; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; padding: 9px 11px; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
         .wbs-node:hover { border-color: var(--c-accent); box-shadow: 0 3px 12px rgba(0,0,0,.13); }
         .wbs-node.wbs-drop { border-color: var(--c-accent); background: var(--c-accent-soft); border-style: dashed; }
-        .wbs-rootnode { background: var(--c-accent-soft); border: 1.5px solid var(--c-accent); width: 220px; }
+        .wbs-rootnode { background: var(--c-accent-soft); border: 1.5px solid var(--c-accent); width: 230px; cursor: default; }
         .wbs-node-row { display: flex; align-items: center; gap: 9px; }
-        .wbs-ring { position: relative; width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; padding: 0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-        .wbs-ring::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--c-card); }
-        .wbs-rootnode .wbs-ring::after { background: var(--c-accent-soft); }
-        .wbs-ring-in { position: relative; z-index: 1; font-size: 8.5px; font-weight: 800; color: var(--c-text2); }
+        .wbs-ring { position: relative; width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer; padding: 0; flex-shrink: 0; }
+        .wbs-ring::after { content: ''; position: absolute; inset: 3.5px; border-radius: 50%; background: var(--c-card); }
+        .wbs-ring-in { display: none; }
         .wbs-node-title { flex: 1; font-size: 13px; font-weight: 700; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-        .wbs-node-av { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; }
-        .wbs-node-add { position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%); border: 1px solid var(--c-border); background: var(--c-card); color: var(--c-accent); border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-weight: 800; line-height: 1; opacity: 0; transition: opacity .12s; z-index: 3; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
-        .wbs-node:hover .wbs-node-add { opacity: 1; }
-        .wbs-node-add:hover { background: var(--c-accent); color: #fff; }
+        .wbs-node-avs { display: flex; align-items: center; flex-shrink: 0; }
+        .wbs-node-avs > span { margin-left: -6px; border: 1.5px solid var(--c-card); border-radius: 50%; display: inline-flex; }
+        .wbs-node-avs > span:first-child { margin-left: 0; }
+        .wbs-av-more { font-size: 9px; font-weight: 800; color: var(--c-text3); margin-left: 2px; }
+        .wbs-add-side { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--c-border); background: var(--c-card); color: var(--c-accent); font-weight: 800; cursor: pointer; opacity: 0; transition: opacity .12s; z-index: 4; line-height: 1; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center; padding: 0; }
+        .wbs-node:hover .wbs-add-side { opacity: 1; }
+        .wbs-add-side:hover { background: var(--c-accent); color: #fff; }
+        .wbs-add-top { top: -11px; left: 50%; transform: translateX(-50%); }
+        .wbs-add-bottom { bottom: -11px; left: 50%; transform: translateX(-50%); }
+        .wbs-add-left { left: -11px; top: 50%; transform: translateY(-50%); }
+        .wbs-add-right { right: -11px; top: 50%; transform: translateY(-50%); }
         .wbs-empty { color: var(--c-text3); font-size: 13px; padding: 20px 26px; text-align: center; }
         /* 호버 툴팁 */
         #wbs-tip { position: fixed; z-index: 11000; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 11px; box-shadow: 0 12px 40px rgba(0,0,0,.3); padding: 10px 12px; min-width: 200px; max-width: 340px; font-size: 12px; color: var(--c-text); display: none; }
@@ -15096,7 +15104,8 @@ return data;
             ['asset_folders', 'parent_id', 'text'],          // [r86 #3] 하위 폴더 지원
             ['wiki_docs', 'kind', "text default 'wiki'"],
             ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"],
-            ['wiki_docs', 'updated_by', 'text']              // [r150] 수정자 — realtime 자기수정 알람 제외용
+            ['wiki_docs', 'updated_by', 'text'],             // [r150] 수정자 — realtime 자기수정 알람 제외용
+            ['wbs_nodes', 'assignees', "jsonb default '[]'::jsonb"] // [r157] WBS 노드 복수 담당자
         ];
         // [r84 #1] 신규 테이블 — CREATE TABLE IF NOT EXISTS (멱등)
         var DB_OPTIONAL_TABLES = [
@@ -15111,7 +15120,7 @@ return data;
             // [r150] 범용 코멘트 — 이슈/일정/에셋(+대댓글). target_type: issue|event|asset|task, parent_id: 대댓글이면 부모 코멘트 키
             ['entity_comments', "id text primary key, project_id text, target_type text, target_id text, parent_id text, author text, author_name text, content text, ts bigint, deleted boolean default false"],
             // [r155] WBS(작업 구조화) 노드 — parent_id null=프로젝트 루트 직속. links=연결(스프린트/카테고리/태스크), attachments=첨부
-            ['wbs_nodes', "id text primary key, project_id text, parent_id text, title text, description text, status text default 'todo', progress int default 0, links jsonb default '{}'::jsonb, attachments jsonb default '[]'::jsonb, owner_user_id text, created_by text, sort_order bigint, created_at timestamptz, updated_at timestamptz"]
+            ['wbs_nodes', "id text primary key, project_id text, parent_id text, title text, description text, status text default 'todo', progress int default 0, links jsonb default '{}'::jsonb, attachments jsonb default '[]'::jsonb, assignees jsonb default '[]'::jsonb, owner_user_id text, created_by text, sort_order bigint, created_at timestamptz, updated_at timestamptz"]
         ];
         function dbMigrationSql() {
             var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존', ''];
@@ -15414,6 +15423,7 @@ return data;
                     title: n.title || '', desc: n.description || '', status: n.status || 'todo',
                     progress: typeof n.progress === 'number' ? n.progress : 0,
                     links: n.links || {}, attachments: n.attachments || [],
+                    assignees: Array.isArray(n.assignees) ? n.assignees : [],
                     ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null,
                     sortOrder: n.sort_order || 0,
                     createdAt: n.created_at ? new Date(n.created_at).getTime() : null,
@@ -15770,7 +15780,7 @@ return data;
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'wbs_nodes' }, (payload) => {
                         const ev = payload.eventType;
                         if (!currentData.wbsNodes) currentData.wbsNodes = [];
-                        const map = function (n) { return { id: n.id, projectId: n.project_id || null, parentId: n.parent_id || null, title: n.title || '', desc: n.description || '', status: n.status || 'todo', progress: typeof n.progress === 'number' ? n.progress : 0, links: n.links || {}, attachments: n.attachments || [], ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null, sortOrder: n.sort_order || 0, createdAt: n.created_at ? new Date(n.created_at).getTime() : null, updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : null }; };
+                        const map = function (n) { return { id: n.id, projectId: n.project_id || null, parentId: n.parent_id || null, title: n.title || '', desc: n.description || '', status: n.status || 'todo', progress: typeof n.progress === 'number' ? n.progress : 0, links: n.links || {}, attachments: n.attachments || [], assignees: Array.isArray(n.assignees) ? n.assignees : [], ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null, sortOrder: n.sort_order || 0, createdAt: n.created_at ? new Date(n.created_at).getTime() : null, updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : null }; };
                         if (ev === 'INSERT') {
                             const n = payload.new;
                             if (!currentData.wbsNodes.find(x => x.id === n.id)) currentData.wbsNodes.push(map(n));
@@ -21353,8 +21363,9 @@ ${intrLog}
         function _wbsCommentCount(id) { return (currentData.entityComments || []).filter(function (c) { return !c.deleted && c.targetType === 'wbs' && c.targetId === id; }).length; }
         async function dbUpsertWbsNode(n) {
             if (!supabaseClient) return;
-            var payload = { id: n.id, project_id: n.projectId || activeProjectId, parent_id: n.parentId || null, title: n.title || '', description: n.desc || '', status: n.status || 'todo', progress: n.progress || 0, links: n.links || {}, attachments: n.attachments || [], owner_user_id: n.ownerUserId || null, created_by: n.createdBy || null, sort_order: n.sortOrder || 0, created_at: n.createdAt ? new Date(n.createdAt).toISOString() : null, updated_at: n.updatedAt ? new Date(n.updatedAt).toISOString() : null };
+            var payload = { id: n.id, project_id: n.projectId || activeProjectId, parent_id: n.parentId || null, title: n.title || '', description: n.desc || '', status: n.status || 'todo', progress: n.progress || 0, links: n.links || {}, attachments: n.attachments || [], assignees: n.assignees || [], owner_user_id: (n.assignees && n.assignees[0]) || n.ownerUserId || null, created_by: n.createdBy || null, sort_order: n.sortOrder || 0, created_at: n.createdAt ? new Date(n.createdAt).toISOString() : null, updated_at: n.updatedAt ? new Date(n.updatedAt).toISOString() : null };
             var { error } = await supabaseClient.from('wbs_nodes').upsert(payload);
+            if (error && _isMissingCol(error, 'assignees')) { delete payload.assignees; ({ error } = await supabaseClient.from('wbs_nodes').upsert(payload)); } // [r157] 구버전 DB(assignees 컬럼 없음) 폴백
             if (error && _isIntOverflow(error)) { if (typeof payload.sort_order === 'number' && payload.sort_order > 2147483647) payload.sort_order = Math.floor(payload.sort_order / 1000); ({ error } = await supabaseClient.from('wbs_nodes').upsert(payload)); }
             if (error) { console.error('[dbUpsertWbsNode]', error); if (typeof showToast === 'function') showToast('⚠️ WBS 저장 실패: ' + (error.message || '') + ' (wbs_nodes 테이블 SQL 필요 — 설정 > DB 스키마 점검)', 'alert'); }
         }
@@ -21362,63 +21373,105 @@ ${intrLog}
         var _wbsZoom = 1;
         function _wbsApplyZoom() { var z = document.getElementById('wbs-zoom'); if (z) z.style.transform = 'scale(' + _wbsZoom + ')'; }
         function wbsWheel(e) { if (!e) return; e.preventDefault(); _wbsZoom = Math.max(0.3, Math.min(2, _wbsZoom + (e.deltaY < 0 ? 0.1 : -0.1))); _wbsApplyZoom(); }
+        // [r157] 휠클릭(가운데 버튼) 드래그로 화면 이동(팬)
+        var _wbsPan = null;
+        function wbsCanvasMouseDown(e) { if (e.button !== 1) return; e.preventDefault(); var c = e.currentTarget; _wbsPan = { x: e.clientX, y: e.clientY, sl: c.scrollLeft, st: c.scrollTop, el: c }; c.style.cursor = 'grabbing'; window.addEventListener('mousemove', _wbsCanvasPan); window.addEventListener('mouseup', _wbsCanvasPanEnd); }
+        function _wbsCanvasPan(e) { if (!_wbsPan) return; _wbsPan.el.scrollLeft = _wbsPan.sl - (e.clientX - _wbsPan.x); _wbsPan.el.scrollTop = _wbsPan.st - (e.clientY - _wbsPan.y); }
+        function _wbsCanvasPanEnd() { if (_wbsPan && _wbsPan.el) _wbsPan.el.style.cursor = ''; _wbsPan = null; window.removeEventListener('mousemove', _wbsCanvasPan); window.removeEventListener('mouseup', _wbsCanvasPanEnd); }
         function renderWbsView() {
             var host = document.getElementById('wbs-view'); if (!host) return;
             var proj = (currentData.projects || []).find(function (p) { return p.id === activeProjectId; });
-            var projName = (proj && proj.name) || '프로젝트';
+            var projName = (proj && proj.name) || (typeof _driveProjectName === 'function' ? _driveProjectName() : '프로젝트');
+            var rootAssignees = (proj && Array.isArray(proj.participants)) ? proj.participants : [];
             var roots = _wbsChildren(null);
-            var rootBox = _wbsNodeBox({ id: '__root__', title: projName }, true);
-            var inner = '<div class="wbs-subtree">' + rootBox
-                + (roots.length ? '<div class="wbs-kids">' + roots.map(function (n) { return _wbsSubtreeHtml(n); }).join('') + '</div>' : '')
-                + '</div>';
+            var rootBox = _wbsNodeBox({ id: '__root__', title: projName }, true, null, rootAssignees);
+            var rootKids = roots.length ? ('<div class="wbs-kids-h">' + roots.map(function (n) { return _wbsSubtreeHtml(n, 'h'); }).join('') + '</div>') : '';
+            var inner = '<div class="wbs-subtree wbs-st-root">' + rootBox + rootKids + '</div>';
             host.innerHTML =
                 '<div class="wbs-wrap">'
-                + '<header class="wbs-head"><div><h2 class="wbs-title">🗂️ 작업 구조화 (WBS)</h2><div class="wbs-sub">노드 클릭=상세 · 우클릭=메뉴 · 드래그=이동 · 휠=확대/축소 · 노드에 마우스 올리면 하단 ＋ 로 하위 추가</div></div></header>'
-                + '<div class="wbs-canvas" onwheel="wbsWheel(event)"><div id="wbs-zoom"><svg id="wbs-svg" class="wbs-svg"></svg>' + inner + '</div></div>'
+                + '<header class="wbs-head"><div><h2 class="wbs-title">🗂️ 작업 구조화 (WBS)</h2><div class="wbs-sub">노드 클릭=상세 · 우클릭=메뉴 · 드래그=계층이동 · 휠=확대/축소 · 휠클릭드래그=이동 · 노드 상하좌우 ＋ 로 추가</div></div></header>'
+                + '<div class="wbs-canvas" onwheel="wbsWheel(event)" onmousedown="wbsCanvasMouseDown(event)"><div id="wbs-zoom"><svg id="wbs-svg" class="wbs-svg"></svg>' + inner + '</div></div>'
                 + '</div>';
             _wbsApplyZoom();
             setTimeout(_wbsDrawLines, 20);
         }
-        function _wbsSubtreeHtml(n) {
+        function _wbsSubtreeHtml(n, parentLayout) {
             var kids = _wbsChildren(n.id);
-            return '<div class="wbs-subtree">' + _wbsNodeBox(n, false)
-                + (kids.length ? '<div class="wbs-kids">' + kids.map(function (k) { return _wbsSubtreeHtml(k); }).join('') + '</div>' : '')
-                + '</div>';
+            // [r157] 깊은 단계는 수직 스택(.wbs-kids-v)
+            var kidsHtml = kids.length ? ('<div class="wbs-kids-v">' + kids.map(function (k) { return _wbsSubtreeHtml(k, 'v'); }).join('') + '</div>') : '';
+            return '<div class="wbs-subtree">' + _wbsNodeBox(n, false, parentLayout) + kidsHtml + '</div>';
         }
-        function _wbsNodeBox(n, isRoot) {
+        function _wbsAvatarsHtml(ids) {
+            ids = ids || []; if (!ids.length) return '';
+            var html = '<span class="wbs-node-avs">';
+            ids.slice(0, 3).forEach(function (uid) { var m = (currentData.users || []).find(function (u) { return u.id === uid; }); if (m && typeof _avatarHtml === 'function') html += '<span title="' + _sprintEsc(m.displayName || m.email || '') + '">' + _avatarHtml(m, 19) + '</span>'; });
+            if (ids.length > 3) html += '<span class="wbs-av-more">+' + (ids.length - 3) + '</span>';
+            return html + '</span>';
+        }
+        function _wbsNodeBox(n, isRoot, conn, rootAssignees) {
             var prog = Math.max(0, Math.min(100, n.progress || 0));
             var st = WBS_STATUS[n.status] || WBS_STATUS.todo;
-            var ring = isRoot ? '' : '<button class="wbs-ring" style="background:conic-gradient(' + st.c + ' ' + prog + '%, var(--ios-fill) 0);" title="진척률 ' + prog + '% (클릭 +25%)" onclick="event.stopPropagation();wbsRingClick(\'' + n.id + '\')"><span class="wbs-ring-in">' + prog + '</span></button>';
-            var av = '';
-            if (!isRoot && n.ownerUserId) { var m = (currentData.users || []).find(function (u) { return u.id === n.ownerUserId; }); if (m && typeof _avatarHtml === 'function') av = '<span title="' + _sprintEsc(m.displayName || m.email || '') + '" style="flex-shrink:0;">' + _avatarHtml(m, 20) + '</span>'; }
+            var ring = isRoot ? '' : '<button class="wbs-ring" style="background:conic-gradient(' + st.c + ' ' + prog + '%, var(--ios-fill) 0);" title="진척률 ' + prog + '% (클릭 +25%)" onclick="event.stopPropagation();wbsRingClick(\'' + n.id + '\')"><span class="wbs-ring-in"></span></button>';
+            var av = isRoot ? _wbsAvatarsHtml(rootAssignees) : _wbsAvatarsHtml(n.assignees);
             var did = isRoot ? '__root__' : n.id;
             var handlers = isRoot
                 ? 'ondragover="wbsDragOver(event)" ondragleave="wbsDragLeave(event)" ondrop="wbsDrop(event,null)" oncontextmenu="wbsRootCtx(event)"'
                 : 'draggable="true" ondragstart="wbsDragStart(event,\'' + n.id + '\')" ondragover="wbsDragOver(event)" ondragleave="wbsDragLeave(event)" ondrop="wbsDrop(event,\'' + n.id + '\')" onclick="wbsOpenNode(\'' + n.id + '\')" oncontextmenu="wbsNodeCtx(event,\'' + n.id + '\')" onmouseenter="wbsTipShow(event,\'' + n.id + '\')" onmouseleave="wbsTipHide()"';
-            return '<div class="wbs-node' + (isRoot ? ' wbs-rootnode' : '') + '" data-id="' + did + '"' + (isRoot ? '' : ' data-pid="' + (n.parentId || '__root__') + '"') + ' ' + handlers + '>'
+            var addBtns = isRoot
+                ? '<button class="wbs-add-side wbs-add-bottom" title="하위 추가" onclick="event.stopPropagation();wbsAddAt(\'\',\'child\')">＋</button>'
+                : '<button class="wbs-add-side wbs-add-top" title="위에 추가" onclick="event.stopPropagation();wbsAddAt(\'' + n.id + '\',\'before\')">＋</button>'
+                + '<button class="wbs-add-side wbs-add-bottom" title="하위 추가" onclick="event.stopPropagation();wbsAddAt(\'' + n.id + '\',\'child\')">＋</button>'
+                + '<button class="wbs-add-side wbs-add-left" title="왼쪽에 추가" onclick="event.stopPropagation();wbsAddAt(\'' + n.id + '\',\'before\')">＋</button>'
+                + '<button class="wbs-add-side wbs-add-right" title="오른쪽에 추가" onclick="event.stopPropagation();wbsAddAt(\'' + n.id + '\',\'after\')">＋</button>';
+            return '<div class="wbs-node' + (isRoot ? ' wbs-rootnode' : '') + '" data-id="' + did + '"' + (isRoot ? '' : ' data-pid="' + (n.parentId || '__root__') + '" data-conn="' + (conn || 'h') + '"') + ' ' + handlers + '>'
                 + '<div class="wbs-node-row">' + ring + '<span class="wbs-node-title">' + _sprintEsc(n.title || '(제목 없음)') + '</span>' + av + '</div>'
-                + '<button class="wbs-node-add" title="하위 작업 추가" onclick="event.stopPropagation();wbsAddNode(\'' + (isRoot ? '' : n.id) + '\')">＋</button>'
+                + addBtns
                 + '</div>';
         }
-        // SVG 연결선 — 부모 하단중앙 → 자식 상단중앙 엘보(직각) 라인
+        // SVG 연결선 — 가로 자식(conn=h): 부모하단중앙→자식상단중앙 / 세로 자식(conn=v): 부모하단좌측 세로버스→자식좌측 가지
         function _wbsDrawLines() {
             var zoom = document.getElementById('wbs-zoom'); var svg = document.getElementById('wbs-svg'); if (!zoom || !svg) return;
             var zr = zoom.getBoundingClientRect(); var scale = _wbsZoom || 1;
             var paths = '';
             zoom.querySelectorAll('.wbs-node[data-pid]').forEach(function (el) {
-                var pid = el.getAttribute('data-pid');
+                var pid = el.getAttribute('data-pid'); var conn = el.getAttribute('data-conn') || 'h';
                 var pel = zoom.querySelector('.wbs-node[data-id="' + pid + '"]'); if (!pel) return;
                 var r = el.getBoundingClientRect(), pr = pel.getBoundingClientRect();
-                var x1 = (pr.left + pr.width / 2 - zr.left) / scale, y1 = (pr.bottom - zr.top) / scale;
-                var x2 = (r.left + r.width / 2 - zr.left) / scale, y2 = (r.top - zr.top) / scale;
-                var my = (y1 + y2) / 2;
-                paths += '<path d="M' + x1 + ' ' + y1 + ' V' + my + ' H' + x2 + ' V' + y2 + '" fill="none" stroke="var(--c-border)" stroke-width="2"/>';
+                if (conn === 'v') {
+                    var bx = (pr.left - zr.left) / scale + 16;
+                    var pb = (pr.bottom - zr.top) / scale;
+                    var cy = (r.top + r.height / 2 - zr.top) / scale;
+                    var cl = (r.left - zr.left) / scale;
+                    paths += '<path d="M' + bx + ' ' + pb + ' V' + cy + ' H' + cl + '" fill="none" stroke="var(--c-border)" stroke-width="2"/>';
+                } else {
+                    var x1 = (pr.left + pr.width / 2 - zr.left) / scale, y1 = (pr.bottom - zr.top) / scale;
+                    var x2 = (r.left + r.width / 2 - zr.left) / scale, y2 = (r.top - zr.top) / scale;
+                    var my = (y1 + y2) / 2;
+                    paths += '<path d="M' + x1 + ' ' + y1 + ' V' + my + ' H' + x2 + ' V' + y2 + '" fill="none" stroke="var(--c-border)" stroke-width="2"/>';
+                }
             });
             svg.setAttribute('width', zoom.scrollWidth); svg.setAttribute('height', zoom.scrollHeight);
             svg.style.width = zoom.scrollWidth + 'px'; svg.style.height = zoom.scrollHeight + 'px';
             svg.innerHTML = paths;
         }
         function wbsRingClick(id) { var n = _wbsNode(id); if (!n) return; var p = (n.progress || 0) + 25; if (p > 100) p = 0; n.progress = p; if (p === 100) n.status = 'done'; else if (n.status === 'done') n.status = 'doing'; else if (p > 0 && n.status === 'todo') n.status = 'doing'; n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderWbsView(); }
+        // [r157] 위치 지정 추가 — pos: child | before | after
+        async function wbsAddAt(refId, pos) {
+            var title = await uiPrompt({ title: '새 작업 노드', label: '작업 이름', value: '새 작업' });
+            if (title === null || !title.trim()) return;
+            var parentId, sortOrder;
+            if (pos === 'child' || !refId) { parentId = refId || null; sortOrder = Date.now(); }
+            else {
+                var ref = _wbsNode(refId); parentId = ref ? (ref.parentId || null) : null;
+                var sibs = _wbsChildren(parentId); var idx = sibs.findIndex(function (s) { return s.id === refId; });
+                if (pos === 'before') { var prev = sibs[idx - 1]; sortOrder = prev ? Math.round((prev.sortOrder + ref.sortOrder) / 2) : (ref.sortOrder - 1000); }
+                else { var next = sibs[idx + 1]; sortOrder = next ? Math.round((ref.sortOrder + next.sortOrder) / 2) : (ref.sortOrder + 1000); }
+            }
+            var node = { id: _wbsUid(), projectId: activeProjectId, parentId: parentId, title: title.trim(), desc: '', status: 'todo', progress: 0, links: {}, attachments: [], assignees: [], ownerUserId: null, createdBy: (currentUser && currentUser.id) || null, sortOrder: sortOrder, createdAt: Date.now(), updatedAt: Date.now() };
+            if (!Array.isArray(currentData.wbsNodes)) currentData.wbsNodes = [];
+            currentData.wbsNodes.push(node); saveData(); dbUpsertWbsNode(node); renderWbsView();
+            if (typeof logActivity === 'function') logActivity('wbs', 'create', { targetId: node.id, targetLabel: node.title, detail: '작업 노드 생성' });
+        }
         // 호버 툴팁 — 연결된 스프린트/태스크, 다시 호버 시 상세
         var _wbsTipTimer = null;
         function _wbsTipEl() { var t = document.getElementById('wbs-tip'); if (!t) { t = document.createElement('div'); t.id = 'wbs-tip'; t.onmouseenter = function () { if (_wbsTipTimer) { clearTimeout(_wbsTipTimer); _wbsTipTimer = null; } }; t.onmouseleave = function () { wbsTipHide(); }; document.body.appendChild(t); } return t; }
@@ -21429,9 +21482,9 @@ ${intrLog}
             var sprints = (links.sprintIds || []).map(function (sid) { var s = (currentData.sprints || []).find(function (x) { return x.id === sid; }); return s ? { id: sid, label: s.weekLabel || '스프린트' } : null; }).filter(Boolean);
             var tasks = (links.taskIds || []).map(function (tid) { var t = (currentData.tasks || []).find(function (x) { return x.id === tid; }); return t ? { id: tid, label: t.title || '태스크' } : null; }).filter(Boolean);
             var html = '<div class="wbs-tip-h">🏃 연결된 스프린트</div>';
-            html += sprints.length ? sprints.map(function (s) { return '<div class="wbs-tip-item" onmouseenter="wbsTipDetail(\'sprint\',\'' + s.id + '\')" onmouseleave="wbsTipDetailHide()">🏃 ' + _sprintEsc(s.label) + '</div>'; }).join('') : '<div style="font-size:11.5px;color:var(--c-text3);padding:2px 4px 6px;">연결된 스프린트 없음</div>';
+            html += sprints.length ? sprints.map(function (s) { return '<div class="wbs-tip-item" style="cursor:pointer;" title="클릭하여 스프린트로 이동" onmouseenter="wbsTipDetail(\'sprint\',\'' + s.id + '\')" onmouseleave="wbsTipDetailHide()" onclick="wbsGoSprint(\'' + s.id + '\')">🏃 ' + _sprintEsc(s.label) + ' <span style="margin-left:auto;color:var(--c-text3);">↗</span></div>'; }).join('') : '<div style="font-size:11.5px;color:var(--c-text3);padding:2px 4px 6px;">연결된 스프린트 없음</div>';
             html += '<div class="wbs-tip-h">📋 연결된 태스크</div>';
-            html += tasks.length ? tasks.map(function (t) { return '<div class="wbs-tip-item" onmouseenter="wbsTipDetail(\'task\',\'' + t.id + '\')" onmouseleave="wbsTipDetailHide()">📋 ' + _sprintEsc(t.label) + '</div>'; }).join('') : '<div style="font-size:11.5px;color:var(--c-text3);padding:2px 4px 6px;">연결된 태스크 없음</div>';
+            html += tasks.length ? tasks.map(function (t) { return '<div class="wbs-tip-item" style="cursor:pointer;" title="클릭하여 카드로 이동" onmouseenter="wbsTipDetail(\'task\',\'' + t.id + '\')" onmouseleave="wbsTipDetailHide()" onclick="wbsGoTask(\'' + t.id + '\')">📋 ' + _sprintEsc(t.label) + ' <span style="margin-left:auto;color:var(--c-text3);">↗</span></div>'; }).join('') : '<div style="font-size:11.5px;color:var(--c-text3);padding:2px 4px 6px;">연결된 태스크 없음</div>';
             html += '<div id="wbs-tip-detail"></div>';
             var tip = _wbsTipEl(); tip.innerHTML = html; tip.style.display = 'block';
             var rect = (e.currentTarget && e.currentTarget.getBoundingClientRect) ? e.currentTarget.getBoundingClientRect() : { left: e.clientX, right: e.clientX, top: e.clientY };
@@ -21463,15 +21516,21 @@ ${intrLog}
             }
         }
         function wbsTipDetailHide() { var box = document.getElementById('wbs-tip-detail'); if (box) box.innerHTML = ''; }
-        // 담당자
-        function wbsSetAssignee(id, uid) { var n = _wbsNode(id); if (!n) return; n.ownerUserId = uid || null; n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderWbsView(); if (document.getElementById('wbs-cmts')) wbsOpenNode(id); }
-        function wbsAssigneePicker(e, id) {
+        // [r157] 툴팁 항목 클릭 → 해당 페이지로 이동
+        function _wbsForceHideTip() { var t = document.getElementById('wbs-tip'); if (t) t.style.display = 'none'; if (_wbsTipTimer) { clearTimeout(_wbsTipTimer); _wbsTipTimer = null; } }
+        function wbsGoSprint(sid) { _wbsForceHideTip(); if (typeof switchView === 'function') switchView('sprint'); setTimeout(function () { var el = document.querySelector('[data-sprint-id="' + sid + '"], #spv-' + sid); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 120); }
+        function wbsGoTask(tid) { _wbsForceHideTip(); if (typeof switchView === 'function') switchView('kanban'); setTimeout(function () { if (typeof openCardModal === 'function') openCardModal(tid); }, 120); }
+        // [r157] 복수 담당자(토글) — 없을 수도 있음
+        function wbsToggleAssignee(id, uid) { var n = _wbsNode(id); if (!n) return; if (!Array.isArray(n.assignees)) n.assignees = []; var i = n.assignees.indexOf(uid); if (i >= 0) n.assignees.splice(i, 1); else n.assignees.push(uid); n.ownerUserId = n.assignees[0] || null; n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderWbsView(); if (document.getElementById('wbs-cmts')) wbsOpenNode(id); else wbsAssigneePicker(id); }
+        function wbsAssigneePicker(id) {
             var n = _wbsNode(id); if (!n) return;
             var members = (typeof getMembers === 'function') ? getMembers() : (currentData.users || []);
-            var rows = members.length ? members.map(function (m) { return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsSetAssignee(\'' + id + '\',\'' + m.id + '\')">' + (typeof _avatarHtml === 'function' ? _avatarHtml(m, 18) : '') + '<span style="flex:1;">' + _sprintEsc(m.displayName || m.email) + '</span>' + (n.ownerUserId === m.id ? '<span>✓</span>' : '') + '</div>'; }).join('') : '<div class="ctx-menu-item" style="opacity:.6;cursor:default;">로그인한 팀원이 없습니다</div>';
-            _openCardMenu(e, rows + '<div class="ctx-menu-sep"></div><div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsSetAssignee(\'' + id + '\',\'\')"><span>🚫</span><span style="flex:1;">미지정</span></div>');
+            var sel = n.assignees || [];
+            var rows = members.length ? members.map(function (m) { var on = sel.indexOf(m.id) >= 0; return '<div class="ctx-menu-item" style="cursor:pointer;" onclick="wbsToggleAssignee(\'' + id + '\',\'' + m.id + '\')">' + (on ? '<span>✓</span>' : '<span style="width:14px;display:inline-block;"></span>') + (typeof _avatarHtml === 'function' ? _avatarHtml(m, 18) : '') + '<span style="flex:1;">' + _sprintEsc(m.displayName || m.email) + '</span></div>'; }).join('') : '<div style="padding:10px;color:var(--c-text3);font-size:12px;text-align:center;">로그인한 팀원이 없습니다</div>';
+            _openSimpleModal('👤 담당자 — ' + _sprintEsc(n.title || ''), '<div style="font-size:11px;color:var(--c-text3);margin-bottom:8px;">클릭하여 추가/해제 (복수 가능, 비워둘 수 있음)</div><div class="dvh-list">' + rows + '</div>');
         }
-        async function wbsAddNode(parentId) {
+        async function wbsAddNode(parentId) { return wbsAddAt(parentId || '', 'child'); }
+        async function _wbsAddNode_legacy(parentId) {
             var title = await uiPrompt({ title: '새 작업 노드', label: '작업 이름', value: '새 작업' });
             if (title === null || !title.trim()) return;
             var node = { id: _wbsUid(), projectId: activeProjectId, parentId: parentId || null, title: title.trim(), desc: '', status: 'todo', progress: 0, links: {}, attachments: [], ownerUserId: (currentUser && currentUser.id) || null, createdBy: (currentUser && currentUser.id) || null, sortOrder: Date.now(), createdAt: Date.now(), updatedAt: Date.now() };
@@ -21496,7 +21555,7 @@ ${intrLog}
         }
         // 드래그 재배치(부모 변경)
         var _wbsDragId = null;
-        function wbsDragStart(e, id) { _wbsDragId = id; e.stopPropagation(); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {} }
+        function wbsDragStart(e, id) { _wbsDragId = id; e.stopPropagation(); _wbsForceHideTip(); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {} }
         function wbsDragOver(e) { if (!_wbsDragId) return; e.preventDefault(); var el = e.currentTarget; if (el) el.classList.add('wbs-drop'); }
         function wbsDragLeave(e) { var el = e.currentTarget; if (el) el.classList.remove('wbs-drop'); }
         function wbsDrop(e, targetId) {
@@ -21517,12 +21576,14 @@ ${intrLog}
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsOpenNode(\'' + id + '\')"><span>⚙️</span> 상세 설정</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsAddNode(\'' + id + '\')"><span>➕</span> 하위 작업 추가</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsRename(\'' + id + '\')"><span>✏️</span> 이름 변경</div>'
-                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsAssigneePicker(event,\'' + id + '\')"><span>👤</span> 담당자 변경</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsAssigneePicker(\'' + id + '\')"><span>👤</span> 담당자 변경</div>'
                 + '<div class="ctx-menu-sep"></div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsDeriveSprint(\'' + id + '\')"><span>🏃</span> 스프린트 파생</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'sprint\')"><span>🔗</span> 스프린트 연결</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'category\')"><span>🗂</span> 카테고리 연결</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'task\')"><span>📋</span> 태스크 연결</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'assetFolder\')"><span>📁</span> 에셋 폴더 연결</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'asset\')"><span>🎮</span> 에셋 연결</div>'
                 + '<div class="ctx-menu-sep"></div>'
                 + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">상태</div>' + stItems
                 + '<div class="ctx-menu-sep"></div>'
@@ -21546,19 +21607,21 @@ ${intrLog}
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderWbsView();
             if (document.getElementById('wbs-cmts')) wbsOpenNode(n.id);
         }
+        var _WBS_LINK_KEY = { sprint: 'sprintIds', category: 'categoryIds', task: 'taskIds', asset: 'assetIds', assetFolder: 'assetFolderIds' };
         function wbsToggleLink(nodeId, kind, itemId) {
             var n = _wbsNode(nodeId); if (!n) return;
-            var key = { sprint: 'sprintIds', category: 'categoryIds', task: 'taskIds' }[kind];
-            _wbsToggleLinkId(n, key, itemId);
+            _wbsToggleLinkId(n, _WBS_LINK_KEY[kind], itemId);
             wbsLinkPicker(nodeId, kind); // 멀티 선택 위해 피커 유지(재렌더)
         }
         function wbsLinkPicker(nodeId, kind) {
             var n = _wbsNode(nodeId); if (!n) return;
-            var key, title, pool;
+            var key = _WBS_LINK_KEY[kind], title, pool;
             var byProj = function (x) { return (x.projectId || 'default') === activeProjectId; };
-            if (kind === 'sprint') { key = 'sprintIds'; title = '🏃 스프린트 연결'; pool = (currentData.sprints || []).filter(byProj).map(function (s) { return { id: s.id, label: s.weekLabel || '스프린트' }; }); }
-            else if (kind === 'category') { key = 'categoryIds'; title = '🗂 카테고리 연결'; pool = (currentData.categories || []).filter(byProj).map(function (c) { return { id: c.id, label: c.title || '카테고리' }; }); }
-            else { key = 'taskIds'; title = '📋 태스크 연결'; pool = (currentData.tasks || []).filter(byProj).map(function (t) { return { id: t.id, label: t.title || '태스크' }; }); }
+            if (kind === 'sprint') { title = '🏃 스프린트 연결'; pool = (currentData.sprints || []).filter(byProj).map(function (s) { return { id: s.id, label: s.weekLabel || '스프린트' }; }); }
+            else if (kind === 'category') { title = '🗂 카테고리 연결'; pool = (currentData.categories || []).filter(byProj).map(function (c) { return { id: c.id, label: c.title || '카테고리' }; }); }
+            else if (kind === 'assetFolder') { title = '📁 에셋 폴더 연결'; pool = (currentData.assetFolders || []).filter(byProj).map(function (f) { return { id: f.id, label: f.name || '폴더' }; }); }
+            else if (kind === 'asset') { title = '🎮 에셋 연결'; pool = (currentData.assets || []).filter(byProj).map(function (a) { return { id: a.id, label: a.name || '에셋' }; }); }
+            else { title = '📋 태스크 연결'; pool = (currentData.tasks || []).filter(byProj).map(function (t) { return { id: t.id, label: t.title || '태스크' }; }); }
             var linked = (n.links && n.links[key]) || [];
             var rows = pool.length ? pool.map(function (p) {
                 var on = linked.indexOf(p.id) >= 0;
@@ -21585,30 +21648,37 @@ ${intrLog}
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderWbsView();
         }
         function _wbsLinkChips(n, kind) {
-            var key = { sprint: 'sprintIds', category: 'categoryIds', task: 'taskIds' }[kind];
+            var key = _WBS_LINK_KEY[kind];
             var ids = (n.links && n.links[key]) || [];
             var nameOf = function (id) {
                 if (kind === 'sprint') { var s = (currentData.sprints || []).find(function (x) { return x.id === id; }); return s ? (s.weekLabel || '스프린트') : '(삭제됨)'; }
                 if (kind === 'category') { var c = (currentData.categories || []).find(function (x) { return x.id === id; }); return c ? (c.title || '카테고리') : '(삭제됨)'; }
+                if (kind === 'assetFolder') { var af = (currentData.assetFolders || []).find(function (x) { return x.id === id; }); return af ? (af.name || '폴더') : '(삭제됨)'; }
+                if (kind === 'asset') { var a = (currentData.assets || []).find(function (x) { return x.id === id; }); return a ? (a.name || '에셋') : '(삭제됨)'; }
                 var t = (currentData.tasks || []).find(function (x) { return x.id === id; }); return t ? (t.title || '태스크') : '(삭제됨)';
             };
             return ids.map(function (id) { return '<span class="wbs-chip">' + _sprintEsc(nameOf(id)) + '<button title="해제" onclick="_wbsToggleLinkId(_wbsNode(\'' + n.id + '\'),\'' + key + '\',\'' + id + '\')">✕</button></span>'; }).join('') || '<span style="font-size:11px;color:var(--c-text3);">없음</span>';
+        }
+        function _wbsAssigneeChips(n) {
+            var ids = n.assignees || [];
+            return ids.map(function (uid) { var m = (currentData.users || []).find(function (u) { return u.id === uid; }); var nm = m ? (m.displayName || m.email) : '(알수없음)'; return '<span class="wbs-chip">' + (typeof _avatarHtml === 'function' && m ? _avatarHtml(m, 16) : '') + _sprintEsc(nm) + '<button title="해제" onclick="wbsToggleAssignee(\'' + n.id + '\',\'' + uid + '\')">✕</button></span>'; }).join('') || '<span style="font-size:11px;color:var(--c-text3);">없음</span>';
         }
         function wbsOpenNode(id) {
             if (typeof wbsTipHide === 'function') { var _t = document.getElementById('wbs-tip'); if (_t) _t.style.display = 'none'; }
             var n = _wbsNode(id); if (!n) { showToast('노드를 찾을 수 없습니다.', 'alert'); return; }
             var stOpts = ['todo', 'doing', 'done'].map(function (s) { return '<option value="' + s + '"' + (n.status === s ? ' selected' : '') + '>' + WBS_STATUS[s].l + '</option>'; }).join('');
-            var asgnOpts = '<option value="">(미지정)</option>' + (currentData.users || []).map(function (m) { return '<option value="' + m.id + '"' + (n.ownerUserId === m.id ? ' selected' : '') + '>' + _sprintEsc(m.displayName || m.email) + '</option>'; }).join('');
             var atts = (n.attachments || []).map(function (a) { return '<span class="wbs-chip"><a href="' + (a.url || '#') + '" target="_blank" style="color:var(--c-text);text-decoration:none;">📎 ' + _sprintEsc(a.label || '파일') + '</a><button title="제거" onclick="wbsRemoveAttach(\'' + id + '\',\'' + a.id + '\')">✕</button></span>'; }).join('') || '<span style="font-size:11px;color:var(--c-text3);">없음</span>';
             var body =
                 '<div class="wbs-fld"><span>제목</span><input type="text" value="' + _sprintEsc(n.title || '').replace(/"/g, '&quot;') + '" onchange="wbsUpdateField(\'' + id + '\',\'title\',this.value)"></div>'
                 + '<div style="display:flex;gap:10px;"><div class="wbs-fld" style="flex:1;"><span>상태</span><select onchange="wbsUpdateField(\'' + id + '\',\'status\',this.value)">' + stOpts + '</select></div>'
                 + '<div class="wbs-fld" style="flex:1.4;"><span>진척률 <span id="wbs-prog-label" style="color:var(--c-accent);">' + (n.progress || 0) + '%</span></span><input type="range" min="0" max="100" step="5" value="' + (n.progress || 0) + '" style="width:100%;" oninput="wbsUpdateField(\'' + id + '\',\'progress\',this.value)"></div></div>'
-                + '<div class="wbs-fld"><span>👤 담당자</span><select onchange="wbsSetAssignee(\'' + id + '\',this.value)">' + asgnOpts + '</select></div>'
+                + '<div class="wbs-fld"><span>👤 담당자 <button class="wbs-mini-btn" onclick="wbsAssigneePicker(\'' + id + '\')">＋ 추가/변경</button></span><div>' + _wbsAssigneeChips(n) + '</div></div>'
                 + '<div class="wbs-fld"><span>내용 (Markdown)</span><textarea rows="5" placeholder="작업 설명·체크리스트·메모…" onchange="wbsUpdateField(\'' + id + '\',\'desc\',this.value)">' + _sprintEsc(n.desc || '') + '</textarea></div>'
                 + '<div class="wbs-fld"><span>🏃 스프린트 <button class="wbs-mini-btn" onclick="wbsDeriveSprint(\'' + id + '\')">파생</button><button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + id + '\',\'sprint\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'sprint') + '</div></div>'
                 + '<div class="wbs-fld"><span>🗂 카테고리 <button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + id + '\',\'category\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'category') + '</div></div>'
                 + '<div class="wbs-fld"><span>📋 태스크 <button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + id + '\',\'task\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'task') + '</div></div>'
+                + '<div class="wbs-fld"><span>📁 에셋 폴더 <button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + id + '\',\'assetFolder\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'assetFolder') + '</div></div>'
+                + '<div class="wbs-fld"><span>🎮 에셋 <button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + id + '\',\'asset\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'asset') + '</div></div>'
                 + '<div class="wbs-fld"><span>📎 첨부 <button class="wbs-mini-btn" onclick="wbsAttachFile(\'' + id + '\')">＋ 파일</button></span><div>' + atts + '</div></div>'
                 + '<div id="wbs-cmts"></div>'
                 + '<div style="margin-top:10px;display:flex;justify-content:flex-end;"><button class="wbs-mini-btn" style="border-color:#d2393d;color:#d2393d;" onclick="wbsDeleteNode(\'' + id + '\')">🗑 노드 삭제</button></div>';
@@ -21821,7 +21891,7 @@ ${intrLog}
             _refreshEntityCommentsOpen(c.targetType, c.targetId);
         }
         function _refreshEntityCommentsOpen(type, id) {
-            var map = { issue: 'iss-e-comments', event: 'cal-ev-comments', asset: 'am-e-comments' };
+            var map = { issue: 'iss-e-comments', event: 'cal-ev-comments', asset: 'am-e-comments', wbs: 'wbs-cmts' };
             var cid = map[type];
             if (cid) { var el = document.getElementById(cid); if (el && el.dataset.tid === id) el.innerHTML = renderEntityCommentThread(type, id); }
             var sb = document.getElementById('comments-sidebar');
