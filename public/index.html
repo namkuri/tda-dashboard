@@ -21490,8 +21490,8 @@ ${intrLog}
             if (p.type === 'view') { _liveApplyRemoteView(p, false); }
             else if (p.type === 'cursor') _liveRenderCursor(p);
             else if (p.type === 'focus') _liveRenderFocus(p);
-            else if (p.type === 'ping') _livePing(p.x, p.y, p.color, p.name);
-            else if (p.type === 'box') _liveBox(p.x, p.y, p.w, p.h, p.color, p.name);
+            else if (p.type === 'ping') _livePing(p);
+            else if (p.type === 'box') _liveBox(p);
             else if (p.type === 'input') _liveApplyInput(p);
             else if (p.type === 'open') { if (LIVE_OPENERS[p.kind]) { _liveModalLock = true; try { LIVE_OPENERS[p.kind](p.id); } finally { setTimeout(function () { _liveModalLock = false; }, 0); } } }
             else if (p.type === 'close') { _liveModalLock = true; try { if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); if (typeof closeCardModal === 'function') closeCardModal(); if (p.id && typeof closeModal === 'function') closeModal(p.id); } finally { setTimeout(function () { _liveModalLock = false; }, 0); } }
@@ -21526,8 +21526,19 @@ ${intrLog}
         }
         function _liveRenderFocus(p) { _liveRemoveFocus(p.by); if (!p.loc) return; var el; try { el = document.querySelector(p.loc); } catch (e) {} if (!el) return; el.style.outline = '2px solid ' + p.color; el.style.outlineOffset = '1px'; _liveFocusEls[p.by] = el; }
         function _liveRemoveFocus(by) { var el = _liveFocusEls[by]; if (el) { el.style.outline = ''; el.style.outlineOffset = ''; delete _liveFocusEls[by]; } }
-        function _livePing(nx, ny, color, name) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-ping'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.color = color; d.style.background = color; if (name) { var t = document.createElement('span'); t.className = 'live-mark-pill'; t.style.background = color; t.textContent = name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
-        function _liveBox(nx, ny, nw, nh, color, name) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-box-hi'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.width = (nw * window.innerWidth) + 'px'; d.style.height = (nh * window.innerHeight) + 'px'; d.style.borderColor = color; if (name) { var t = document.createElement('span'); t.className = 'live-mark-pill live-mark-pill-box'; t.style.background = color; t.textContent = name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
+        // [r168] 요소 앵커링 — 캡처 레이어를 잠시 비활성화하고 실제 요소 기준 좌표 산출
+        function _liveAnchorAt(cx, cy) {
+            var cap = document.getElementById('live-capture'); var pe;
+            if (cap) { pe = cap.style.pointerEvents; cap.style.pointerEvents = 'none'; }
+            var el = document.elementFromPoint(cx, cy);
+            if (cap) cap.style.pointerEvents = pe;
+            if (!el || el.id === 'live-capture' || (el.className && ('' + el.className).indexOf('live-') === 0)) return null;
+            var r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return null;
+            return { loc: _liveLocator(el), ox: (cx - r.left) / r.width, oy: (cy - r.top) / r.height };
+        }
+        function _liveResolveAnchor(a) { if (!a || !a.loc) return null; var el; try { el = document.querySelector(a.loc); } catch (e) {} if (!el) return null; var r = el.getBoundingClientRect(); return { x: r.left + (a.ox || 0) * r.width, y: r.top + (a.oy || 0) * r.height }; }
+        function _livePing(p) { var layer = _liveLayer(); var pt = _liveResolveAnchor(p.a); var px = pt ? pt.x : (p.x || 0) * window.innerWidth, py = pt ? pt.y : (p.y || 0) * window.innerHeight; var d = document.createElement('div'); d.className = 'live-ping'; d.style.left = px + 'px'; d.style.top = py + 'px'; d.style.color = p.color; d.style.background = p.color; if (p.name) { var t = document.createElement('span'); t.className = 'live-mark-pill'; t.style.background = p.color; t.textContent = p.name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
+        function _liveBox(p) { var layer = _liveLayer(); var tl = _liveResolveAnchor(p.a1), br = _liveResolveAnchor(p.a2); var left, top, w, h; if (tl && br) { left = Math.min(tl.x, br.x); top = Math.min(tl.y, br.y); w = Math.abs(br.x - tl.x); h = Math.abs(br.y - tl.y); } else { left = (p.x || 0) * window.innerWidth; top = (p.y || 0) * window.innerHeight; w = (p.w || 0) * window.innerWidth; h = (p.h || 0) * window.innerHeight; } var d = document.createElement('div'); d.className = 'live-box-hi'; d.style.left = left + 'px'; d.style.top = top + 'px'; d.style.width = w + 'px'; d.style.height = h + 'px'; d.style.borderColor = p.color; if (p.name) { var t = document.createElement('span'); t.className = 'live-mark-pill live-mark-pill-box'; t.style.background = p.color; t.textContent = p.name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
         function _liveClearOverlays() { var l = document.getElementById('live-layer'); if (l) l.innerHTML = ''; for (var k in _liveCursors) { clearTimeout(_liveCursors[k].timer); } _liveCursors = {}; for (var f in _liveFocusEls) _liveRemoveFocus(f); }
         function _liveOnMouseMove(e) {
             var now = Date.now(); if (now - _liveMouseTs < 55) return; _liveMouseTs = now;
@@ -21538,7 +21549,7 @@ ${intrLog}
         }
         function _liveOnFocusIn(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable)) return; _liveBroadcast({ type: 'focus', loc: _liveLocator(t) }); }
         function _liveOnFocusOut() { _liveBroadcast({ type: 'focus', loc: null }); }
-        function _liveOnInput(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA)$/.test(t.tagName) && !t.isContentEditable)) return; if (t.type === 'password') return; var now = Date.now(); if (now - _liveInputTs < 90) return; _liveInputTs = now; _liveBroadcast({ type: 'input', loc: _liveLocator(t), value: t.isContentEditable ? t.innerHTML : t.value }); }
+        function _liveOnInput(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable)) return; if (t.type === 'password') return; var now = Date.now(); if (t.tagName !== 'SELECT' && now - _liveInputTs < 90) return; _liveInputTs = now; _liveBroadcast({ type: 'input', loc: _liveLocator(t), value: t.isContentEditable ? t.innerHTML : t.value }); }
         function _liveAttachLocal() { document.addEventListener('mousemove', _liveOnMouseMove, true); document.addEventListener('focusin', _liveOnFocusIn, true); document.addEventListener('focusout', _liveOnFocusOut, true); document.addEventListener('input', _liveOnInput, true); }
         function _liveDetachLocal() { document.removeEventListener('mousemove', _liveOnMouseMove, true); document.removeEventListener('focusin', _liveOnFocusIn, true); document.removeEventListener('focusout', _liveOnFocusOut, true); document.removeEventListener('input', _liveOnInput, true); }
         // 핑/박스 플로팅 메뉴 + 캡처
@@ -21552,12 +21563,12 @@ ${intrLog}
         function _liveStartCapture() {
             var cap = document.createElement('div'); cap.id = 'live-capture'; document.body.appendChild(cap);
             if (_liveMode === 'ping') {
-                cap.addEventListener('mousedown', function (e) { var nx = e.clientX / window.innerWidth, ny = e.clientY / window.innerHeight; _livePing(nx, ny, _liveColor(myClientId), myNickname); _liveBroadcast({ type: 'ping', x: nx, y: ny }); _liveSetMode(null); });
+                cap.addEventListener('mousedown', function (e) { var nx = e.clientX / window.innerWidth, ny = e.clientY / window.innerHeight; var pl = { x: nx, y: ny, a: _liveAnchorAt(e.clientX, e.clientY), color: _liveColor(myClientId), name: myNickname }; _livePing(pl); _liveBroadcast(Object.assign({ type: 'ping' }, pl)); _liveSetMode(null); });
             } else {
                 var sx, sy, box = null;
                 cap.addEventListener('mousedown', function (e) { sx = e.clientX; sy = e.clientY; box = document.createElement('div'); box.className = 'live-box-hi'; box.style.borderColor = _liveColor(myClientId); document.body.appendChild(box); });
                 cap.addEventListener('mousemove', function (e) { if (!box) return; var l = Math.min(sx, e.clientX), tp = Math.min(sy, e.clientY); box.style.left = l + 'px'; box.style.top = tp + 'px'; box.style.width = Math.abs(e.clientX - sx) + 'px'; box.style.height = Math.abs(e.clientY - sy) + 'px'; });
-                cap.addEventListener('mouseup', function (e) { if (box && box.parentNode) box.parentNode.removeChild(box); box = null; var l = Math.min(sx, e.clientX), tp = Math.min(sy, e.clientY), w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy); if (w < 4 && h < 4) { _liveSetMode(null); return; } var nx = l / window.innerWidth, ny = tp / window.innerHeight, nw = w / window.innerWidth, nh = h / window.innerHeight; _liveBox(nx, ny, nw, nh, _liveColor(myClientId), myNickname); _liveBroadcast({ type: 'box', x: nx, y: ny, w: nw, h: nh }); _liveSetMode(null); });
+                cap.addEventListener('mouseup', function (e) { if (box && box.parentNode) box.parentNode.removeChild(box); box = null; var l = Math.min(sx, e.clientX), tp = Math.min(sy, e.clientY), w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy); if (w < 4 && h < 4) { _liveSetMode(null); return; } var a1 = _liveAnchorAt(l, tp), a2 = _liveAnchorAt(l + w, tp + h); var pl = { x: l / window.innerWidth, y: tp / window.innerHeight, w: w / window.innerWidth, h: h / window.innerHeight, a1: a1, a2: a2, color: _liveColor(myClientId), name: myNickname }; _liveBox(pl); _liveBroadcast(Object.assign({ type: 'box' }, pl)); _liveSetMode(null); });
             }
         }
         function sidebarNavAction(view, idx) {
