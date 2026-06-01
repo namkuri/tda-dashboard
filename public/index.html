@@ -9658,7 +9658,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var caret = open ? '▼' : '▶';
                 var headRow = '<div style="display:flex;align-items:center;gap:2px;padding:2px 0;">'
                     + '<button onclick="_dwpToggleExpand(\'' + safeSlug + '\')" title="펼치기/접기" style="background:none;border:none;color:var(--c-text3);cursor:pointer;padding:4px 4px;font-size:10px;line-height:1;width:18px;flex-shrink:0;">' + caret + '</button>'
-                    + '<button onclick="dwpOpenPage(\'' + safeSlug + '\')" style="flex:1;text-align:left;background:none;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;' + active + '" title="' + safeTitle + '">' + safeTitle + '</button>'
+                    + '<button onclick="dwpOpenPage(\'' + safeSlug + '\')" oncontextmenu="dwpPageCtx(event,\'' + safeSlug + '\')" style="flex:1;text-align:left;background:none;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;' + active + '" title="' + safeTitle + '">' + safeTitle + '</button>'
                     + '</div>';
                 if (!open) return headRow;
                 // 자식 — 헤더 + 그 헤더의 링크 (중첩 구조)
@@ -11165,7 +11165,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var stateClass = a._pending ? ' db-pending' : (a._failed ? ' db-failed' : '');
             var stateTip = a._pending ? '\n💾 DB에 저장 중...' : (a._failed ? '\n❌ DB 저장 실패: ' + (a._failReason || '') : '');
             // [r86 #4] 드래그 가능
-            return '<div class="am-asset' + stateClass + '" draggable="true" ondragstart="amDragStartAsset(event,\'' + a.id + '\')" ondragend="amDragEnd(event)" title="' + _annEsc(a.name) + stateTip + '\n💡 폴더로 드래그해서 이동" onclick="amEditAsset(\'' + a.id + '\')">' +
+            return '<div class="am-asset' + stateClass + '" draggable="true" ondragstart="amDragStartAsset(event,\'' + a.id + '\')" ondragend="amDragEnd(event)" title="' + _annEsc(a.name) + stateTip + '\n💡 폴더로 드래그해서 이동" onclick="amEditAsset(\'' + a.id + '\')" oncontextmenu="amAssetCtx(event,\'' + a.id + '\')">' +
                 '<div class="am-asset-head"><span class="am-asset-ico">' + ico + '</span><span class="am-asset-name">' + _annEsc(a.name || '에셋') + '</span><span class="am-asset-status ' + st + '">' + stLabel + '</span></div>' +
                 '<div class="am-asset-meta"><span>👤 ' + _annEsc(asgnName) + '</span>' + (a.fileLink ? '<span>🔗 ' + (a.fileLink.startsWith('http') ? '외부' : '드라이브') + '</span>' : '') + (a._failed ? '<span style="color:#d2393d;">⚠ 미저장</span>' : '') + '</div>' +
                 '</div>';
@@ -11429,7 +11429,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 // [r84 #2/#3] DB 저장 상태
                 var stClass = i._pending ? ' db-pending' : (i._failed ? ' db-failed' : '');
                 var stTip = i._pending ? '\n💾 DB에 저장 중...' : (i._failed ? '\n❌ DB 저장 실패: ' + (i._failReason || '') : '');
-                return '<div class="iss-card priority-' + p + ' status-' + st + stClass + '" title="' + _annEsc(i.title) + stTip + '" onclick="issEditIssue(\'' + i.id + '\')">' +
+                return '<div class="iss-card priority-' + p + ' status-' + st + stClass + '" title="' + _annEsc(i.title) + stTip + '" onclick="issEditIssue(\'' + i.id + '\')" oncontextmenu="issCtx(event,\'' + i.id + '\')">' +
                     '<span class="iss-c-priority" style="color:' + ({ p0: '#d2393d', p1: '#f97316', p2: '#d49a1c', p3: 'var(--c-text3)' }[p]) + ';">' + p.toUpperCase() + '</span>' +
                     '<span class="iss-c-status">' + stLabel + '</span>' +
                     '<span class="iss-c-title">' + _annEsc(i.title || '(제목 없음)') + (i._failed ? ' <span style="color:#d2393d;font-size:11px;">⚠ 미저장</span>' : '') + '</span>' +
@@ -14143,7 +14143,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (typeof renderPersonalPicker === 'function') renderPersonalPicker();
                 if (typeof updateDocEditorUI === 'function') updateDocEditorUI();
             }
+            // [r154] 브라우저 뒤로/앞으로 가기 연동 — 뷰 전환을 history에 기록
+            if (typeof _navPushView === 'function') _navPushView();
         }
+        // [r154] 뷰 네비게이션 history — 뒤로/앞으로 버튼으로 이전 페이지 이동
+        var _navState = { lastView: null, lock: false };
+        function _navPushView() {
+            if (_navState.lock) return;
+            if (currentView === _navState.lastView) return;
+            _navState.lastView = currentView;
+            try { history.pushState({ tdaView: currentView, docId: (typeof activeDocId !== 'undefined' ? activeDocId : null) }, ''); } catch (e) {}
+        }
+        window.addEventListener('popstate', function (ev) {
+            var st = ev.state;
+            if (!st || !st.tdaView) return;
+            _navState.lock = true;
+            _navState.lastView = st.tdaView;
+            try {
+                if (typeof switchView === 'function') switchView(st.tdaView);
+                if (st.docId && typeof openDoc === 'function') setTimeout(function () { openDoc(st.docId); }, 60);
+            } finally { setTimeout(function () { _navState.lock = false; }, 0); }
+        });
 
         function toggleDocSidebar() {
             isDocSidebarOpen = !isDocSidebarOpen;
@@ -21072,6 +21092,117 @@ ${intrLog}
                 window.addEventListener('resize', hideTreeContextMenu, { once: true });
             }, 0);
         }
+        // ===== [r154] 페이지별 컨텍스트 메뉴 보강 — 이슈 / 에셋 / Deep Wiki 페이지 =====
+        function _ctxStatusItems(cur, list, fn, id) {
+            return list.map(function (s) {
+                var mark = (cur === s[0]) ? '<span>✓</span>' : '<span style="width:14px;display:inline-block;"></span>';
+                return '<div class="ctx-menu-item" onclick="hideTreeContextMenu();' + fn + '(\'' + id + '\',\'' + s[0] + '\')">' + mark + ' ' + s[1] + '</div>';
+            }).join('');
+        }
+        function issCtx(e, id) {
+            e.preventDefault(); e.stopPropagation();
+            var iss = (currentData.issues || []).find(function (x) { return x.id === id; }); if (!iss) return;
+            var STS = [['open', '📋 OPEN'], ['progress', '🔥 진행 중'], ['review', '👀 리뷰'], ['closed', '✅ 종료'], ['wont', '⛔ 보류']];
+            _openCardMenu(e,
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();issEditIssue(\'' + id + '\')"><span>✏️</span> 편집 (상세)</div>'
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">상태 변경</div>'
+                + _ctxStatusItems(iss.status, STS, 'issSetStatus', id)
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();issDeleteById(\'' + id + '\')"><span>🗑</span> 삭제</div>');
+        }
+        function issSetStatus(id, st) {
+            var iss = (currentData.issues || []).find(function (x) { return x.id === id; }); if (!iss) return;
+            iss.status = st; iss.updatedAt = Date.now(); saveData();
+            if (typeof dbUpsertIssue === 'function') dbUpsertIssue(iss);
+            if (typeof issRender === 'function') issRender();
+            showToast('이슈 상태 변경됨', 'info');
+        }
+        async function issDeleteById(id) {
+            if (!(await uiConfirm({ title: '이슈 삭제', message: '이 이슈를 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            currentData.issues = (currentData.issues || []).filter(function (i) { return i.id !== id; });
+            saveData(); if (typeof dbDeleteIssue === 'function') await dbDeleteIssue(id);
+            if (typeof issRender === 'function') issRender();
+        }
+        function amAssetCtx(e, id) {
+            e.preventDefault(); e.stopPropagation();
+            var a = (currentData.assets || []).find(function (x) { return x.id === id; }); if (!a) return;
+            var STS = [['planned', '📋 계획'], ['progress', '🔥 진행'], ['done', '✅ 완료'], ['blocked', '⛔ 보류']];
+            var openFile = (a.fileLink && a.fileLink.indexOf('http') === 0) ? '<div class="ctx-menu-item" onclick="hideTreeContextMenu();window.open(\'' + a.fileLink + '\',\'_blank\')"><span>🔗</span> 파일 열기</div>' : '';
+            _openCardMenu(e,
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();amEditAsset(\'' + id + '\')"><span>✏️</span> 편집 (상세)</div>'
+                + openFile
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">상태 변경</div>'
+                + _ctxStatusItems(a.status, STS, 'amSetStatus', id)
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();amDeleteById(\'' + id + '\')"><span>🗑</span> 삭제</div>');
+        }
+        function amSetStatus(id, st) {
+            var a = (currentData.assets || []).find(function (x) { return x.id === id; }); if (!a) return;
+            a.status = st; a.updatedAt = Date.now(); saveData();
+            if (typeof dbUpsertAsset === 'function') dbUpsertAsset(a);
+            if (typeof amRender === 'function') amRender();
+            showToast('에셋 상태 변경됨', 'info');
+        }
+        async function amDeleteById(id) {
+            if (!(await uiConfirm({ title: '에셋 삭제', message: '이 에셋을 삭제할까요?', confirmText: '삭제', danger: true }))) return;
+            currentData.assets = (currentData.assets || []).filter(function (a) { return a.id !== id; });
+            saveData(); if (typeof dbDeleteAsset === 'function') await dbDeleteAsset(id);
+            if (typeof amRender === 'function') amRender();
+        }
+        function dwpPageCtx(e, slug) {
+            e.preventDefault(); e.stopPropagation();
+            _openCardMenu(e,
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();dwpOpenPage(\'' + slug + '\')"><span>📖</span> 열기</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_dwpToggleExpand(\'' + slug + '\')"><span>↔</span> 펼치기 / 접기</div>'
+                + (typeof dwpRefreshTree === 'function' ? '<div class="ctx-menu-item" onclick="hideTreeContextMenu();dwpRefreshTree()"><span>🔄</span> 트리 새로고침</div>' : ''));
+        }
+        // ===== [r154] 좌측 사이드바 카테고리 우클릭 — "열기" + 맥락적 빠른 작업 =====
+        var _navActions = {
+            kanban: [{ l: '➕ 새 카테고리', f: function () { if (typeof addNewCategory === 'function') addNewCategory(); } }],
+            sprint: [{ l: '➕ 새 스프린트', f: function () { if (typeof startSprint === 'function') startSprint(); } }],
+            issues: [{ l: '➕ 새 이슈', f: function () { if (typeof issAddIssue === 'function') issAddIssue(); } }],
+            calendar: [{ l: '➕ 새 일정', f: function () { if (typeof calOpenAddEvent === 'function') calOpenAddEvent(); } }],
+            docs: [{ l: '➕ 새 문서', f: function () { if (typeof createNewDoc === 'function') createNewDoc(null); } }],
+            personal: [{ l: '➕ 새 개인 문서', f: function () { if (typeof createNewDoc === 'function') createNewDoc(null); } }],
+            canon: [{ l: '➕ 새 위키 문서', f: function () { if (typeof createNewDoc === 'function') createNewDoc(null); } }],
+            assets: [{ l: '➕ 새 에셋', f: function () { if (typeof amAddAsset === 'function') amAddAsset(); else if (typeof amNewAsset === 'function') amNewAsset(); } }],
+            bugReport: [{ l: '➕ 새 버그 리포트', f: function () { if (typeof brAddReport === 'function') brAddReport(); } }],
+            drive: [{ l: '⬆ 파일 업로드', f: function () { var i = document.getElementById('drv-file-input'); if (i) i.click(); } }],
+            deepwikiPages: [{ l: '⚡ 실행 / 설정 (위키 생성·감사)', f: function () { if (typeof openModal === 'function') openModal('dwp-action-popup'); } }]
+        };
+        function sidebarNavOpen(view) {
+            hideTreeContextMenu();
+            if (view === 'comment') { if (typeof toggleCommentsSidebar === 'function') toggleCommentsSidebar(); return; }
+            if (view === 'review' && typeof openReviewInbox === 'function') { openReviewInbox(); return; }
+            if (view === 'changelog' && typeof openChangeLog === 'function') { openChangeLog(); return; }
+            if (view === 'settings' && typeof toggleSettings === 'function') { toggleSettings(); return; }
+            if (typeof switchView === 'function') switchView(view);
+        }
+        function sidebarNavAction(view, idx) {
+            hideTreeContextMenu();
+            sidebarNavOpen(view);
+            var arr = _navActions[view];
+            if (arr && arr[idx]) { setTimeout(function () { try { arr[idx].f(); } catch (e) { console.warn('[sidebarNavAction]', e); } }, 90); }
+        }
+        function sidebarNavCtx(e, view) {
+            if (e && e.preventDefault) e.preventDefault();
+            var items = '<div class="ctx-menu-item" onclick="sidebarNavOpen(\'' + view + '\')"><span>📂</span> 열기</div>';
+            var arr = _navActions[view] || [];
+            if (arr.length) {
+                items += '<div class="ctx-menu-sep"></div>';
+                arr.forEach(function (a, i) { items += '<div class="ctx-menu-item" onclick="sidebarNavAction(\'' + view + '\',' + i + ')"><span>✨</span> ' + _annEsc(a.l) + '</div>'; });
+            }
+            _openCardMenu(e, items);
+        }
+        // 위임 리스너 — 모든 .cs-nav 버튼 우클릭 처리 (각 버튼에 핸들러 추가 불필요)
+        document.addEventListener('contextmenu', function (e) {
+            var nav = (e.target && e.target.closest) ? e.target.closest('.cs-nav') : null;
+            if (!nav) return;
+            var view = nav.getAttribute('data-nav'); if (!view) return;
+            sidebarNavCtx(e, view);
+        });
         // [#4] 담당자(실 계정) 피커 — board/sprint 공용
         function openAssigneePicker(e, taskId, ctx) {
             var task = currentData.tasks.find(function (t) { return t.id === taskId; }); if (!task) return;
@@ -23477,17 +23608,16 @@ ${intrLog}
             if(!menu) return;
             if(menu.parentNode !== document.body) document.body.appendChild(menu);
             var isDeprecated = doc && doc.deprecated;
-            var projOptions = currentData.projects
-                .filter(function(p){ return p.id !== activeProjectId; })
-                .map(function(p){ return '<div class="ctx-menu-item" onclick="moveDocToProjectCtx(\''+docId+'\',\''+p.id+'\')" ><span>📁</span>'+p.name+'으로 이동</div>'; }).join('');
             menu.innerHTML =
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();createNewDoc(\''+docId+'\')"><span>📄</span> 새 하위 문서</div>' +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();createNewFolder(\''+docId+'\')"><span>📁</span> 새 하위 폴더</div>' +
                 '<div class="ctx-menu-sep"></div>' +
                 '<div class="ctx-menu-item" onclick="ctxMoveUp()"><span>⬆️</span> 위로 이동</div>' +
                 '<div class="ctx-menu-item" onclick="ctxMoveDown()"><span>⬇️</span> 아래로 이동</div>' +
-                '<div class="ctx-menu-sep"></div>' + projOptions +
-                '<div class="ctx-menu-item" onclick="ctxCopyDoc()"><span>📋</span> 복사</div>' +
+                '<div class="ctx-menu-sep"></div>' +
+                // [r154] 다중 "프로젝트로 이동" 버튼 통합 → 단일 모달(프로젝트·종류 선택 + 이동/복사)
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openDocMoveCopyModal(\''+docId+'\')"><span>📦</span> 이동 / 복사…</div>' +
+                '<div class="ctx-menu-item" onclick="ctxCopyDoc()"><span>📋</span> 복사 (같은 위치)</div>' +
                 '<div class="ctx-menu-item" onclick="renameDoc(\''+docId+'\')"><span>✏️</span> 이름 변경</div>' +
                 '<div class="ctx-menu-sep"></div>' +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openReviewModal(\'decision\',null,\''+docId+'\')"><span>🗳</span> 결정 요청 (이 문서)</div>' +
@@ -23608,6 +23738,73 @@ ${intrLog}
             currentData.docs.push(newDoc);
             saveData(); dbUpsertDoc(newDoc); renderDocTree();
             showToast('"' + newDoc.title + '" 복사 완료', 'success');
+        }
+
+        // [r154] 문서 이동/복사 통합 모달 — 대상 프로젝트 + 종류(문서/프로젝트위키/개인문서) 선택 + 이동 or 복사
+        function _adaptDocMetaForKind(meta, kind) {
+            meta = Object.assign({}, meta || {});
+            if (kind === 'personal') { meta.owner = (currentUser && currentUser.id) || meta.owner || null; if (!meta.visibility) meta.visibility = 'private'; }
+            else if (kind === 'canon') { if (!meta.version) meta.version = 1; if (!meta.status) meta.status = 'draft'; if (!Array.isArray(meta.versionHistory)) meta.versionHistory = []; }
+            return meta;
+        }
+        function openDocMoveCopyModal(docId) {
+            var doc = (currentData.docs || []).find(function (d) { return d.id === docId; });
+            if (!doc) { showToast('문서를 찾을 수 없습니다.', 'alert'); return; }
+            var esc = _annEsc;
+            var KINDS = [['wiki', '📄 문서'], ['canon', '📘 프로젝트 위키'], ['personal', '🔒 개인 문서']];
+            var projs = (currentData.projects || []);
+            var kindOpts = KINDS.map(function (k) { return '<option value="' + k[0] + '"' + (((doc.kind || 'wiki') === k[0]) ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('');
+            var projOpts = projs.map(function (p) { return '<option value="' + p.id + '"' + ((p.id === (doc.projectId || activeProjectId)) ? ' selected' : '') + '>' + esc(p.name) + (p.id === activeProjectId ? ' (현재)' : '') + '</option>'; }).join('');
+            var ov = document.createElement('div');
+            ov.id = 'doc-movecopy-modal';
+            ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9500;display:flex;align-items:center;justify-content:center;';
+            ov.innerHTML = '<div style="background:var(--c-paper);color:var(--c-text);border:1px solid var(--c-border);border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.45);width:420px;max-width:94vw;display:flex;flex-direction:column;">'
+                + '<div style="padding:14px 18px;border-bottom:1px solid var(--c-border);"><h3 style="font-size:14px;font-weight:800;">📦 문서 이동 / 복사</h3><div style="font-size:11.5px;color:var(--c-text3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (doc.emoji || '📄') + ' ' + esc(doc.title || '제목 없음') + '</div></div>'
+                + '<div style="padding:14px 18px;display:flex;flex-direction:column;gap:12px;">'
+                + '<label style="font-size:12px;font-weight:700;color:var(--c-text2);">동작<div style="display:flex;gap:8px;margin-top:5px;"><label style="flex:1;display:flex;align-items:center;gap:6px;font-weight:500;font-size:12.5px;cursor:pointer;padding:7px 10px;border:1px solid var(--c-border);border-radius:8px;"><input type="radio" name="dmc-action" value="move" checked> 이동</label><label style="flex:1;display:flex;align-items:center;gap:6px;font-weight:500;font-size:12.5px;cursor:pointer;padding:7px 10px;border:1px solid var(--c-border);border-radius:8px;"><input type="radio" name="dmc-action" value="copy"> 복사</label></div></label>'
+                + '<label style="font-size:12px;font-weight:700;color:var(--c-text2);">대상 프로젝트<select id="dmc-project" style="width:100%;margin-top:5px;padding:7px 9px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-paper);color:var(--c-text);font-size:12.5px;">' + projOpts + '</select></label>'
+                + '<label style="font-size:12px;font-weight:700;color:var(--c-text2);">종류<select id="dmc-kind" style="width:100%;margin-top:5px;padding:7px 9px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-paper);color:var(--c-text);font-size:12.5px;">' + kindOpts + '</select></label>'
+                + '</div>'
+                + '<div style="padding:12px 18px;border-top:1px solid var(--c-border);display:flex;gap:8px;justify-content:flex-end;"><button id="dmc-cancel" style="font-size:12px;padding:7px 14px;border-radius:8px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;">취소</button><button id="dmc-go" style="font-size:12px;font-weight:700;padding:7px 16px;border-radius:8px;border:none;background:var(--c-accent);color:#fff;cursor:pointer;">확인</button></div>'
+                + '</div>';
+            document.body.appendChild(ov);
+            var close = function () { try { document.body.removeChild(ov); } catch (e) {} };
+            ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+            ov.querySelector('#dmc-cancel').onclick = close;
+            ov.querySelector('#dmc-go').onclick = function () {
+                var action = (ov.querySelector('input[name="dmc-action"]:checked') || {}).value || 'move';
+                var projectId = ov.querySelector('#dmc-project').value;
+                var kind = ov.querySelector('#dmc-kind').value;
+                close();
+                _doDocMoveCopy(docId, action, projectId, kind);
+            };
+        }
+        function _doDocMoveCopy(docId, action, projectId, kind) {
+            var doc = (currentData.docs || []).find(function (d) { return d.id === docId; });
+            if (!doc) return;
+            var kindLabel = { wiki: '문서', canon: '프로젝트 위키', personal: '개인 문서' }[kind] || kind;
+            var projName = (((currentData.projects || []).find(function (p) { return p.id === projectId; })) || {}).name || projectId;
+            if (action === 'copy') {
+                var nd = Object.assign({}, doc, {
+                    id: 'doc_' + Date.now(), title: (doc.title || '문서') + ' (복사본)',
+                    projectId: projectId, kind: kind, parentId: null,
+                    meta: _adaptDocMetaForKind(doc.meta, kind),
+                    createdAt: Date.now(), updatedAt: Date.now(), sortOrder: Date.now(),
+                    createdBy: (currentUser && currentUser.id) || null, updatedBy: (currentUser && currentUser.id) || null
+                });
+                if (!Array.isArray(currentData.docs)) currentData.docs = [];
+                currentData.docs.push(nd);
+                saveData(); dbUpsertDoc(nd); renderDocTree();
+                if (typeof logActivity === 'function') logActivity('doc', 'create', { targetId: nd.id, targetLabel: nd.title, detail: kindLabel + '(으)로 복사 → ' + projName });
+                showToast('📋 "' + nd.title + '" → ' + projName + ' / ' + kindLabel + ' 복사됨', 'success');
+            } else {
+                doc.projectId = projectId; doc.kind = kind; doc.parentId = null;
+                doc.meta = _adaptDocMetaForKind(doc.meta, kind);
+                doc.updatedAt = Date.now();
+                saveData(); dbUpsertDoc(doc); renderDocTree();
+                if (typeof logActivity === 'function') logActivity('doc', 'move', { targetId: doc.id, targetLabel: doc.title, detail: projName + ' / ' + kindLabel + '(으)로 이동' });
+                showToast('📦 "' + doc.title + '" → ' + projName + ' / ' + kindLabel + ' 이동됨', 'success');
+            }
         }
 
         function ctxDeprecate() {
