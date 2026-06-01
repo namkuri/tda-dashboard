@@ -21503,19 +21503,39 @@ ${intrLog}
         function _liveRenderCursor(p) {
             var layer = _liveLayer(); var c = _liveCursors[p.by];
             if (!c) { var el = document.createElement('div'); el.className = 'live-cursor'; el.innerHTML = '<svg width="18" height="18" viewBox="0 0 16 16"><path d="M1 1 L1 12 L4.2 9 L6.3 13.5 L8.3 12.6 L6.2 8.2 L10.5 8.2 Z" stroke="#fff" stroke-width="0.8"/></svg><span class="live-cursor-pill"></span>'; layer.appendChild(el); c = { el: el }; _liveCursors[p.by] = c; }
-            c.el.style.left = (p.x * window.innerWidth) + 'px'; c.el.style.top = (p.y * window.innerHeight) + 'px';
+            // [r167] 요소 앵커링 — 같은 요소 위 같은 상대위치로 표시(창 크기/사이드바 폭 달라도 일치). 실패 시 뷰포트 비율 폴백.
+            var px, py, tgt = null;
+            if (p.loc) { try { tgt = document.querySelector(p.loc); } catch (e) {} }
+            if (tgt) { var r = tgt.getBoundingClientRect(); px = r.left + (p.ox || 0) * r.width; py = r.top + (p.oy || 0) * r.height; }
+            else { px = (p.x || 0) * window.innerWidth; py = (p.y || 0) * window.innerHeight; }
+            c.el.style.left = px + 'px'; c.el.style.top = py + 'px';
             var path = c.el.querySelector('svg path'); if (path) path.setAttribute('fill', p.color);
             var pill = c.el.querySelector('.live-cursor-pill'); if (pill) { pill.textContent = p.name || ''; pill.style.background = p.color; }
             clearTimeout(c.timer); c.timer = setTimeout(function () { _liveRemoveCursor(p.by); }, 6000);
         }
         function _liveRemoveCursor(by) { var c = _liveCursors[by]; if (c) { if (c.el && c.el.parentNode) c.el.parentNode.removeChild(c.el); clearTimeout(c.timer); delete _liveCursors[by]; } _liveRemoveFocus(by); }
-        function _liveLocator(el) { if (!el) return null; try { if (el.id) return '#' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id); } catch (e) {} var path = [], e2 = el, g = 0; while (e2 && e2.nodeType === 1 && e2 !== document.body && g++ < 6) { var ix = 1, sib = e2; while (sib = sib.previousElementSibling) { if (sib.tagName === e2.tagName) ix++; } path.unshift(e2.tagName.toLowerCase() + ':nth-of-type(' + ix + ')'); e2 = e2.parentElement; } return path.join('>'); }
+        function _liveLocator(el) {
+            if (!el || el.nodeType !== 1) return null;
+            var parts = [], e2 = el, g = 0;
+            while (e2 && e2.nodeType === 1 && e2 !== document.documentElement && g++ < 30) {
+                if (e2.id) { try { parts.unshift('#' + (window.CSS && CSS.escape ? CSS.escape(e2.id) : e2.id)); } catch (x) { parts.unshift('#' + e2.id); } break; }
+                var ix = 1, sib = e2; while (sib = sib.previousElementSibling) { if (sib.tagName === e2.tagName) ix++; }
+                parts.unshift(e2.tagName.toLowerCase() + ':nth-of-type(' + ix + ')'); e2 = e2.parentElement;
+            }
+            return parts.join('>');
+        }
         function _liveRenderFocus(p) { _liveRemoveFocus(p.by); if (!p.loc) return; var el; try { el = document.querySelector(p.loc); } catch (e) {} if (!el) return; el.style.outline = '2px solid ' + p.color; el.style.outlineOffset = '1px'; _liveFocusEls[p.by] = el; }
         function _liveRemoveFocus(by) { var el = _liveFocusEls[by]; if (el) { el.style.outline = ''; el.style.outlineOffset = ''; delete _liveFocusEls[by]; } }
         function _livePing(nx, ny, color, name) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-ping'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.color = color; d.style.background = color; if (name) { var t = document.createElement('span'); t.className = 'live-mark-pill'; t.style.background = color; t.textContent = name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
         function _liveBox(nx, ny, nw, nh, color, name) { var layer = _liveLayer(); var d = document.createElement('div'); d.className = 'live-box-hi'; d.style.left = (nx * window.innerWidth) + 'px'; d.style.top = (ny * window.innerHeight) + 'px'; d.style.width = (nw * window.innerWidth) + 'px'; d.style.height = (nh * window.innerHeight) + 'px'; d.style.borderColor = color; if (name) { var t = document.createElement('span'); t.className = 'live-mark-pill live-mark-pill-box'; t.style.background = color; t.textContent = name; d.appendChild(t); } layer.appendChild(d); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3000); }
         function _liveClearOverlays() { var l = document.getElementById('live-layer'); if (l) l.innerHTML = ''; for (var k in _liveCursors) { clearTimeout(_liveCursors[k].timer); } _liveCursors = {}; for (var f in _liveFocusEls) _liveRemoveFocus(f); }
-        function _liveOnMouseMove(e) { var now = Date.now(); if (now - _liveMouseTs < 55) return; _liveMouseTs = now; _liveBroadcast({ type: 'cursor', x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight }); }
+        function _liveOnMouseMove(e) {
+            var now = Date.now(); if (now - _liveMouseTs < 55) return; _liveMouseTs = now;
+            var pl = { type: 'cursor', x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight };
+            var el = document.elementFromPoint(e.clientX, e.clientY);
+            if (el && el.id !== 'live-capture') { var r = el.getBoundingClientRect(); if (r.width > 0 && r.height > 0) { pl.loc = _liveLocator(el); pl.ox = (e.clientX - r.left) / r.width; pl.oy = (e.clientY - r.top) / r.height; } }
+            _liveBroadcast(pl);
+        }
         function _liveOnFocusIn(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable)) return; _liveBroadcast({ type: 'focus', loc: _liveLocator(t) }); }
         function _liveOnFocusOut() { _liveBroadcast({ type: 'focus', loc: null }); }
         function _liveOnInput(e) { var t = e.target; if (!t || (!/^(INPUT|TEXTAREA)$/.test(t.tagName) && !t.isContentEditable)) return; if (t.type === 'password') return; var now = Date.now(); if (now - _liveInputTs < 90) return; _liveInputTs = now; _liveBroadcast({ type: 'input', loc: _liveLocator(t), value: t.isContentEditable ? t.innerHTML : t.value }); }
