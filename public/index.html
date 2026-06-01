@@ -21416,7 +21416,10 @@ ${intrLog}
         function liveSidebarClick() { if (_liveJoined) liveLeave(); else liveJoin(); }
         function liveJoin() {
             if (_liveJoined) return;
-            if (!supabaseClient || !window.myClientId) { showToast('실시간 연결이 없어 라이브를 시작할 수 없습니다.', 'alert'); return; }
+            // [r162] 가드 수정 — 클라이언트 ID는 전역 myClientId(window.* 아님). 미연결이면 globalRoom 부재로 판단.
+            if (!supabaseClient) { showToast('로그인(DB 연결)이 필요합니다. 우상단에서 로그인 후 다시 시도하세요.', 'alert'); return; }
+            if (!window.globalRoom) { showToast('실시간 채널 연결 중입니다. 잠시 후 다시 시도하세요.', 'alert'); return; }
+            if (typeof myClientId === 'undefined' || !myClientId) { showToast('클라이언트 식별자가 없어 라이브를 시작할 수 없습니다.', 'alert'); return; }
             _liveJoined = true; _liveReannounce();
             _liveChannel = supabaseClient.channel('live_pb3_' + (activeProjectId || 'default'), { config: { broadcast: { self: false } } });
             _liveChannel.on('broadcast', { event: 'live' }, function (m) { _liveOnMsg(m.payload); });
