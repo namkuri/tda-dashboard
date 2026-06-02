@@ -478,6 +478,13 @@
         .tl-sprint-seg { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, rgba(255,255,255,.18), rgba(255,255,255,.18) 5px, transparent 5px, transparent 10px); border-left: 2px solid rgba(255,255,255,.4); pointer-events: none; display: flex; align-items: center; justify-content: flex-end; }
         .tl-sprint-live { font-size: 9px; color: #fff; background: var(--c-accent); border-radius: 4px; padding: 0 3px; margin-right: 2px; }
         .tl-dep-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; z-index: 1; }
+        /* [r172] 의존선 — 곡선 + 호버 하이라이트(넓은 투명 hit 경로로 포착) */
+        .tl-dep-hit { pointer-events: stroke; cursor: pointer; }
+        .tl-dep-line, .tl-dep-arrow { pointer-events: none; transition: stroke-width .12s, fill .12s, filter .12s; }
+        .tl-dep:hover .tl-dep-line { stroke-width: 3.4; filter: drop-shadow(0 0 3px var(--c-accent)); }
+        .tl-dep:hover .tl-dep-arrow { filter: drop-shadow(0 0 3px var(--c-accent)); }
+        /* [r172] 진행바 드래그 중 날짜 미리보기 툴팁 */
+        #tl-drag-tip { position: fixed; z-index: 100001; pointer-events: none; background: var(--c-text); color: var(--c-paper); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.3); display: none; }
         .tl-left-row { position: relative; }
         /* [r161] 라이브 협업 */
         #live-layer { position: fixed; inset: 0; pointer-events: none; z-index: 100000; overflow: hidden; }
@@ -22092,23 +22099,28 @@ ${intrLog}
                     var trc = tgtBar.getBoundingClientRect();
                     var x1 = sr.right - rr.left, y1 = sr.top + sr.height / 2 - rr.top;
                     var x2 = trc.left - rr.left, y2 = trc.top + trc.height / 2 - rr.top;
-                    paths += '<path d="' + _tlDepRoute(x1, y1, x2, y2) + '" fill="none" stroke="var(--c-accent)" stroke-width="1.6"/>'
-                        + '<path d="M' + (x2 - 6) + ' ' + (y2 - 4) + ' L' + x2 + ' ' + y2 + ' L' + (x2 - 6) + ' ' + (y2 + 4) + '" fill="var(--c-accent)"/>';
+                    var d = _tlDepRoute(x1, y1, x2, y2);
+                    var arrowD = 'M' + (x2 - 6) + ' ' + (y2 - 4) + ' L' + x2 + ' ' + y2 + ' L' + (x2 - 6) + ' ' + (y2 + 4);
+                    // [r172] hit(넓은 투명) → line(곡선) → arrow 순. 그룹 hover 시 line/arrow 하이라이트
+                    paths += '<g class="tl-dep">'
+                        + '<path class="tl-dep-hit" d="' + d + '" fill="none" stroke="transparent" stroke-width="12"/>'
+                        + '<path class="tl-dep-line" d="' + d + '" fill="none" stroke="var(--c-accent)" stroke-width="1.6"/>'
+                        + '<path class="tl-dep-arrow" d="' + arrowD + '" fill="var(--c-accent)"/>'
+                        + '</g>';
                 });
             });
             svg.style.width = rowsEl.scrollWidth + 'px'; svg.style.height = rowsEl.scrollHeight + 'px'; svg.innerHTML = paths;
         }
-        // [r171] 의존선 직각 라우팅. 타깃이 충분히 우측이면 기존 1단 꺾임,
-        //   타깃이 좌측(역방향)·너무 가까우면 노드 위 레인을 거쳐 두 번 꺾여 좌측에서 진입(노드 관통 방지).
+        // [r172] 의존선 곡선(베지어) 라우팅. 타깃이 우측이면 부드러운 수평 S곡선,
+        //   타깃이 좌측(역방향)·근접이면 제어점을 노드 위 레인에 둬 활처럼 넘어가 좌측에서 진입(노드 관통 방지).
         function _tlDepRoute(x1, y1, x2, y2) {
-            var stub = 14, arrow = 6;
-            if (x2 >= x1 + stub * 2) {
-                var mx = x1 + Math.max(stub, (x2 - x1) / 2);
-                return 'M' + x1 + ' ' + y1 + ' H' + mx + ' V' + y2 + ' H' + (x2 - arrow);
+            var arrow = 6, end = x2 - arrow;
+            if (x2 >= x1 + 24) {
+                var dx = Math.max(28, (x2 - x1) * 0.45);
+                return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (end - dx) + ' ' + y2 + ', ' + end + ' ' + y2;
             }
-            var lane = Math.min(y1, y2) - 20;        // 두 막대 중 위쪽 막대 상단 위 여백(행 간격 14px 안)
-            var ax1 = x1 + stub, ax2 = x2 - stub;     // 소스에서 살짝 나간 뒤 / 타깃 앞에서 내려오는 지점
-            return 'M' + x1 + ' ' + y1 + ' H' + ax1 + ' V' + lane + ' H' + ax2 + ' V' + y2 + ' H' + (x2 - arrow);
+            var lane = Math.min(y1, y2) - 30, bow = 34;   // 두 막대 중 위쪽 위로 올린 레인 + 좌우 활폭
+            return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + bow) + ' ' + lane + ', ' + (end - bow) + ' ' + lane + ', ' + end + ' ' + y2;
         }
         // 막대 드래그 — 이동 / 좌우 모서리 기간 조절
         var _tlDrag = null;
@@ -22125,9 +22137,31 @@ ${intrLog}
             if (_tlDrag.mode === 'move') el.style.left = (_tlDrag.oL + dx) + 'px';
             else if (_tlDrag.mode === 'resizeL') { el.style.left = (_tlDrag.oL + dx) + 'px'; el.style.width = Math.max(_tlDrag.ppd, _tlDrag.oW - dx) + 'px'; }
             else if (_tlDrag.mode === 'resizeR') el.style.width = Math.max(_tlDrag.ppd, _tlDrag.oW + dx) + 'px';
+            // [r172] 드래그 중 바뀌는 날짜를 커서 옆 작은 툴팁으로 표시
+            if (!_tlDrag.moved) { _tlHideDragTip(); return; }
+            var days = Math.round(dx / _tlDrag.ppd);
+            var s0 = _tlParseDate(_tlDrag.s0) || _tlParseDate(_tlDrag.d0), d0 = _tlParseDate(_tlDrag.d0) || _tlParseDate(_tlDrag.s0);
+            if (!s0 || !d0) return;
+            var add = function (dt, k) { var x = new Date(dt); x.setDate(x.getDate() + k); return x; };
+            var f = function (dt) { return (dt.getMonth() + 1) + '/' + dt.getDate(); };
+            var label;
+            if (_tlDrag.mode === 'move') label = f(add(s0, days)) + ' ~ ' + f(add(d0, days));
+            else if (_tlDrag.mode === 'resizeL') { var ns = add(s0, days); if (ns > d0) ns = d0; label = '시작 ' + f(ns); }
+            else { var nd = add(d0, days); if (nd < s0) nd = s0; label = '마감 ' + f(nd); }
+            _tlShowDragTip(e.clientX, e.clientY, label);
         }
+        var _tlDragTipEl = null;
+        function _tlShowDragTip(x, y, text) {
+            if (!_tlDragTipEl) { _tlDragTipEl = document.createElement('div'); _tlDragTipEl.id = 'tl-drag-tip'; document.body.appendChild(_tlDragTipEl); }
+            _tlDragTipEl.textContent = text;
+            _tlDragTipEl.style.display = 'block';
+            _tlDragTipEl.style.left = (x + 12) + 'px';
+            _tlDragTipEl.style.top = (y - 28) + 'px';
+        }
+        function _tlHideDragTip() { if (_tlDragTipEl) _tlDragTipEl.style.display = 'none'; }
         function _tlBarUp(e) {
             window.removeEventListener('mousemove', _tlBarMove); window.removeEventListener('mouseup', _tlBarUp);
+            _tlHideDragTip();
             var dg = _tlDrag; _tlDrag = null; if (!dg) return;
             if (!dg.moved) { wbsOpenNode(dg.id); return; }
             var n = _wbsNode(dg.id); if (!n) return;
@@ -22148,17 +22182,24 @@ ${intrLog}
             var lk = _tlLink; _tlLink = null; if (!lk) return;
             var n = _wbsNode(lk.from); if (!n) return;
             var tgt = document.elementFromPoint(e.clientX, e.clientY);
-            var row = tgt && tgt.closest ? tgt.closest('[data-tl-id]') : null;
-            // [r171] 작업 행이 아닌 허공에 드롭 → 이 작업의 나가는 연결(의존선) 삭제. 삭제 기능이 따로 없으므로 이 제스처로 해제.
-            if (!row) {
+            // [r172] 막대(.tl-bar / 기간미설정 .tl-bar-none) 위에 놓아야 연결. 그 외(빈 트랙·바깥)는 '허공'으로 보고 취소/해제.
+            //   (행 트랙이 전체 너비라 [data-tl-id]만 보면 빈 곳이 인식되지 않던 문제 수정)
+            var barEl = tgt && tgt.closest ? tgt.closest('.tl-bar, .tl-bar-none') : null;
+            var toId = null;
+            if (barEl) {
+                toId = barEl.getAttribute('data-id');
+                if (!toId) { var rw = barEl.closest('[data-tl-id]'); toId = rw ? rw.getAttribute('data-tl-id') : null; }
+            }
+            if (!toId) {
+                // 허공 드롭 → 새 연결 시도면 취소(무동작), 기존 연결 있으면 해제
                 var had = (n.links && Array.isArray(n.links.linkIds)) ? n.links.linkIds.length : 0;
-                if (!had) return; // 연결이 없으면 무동작(빈 곳 미스 클릭 안전)
+                if (!had) return;
                 n.links.linkIds = [];
                 n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
                 showToast(had > 1 ? ('🔗 연결 ' + had + '개 해제됨') : '🔗 연결이 해제되었습니다', 'info');
                 return;
             }
-            var toId = row.getAttribute('data-tl-id'); if (!toId || toId === lk.from) return;
+            if (toId === lk.from) return;
             if (!n.links) n.links = {}; if (!Array.isArray(n.links.linkIds)) n.links.linkIds = [];
             if (n.links.linkIds.indexOf(toId) < 0) n.links.linkIds.push(toId);
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
