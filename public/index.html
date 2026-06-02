@@ -7213,7 +7213,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var hashPart = hashIdx >= 0 ? raw.slice(hashIdx + 1).trim() : '';
                 if (!titlePart && !hashPart) return match;
                 var lower = titlePart.toLowerCase();
-                var docHit = titlePart ? (currentData.docs || []).find(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder) && (d.title || '').toLowerCase() === lower; }) : null;
+                var _meId = (currentUser && currentUser.id) || null;
+                var _wlVisible = function (d) {
+                    if ((d.projectId || 'default') !== activeProjectId) return false;
+                    if (d.kind === 'diagram') return false;
+                    if (d.meta && d.meta.isFolder) return false;
+                    // [r195] 개인 문서는 owner만 — 다른 사용자의 개인 문서 참조 차단(보안)
+                    if (d.kind === 'personal') { var own = d.meta && d.meta.owner; if (own && own !== _meId) return false; }
+                    return true;
+                };
+                var docHit = titlePart ? (currentData.docs || []).find(function (d) { return _wlVisible(d) && (d.title || '').toLowerCase() === lower; }) : null;
                 var taskHit = (titlePart && !docHit) ? (currentData.tasks || []).find(function (tk) { return (tk.projectId || 'default') === activeProjectId && (tk.title || '').toLowerCase() === lower; }) : null;
                 // 표시 라벨
                 var disp;
@@ -17653,9 +17662,19 @@ return data;
             var hashMode = hashIdx >= 0;
             var match = function (s) { return !titlePart || (s || '').toLowerCase().indexOf(titlePart.toLowerCase()) !== -1; };
             var items = [];
+            // [r195] 개인 문서는 owner만 노출(보안). 라벨에 종류 표시(📄 문서 / 📘 위키 / 🔒 개인).
+            var _meId = (currentUser && currentUser.id) || null;
+            var _wlVisible = function (d) {
+                if ((d.projectId || 'default') !== activeProjectId) return false;
+                if (d.kind === 'diagram') return false;
+                if (d.meta && d.meta.isFolder) return false;
+                if (d.kind === 'personal') { var own = d.meta && d.meta.owner; if (own && own !== _meId) return false; }
+                return true;
+            };
+            var _wlKindLabel = function (d) { return d.kind === 'canon' ? '📘 위키' : (d.kind === 'personal' ? '🔒 개인' : '📄 문서'); };
             if (hashMode) {
                 // 헤더 자동완성 — 대상 문서(제목으로 매칭 / 빈 제목이면 현재 문서)의 헤더 목록
-                var docs = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder); });
+                var docs = (currentData.docs || []).filter(_wlVisible);
                 var targets;
                 if (!titlePart) { var cur = docs.find(function (d) { return d.id === activeDocId; }); targets = cur ? [cur] : []; }
                 else targets = docs.filter(function (d) { return (d.title || '').toLowerCase() === titlePart.toLowerCase(); });
@@ -17683,10 +17702,11 @@ return data;
                 });
             } else {
                 // [r191] 옵시디언식 제목 매칭 — 입력 = 제목 그대로면 [[제목]] 으로 삽입
-                (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder); })
-                    .forEach(function (d) { if (match(d.title)) items.push({ mode: 'title', type: 'doc', id: d.id, title: d.title || '', label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), kind: '문서' }); });
+                // [r195] 종류 라벨(📄/📘/🔒)과 owner 가드 적용
+                (currentData.docs || []).filter(_wlVisible)
+                    .forEach(function (d) { if (match(d.title)) items.push({ mode: 'title', type: 'doc', id: d.id, title: d.title || '', label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), kind: _wlKindLabel(d) }); });
                 (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; })
-                    .forEach(function (t) { if (match(t.title)) items.push({ mode: 'title', type: 'task', id: t.id, title: t.title || '', label: '🗂 ' + (t.title || '제목 없음'), kind: '태스크' }); });
+                    .forEach(function (t) { if (match(t.title)) items.push({ mode: 'title', type: 'task', id: t.id, title: t.title || '', label: '🗂 ' + (t.title || '제목 없음'), kind: '🗂 태스크' }); });
             }
             items = items.slice(0, 8);
             // 입력값과 동일 제목이 없으면 '새로 만들기' 옵션 (헤더 모드 아닐 때만)
