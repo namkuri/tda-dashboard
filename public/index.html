@@ -4392,6 +4392,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="gph-side-actions">
                     <button class="gph-btn gph-btn-primary" onclick="gphNewDiagram(null)">＋ 새 그래프</button>
                     <button class="gph-btn" onclick="gphNewFolder(null)">＋ 폴더</button>
+                    <!-- [r196] 문서→마인드맵 자동 생성 (Ollama) -->
+                    <button class="gph-btn" style="background:var(--c-accent-soft);color:var(--c-accent);font-weight:700;" onclick="mmpOpenPicker()" title="선택한 문서를 LLM으로 분석해 마인드맵 자동 생성">🧠 문서로 마인드맵</button>
                 </div>
             </aside>
             <main class="gph-main">
@@ -28430,6 +28432,160 @@ ${intrLog}
     "use strict";
     var gphState = { scope: 'project', currentId: null, selected: null, connecting: null, expanded: {} };
     var _gphSaveT = null;
+
+    // ====================================================================
+    // [r196] 문서 → 마인드맵 자동 생성 (Ollama). GPU/Ollama 인프라(_dwpBackendUrl) 재사용.
+    // ====================================================================
+    var _mmpState = { selected: {}, target: 'new', existingId: null, running: false, log: [] };
+    function mmpOpenPicker() {
+        if (typeof _dwpBackendUrl !== 'function' || !_dwpBackendUrl()) { showToast('⚙️ Deep Wiki(AI) 백엔드 URL이 필요합니다. AI Agent 설정에서 먼저 등록하세요.', 'alert'); return; }
+        if (!activeProjectId) { showToast('프로젝트가 선택되어 있지 않습니다.', 'alert'); return; }
+        _mmpState.selected = {}; _mmpState.target = 'new'; _mmpState.existingId = null;
+        _openSimpleModal('🧠 문서로 마인드맵 만들기', _mmpRenderPicker());
+    }
+    function _mmpEligibleDocs() {
+        var meId = (currentUser && currentUser.id) || null;
+        return (currentData.docs || []).filter(function (d) {
+            if ((d.projectId || 'default') !== activeProjectId) return false;
+            if (d.kind === 'diagram') return false;
+            if (d.meta && d.meta.isFolder) return false;
+            if (d.kind === 'personal') { var own = d.meta && d.meta.owner; if (own && own !== meId) return false; }
+            return (d.title || '').trim().length > 0;
+        });
+    }
+    function _mmpExistingDiagrams() {
+        return (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind === 'diagram' && !(d.meta && d.meta.isFolder); });
+    }
+    function _mmpKindBadge(d) { return d.kind === 'canon' ? '📘 위키' : (d.kind === 'personal' ? '🔒 개인' : '📄 문서'); }
+    function _mmpRenderPicker() {
+        var docs = _mmpEligibleDocs();
+        var docRows = docs.length ? docs.map(function (d) {
+            var on = !!_mmpState.selected[d.id];
+            return '<label class="mmp-row" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;border:1px solid ' + (on ? 'var(--c-accent)' : 'transparent') + ';background:' + (on ? 'var(--c-accent-soft)' : 'transparent') + ';">'
+                + '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="_mmpToggleDoc(\'' + d.id + '\',this.checked)">'
+                + '<span style="font-size:11px;color:var(--c-text3);min-width:55px;">' + _mmpKindBadge(d) + '</span>'
+                + '<span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sprintEsc(d.title || '제목 없음') + '</span></label>';
+        }).join('') : '<div style="padding:12px;color:var(--c-text3);font-size:12px;text-align:center;">문서가 없습니다. 먼저 문서를 만드세요.</div>';
+        var n = Object.keys(_mmpState.selected).filter(function (k) { return _mmpState.selected[k]; }).length;
+        var modeHint = n === 0 ? '문서 1개 이상 선택' : (n === 1 ? '단일 모드 (그 문서 1개를 마인드맵화)' : '다중 모드 (공통 개념 + 문서 간 관계까지 추출)');
+        var diags = _mmpExistingDiagrams();
+        var diagOptions = diags.length ? diags.map(function (d) { return '<option value="' + d.id + '"' + (_mmpState.existingId === d.id ? ' selected' : '') + '>' + _sprintEsc(d.title || '그래프') + '</option>'; }).join('') : '<option value="">(기존 그래프 없음)</option>';
+        return '<div style="font-size:11px;color:var(--c-text3);margin-bottom:8px;">선택한 문서를 GPU/Ollama에 보내 마인드맵으로 자동 정리합니다. ' + modeHint + ' · 선택 ' + n + '개</div>'
+            + '<div style="display:flex;gap:8px;margin-bottom:8px;"><input id="mmp-q" type="text" placeholder="🔍 제목 검색" oninput="_mmpFilterPicker(this.value)" style="flex:1;font-size:12px;padding:5px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"><button onclick="_mmpSelectAll(true)" style="font-size:11px;padding:4px 9px;border-radius:6px;border:1px solid var(--c-border);background:var(--ios-fill);cursor:pointer;">모두</button><button onclick="_mmpSelectAll(false)" style="font-size:11px;padding:4px 9px;border-radius:6px;border:1px solid var(--c-border);background:var(--ios-fill);cursor:pointer;">해제</button></div>'
+            + '<div id="mmp-doc-list" style="max-height:36vh;overflow-y:auto;border:1px solid var(--c-border);border-radius:8px;padding:5px;background:var(--c-paper);">' + docRows + '</div>'
+            + '<div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--c-border);border-radius:8px;padding:10px;background:var(--c-paper);">'
+            + '<div style="font-size:12px;font-weight:700;color:var(--c-text2);">📊 결과 배치</div>'
+            + '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;"><input type="radio" name="mmp-tg" value="new" ' + (_mmpState.target === 'new' ? 'checked' : '') + ' onchange="_mmpSetTarget(\'new\')"> <span>새 다이어그램으로 생성</span></label>'
+            + '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;"><input type="radio" name="mmp-tg" value="existing" ' + (_mmpState.target === 'existing' ? 'checked' : '') + ' onchange="_mmpSetTarget(\'existing\')" ' + (diags.length ? '' : 'disabled') + '> <span>기존 다이어그램에 노드 추가</span></label>'
+            + (_mmpState.target === 'existing' ? ('<select onchange="_mmpState.existingId=this.value" style="margin-left:24px;font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--c-border);background:var(--c-paper);color:var(--c-text);">' + diagOptions + '</select>') : '')
+            + '</div>'
+            + '<div style="margin-top:12px;text-align:right;"><button onclick="_closeSimpleModal()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;margin-right:6px;">취소</button>'
+            + '<button onclick="mmpRun()" style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:7px;border:none;background:var(--c-accent);color:#fff;cursor:pointer;">🧠 생성 시작</button></div>';
+    }
+    function _mmpToggleDoc(id, on) { _mmpState.selected[id] = !!on; _mmpRefreshPicker(); }
+    function _mmpSelectAll(on) {
+        var docs = _mmpEligibleDocs(); var q = (document.getElementById('mmp-q') || {}).value || '';
+        docs.forEach(function (d) { if (!q || (d.title || '').toLowerCase().indexOf(q.toLowerCase()) >= 0) _mmpState.selected[d.id] = on; });
+        _mmpRefreshPicker();
+    }
+    function _mmpSetTarget(t) { _mmpState.target = t; _mmpRefreshPicker(); }
+    function _mmpFilterPicker(q) {
+        var ql = (q || '').toLowerCase();
+        document.querySelectorAll('#mmp-doc-list .mmp-row').forEach(function (row) {
+            var t = (row.textContent || '').toLowerCase();
+            row.style.display = (!ql || t.indexOf(ql) >= 0) ? '' : 'none';
+        });
+    }
+    function _mmpRefreshPicker() { var ov = document.getElementById('simple-modal-overlay'); if (ov && ov.style.display !== 'none') _openSimpleModal('🧠 문서로 마인드맵 만들기', _mmpRenderPicker()); }
+    async function mmpRun() {
+        var ids = Object.keys(_mmpState.selected).filter(function (k) { return _mmpState.selected[k]; });
+        if (!ids.length) { showToast('문서를 1개 이상 선택하세요.', 'alert'); return; }
+        var url = _dwpBackendUrl(); if (!url) { showToast('백엔드 URL이 없습니다.', 'alert'); return; }
+        // 본문 미로드 문서는 fetch
+        var docs = [];
+        for (var i = 0; i < ids.length; i++) {
+            var d = (currentData.docs || []).find(function (x) { return x.id === ids[i]; }); if (!d) continue;
+            if (d._contentLoaded === false && typeof _fetchDocContent === 'function') {
+                try { d.content = await _fetchDocContent(d.id); d._contentLoaded = true; } catch (e) {}
+            }
+            docs.push({ title: d.title || '', content: (d.content || '').slice(0, 12000) });
+        }
+        // 진행 모달
+        _mmpState.running = true; _mmpState.log = [];
+        _openSimpleModal('🧠 마인드맵 생성 중…', '<div id="mmp-log" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:7px;padding:10px;max-height:50vh;overflow-y:auto;white-space:pre-wrap;line-height:1.5;color:var(--c-text);">⏳ 시작 중…</div>');
+        function _log(line) { _mmpState.log.push(line); var el = document.getElementById('mmp-log'); if (el) { el.textContent = _mmpState.log.join('\n'); el.scrollTop = el.scrollHeight; } }
+        try {
+            var res = await fetch(url + '/mindmap/generate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ docs: docs, mode: 'auto', project_id: activeProjectId })
+            });
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(), dec = new TextDecoder(), buf = '', diagram = null, done = false;
+            while (!done) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, { stream: true });
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var k = 0; k < lines.length; k++) {
+                    var line = lines[k]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'stage') _log('🔄 [' + ev.stage + '] ' + (ev.message || ''));
+                        else if (ev.event === 'progress') _log('… ' + (ev.message || ''));
+                        else if (ev.event === 'info') _log('ℹ ' + (ev.message || ''));
+                        else if (ev.event === 'warn') _log('⚠ ' + (ev.message || ''));
+                        else if (ev.event === 'error') { _log('❌ ' + (ev.message || '오류')); throw new Error(ev.message || 'LLM 오류'); }
+                        else if (ev.event === 'done') { diagram = ev.diagram; done = true; _log('✅ 노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개 (' + ev.mode + ' 모드)'); }
+                    } catch (parseErr) { /* JSON 라인 외엔 무시 */ }
+                }
+            }
+            if (!diagram) throw new Error('빈 결과');
+            // 다이어그램에 적용
+            await _mmpApplyDiagram(diagram, docs);
+            _mmpState.running = false;
+            showToast('🧠 마인드맵이 생성되었습니다.', 'success');
+        } catch (e) {
+            _log('❌ 실패: ' + (e.message || e));
+            showToast('마인드맵 생성 실패: ' + (e.message || e), 'alert');
+            _mmpState.running = false;
+        }
+    }
+    async function _mmpApplyDiagram(diagram, docs) {
+        // target == 'new' → 새 diagram doc 생성. 'existing' → 기존 diagram에 노드 머지(좌표 오프셋)
+        if (_mmpState.target === 'existing' && _mmpState.existingId) {
+            var doc = (currentData.docs || []).find(function (d) { return d.id === _mmpState.existingId; }); if (!doc) throw new Error('대상 다이어그램 없음');
+            var p = gphPayload(doc);
+            p.mode = 'graph';
+            // 기존 노드 영역 우측에 새 노드 배치
+            var maxX = 0; (p.nodes || []).forEach(function (n) { maxX = Math.max(maxX, n.x + (n.w || 200)); });
+            var ox = (p.nodes && p.nodes.length) ? (maxX + 200) : 0;
+            (diagram.nodes || []).forEach(function (n) { n.x = (n.x || 0) + ox; p.nodes.push(n); });
+            (diagram.edges || []).forEach(function (e) { p.edges.push(e); });
+            gphSave(doc);
+            if (typeof switchView === 'function') switchView('graph');
+            gphState.currentId = doc.id;
+            setTimeout(function () { gphRender(); }, 50);
+        } else {
+            // 새 diagram
+            var title = docs.length === 1 ? ('🧠 ' + docs[0].title + ' — 마인드맵') : ('🧠 마인드맵 — ' + docs.length + '개 문서');
+            var newDoc = {
+                id: gphUid('doc'), projectId: activeProjectId, parentId: null,
+                title: title, emoji: '🧠', kind: 'diagram', content: '',
+                meta: { scope: 'project', isFolder: false, diagram: diagram,
+                    history: [{ action: 'create', by: currentUser ? currentUser.id : null, byName: myNickname, at: new Date().toISOString() }],
+                    mindmap: { sourceDocs: docs.map(function (d) { return d.title; }), generatedAt: new Date().toISOString() } },
+                createdAt: Date.now(), updatedAt: Date.now(), sortOrder: gphNextOrder(null),
+                createdBy: (currentUser && currentUser.id) || null
+            };
+            if (!Array.isArray(currentData.docs)) currentData.docs = [];
+            currentData.docs.push(newDoc);
+            gphSaveNow(newDoc);
+            if (typeof switchView === 'function') switchView('graph');
+            gphState.currentId = newDoc.id; gphState.selected = null;
+            setTimeout(function () { gphRender(); }, 50);
+        }
+        _closeSimpleModal();
+    }
 
     // ====================================================================
     // [r186] 프로젝트 관계도 — 신규 페이지(문서·태스크·스프린트·카테고리·작업구조화·에셋)의

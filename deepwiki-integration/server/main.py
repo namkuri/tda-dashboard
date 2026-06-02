@@ -18,6 +18,7 @@ from retriever import retrieve, SIMILARITY_THRESHOLD
 from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints, _is_empty_template_chunk
 from wiki_generator import generate_wiki, extend_wiki_page  # [r113] 자동 위키 + [r132] 페이지 확장
 from wiki_auditor import audit_wiki  # [r115] 기획 대조 2차 MD
+from mindmap_generator import generate_mindmap  # [r196] 문서→마인드맵
 
 
 app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
@@ -72,6 +73,7 @@ def _busy_human() -> str:
     kind_label = {
         "wiki_generate": "Deep Wiki 자동 생성",
         "wiki_audit": "기획 대조 보고서(2차) 생성",
+        "mindmap_generate": "마인드맵 생성",  # [r196]
         "index_code": "코드 인덱싱",
         "index_wiki": "위키 인덱싱",
         "index_task": "태스크 인덱싱",
@@ -442,6 +444,41 @@ async def wiki_generate(req: WikiGenerateRequest):
         model=req.model,
         mode=req.mode,
     ), busy_kind="wiki_generate", busy_project=req.project_id)
+
+
+# ─────────────────────────────────────────────
+# [r196] 문서 → 마인드맵 자동 생성
+# ─────────────────────────────────────────────
+
+class MindmapDoc(BaseModel):
+    title: str
+    content: str
+
+
+class MindmapGenerateRequest(BaseModel):
+    docs: List[MindmapDoc]
+    mode: str = "auto"           # 'auto' | 'single' | 'multi'
+    model: Optional[str] = None
+    project_id: Optional[str] = None  # busy 추적용(선택)
+
+
+@app.post("/mindmap/generate")
+async def mindmap_generate(req: MindmapGenerateRequest):
+    """문서 1개 또는 여러 개 → LLM으로 마인드맵 JSON 생성. SSE 진행률 스트리밍.
+
+    응답 done 이벤트의 diagram payload를 그대로 wiki_docs.meta.diagram에 저장하면 그래프 뷰에서 즉시 렌더됨.
+    """
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    docs = [{"title": d.title, "content": d.content} for d in (req.docs or [])]
+    return _sse_indexer(generate_mindmap(
+        docs=docs,
+        model=req.model,
+        mode=req.mode,
+    ), busy_kind="mindmap_generate", busy_project=req.project_id)
 
 
 @app.get("/wiki/pages")
