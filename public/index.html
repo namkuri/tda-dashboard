@@ -492,6 +492,9 @@
         .tl-dep-line, .tl-dep-arrow { pointer-events: none; transition: stroke-width .12s, fill .12s, filter .12s; }
         .tl-dep:hover .tl-dep-line { stroke-width: 3.4; filter: drop-shadow(0 0 3px var(--c-accent)); }
         .tl-dep:hover .tl-dep-arrow { filter: drop-shadow(0 0 3px var(--c-accent)); }
+        /* [r177] 연결 드래그 미리보기 선 + 대상 막대 강조 */
+        .tl-link-preview { pointer-events: none; opacity: .9; }
+        .tl-bar-linktarget { box-shadow: 0 0 0 2px var(--c-accent), 0 0 10px var(--c-accent); transition: box-shadow .1s; }
         .tl-dep-grip { pointer-events: all; cursor: grab; transition: fill .12s, stroke .12s; }
         .tl-dep:hover .tl-dep-grip { fill: rgba(201,100,66,.18); stroke: var(--c-accent); stroke-width: 1.5; }
         .tl-dep-grip:active { cursor: grabbing; }
@@ -22226,9 +22229,45 @@ ${intrLog}
             if (!id) { var rw = barEl.closest('[data-tl-id]'); id = rw ? rw.getAttribute('data-tl-id') : null; }
             return id || null;
         }
-        function _tlLinkDown(e, id) { e.stopPropagation(); e.preventDefault(); _tlLink = { from: id }; document.body.style.cursor = 'crosshair'; window.addEventListener('mouseup', _tlLinkUp); }
+        // [r177] 연결선 드래그 중 실시간 미리보기 — 소스 막대 우측 → 커서까지 점선 곡선 + 대상 막대 강조
+        var _tlLinkPv = null;
+        function _tlLinkPreviewStart(fromId) {
+            var rowsEl = document.getElementById('tl-rows'); var svg = document.getElementById('tl-dep-svg');
+            if (!rowsEl || !svg) return;
+            var bar = rowsEl.querySelector('.tl-bar[data-id="' + fromId + '"]'); if (!bar) return;
+            var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            p.setAttribute('class', 'tl-link-preview'); p.setAttribute('fill', 'none');
+            p.setAttribute('stroke', 'var(--c-accent)'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-dasharray', '5 4');
+            svg.appendChild(p);
+            _tlLinkPv = { fromId: fromId, rowsEl: rowsEl, path: p, hl: null, hlId: null };
+            window.addEventListener('mousemove', _tlLinkPreviewMove);
+        }
+        function _tlLinkPreviewMove(e) {
+            if (!_tlLinkPv) return;
+            var rowsEl = _tlLinkPv.rowsEl, rr = rowsEl.getBoundingClientRect();
+            var bar = rowsEl.querySelector('.tl-bar[data-id="' + _tlLinkPv.fromId + '"]'); if (!bar) return;
+            var br = bar.getBoundingClientRect();
+            var x1 = br.right - rr.left, y1 = br.top + br.height / 2 - rr.top;
+            var cx = e.clientX - rr.left, cy = e.clientY - rr.top;
+            _tlLinkPv.path.setAttribute('d', _tlDepRoute(x1, y1, cx, cy));
+            var tid = _tlBarNodeAt(e.clientX, e.clientY);
+            if (_tlLinkPv.hl && tid !== _tlLinkPv.hlId) { _tlLinkPv.hl.classList.remove('tl-bar-linktarget'); _tlLinkPv.hl = null; _tlLinkPv.hlId = null; }
+            if (tid && tid !== _tlLinkPv.fromId && tid !== _tlLinkPv.hlId) {
+                var tb = rowsEl.querySelector('.tl-bar[data-id="' + tid + '"]');
+                if (tb) { tb.classList.add('tl-bar-linktarget'); _tlLinkPv.hl = tb; _tlLinkPv.hlId = tid; }
+            }
+        }
+        function _tlLinkPreviewEnd() {
+            window.removeEventListener('mousemove', _tlLinkPreviewMove);
+            if (_tlLinkPv) {
+                if (_tlLinkPv.path && _tlLinkPv.path.parentNode) _tlLinkPv.path.parentNode.removeChild(_tlLinkPv.path);
+                if (_tlLinkPv.hl) _tlLinkPv.hl.classList.remove('tl-bar-linktarget');
+                _tlLinkPv = null;
+            }
+        }
+        function _tlLinkDown(e, id) { e.stopPropagation(); e.preventDefault(); _tlLink = { from: id }; document.body.style.cursor = 'crosshair'; _tlLinkPreviewStart(id); window.addEventListener('mouseup', _tlLinkUp); }
         function _tlLinkUp(e) {
-            window.removeEventListener('mouseup', _tlLinkUp); document.body.style.cursor = '';
+            window.removeEventListener('mouseup', _tlLinkUp); document.body.style.cursor = ''; _tlLinkPreviewEnd();
             var lk = _tlLink; _tlLink = null; if (!lk) return;
             var n = _wbsNode(lk.from); if (!n) return;
             var toId = _tlBarNodeAt(e.clientX, e.clientY);
@@ -22252,10 +22291,11 @@ ${intrLog}
         function _tlRelinkDown(e, fromId, toId) {
             if (e.button !== 0) return; e.stopPropagation(); e.preventDefault();
             _tlRelink = { from: fromId, oldTo: toId }; document.body.style.cursor = 'crosshair';
+            _tlLinkPreviewStart(fromId);
             window.addEventListener('mouseup', _tlRelinkUp);
         }
         function _tlRelinkUp(e) {
-            window.removeEventListener('mouseup', _tlRelinkUp); document.body.style.cursor = '';
+            window.removeEventListener('mouseup', _tlRelinkUp); document.body.style.cursor = ''; _tlLinkPreviewEnd();
             var rl = _tlRelink; _tlRelink = null; if (!rl) return;
             var n = _wbsNode(rl.from); if (!n || !n.links || !Array.isArray(n.links.linkIds)) return;
             var ids = n.links.linkIds, oldIdx = ids.indexOf(rl.oldTo);
@@ -22272,21 +22312,24 @@ ${intrLog}
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
             showToast('🔗 연결 대상을 변경했습니다', 'success');
         }
-        // [r176] 행 순서 변경(드래그) — 드롭 위치 미리보기(부드럽게 슬라이드) + ESC 취소 + 착지 강조
-        var _tlRowDrag = null, _tlDropInd = null, _tlJustMovedId = null;
-        function _tlEnsureDropInd() {
-            var left = document.querySelector('#timeline-view .tl-left'); if (!left) return null;
-            if (!_tlDropInd || _tlDropInd.parentNode !== left) {
-                _tlDropInd = document.createElement('div'); _tlDropInd.className = 'tl-drop-ind';
-                left.appendChild(_tlDropInd);
-            }
-            return _tlDropInd;
-        }
+        // [r176/r177] 행 순서 변경(드래그) — 드래그 도중 슬롯이 실시간으로 부드럽게 열림(양 컬럼 transform)
+        //   + 드롭 확정 + ESC 취소 + 착지 강조
+        var _tlRowDrag = null, _tlJustMovedId = null;
         function _tlRowDragStart(e, id) {
-            _tlRowDrag = { id: id, overId: null, before: false, cancelled: false };
+            var left = document.querySelector('#timeline-view .tl-left');
+            var rowsEl = document.getElementById('tl-rows');
+            var leftRowsArr = left ? Array.prototype.slice.call(left.querySelectorAll('.tl-left-row')) : [];
+            var els = leftRowsArr.map(function (lr) {
+                var rid = lr.getAttribute('data-tl-leftid');
+                return { id: rid, left: lr, bar: rowsEl ? rowsEl.querySelector('.tl-bar-row[data-tl-id="' + rid + '"]') : null };
+            });
+            var dragIdx = els.findIndex(function (x) { return x.id === id; });
+            var rh = (els[0] && els[0].left.offsetHeight) || 40;
+            _tlRowDrag = { id: id, dragIdx: dragIdx, els: els, rh: rh, overId: null, before: false, cancelled: false };
             try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {}
-            var row = e.currentTarget; if (row && row.classList) row.classList.add('tl-row-dragging');
-            _tlEnsureDropInd();
+            els.forEach(function (x) { x.left.style.transition = 'transform .16s cubic-bezier(.4,0,.2,1)'; if (x.bar) x.bar.style.transition = 'transform .16s cubic-bezier(.4,0,.2,1)'; });
+            // 드래그 고스트 캡처 후 다음 틱에 원본 숨김(슬롯이 비어 보이도록)
+            setTimeout(function () { if (!_tlRowDrag || _tlRowDrag.cancelled) return; var d = els[dragIdx]; if (d) { d.left.style.visibility = 'hidden'; if (d.bar) d.bar.style.visibility = 'hidden'; } }, 0);
             window.addEventListener('keydown', _tlRowDragKey, true);
         }
         function _tlRowDragKey(e) {
@@ -22294,22 +22337,39 @@ ${intrLog}
         }
         function _tlRowDragOver(e, targetId) {
             e.preventDefault();
-            if (!_tlRowDrag || _tlRowDrag.cancelled) return;
+            var dr = _tlRowDrag; if (!dr || dr.cancelled) return;
             try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
-            var ind = _tlEnsureDropInd(); if (!ind) return;
-            if (targetId === _tlRowDrag.id) { ind.style.opacity = '0'; _tlRowDrag.overId = null; return; }
-            var row = e.currentTarget, rect = row.getBoundingClientRect();
-            var before = (e.clientY - rect.top) < rect.height / 2;
-            _tlRowDrag.overId = targetId; _tlRowDrag.before = before;
-            ind.style.top = (row.offsetTop + (before ? 0 : row.offsetHeight)) + 'px';
-            ind.style.left = (parseFloat(row.style.paddingLeft) || 8) + 'px';
-            ind.style.opacity = '1';
+            if (targetId === dr.id) return;
+            if (_wbsIsDescendant(dr.id, targetId)) { _tlResetRowTransforms(); dr.overId = null; return; }
+            var targetIdx = dr.els.findIndex(function (x) { return x.id === targetId; }); if (targetIdx < 0) return;
+            var row = e.currentTarget, left = document.querySelector('#timeline-view .tl-left');
+            // before/after는 레이아웃 기준(offsetTop)으로 — transform 적용된 위치로 판정하면 떨림 발생
+            var lrect = left.getBoundingClientRect();
+            var rowLayoutTop = lrect.top - left.scrollTop + row.offsetTop;
+            var before = (e.clientY - rowLayoutTop) < dr.rh / 2;
+            dr.overId = targetId; dr.before = before;
+            var rawIns = before ? targetIdx : targetIdx + 1;
+            var dragIdx = dr.dragIdx, rh = dr.rh;
+            var insWithout = rawIns > dragIdx ? rawIns - 1 : rawIns;
+            dr.els.forEach(function (x, j) {
+                if (j === dragIdx) return;
+                var newSlot = j; if (j > dragIdx) newSlot -= 1; if (newSlot >= insWithout) newSlot += 1;
+                var tf = (newSlot - j) ? ('translateY(' + ((newSlot - j) * rh) + 'px)') : '';
+                x.left.style.transform = tf; if (x.bar) x.bar.style.transform = tf;
+            });
+        }
+        function _tlResetRowTransforms() {
+            if (!_tlRowDrag) return;
+            _tlRowDrag.els.forEach(function (x) { x.left.style.transform = ''; if (x.bar) x.bar.style.transform = ''; });
         }
         function _tlClearRowDrag() {
             window.removeEventListener('keydown', _tlRowDragKey, true);
-            var dz = document.querySelectorAll('#timeline-view .tl-left-row.tl-row-dragging');
-            for (var i = 0; i < dz.length; i++) dz[i].classList.remove('tl-row-dragging');
-            if (_tlDropInd) _tlDropInd.style.opacity = '0';
+            if (_tlRowDrag && _tlRowDrag.els) {
+                _tlRowDrag.els.forEach(function (x) {
+                    x.left.style.transform = ''; x.left.style.transition = ''; x.left.style.visibility = '';
+                    if (x.bar) { x.bar.style.transform = ''; x.bar.style.transition = ''; x.bar.style.visibility = ''; }
+                });
+            }
             _tlRowDrag = null;
         }
         function _tlRowDragEnd() { _tlClearRowDrag(); }    // drop·ESC·바깥 놓기 등 항상 호출 → 정리
