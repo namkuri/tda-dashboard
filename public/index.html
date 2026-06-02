@@ -452,8 +452,13 @@
         /* [r176] 작업 컬럼 행 드래그 — 드롭 위치 미리보기(부드럽게 이동) + 드래그 중 행 + 착지 강조 */
         .tl-drop-ind { position: absolute; height: 2px; right: 8px; background: var(--c-accent); border-radius: 2px; opacity: 0; pointer-events: none; z-index: 5; box-shadow: 0 0 6px var(--c-accent); transition: top .14s cubic-bezier(.4,0,.2,1), left .14s cubic-bezier(.4,0,.2,1), opacity .12s; }
         .tl-drop-ind::before { content: ''; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); }
-        .tl-left-row { transition: background .12s, opacity .12s; }
-        .tl-left-row.tl-row-dragging { opacity: .4; background: var(--ios-fill); }
+        .tl-left-row { transition: background .12s; }
+        /* [r178] 드래그 중인 행(보이는 채로 슬롯 따라 이동) — 집은 느낌의 강조 */
+        .tl-left-row.tl-row-dragging { background: var(--c-accent-soft); box-shadow: inset 0 0 0 2px var(--c-accent); border-radius: 6px; position: relative; z-index: 4; }
+        .tl-bar-row.tl-bar-dragging { z-index: 4; }
+        .tl-bar-row.tl-bar-dragging .tl-bar { box-shadow: 0 0 0 2px var(--c-accent), 0 2px 8px rgba(0,0,0,.25); }
+        /* [r178] 자식으로 넣을 대상 행 강조 */
+        .tl-left-row.tl-row-dropchild { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-accent); }
         @keyframes tlRowLand { 0% { background: var(--c-accent-soft); } 100% { background: transparent; } }
         .tl-left-row.tl-row-justmoved { animation: tlRowLand .7s ease-out; }
         .tl-left-hdr { height: 34px; display: flex; align-items: center; padding: 0 12px; font-size: 11px; font-weight: 800; color: var(--c-text3); border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-card); z-index: 2; }
@@ -22312,86 +22317,117 @@ ${intrLog}
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
             showToast('🔗 연결 대상을 변경했습니다', 'success');
         }
-        // [r176/r177] 행 순서 변경(드래그) — 드래그 도중 슬롯이 실시간으로 부드럽게 열림(양 컬럼 transform)
-        //   + 드롭 확정 + ESC 취소 + 착지 강조
-        var _tlRowDrag = null, _tlJustMovedId = null;
+        // [r176/r177/r178] 행 순서 변경(드래그) — 드래그 도중 슬롯 실시간 이동(양 컬럼+막대 함께),
+        //   행 위/아래 가장자리=형제 앞/뒤, 가운데=자식으로 넣기. 드롭 확정(sortOrder 재정규화) + ESC 취소.
+        var _tlRowDrag = null, _tlJustMovedId = null, _tlBlankImg = null;
         function _tlRowDragStart(e, id) {
             var left = document.querySelector('#timeline-view .tl-left');
             var rowsEl = document.getElementById('tl-rows');
             var leftRowsArr = left ? Array.prototype.slice.call(left.querySelectorAll('.tl-left-row')) : [];
             var els = leftRowsArr.map(function (lr) {
                 var rid = lr.getAttribute('data-tl-leftid');
-                return { id: rid, left: lr, bar: rowsEl ? rowsEl.querySelector('.tl-bar-row[data-tl-id="' + rid + '"]') : null };
+                return { id: rid, left: lr, bar: rowsEl ? rowsEl.querySelector('.tl-bar-row[data-tl-id="' + rid + '"]') : null,
+                         padL: lr.style.paddingLeft, depth: Math.round(((parseFloat(lr.style.paddingLeft) || 8) - 8) / 16) };
             });
             var dragIdx = els.findIndex(function (x) { return x.id === id; });
             var rh = (els[0] && els[0].left.offsetHeight) || 40;
-            _tlRowDrag = { id: id, dragIdx: dragIdx, els: els, rh: rh, overId: null, before: false, cancelled: false };
-            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {}
-            els.forEach(function (x) { x.left.style.transition = 'transform .16s cubic-bezier(.4,0,.2,1)'; if (x.bar) x.bar.style.transition = 'transform .16s cubic-bezier(.4,0,.2,1)'; });
-            // 드래그 고스트 캡처 후 다음 틱에 원본 숨김(슬롯이 비어 보이도록)
-            setTimeout(function () { if (!_tlRowDrag || _tlRowDrag.cancelled) return; var d = els[dragIdx]; if (d) { d.left.style.visibility = 'hidden'; if (d.bar) d.bar.style.visibility = 'hidden'; } }, 0);
+            _tlRowDrag = { id: id, dragIdx: dragIdx, els: els, rh: rh, drop: null, childHl: null, cancelled: false };
+            try {
+                e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id);
+                // 투명 드래그 이미지 — 커서 고스트 대신 실제 행이 슬롯을 따라 이동(막대 포함)
+                if (!_tlBlankImg) { _tlBlankImg = new Image(); _tlBlankImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; }
+                e.dataTransfer.setDragImage(_tlBlankImg, 0, 0);
+            } catch (_) {}
+            els.forEach(function (x) {
+                x.left.style.transition = 'transform .16s cubic-bezier(.4,0,.2,1), padding-left .16s ease';
+                if (x.bar) x.bar.style.transition = 'transform .16s cubic-bezier(.4,0,.2,1)';
+            });
+            var d = els[dragIdx]; if (d) { d.left.classList.add('tl-row-dragging'); if (d.bar) d.bar.classList.add('tl-bar-dragging'); }
             window.addEventListener('keydown', _tlRowDragKey, true);
         }
         function _tlRowDragKey(e) {
             if (e.key === 'Escape' && _tlRowDrag) { _tlRowDrag.cancelled = true; _tlClearRowDrag(); if (typeof showToast === 'function') showToast('이동 취소됨', 'info'); }
         }
-        function _tlRowDragOver(e, targetId) {
+        function _tlRowDragOver(e) {
             e.preventDefault();
             var dr = _tlRowDrag; if (!dr || dr.cancelled) return;
             try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
-            if (targetId === dr.id) return;
-            if (_wbsIsDescendant(dr.id, targetId)) { _tlResetRowTransforms(); dr.overId = null; return; }
-            var targetIdx = dr.els.findIndex(function (x) { return x.id === targetId; }); if (targetIdx < 0) return;
-            var row = e.currentTarget, left = document.querySelector('#timeline-view .tl-left');
-            // before/after는 레이아웃 기준(offsetTop)으로 — transform 적용된 위치로 판정하면 떨림 발생
+            var left = document.querySelector('#timeline-view .tl-left'); if (!left) return;
             var lrect = left.getBoundingClientRect();
-            var rowLayoutTop = lrect.top - left.scrollTop + row.offsetTop;
-            var before = (e.clientY - rowLayoutTop) < dr.rh / 2;
-            dr.overId = targetId; dr.before = before;
-            var rawIns = before ? targetIdx : targetIdx + 1;
+            var base = dr.els[0] ? dr.els[0].left.offsetTop : 0;
+            var contentY = e.clientY - lrect.top + left.scrollTop;
+            var n = dr.els.length;
+            var rawIdx = Math.floor((contentY - base) / dr.rh);
+            if (rawIdx < 0) rawIdx = 0; if (rawIdx > n - 1) rawIdx = n - 1;
+            var withinY = ((contentY - base) / dr.rh) - rawIdx;
+            var te = dr.els[rawIdx];
+            // 자기 자신/하위 트리 위에서는 드롭 불가 — 미리보기 원위치
+            if (!te || te.id === dr.id || _wbsIsDescendant(dr.id, te.id)) { _tlPreviewClear(); dr.drop = null; return; }
+            var tNode = _wbsNode(te.id); if (!tNode) { _tlPreviewClear(); dr.drop = null; return; }
+            var mode = withinY < 0.28 ? 'before' : (withinY > 0.72 ? 'after' : 'child');
+            var ins, parentId, indentDepth;
+            if (mode === 'child') { parentId = te.id; ins = rawIdx + 1; indentDepth = te.depth + 1; }
+            else if (mode === 'before') { parentId = tNode.parentId || null; ins = rawIdx; indentDepth = te.depth; }
+            else { parentId = tNode.parentId || null; ins = rawIdx + 1; indentDepth = te.depth; }
+            dr.drop = { mode: mode, targetId: te.id, parentId: parentId };
+            // 미리보기: 슬롯 열기(드래그 행 포함) + 자식이면 들여쓰기/대상 강조
             var dragIdx = dr.dragIdx, rh = dr.rh;
-            var insWithout = rawIns > dragIdx ? rawIns - 1 : rawIns;
+            var insWithout = ins > dragIdx ? ins - 1 : ins;
             dr.els.forEach(function (x, j) {
-                if (j === dragIdx) return;
-                var newSlot = j; if (j > dragIdx) newSlot -= 1; if (newSlot >= insWithout) newSlot += 1;
+                var newSlot;
+                if (j === dragIdx) newSlot = insWithout;
+                else { newSlot = j; if (j > dragIdx) newSlot -= 1; if (newSlot >= insWithout) newSlot += 1; }
                 var tf = (newSlot - j) ? ('translateY(' + ((newSlot - j) * rh) + 'px)') : '';
                 x.left.style.transform = tf; if (x.bar) x.bar.style.transform = tf;
             });
+            dr.els[dragIdx].left.style.paddingLeft = (8 + indentDepth * 16) + 'px';
+            // 자식 대상 강조
+            if (dr.childHl && dr.childHl !== te.left) { dr.childHl.classList.remove('tl-row-dropchild'); dr.childHl = null; }
+            if (mode === 'child') { te.left.classList.add('tl-row-dropchild'); dr.childHl = te.left; }
+            else if (dr.childHl) { dr.childHl.classList.remove('tl-row-dropchild'); dr.childHl = null; }
         }
-        function _tlResetRowTransforms() {
+        function _tlPreviewClear() {
             if (!_tlRowDrag) return;
-            _tlRowDrag.els.forEach(function (x) { x.left.style.transform = ''; if (x.bar) x.bar.style.transform = ''; });
+            _tlRowDrag.els.forEach(function (x) { x.left.style.transform = ''; if (x.bar) x.bar.style.transform = ''; x.left.style.paddingLeft = x.padL; });
+            if (_tlRowDrag.childHl) { _tlRowDrag.childHl.classList.remove('tl-row-dropchild'); _tlRowDrag.childHl = null; }
         }
         function _tlClearRowDrag() {
             window.removeEventListener('keydown', _tlRowDragKey, true);
             if (_tlRowDrag && _tlRowDrag.els) {
                 _tlRowDrag.els.forEach(function (x) {
-                    x.left.style.transform = ''; x.left.style.transition = ''; x.left.style.visibility = '';
-                    if (x.bar) { x.bar.style.transform = ''; x.bar.style.transition = ''; x.bar.style.visibility = ''; }
+                    x.left.style.transform = ''; x.left.style.transition = ''; x.left.style.paddingLeft = x.padL;
+                    x.left.classList.remove('tl-row-dragging');
+                    if (x.bar) { x.bar.style.transform = ''; x.bar.style.transition = ''; x.bar.classList.remove('tl-bar-dragging'); }
                 });
+                if (_tlRowDrag.childHl) _tlRowDrag.childHl.classList.remove('tl-row-dropchild');
             }
             _tlRowDrag = null;
         }
         function _tlRowDragEnd() { _tlClearRowDrag(); }    // drop·ESC·바깥 놓기 등 항상 호출 → 정리
-        function _tlRowDrop(e, targetId) {
+        function _tlRowDrop(e) {
             e.preventDefault();
-            var drag = _tlRowDrag; var before = drag ? drag.before : false; var cancelled = drag ? drag.cancelled : true;
-            var id = drag ? drag.id : null;
+            var drag = _tlRowDrag; var cancelled = drag ? drag.cancelled : true;
+            var id = drag ? drag.id : null; var info = drag ? drag.drop : null;
             _tlClearRowDrag();
-            if (cancelled || !id || id === targetId) { return; }
-            if (_wbsIsDescendant(id, targetId)) { showToast('하위 노드로는 이동할 수 없습니다.', 'alert'); return; }
-            var src = _wbsNode(id), tgt = _wbsNode(targetId); if (!src || !tgt) return;
-            src.parentId = tgt.parentId || null;
-            var sibs = _wbsChildren(src.parentId).filter(function (x) { return x.id !== id; });
-            var idx = sibs.findIndex(function (x) { return x.id === targetId; });
-            // 삽입 위치: before면 target 앞, 아니면 target 뒤 — 이웃 사이 sortOrder 보간
-            var prev = before ? sibs[idx - 1] : sibs[idx];
-            var next = before ? sibs[idx] : sibs[idx + 1];
-            if (prev && next) src.sortOrder = Math.round((prev.sortOrder + next.sortOrder) / 2);
-            else if (next) src.sortOrder = next.sortOrder - 1000;
-            else if (prev) src.sortOrder = prev.sortOrder + 1000;
-            else src.sortOrder = tgt.sortOrder;
-            src.updatedAt = Date.now(); _tlJustMovedId = id; saveData(); dbUpsertWbsNode(src); renderTimelineView();
+            if (cancelled || !id || !info) return;
+            var src = _wbsNode(id); if (!src) return;
+            if (info.parentId === id || _wbsIsDescendant(id, info.parentId)) { showToast('하위 노드로는 이동할 수 없습니다.', 'alert'); return; }
+            var sibs = _wbsChildren(info.parentId).filter(function (x) { return x.id !== id; });
+            var insertIndex;
+            if (info.mode === 'child') { insertIndex = 0; if (typeof _tlCollapsed === 'object') delete _tlCollapsed[info.parentId]; }
+            else {
+                var ti = sibs.findIndex(function (x) { return x.id === info.targetId; });
+                if (ti < 0) ti = sibs.length;
+                insertIndex = info.mode === 'before' ? ti : ti + 1;
+            }
+            src.parentId = info.parentId || null;
+            sibs.splice(insertIndex, 0, src);
+            // sortOrder 재정규화 — 순서가 확실히 바뀌도록(보간 충돌·미변경 문제 방지). 변경된 노드만 저장.
+            var changed = [];
+            sibs.forEach(function (x, k) { var so = (k + 1) * 1000; if (x.sortOrder !== so) { x.sortOrder = so; if (changed.indexOf(x) < 0) changed.push(x); } });
+            if (changed.indexOf(src) < 0) changed.push(src); // parentId 변경도 반드시 반영
+            changed.forEach(function (x) { x.updatedAt = Date.now(); });
+            _tlJustMovedId = id; saveData(); changed.forEach(function (x) { dbUpsertWbsNode(x); }); renderTimelineView();
         }
         // 타임라인 노드 컨텍스트 메뉴 (행/막대 공용)
         function _tlNodeCtx(e, id) {
