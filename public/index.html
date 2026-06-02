@@ -5306,6 +5306,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         </div>
                         <!-- 우측 액션 버튼 -->
                         <div style="display:flex;gap:4px;padding:4px 0 4px 6px;border-left:1px solid #e7e3d8;margin-left:4px;">
+                            <button id="dh-undo" onclick="dhUndo()" title="되돌리기 — 당일 자동기록 기준" style="padding:3px 8px;border-radius:5px;border:none;cursor:pointer;background:#f4f1e9;color:#4d4a44;font-size:13px;font-weight:700;">↶</button>
+                            <button id="dh-redo" onclick="dhRedo()" title="다시 실행" style="padding:3px 8px;border-radius:5px;border:none;cursor:pointer;background:#f4f1e9;color:#4d4a44;font-size:13px;font-weight:700;">↷</button>
+                            <button onclick="openDocDayHistory(activeDocId)" title="당일 편집 기록(최근 24시간) — 원하는 시점으로 복원" style="padding:3px 7px;border-radius:5px;border:none;cursor:pointer;background:#ecfeff;color:#155e63;font-size:12px;font-weight:600;">🕘 당일기록</button>
                             <button onclick="openDocHistory(activeDocId)" title="문서 히스토리 (작성·수정·버전·리뷰·잠금 내역)" style="padding:3px 7px;border-radius:5px;border:none;cursor:pointer;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:600;">🕘 히스토리</button>
                             <button id="btn-preview-edit" onclick="togglePreviewEditMode()" title="미리보기 직접 편집" style="padding:3px 7px;border-radius:5px;border:none;cursor:pointer;background:#f3e6df;color:#b5573a;font-size:12px;font-weight:600;">✏️ 편집</button>
                             <button onclick="toggleHighlightMode()" id="btn-highlight" title="형광펜" style="padding:3px 7px;border-radius:5px;border:none;cursor:pointer;background:#fef9c3;color:#854d0e;font-size:13px;">🖊</button>
@@ -16921,6 +16924,9 @@ return data;
                     _initDoc.content = content || '';
                     _initDoc._contentLoaded = true;
                     _docLastLoggedContent[docId] = content || '';
+                    // [r184] 로드된 본문을 당일 기록의 기준점으로(undo가 원본까지 돌아가도록)
+                    if (typeof _dhRecord === 'function') _dhRecord(docId, content || '');
+                    if (typeof _dhUpdateButtons === 'function') _dhUpdateButtons();
                     updateDocEditorUI();
                     if (_initDoc.userHighlights) userHighlights[docId] = _initDoc.userHighlights;
                     setTimeout(function() {
@@ -16934,6 +16940,9 @@ return data;
             }
 
             updateDocEditorUI();
+            // [r184] 이미 본문이 로드된 문서는 열 때 기준점 기록 + undo/redo 버튼 상태 갱신
+            if (_initDoc && _initDoc._contentLoaded !== false && typeof _dhRecord === 'function') _dhRecord(docId, _initDoc.content || '');
+            if (typeof _dhUpdateButtons === 'function') _dhUpdateButtons();
             if (typeof renderDocLinksBar === 'function') renderDocLinksBar(); // [v40 Day3 청크1]
             // Load user highlights for this doc
             const doc = currentData.docs ? currentData.docs.find(d => d.id === docId) : null;
@@ -17143,6 +17152,9 @@ return data;
 
             // 이미 저장된 내용이면 스킵 (콜백은 성공으로 처리 — 변경 없음 = 이미 최신 상태)
             if(_docLastSavedContent === content) { _cb(null); return; }
+
+            // [r184] 당일 자동 편집 기록(undo/redo·시점복원용) — 내용이 바뀐 커밋 시점에 스냅샷 적립
+            if (typeof _dhRecord === 'function') _dhRecord(activeDocId, content);
 
             // [v40 Day3 청크1] 본문의 [[task:ID]]/[[doc:ID]] 위키링크 자동 양방향 등록 (신규 링크만 DB 반영)
             if (typeof autoRegisterWikiLinks === 'function') autoRegisterWikiLinks('doc', activeDocId, content);
@@ -17948,7 +17960,7 @@ addEventListener("resize",sendPos);
             var createAct = docActs.filter(function (a) { return a.action === 'create'; })[0];
             var lastAct = docActs.length ? docActs[docActs.length - 1] : null;
             // [r153] 작성자/최종수정자 — doc 필드 우선, 없으면 활동로그 actor_name 폴백 (새로고침 후에도 '?' 대신 실제 이름)
-            var authorName = uName(doc.createdBy) || (createAct && createAct.actor_name) || (doc.meta && doc.meta.versionHistory && doc.meta.versionHistory[0] && doc.meta.versionHistory[0].byName) || '?';
+            var authorName = uName(doc.createdBy) || (createAct && createAct.actor_name) || (doc.meta && doc.meta.versionHistory && doc.meta.versionHistory[0] && doc.meta.versionHistory[0].byName) || '미상';
             var editorName = uName(doc.updatedBy) || (lastAct && lastAct.actor_name) || authorName;
             var events = [];
             if (doc.createdAt) events.push({ ms: toMs(doc.createdAt), icon: '🆕', label: '문서 생성', who: authorName, detail: '' });
@@ -17956,7 +17968,7 @@ addEventListener("resize",sendPos);
             var ACT = { create: { i: '🆕', l: '생성' }, edit: { i: '✏️', l: '수정' }, version: { i: '📌', l: '버전' }, lock: { i: '🔒', l: '잠금' }, unlock: { i: '🔓', l: '잠금 해제' }, rename: { i: '🏷', l: '이름변경' }, move: { i: '📁', l: '이동' }, assign: { i: '👤', l: '담당자' } };
             docActs.forEach(function (a) {
                 var m = ACT[a.action] || { i: '•', l: a.action || '활동' };
-                events.push({ ms: toMs(a.at), icon: m.i, label: m.l, who: a.actor_name || '?', detail: a.detail || '' });
+                events.push({ ms: toMs(a.at), icon: m.i, label: m.l, who: a.actor_name || '미상', detail: a.detail || '' });
             });
             // 버전 스냅샷 — 클릭 시 해당 버전 내용 미리보기
             ((doc.meta && doc.meta.versionHistory) || []).forEach(function (h) {
@@ -18001,6 +18013,93 @@ addEventListener("resize",sendPos);
                 + '<span style="display:flex;gap:6px;"><button onclick="openDocHistory(\'' + docId + '\')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;">← 히스토리</button>'
                 + '<button onclick="restoreDocVersion(\'' + docId + '\',' + version + ')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--c-border);background:var(--c-accent);color:#fff;cursor:pointer;">↩ 이 버전으로 되돌리기</button></span></div>';
             _openSimpleModal('📄 v' + version + ' 미리보기 — ' + _sprintEsc(doc.title), head + '<div class="markdown-body" style="max-height:55vh;overflow-y:auto;border:1px solid var(--c-border);border-radius:8px;padding:12px;">' + bodyHtml + '</div>');
+        }
+        // [r184] 문서 당일(최근 24시간) 자동 편집 기록 — undo/redo + 시점 복원.
+        //   로컬(localStorage) 저장이라 DB 스키마 변경 불필요. 이 브라우저 기준.
+        var _DH_KEY = 'pb3_dochist_v1';
+        var _DH_MAX_AGE = 24 * 60 * 60 * 1000;   // 24시간 경과분 제거
+        var _DH_MAX_PER_DOC = 120;               // 문서당 최대 스냅샷 수
+        var _DH_COALESCE = 12000;                // 12초 내 연속 편집은 1개로 합침
+        var _DH_MAX_CHARS = 300000;              // 초대형 본문은 기록 생략(용량 보호)
+        var _dhApplying = false;
+        var _dhPos = {};                         // docId -> 현재 포인터(메모리 전용)
+        function _dhLoadAll() { try { return JSON.parse(localStorage.getItem(_DH_KEY) || '{}') || {}; } catch (e) { return {}; } }
+        function _dhSaveAll(obj) {
+            try { localStorage.setItem(_DH_KEY, JSON.stringify(obj)); }
+            catch (e) { try { var ks = Object.keys(obj); if (ks.length) { delete obj[ks[0]]; localStorage.setItem(_DH_KEY, JSON.stringify(obj)); } } catch (e2) {} }
+        }
+        function _dhPrune(list) { var cut = Date.now() - _DH_MAX_AGE; var out = (list || []).filter(function (s) { return s && s.t >= cut; }); while (out.length > _DH_MAX_PER_DOC) out.shift(); return out; }
+        function _dhGet(docId) { var all = _dhLoadAll(); return _dhPrune(all[docId] || []); }
+        function _dhWhen(t) { try { return new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); } catch (e) { return ''; } }
+        function _dhRecord(docId, content) {
+            if (_dhApplying || !docId || typeof content !== 'string') return;
+            if (content.length > _DH_MAX_CHARS) return;
+            var all = _dhLoadAll();
+            var list = _dhPrune(all[docId] || []);
+            var last = list[list.length - 1];
+            if (last && last.c === content) { all[docId] = list; _dhSaveAll(all); _dhPos[docId] = list.length - 1; return; }
+            var now = Date.now(), by = (currentUser && currentUser.id) || null;
+            if (last && (now - last.t) < _DH_COALESCE) { last.c = content; last.t = now; last.by = by; }  // 연속 편집 합치기
+            else list.push({ t: now, c: content, by: by });
+            while (list.length > _DH_MAX_PER_DOC) list.shift();
+            all[docId] = list; _dhSaveAll(all);
+            _dhPos[docId] = list.length - 1;   // 새 편집 → 포인터를 최신으로
+            _dhUpdateButtons();
+        }
+        function _dhApply(docId, content) {
+            if (docId !== activeDocId && typeof openDoc === 'function') openDoc(docId);
+            var ta = document.getElementById('doc-editor-textarea');
+            var doc = (currentData.docs || []).find(function (d) { return d.id === docId; });
+            _dhApplying = true;
+            try {
+                if (doc) { doc.content = content; doc._contentLoaded = true; doc.updatedAt = Date.now(); }
+                if (ta) ta.value = content;
+                if (typeof updateDocPreview === 'function') updateDocPreview(content);
+                if (typeof _safeLocalCache === 'function') _safeLocalCache(currentData);
+                if (typeof flushDocSave === 'function') flushDocSave();   // DB 반영(부분 update) — 가드로 재기록 안 함
+            } finally { _dhApplying = false; }
+            _dhUpdateButtons();
+        }
+        function dhUndo() {
+            if (!activeDocId) return; var list = _dhGet(activeDocId);
+            var pos = (typeof _dhPos[activeDocId] === 'number') ? _dhPos[activeDocId] : list.length - 1;
+            if (pos > 0) { pos--; _dhPos[activeDocId] = pos; _dhApply(activeDocId, list[pos].c); showToast('↶ 되돌림 · ' + _dhWhen(list[pos].t), 'info'); }
+            else showToast('더 되돌릴 기록이 없습니다.', 'info');
+        }
+        function dhRedo() {
+            if (!activeDocId) return; var list = _dhGet(activeDocId);
+            var pos = (typeof _dhPos[activeDocId] === 'number') ? _dhPos[activeDocId] : list.length - 1;
+            if (pos < list.length - 1) { pos++; _dhPos[activeDocId] = pos; _dhApply(activeDocId, list[pos].c); showToast('↷ 다시 실행 · ' + _dhWhen(list[pos].t), 'info'); }
+            else showToast('다시 실행할 기록이 없습니다.', 'info');
+        }
+        function _dhUpdateButtons() {
+            var list = activeDocId ? _dhGet(activeDocId) : [];
+            var pos = (typeof _dhPos[activeDocId] === 'number') ? _dhPos[activeDocId] : list.length - 1;
+            var u = document.getElementById('dh-undo'), r = document.getElementById('dh-redo');
+            if (u) { u.disabled = !(pos > 0); u.style.opacity = (pos > 0) ? '1' : '.4'; }
+            if (r) { r.disabled = !(pos < list.length - 1); r.style.opacity = (pos < list.length - 1) ? '1' : '.4'; }
+        }
+        function openDocDayHistory(docId) {
+            docId = docId || activeDocId;
+            if (!docId) { showToast('문서를 먼저 여세요.', 'info'); return; }
+            var doc = (currentData.docs || []).find(function (d) { return d.id === docId; });
+            var list = _dhGet(docId);
+            var pos = (typeof _dhPos[docId] === 'number') ? _dhPos[docId] : list.length - 1;
+            var rows = list.length ? list.slice().reverse().map(function (s, ri) {
+                var i = list.length - 1 - ri;
+                var preview = _sprintEsc((s.c || '').replace(/\s+/g, ' ').slice(0, 64)) || '(빈 내용)';
+                var when = new Date(s.t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                var curStyle = (i === pos) ? ' style="border-color:var(--c-accent);background:var(--c-accent-soft);"' : '';
+                return '<div class="dvh-row"' + curStyle + '><span class="dvh-meta"><b style="color:var(--c-text);">' + when + '</b>' + (i === pos ? ' <span style="color:var(--c-accent);font-size:11px;">● 현재</span>' : '') + '<br><span style="color:var(--c-text3);font-size:11px;">' + preview + '</span></span>'
+                    + '<button class="dvh-restore" onclick="dhRevert(\'' + docId + '\',' + i + ')">↩ 이 시점으로</button></div>';
+            }).join('') : '<div class="dvh-row" style="color:var(--c-text3);">최근 24시간 동안 기록된 편집이 없습니다. 문서를 편집하면 자동으로 시점이 쌓입니다.</div>';
+            _openSimpleModal('🕘 당일 편집 기록 (24시간) — ' + _sprintEsc(doc ? doc.title : ''), '<div style="font-size:11px;color:var(--c-text3);margin-bottom:8px;">자동 저장된 편집 시점들입니다 (이 브라우저 기준). 클릭한 시점의 내용으로 복원됩니다. · 총 ' + list.length + '개 · 24시간 경과분은 자동 삭제</div><div class="dvh-list">' + rows + '</div>');
+        }
+        function dhRevert(docId, i) {
+            var list = _dhGet(docId); if (!list[i]) return;
+            _dhPos[docId] = i; _dhApply(docId, list[i].c);
+            showToast('↩ ' + _dhWhen(list[i].t) + ' 시점으로 복원됨', 'success');
+            if (document.getElementById('simple-modal-overlay')) openDocDayHistory(docId);
         }
         async function restoreDocVersion(docId, version) {
             var doc = currentData.docs.find(function (d) { return d.id === docId; }); if (!doc || !doc.meta) return;
