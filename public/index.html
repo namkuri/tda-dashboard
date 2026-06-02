@@ -22127,28 +22127,17 @@ ${intrLog}
                     var tgtBar = rowsEl.querySelector('.tl-bar[data-id="' + tid + '"]'); if (!tgtBar) return;
                     var trc = tgtBar.getBoundingClientRect();
                     var x1 = sr.right - rr.left, y1 = sr.top + sr.height / 2 - rr.top;
-                    var x2 = trc.left - rr.left, x2R = trc.right - rr.left, y2 = trc.top + trc.height / 2 - rr.top;
-                    var d, arrowD, gripX;
-                    if (x2 >= x1 + 24) {
-                        // [r180] 정방향 — 타깃 좌측 진입(화살표 우향), 부드러운 수평 S곡선
-                        d = _tlDepRoute(x1, y1, x2, y2);
-                        arrowD = 'M' + (x2 - 6) + ' ' + (y2 - 4) + ' L' + x2 + ' ' + y2 + ' L' + (x2 - 6) + ' ' + (y2 + 4);
-                        gripX = x2 - 5;
-                    } else {
-                        // [r180] 역방향(타깃이 좌측) — 타깃 우측 가장자리로 진입(화살표 좌향).
-                        //   좌측으로 크게 돌아 꺾이던 문제 해결: 소스·타깃 모두 우측 수평 접선의 부드러운 활.
-                        var aw = 6, endB = x2R + aw, R = Math.max(34, Math.abs(y2 - y1) * 0.7);
-                        d = 'M' + x1 + ' ' + y1 + ' C ' + (x1 + R) + ' ' + y1 + ', ' + (endB + R) + ' ' + y2 + ', ' + endB + ' ' + y2;
-                        arrowD = 'M' + (x2R + aw) + ' ' + (y2 - 4) + ' L' + x2R + ' ' + y2 + ' L' + (x2R + aw) + ' ' + (y2 + 4);
-                        gripX = x2R + 5;
-                    }
+                    var x2 = trc.left - rr.left, y2 = trc.top + trc.height / 2 - rr.top;
+                    // [r181] 화살표는 항상 타깃 좌측(진행바 시작)으로 진입, 우향. 역/정방향 모두 동일.
+                    var d = _tlDepRoute(x1, y1, x2, y2);
+                    var arrowD = 'M' + (x2 - 6) + ' ' + (y2 - 4) + ' L' + x2 + ' ' + y2 + ' L' + (x2 - 6) + ' ' + (y2 + 4);
                     // [r172] hit(넓은 투명) → line(곡선) → arrow 순. 그룹 hover 시 line/arrow 하이라이트
                     paths += '<g class="tl-dep">'
                         + '<path class="tl-dep-hit" d="' + d + '" fill="none" stroke="transparent" stroke-width="12"/>'
                         + '<path class="tl-dep-line" d="' + d + '" fill="none" stroke="var(--c-accent)" stroke-width="1.6"/>'
                         + '<path class="tl-dep-arrow" d="' + arrowD + '" fill="var(--c-accent)"/>'
                         // [r173] 화살표 끝 그랩 핸들 — 드래그로 다른 작업에 재연결, 허공에 놓으면 삭제
-                        + '<circle class="tl-dep-grip" cx="' + gripX + '" cy="' + y2 + '" r="8" fill="transparent" stroke="transparent" onmousedown="_tlRelinkDown(event,\'' + n.id + '\',\'' + tid + '\')"><title>드래그=다른 작업에 재연결 · 허공=연결 삭제</title></circle>'
+                        + '<circle class="tl-dep-grip" cx="' + (x2 - 5) + '" cy="' + y2 + '" r="8" fill="transparent" stroke="transparent" onmousedown="_tlRelinkDown(event,\'' + n.id + '\',\'' + tid + '\')"><title>드래그=다른 작업에 재연결 · 허공=연결 삭제</title></circle>'
                         + '</g>';
                 });
             });
@@ -22162,14 +22151,11 @@ ${intrLog}
                 var dx = Math.max(28, (x2 - x1) * 0.45);
                 return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (end - dx) + ' ' + y2 + ', ' + end + ' ' + y2;
             }
-            // [r179] 역방향 — 시작 접선을 "살짝 우측 + 타깃 방향(위/아래)"의 완만한 대각선으로.
-            //   r175(수평 우측 출발)는 타깃이 위일 때 우측으로 크게 나갔다 돌아 올라가 부자연스러웠음.
-            //   이제 큰 우측 돌출 없이 타깃 행으로 곧장 흐르고, 타깃 좌측으로 수평 진입(화살표 우향 유지).
-            var dy = Math.max(28, Math.abs(y2 - y1) * 0.55);
-            var sx = 18;                                         // 시작 약간 우측(부드러운 출발, 90° 꺾임 방지)
-            var kx = Math.min(44, Math.max(26, Math.abs(y2 - y1) * 0.30));
-            var cp1y = y1 + (y2 >= y1 ? dy : -dy);
-            return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + sx) + ' ' + cp1y + ', ' + (end - kx) + ' ' + y2 + ', ' + end + ' ' + y2;
+            // [r181] 역방향 — 화살표는 타깃 좌측(시작)으로 진입(우향). 소스 막대를 피하려 우측으로
+            //   완만히 빠진 뒤(큰 반경) 타깃 좌측으로 들어옴. 타깃쪽 돌출은 작게 해 꺾임/훅 최소화.
+            var R = Math.max(48, Math.abs(y2 - y1) * 0.9);       // 시작 우측 탈출 반경(클수록 턴 완만)
+            var kx = Math.max(18, Math.abs(y2 - y1) * 0.25);     // 타깃 좌측 진입 반경(작게 → 훅 최소화)
+            return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + R) + ' ' + y1 + ', ' + (end - kx) + ' ' + y2 + ', ' + end + ' ' + y2;
         }
         // 막대 드래그 — 이동 / 좌우 모서리 기간 조절
         var _tlDrag = null;
