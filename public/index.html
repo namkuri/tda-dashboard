@@ -463,6 +463,9 @@
         .tl-left-row.tl-row-justmoved { animation: tlRowLand .7s ease-out; }
         .tl-left-hdr { height: 34px; display: flex; align-items: center; padding: 0 12px; font-size: 11px; font-weight: 800; color: var(--c-text3); border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-card); z-index: 2; }
         .tl-row { height: 40px; box-sizing: border-box; }
+        /* [r189] 빈 곳 드래그로 새 일정 막대 생성 미리보기 */
+        .tl-create-prev { position: absolute; top: 7px; height: 26px; background: var(--c-accent-soft); border: 1.5px dashed var(--c-accent); border-radius: 7px; pointer-events: none; z-index: 2; }
+        .tl-bar-row { cursor: crosshair; }
         .tl-left-row { display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--c-border); cursor: pointer; padding-right: 8px; }
         .tl-left-row:hover { background: var(--ios-fill); }
         .tl-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -15099,10 +15102,17 @@ return data;
                 created_by: task.createdBy || (currentUser ? currentUser.id : null),
                 assignees: task.assignees || [],
                 due_date: task.dueDate || null,
+                issue_ids: task.issueIds || [], // [r189] 카드 ↔ 이슈 연결
                 // [r75] 개인 칸반: 팀 카드와 연결(상태 동기화용)
                 linked_task_id: task.linkedTaskId || null
             };
             let { error } = await supabaseClient.from('tasks').upsert(payload);
+            // [r189] issue_ids 컬럼 미생성 환경 보호: 빼고 재시도(기존 저장 보존)
+            if (error && /issue_ids/.test(error.message || '')) {
+                delete payload.issue_ids;
+                ({ error } = await supabaseClient.from('tasks').upsert(payload));
+                if (!error) console.warn('[dbUpsertTask] issue_ids 컬럼 없음 — 이슈 연결 제외 저장. SQL: alter table tasks add column if not exists issue_ids jsonb default \'[]\'::jsonb;');
+            }
             // [라운드8] due_date 컬럼 미생성 환경 보호: 마감기한만 빼고 재시도(기존 저장 보존)
             if (error && /due_date/.test(error.message || '')) {
                 delete payload.due_date;
@@ -15399,7 +15409,8 @@ return data;
             ['wiki_docs', 'kind', "text default 'wiki'"],
             ['wiki_docs', 'meta', "jsonb default '{}'::jsonb"],
             ['wiki_docs', 'updated_by', 'text'],             // [r150] 수정자 — realtime 자기수정 알람 제외용
-            ['wbs_nodes', 'assignees', "jsonb default '[]'::jsonb"] // [r157] WBS 노드 복수 담당자
+            ['wbs_nodes', 'assignees', "jsonb default '[]'::jsonb"], // [r157] WBS 노드 복수 담당자
+            ['tasks', 'issue_ids', "jsonb default '[]'::jsonb"]  // [r189] 카드 ↔ 이슈 연결
         ];
         // [r84 #1] 신규 테이블 — CREATE TABLE IF NOT EXISTS (멱등)
         var DB_OPTIONAL_TABLES = [
@@ -15622,6 +15633,7 @@ return data;
                     carryoverCount: t.carryover_count || 0,
                     doneAt: t.done_at || null,
                     linkedDocIds: t.linked_doc_ids || [],
+                    issueIds: t.issue_ids || [], // [r189] 카드 ↔ 이슈 연결
                     createdBy: t.created_by || null,
                     assignees: t.assignees || [],
                     // [라운드8] 담당자 실계정 연결(assignees[0]) + 마감기한
@@ -15719,6 +15731,7 @@ return data;
                     links: n.links || {}, attachments: n.attachments || [],
                     assignees: Array.isArray(n.assignees) ? n.assignees : [],
                     startDate: (n.links && n.links._start) || null, dueDate: (n.links && n.links._due) || null,
+                    segments: (n.links && Array.isArray(n.links._segments)) ? n.links._segments : undefined, // [r189] 다중 일정 세그먼트 복원
                     ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null,
                     sortOrder: n.sort_order || 0,
                     createdAt: n.created_at ? new Date(n.created_at).getTime() : null,
@@ -15993,6 +16006,7 @@ return data;
                                     dev: t.dev_name, catBadge: t.cat_badge,
                                     isStarred: t.is_starred, time: t.completed_at, zone: t.zone || 'shelf', sprintId: t.sprint_id || null,
                                     scripts: t.scripts || [], isCollapsed: false, comments: [], linkedDocIds: t.linked_doc_ids || [],
+                                    issueIds: t.issue_ids || [], // [r189]
                                     assignees: t.assignees || [], assigneeId: (t.assignees && t.assignees[0]) || null, dueDate: t.due_date || null,
                                     linkedTaskId: t.linked_task_id || null // [r75]
                                 });
@@ -16081,7 +16095,7 @@ return data;
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'wbs_nodes' }, (payload) => {
                         const ev = payload.eventType;
                         if (!currentData.wbsNodes) currentData.wbsNodes = [];
-                        const map = function (n) { return { id: n.id, projectId: n.project_id || null, parentId: n.parent_id || null, title: n.title || '', desc: n.description || '', status: n.status || 'todo', progress: typeof n.progress === 'number' ? n.progress : 0, links: n.links || {}, attachments: n.attachments || [], assignees: Array.isArray(n.assignees) ? n.assignees : [], startDate: (n.links && n.links._start) || null, dueDate: (n.links && n.links._due) || null, ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null, sortOrder: n.sort_order || 0, createdAt: n.created_at ? new Date(n.created_at).getTime() : null, updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : null }; };
+                        const map = function (n) { return { id: n.id, projectId: n.project_id || null, parentId: n.parent_id || null, title: n.title || '', desc: n.description || '', status: n.status || 'todo', progress: typeof n.progress === 'number' ? n.progress : 0, links: n.links || {}, attachments: n.attachments || [], assignees: Array.isArray(n.assignees) ? n.assignees : [], startDate: (n.links && n.links._start) || null, dueDate: (n.links && n.links._due) || null, segments: (n.links && Array.isArray(n.links._segments)) ? n.links._segments : undefined, ownerUserId: n.owner_user_id || null, createdBy: n.created_by || null, sortOrder: n.sort_order || 0, createdAt: n.created_at ? new Date(n.created_at).getTime() : null, updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : null }; };
                         if (ev === 'INSERT') {
                             const n = payload.new;
                             if (!currentData.wbsNodes.find(x => x.id === n.id)) currentData.wbsNodes.push(map(n));
@@ -18623,6 +18637,7 @@ addEventListener("resize",sendPos);
                     </div>
                 </div>
                 ${typeof renderTaskLinkedDocsPanel === 'function' ? renderTaskLinkedDocsPanel(task) : ''}
+                ${typeof renderTaskIssuesPanel === 'function' ? renderTaskIssuesPanel(task) : ''}
                 ${typeof renderTaskReviewsPanel === 'function' ? renderTaskReviewsPanel(task) : ''}
                 <div class="comments-section relative z-10 mt-3">
                     <div class="comments-list">${commentsHtml}</div>
@@ -20190,6 +20205,34 @@ addEventListener("resize",sendPos);
                 <div class="linked-panel-head">📄 연결된 문서 <button class="link-add-btn" onclick="openLinkPicker('task','${task.id}','doc')">🔗 연결</button></div>
                 <div class="linked-chips">${chips || '<span class="linked-empty">없음 — 🔗 연결 또는 본문에 [[doc:ID]]</span>'}</div>
             </div>`;
+        }
+        // [r189] 카드 ↔ 이슈 연결 패널
+        function renderTaskIssuesPanel(task) {
+            var ids = Array.isArray(task.issueIds) ? task.issueIds : [];
+            var chips = ids.map(function (iid) {
+                var iss = (currentData.issues || []).find(function (x) { return x.id === iid; });
+                var lbl = iss ? (iss.title || '이슈') : '(삭제됨)';
+                var st = iss ? (({ open: '📋', progress: '🔥', closed: '✅', wont: '⛔' })[iss.status] || '') : '';
+                return '<span class="link-chip" onclick="navToIssue(\'' + iid + '\')" title="이슈 열기">' + st + ' ' + _sprintEsc(lbl) + '<button class="link-chip-x" onclick="event.stopPropagation();_taskToggleIssue(\'' + task.id + '\',\'' + iid + '\')" title="연결 해제">✕</button></span>';
+            }).join('');
+            return '<div class="linked-panel ' + (task.isCollapsed ? 'hidden' : '') + '"><div class="linked-panel-head">🐛 연결된 이슈 <button class="link-add-btn" onclick="_taskIssuePicker(\'' + task.id + '\')">🔗 연결</button></div><div class="linked-chips">' + (chips || '<span class="linked-empty">없음 — 🔗 연결</span>') + '</div></div>';
+        }
+        function navToIssue(iid) { if (typeof switchView === 'function') { switchView('issues'); setTimeout(function () { if (typeof issEditIssue === 'function') issEditIssue(iid); }, 80); } }
+        function _taskIssuePicker(taskId) {
+            var t = (currentData.tasks || []).find(function (x) { return x.id === taskId; }); if (!t) return;
+            var issues = (currentData.issues || []).filter(function (x) { return (x.projectId || 'default') === activeProjectId; });
+            var sel = t.issueIds || [];
+            var rows = issues.length ? issues.map(function (i) { var on = sel.indexOf(i.id) >= 0; var st = ({ open: '📋', progress: '🔥', closed: '✅', wont: '⛔' })[i.status] || ''; return '<div class="ctx-menu-item" style="cursor:pointer;border-radius:6px;" onclick="_taskToggleIssue(\'' + taskId + '\',\'' + i.id + '\')">' + (on ? '<span>✓</span>' : '<span style="width:14px;display:inline-block;"></span>') + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + st + ' ' + _sprintEsc(i.title || '이슈') + '</span></div>'; }).join('') : '<div style="padding:10px;color:var(--c-text3);font-size:12px;text-align:center;">이슈가 없습니다. 이슈 트래커에서 먼저 등록하세요.</div>';
+            _openSimpleModal('🐛 이슈 연결 — ' + _sprintEsc(t.title || '카드'), '<div style="font-size:11px;color:var(--c-text3);margin-bottom:8px;">클릭하여 연결/해제 (복수 가능).</div><div class="dvh-list">' + rows + '</div>');
+        }
+        function _taskToggleIssue(taskId, issueId) {
+            var t = (currentData.tasks || []).find(function (x) { return x.id === taskId; }); if (!t) return;
+            if (!Array.isArray(t.issueIds)) t.issueIds = [];
+            var i = t.issueIds.indexOf(issueId); if (i >= 0) t.issueIds.splice(i, 1); else t.issueIds.push(issueId);
+            saveData(); if (typeof dbUpsertTask === 'function') dbUpsertTask(t);
+            var ov = document.getElementById('simple-modal-overlay');
+            if (ov && ov.style.display !== 'none') _taskIssuePicker(taskId);
+            if (typeof _refreshOpenCardModal === 'function') _refreshOpenCardModal();
         }
 
         // ── 연결 바 렌더 (문서 뷰) ──
@@ -21971,6 +22014,7 @@ ${intrLog}
         async function dbUpsertWbsNode(n) {
             if (!supabaseClient) return;
             var _links = Object.assign({}, n.links || {}, { _start: n.startDate || null, _due: n.dueDate || null }); // [r159] 일정은 links jsonb에 보관(추가 컬럼 불필요)
+            if (Array.isArray(n.segments)) _links._segments = n.segments; else delete _links._segments; // [r189] 다중 일정 세그먼트도 links jsonb에 보관(스키마 변경 불필요)
             var payload = { id: n.id, project_id: n.projectId || activeProjectId, parent_id: n.parentId || null, title: n.title || '', description: n.desc || '', status: n.status || 'todo', progress: n.progress || 0, links: _links, attachments: n.attachments || [], assignees: n.assignees || [], owner_user_id: (n.assignees && n.assignees[0]) || n.ownerUserId || null, created_by: n.createdBy || null, sort_order: n.sortOrder || 0, created_at: n.createdAt ? new Date(n.createdAt).toISOString() : null, updated_at: n.updatedAt ? new Date(n.updatedAt).toISOString() : null };
             var { error } = await supabaseClient.from('wbs_nodes').upsert(payload);
             if (error && _isMissingCol(error, 'assignees')) { delete payload.assignees; ({ error } = await supabaseClient.from('wbs_nodes').upsert(payload)); } // [r157] 구버전 DB(assignees 컬럼 없음) 폴백
@@ -22382,6 +22426,104 @@ ${intrLog}
             return cols;
         }
         var _tlRange = null; // {start,end,ppd} 현재 렌더 좌표계 (드롭 위치 계산용)
+        // [r189] ── 타임라인 다중 일정(세그먼트) 모델 ──
+        //   한 노드가 여러 진행바(세그먼트)를 가질 수 있고, 각 세그먼트는 독립된 기간·스프린트·태스크·이슈 연결을 가짐.
+        //   세그먼트 없는(레거시) 노드는 startDate/dueDate를 단일 세그먼트로 폴백 표시.
+        function _tlSegUid() { return 'sg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+        function _tlSegs(n) {
+            if (n && Array.isArray(n.segments)) return n.segments;
+            if (n && (n.startDate || n.dueDate)) return [{ id: 'seg0', start: n.startDate || null, due: n.dueDate || null, sprintIds: ((n.links && n.links.sprintIds) || []).slice(), taskIds: ((n.links && n.links.taskIds) || []).slice(), issueIds: ((n.links && n.links.issueIds) || []).slice(), color: (n.links && n.links._color) || null, _legacy: true }];
+            return [];
+        }
+        function _tlEnsureSegs(n) {
+            if (!Array.isArray(n.segments)) {
+                n.segments = _tlSegs(n).map(function (s) { return { id: s.id, start: s.start || null, due: s.due || null, sprintIds: (s.sprintIds || []).slice(), taskIds: (s.taskIds || []).slice(), issueIds: (s.issueIds || []).slice(), color: s.color || null }; });
+            }
+            return n.segments;
+        }
+        function _tlSegById(n, segId) { var segs = _tlSegs(n); for (var i = 0; i < segs.length; i++) if (segs[i].id === segId) return segs[i]; return null; }
+        function _tlSyncNode(n) {
+            var segs = Array.isArray(n.segments) ? n.segments : _tlSegs(n);
+            var minS = null, maxD = null;
+            segs.forEach(function (s) { [_tlParseDate(s.start), _tlParseDate(s.due)].forEach(function (x) { if (x) { if (!minS || x < minS) minS = x; if (!maxD || x > maxD) maxD = x; } }); });
+            n.startDate = minS ? _tlFmtDate(minS) : null; n.dueDate = maxD ? _tlFmtDate(maxD) : null;
+        }
+        function _tlSaveNode(n) { _tlSyncNode(n); n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); }
+        // 세그먼트 상세(연결·기간) 모달 — 막대 클릭/우클릭으로 진입
+        function _tlSegOpen(nodeId, segId) {
+            var n = _wbsNode(nodeId); if (!n) return; _tlEnsureSegs(n); var seg = _tlSegById(n, segId); if (!seg) return;
+            var byP = function (x) { return (x.projectId || 'default') === activeProjectId; };
+            var idx = (n.segments || []).indexOf(seg) + 1;
+            var listHtml = function (selKey, items, icon) {
+                var sel = seg[selKey] || [];
+                return items.length ? items.map(function (it) { var on = sel.indexOf(it.id) >= 0; return '<div class="ctx-menu-item" style="cursor:pointer;border-radius:6px;" onclick="_tlSegToggle(\'' + nodeId + '\',\'' + segId + '\',\'' + selKey + '\',\'' + it.id + '\')">' + (on ? '<span>✓</span>' : '<span style="width:14px;display:inline-block;"></span>') + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + icon + ' ' + _sprintEsc(it.label) + '</span></div>'; }).join('') : '<div style="padding:8px;color:var(--c-text3);font-size:12px;">항목 없음</div>';
+            };
+            var sprints = (currentData.sprints || []).filter(byP).map(function (s) { return { id: s.id, label: s.weekLabel || '스프린트' }; });
+            var tasks = (currentData.tasks || []).filter(byP).map(function (t) { return { id: t.id, label: t.title || '카드' }; });
+            var issues = (currentData.issues || []).filter(byP).map(function (i) { return { id: i.id, label: i.title || '이슈' }; });
+            var cols = ['#c96442', '#d49a1c', '#2e9e5b', '#3b82f6', '#8b5cf6', '#ec4899', '#8a8a8a'];
+            var sw = cols.map(function (c) { return '<span onclick="_tlSegSetColor(\'' + nodeId + '\',\'' + segId + '\',\'' + c + '\')" style="width:20px;height:20px;border-radius:50%;background:' + c + ';cursor:pointer;border:' + (seg.color === c ? '2px solid var(--c-text)' : '1px solid rgba(0,0,0,.2)') + ';"></span>'; }).join('') + '<span onclick="_tlSegSetColor(\'' + nodeId + '\',\'' + segId + '\',null)" title="기본(상태색)" style="width:20px;height:20px;border-radius:50%;background:var(--ios-fill);border:1px solid var(--c-border);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✕</span>';
+            var html = '<div style="font-size:11px;color:var(--c-text3);margin-bottom:8px;">이 막대(일정)만의 기간·연결입니다. 같은 작업이라도 막대마다 다른 스프린트·태스크·이슈를 가질 수 있습니다.</div>'
+                + '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">'
+                + '<label style="font-size:12px;color:var(--c-text2);">시작 <input type="date" value="' + (seg.start || '') + '" onchange="_tlSegSetDate(\'' + nodeId + '\',\'' + segId + '\',\'start\',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>'
+                + '<label style="font-size:12px;color:var(--c-text2);">마감 <input type="date" value="' + (seg.due || '') + '" onchange="_tlSegSetDate(\'' + nodeId + '\',\'' + segId + '\',\'due\',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>'
+                + '</div>'
+                + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px;"><span style="font-size:11px;font-weight:700;color:var(--c-text3);">막대 색상</span>' + sw + '</div>'
+                + '<div class="rel-lm-h">🏃 스프린트 연결</div><div class="dvh-list" style="max-height:20vh;overflow:auto;">' + listHtml('sprintIds', sprints, '🏃') + '</div>'
+                + '<div class="rel-lm-h">📋 태스크 연결</div><div class="dvh-list" style="max-height:20vh;overflow:auto;">' + listHtml('taskIds', tasks, '📋') + '</div>'
+                + '<div class="rel-lm-h">🐛 이슈 연결</div><div class="dvh-list" style="max-height:20vh;overflow:auto;">' + listHtml('issueIds', issues, '🐛') + '</div>'
+                + '<div style="margin-top:12px;text-align:right;"><button onclick="_tlSegDelete(\'' + nodeId + '\',\'' + segId + '\')" style="background:#c0392b;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;padding:6px 12px;cursor:pointer;">🗑 이 막대 삭제</button></div>';
+            _openSimpleModal('📊 일정 막대 #' + idx + ' — ' + _sprintEsc(n.title || ''), html);
+        }
+        function _tlSegToggle(nodeId, segId, key, itemId) { var n = _wbsNode(nodeId); if (!n) return; _tlEnsureSegs(n); var seg = _tlSegById(n, segId); if (!seg) return; if (!Array.isArray(seg[key])) seg[key] = []; var i = seg[key].indexOf(itemId); if (i >= 0) seg[key].splice(i, 1); else seg[key].push(itemId); _tlSaveNode(n); _tlSegOpen(nodeId, segId); if (currentView === 'timeline') renderTimelineView(); }
+        function _tlSegSetColor(nodeId, segId, c) { var n = _wbsNode(nodeId); if (!n) return; _tlEnsureSegs(n); var seg = _tlSegById(n, segId); if (!seg) return; seg.color = c || null; _tlSaveNode(n); if (document.getElementById('simple-modal-overlay') && document.getElementById('simple-modal-overlay').style.display !== 'none') _tlSegOpen(nodeId, segId); if (currentView === 'timeline') renderTimelineView(); }
+        function _tlSegSetDate(nodeId, segId, which, val) { var n = _wbsNode(nodeId); if (!n) return; _tlEnsureSegs(n); var seg = _tlSegById(n, segId); if (!seg) return; if (which === 'start') seg.start = val || null; else seg.due = val || null; _tlSaveNode(n); if (currentView === 'timeline') renderTimelineView(); }
+        function _tlSegDelete(nodeId, segId) { var n = _wbsNode(nodeId); if (!n) return; _tlEnsureSegs(n); n.segments = n.segments.filter(function (s) { return s.id !== segId; }); _tlSaveNode(n); if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); if (currentView === 'timeline') renderTimelineView(); showToast('🗑 일정 막대 삭제됨', 'info'); }
+        function _tlBarCtx(e, id, segId) {
+            e.preventDefault(); e.stopPropagation(); var n = _wbsNode(id); if (!n) return;
+            var cols = ['#c96442', '#d49a1c', '#2e9e5b', '#3b82f6', '#8b5cf6', '#ec4899', '#8a8a8a'];
+            var sw = '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 14px 8px;">' + cols.map(function (c) { return '<span onclick="hideTreeContextMenu();_tlSegSetColor(\'' + id + '\',\'' + segId + '\',\'' + c + '\')" style="width:18px;height:18px;border-radius:50%;background:' + c + ';cursor:pointer;border:1px solid rgba(0,0,0,.2);"></span>'; }).join('') + '<span onclick="hideTreeContextMenu();_tlSegSetColor(\'' + id + '\',\'' + segId + '\',null)" style="width:18px;height:18px;border-radius:50%;background:var(--ios-fill);border:1px solid var(--c-border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;">✕</span></div>';
+            _openCardMenu(e,
+                '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_tlSegOpen(\'' + id + '\',\'' + segId + '\')"><span>🔗</span> 이 막대 연결·기간 편집</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsOpenNode(\'' + id + '\')"><span>⚙️</span> 노드 상세 설정</div>'
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">막대 색상</div>' + sw
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();_tlSegDelete(\'' + id + '\',\'' + segId + '\')"><span>🗑</span> 이 막대 삭제</div>');
+        }
+        // 빈 곳 클릭·드래그 → 새 일정 막대 생성
+        var _tlCreate = null;
+        function _tlRowCreateDown(e, nodeId) {
+            if (e.button !== 0) return;
+            var rowsEl = document.getElementById('tl-rows'); if (!rowsEl || !_tlRange) return;
+            var rr = rowsEl.getBoundingClientRect(); var x0 = e.clientX - rr.left;
+            var rowEl = e.currentTarget;
+            var prev = document.createElement('div'); prev.className = 'tl-create-prev'; prev.style.left = x0 + 'px'; prev.style.width = '1px';
+            rowEl.appendChild(prev);
+            _tlCreate = { nodeId: nodeId, x0: x0, rr: rr, prev: prev, ppd: _tlRange.ppd, moved: false };
+            window.addEventListener('mousemove', _tlRowCreateMove); window.addEventListener('mouseup', _tlRowCreateUp);
+        }
+        function _tlRowCreateMove(e) {
+            if (!_tlCreate) return; var x = e.clientX - _tlCreate.rr.left;
+            var l = Math.min(_tlCreate.x0, x), w = Math.abs(x - _tlCreate.x0);
+            if (w > 4) _tlCreate.moved = true;
+            _tlCreate.prev.style.left = l + 'px'; _tlCreate.prev.style.width = Math.max(1, w) + 'px';
+            if (_tlCreate.moved) { var d0 = Math.floor(l / _tlCreate.ppd), d1 = Math.floor((l + w) / _tlCreate.ppd); var f = function (k) { var dt = new Date(_tlRange.start); dt.setDate(dt.getDate() + k); return (dt.getMonth() + 1) + '/' + dt.getDate(); }; _tlShowDragTip(e.clientX, e.clientY, f(d0) + ' ~ ' + f(d1)); }
+        }
+        function _tlRowCreateUp(e) {
+            window.removeEventListener('mousemove', _tlRowCreateMove); window.removeEventListener('mouseup', _tlRowCreateUp); _tlHideDragTip();
+            var c = _tlCreate; _tlCreate = null; if (!c) return;
+            if (c.prev && c.prev.parentNode) c.prev.parentNode.removeChild(c.prev);
+            if (!c.moved) return;
+            var x1 = e.clientX - c.rr.left, l = Math.min(c.x0, x1), r = Math.max(c.x0, x1);
+            var d0 = Math.max(0, Math.floor(l / c.ppd)), d1 = Math.max(d0, Math.floor(r / c.ppd));
+            var addDate = function (k) { var dt = new Date(_tlRange.start); dt.setDate(dt.getDate() + k); return _tlFmtDate(dt); };
+            var n = _wbsNode(c.nodeId); if (!n) return;
+            _tlEnsureSegs(n);
+            n.segments.push({ id: _tlSegUid(), start: addDate(d0), due: addDate(d1), sprintIds: [], taskIds: [], issueIds: [], color: null });
+            _tlSaveNode(n); renderTimelineView();
+            showToast('📊 일정 막대 추가됨 — 막대를 클릭해 스프린트·태스크·이슈를 연결하세요', 'success');
+        }
         function renderTimelineView() {
             var host = document.getElementById('timeline-view'); if (!host) return;
             var proj = (currentData.projects || []).find(function (p) { return p.id === activeProjectId; });
@@ -22415,38 +22557,42 @@ ${intrLog}
                     + caret + '<span class="tl-row-dot" style="background:' + col + ';"></span>'
                     + '<span class="tl-row-title">' + _sprintEsc(n.title || '(제목 없음)') + '</span>'
                     + '<span class="tl-row-st" style="color:' + st.c + ';">' + st.l + '</span></div>';
-                var s = _tlParseDate(n.startDate), d = _tlParseDate(n.dueDate);
+                // [r189] 다중 세그먼트 렌더 — 노드당 여러 진행바, 각 막대는 독립 기간·연결
                 var bar = '';
-                if (s || d) {
-                    var bs = s || d, be = d || s; if (be < bs) be = bs;
+                var prog = Math.max(0, Math.min(100, n.progress || 0));
+                var _segs = _tlSegs(n);
+                _segs.forEach(function (seg, si) {
+                    var ss0 = _tlParseDate(seg.start), dd0 = _tlParseDate(seg.due);
+                    if (!ss0 && !dd0) return;
+                    var bs = ss0 || dd0, be = dd0 || ss0; if (be < bs) be = bs;
                     var left = _tlDayDiff(rangeStart, bs) * ppd;
                     var w = Math.max(ppd * 1, (_tlDayDiff(bs, be) + 1) * ppd);
-                    var prog = Math.max(0, Math.min(100, n.progress || 0));
-                    // 연결된 스프린트 구간 하이라이트(+진행중)
-                    var segs = '';
-                    ((n.links && n.links.sprintIds) || []).forEach(function (sid) {
+                    var col2 = seg.color || col;
+                    // 이 막대에 연결된 스프린트 구간 하이라이트(+진행중)
+                    var spsegs = '';
+                    (seg.sprintIds || []).forEach(function (sid) {
                         var sp = (currentData.sprints || []).find(function (x) { return x.id === sid; }); if (!sp || !sp.startDate || !sp.endDate) return;
-                        var ss = _tlParseDate(sp.startDate), se = _tlParseDate(sp.endDate); if (!ss || !se) return;
-                        var os = ss > bs ? ss : bs, oe = se < be ? se : be; if (oe < os) return;
+                        var sss = _tlParseDate(sp.startDate), se = _tlParseDate(sp.endDate); if (!sss || !se) return;
+                        var os = sss > bs ? sss : bs, oe = se < be ? se : be; if (oe < os) return;
                         var sl = _tlDayDiff(bs, os) * ppd, sw = Math.max(2, (_tlDayDiff(os, oe) + 1) * ppd);
-                        var active = (sp.status === 'active') || (today >= ss && today <= se);
-                        // [r173] 스프린트 구간 호버 → 커스텀 툴팁에 스프린트 정보. 드래그(이동)는 막대로 위임해 유지.
+                        var active = (sp.status === 'active') || (today >= sss && today <= se);
                         var spStatusKr = sp.status === 'active' ? '🏃 진행 중' : (sp.status === 'closed' ? '🏁 종료' : '📋 예정');
-                        var spTip = '🏃 ' + _sprintEsc(sp.weekLabel || '스프린트') + ' · ' + spStatusKr + (active && sp.status !== 'active' ? '(기간 내)' : '') + ' · ' + (sp.startDate || '?') + ' ~ ' + (sp.endDate || '?') + (sp.goal ? ' · ' + _sprintEsc(sp.goal) : '');
-                        segs += '<div class="tl-sprint-seg" data-sptip="' + spTip + '" onmousemove="_tlSegTipMove(event)" onmouseleave="_tlHideSegTip()" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'move\')" style="left:' + sl + 'px;width:' + sw + 'px;" title="">' + (active ? '<span class="tl-sprint-live">▶</span>' : '') + '</div>';
+                        var spTip = '🏃 ' + _sprintEsc(sp.weekLabel || '스프린트') + ' · ' + spStatusKr + ' · ' + (sp.startDate || '?') + ' ~ ' + (sp.endDate || '?') + (sp.goal ? ' · ' + _sprintEsc(sp.goal) : '');
+                        spsegs += '<div class="tl-sprint-seg" data-sptip="' + spTip + '" onmousemove="_tlSegTipMove(event)" onmouseleave="_tlHideSegTip()" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'move\',\'' + seg.id + '\')" style="left:' + sl + 'px;width:' + sw + 'px;" title="">' + (active ? '<span class="tl-sprint-live">▶</span>' : '') + '</div>';
                     });
-                    bar = '<div class="tl-bar" data-id="' + n.id + '" style="left:' + left + 'px;width:' + w + 'px;background:' + col + '22;border-color:' + col + ';" oncontextmenu="_tlNodeCtx(event,\'' + n.id + '\')" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'move\')" title="' + _sprintEsc(n.title) + ' · ' + (n.startDate || '?') + ' ~ ' + (n.dueDate || '?') + ' · 드래그=이동, 모서리=기간조절">'
-                        + '<div class="tl-bar-fill" style="width:' + prog + '%;background:' + col + ';"></div>'
-                        + segs
-                        + '<span class="tl-bar-label">' + _sprintEsc(n.title) + '</span>'
-                        + '<div class="tl-bar-h tl-bar-hl" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'resizeL\')"></div>'
-                        + '<div class="tl-bar-h tl-bar-hr" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'resizeR\')"></div>'
+                    var connN = (seg.sprintIds || []).length + (seg.taskIds || []).length + (seg.issueIds || []).length;
+                    var label = _sprintEsc(n.title) + (_segs.length > 1 ? (' <span style="opacity:.6">#' + (si + 1) + '</span>') : '') + (connN ? (' <span style="opacity:.6;font-size:9px;">🔗' + connN + '</span>') : '');
+                    bar += '<div class="tl-bar" data-id="' + n.id + '" data-seg="' + seg.id + '" style="left:' + left + 'px;width:' + w + 'px;background:' + col2 + '22;border-color:' + col2 + ';" oncontextmenu="_tlBarCtx(event,\'' + n.id + '\',\'' + seg.id + '\')" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'move\',\'' + seg.id + '\')" title="' + _sprintEsc(n.title) + ' · ' + (seg.start || '?') + ' ~ ' + (seg.due || '?') + ' · 클릭=연결편집, 드래그=이동, 모서리=기간조절">'
+                        + '<div class="tl-bar-fill" style="width:' + prog + '%;background:' + col2 + ';"></div>'
+                        + spsegs
+                        + '<span class="tl-bar-label">' + label + '</span>'
+                        + '<div class="tl-bar-h tl-bar-hl" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'resizeL\',\'' + seg.id + '\')"></div>'
+                        + '<div class="tl-bar-h tl-bar-hr" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'resizeR\',\'' + seg.id + '\')"></div>'
                         + '<div class="tl-link-handle" title="드래그하여 다른 작업과 연결" onmousedown="_tlLinkDown(event,\'' + n.id + '\')">🔗</div>'
                         + '</div>';
-                } else {
-                    bar = '<div class="tl-bar-none" onclick="wbsOpenNode(\'' + n.id + '\')" title="기간 미설정 — 클릭하여 설정">기간 미설정</div>';
-                }
-                barRows += '<div class="tl-row tl-bar-row" data-tl-id="' + n.id + '">' + bar + '</div>';
+                });
+                if (!bar) bar = '<div class="tl-bar-none" title="빈 곳을 클릭·드래그하면 새 일정 막대가 생깁니다">기간 미설정 — 드래그로 생성</div>';
+                barRows += '<div class="tl-row tl-bar-row" data-tl-id="' + n.id + '" onmousedown="_tlRowCreateDown(event,\'' + n.id + '\')">' + bar + '</div>';
             });
             host.innerHTML =
                 '<div class="tl-wrap">'
@@ -22519,11 +22665,12 @@ ${intrLog}
         }
         // 막대 드래그 — 이동 / 좌우 모서리 기간 조절
         var _tlDrag = null;
-        function _tlBarDown(e, id, mode) {
+        function _tlBarDown(e, id, mode, segId) {
             if (e.button !== 0) return; e.stopPropagation();
             var n = _wbsNode(id); if (!n) return;
+            var seg = _tlSegById(n, segId); if (!seg) return;
             var bar = (e.currentTarget.classList && e.currentTarget.classList.contains('tl-bar')) ? e.currentTarget : e.currentTarget.closest('.tl-bar');
-            _tlDrag = { id: id, mode: mode, x0: e.clientX, moved: false, s0: n.startDate, d0: n.dueDate, ppd: (_tlRange ? _tlRange.ppd : _tlPxPerDay()), el: bar, oL: bar ? (parseFloat(bar.style.left) || 0) : 0, oW: bar ? (parseFloat(bar.style.width) || 0) : 0 };
+            _tlDrag = { id: id, segId: segId, mode: mode, x0: e.clientX, moved: false, s0: seg.start, d0: seg.due, ppd: (_tlRange ? _tlRange.ppd : _tlPxPerDay()), el: bar, oL: bar ? (parseFloat(bar.style.left) || 0) : 0, oW: bar ? (parseFloat(bar.style.width) || 0) : 0 };
             window.addEventListener('mousemove', _tlBarMove); window.addEventListener('mouseup', _tlBarUp);
         }
         function _tlBarMove(e) {
@@ -22572,16 +22719,17 @@ ${intrLog}
             window.removeEventListener('mousemove', _tlBarMove); window.removeEventListener('mouseup', _tlBarUp);
             _tlHideDragTip();
             var dg = _tlDrag; _tlDrag = null; if (!dg) return;
-            if (!dg.moved) { wbsOpenNode(dg.id); return; }
+            if (!dg.moved) { _tlSegOpen(dg.id, dg.segId); return; }  // 클릭 → 막대 연결·기간 편집
             var n = _wbsNode(dg.id); if (!n) return;
+            _tlEnsureSegs(n); var seg = _tlSegById(n, dg.segId); if (!seg) { renderTimelineView(); return; }
             var days = Math.round((e.clientX - dg.x0) / dg.ppd);
             var s = _tlParseDate(dg.s0) || _tlParseDate(dg.d0), d = _tlParseDate(dg.d0) || _tlParseDate(dg.s0);
             if (!s || !d) { renderTimelineView(); return; }
             var add = function (dt, k) { var x = new Date(dt); x.setDate(x.getDate() + k); return _tlFmtDate(x); };
-            if (dg.mode === 'move') { n.startDate = add(s, days); n.dueDate = add(d, days); }
-            else if (dg.mode === 'resizeL') { var ns = add(s, days); if (_tlParseDate(ns) <= d) n.startDate = ns; }
-            else if (dg.mode === 'resizeR') { var nd = add(d, days); if (_tlParseDate(nd) >= s) n.dueDate = nd; }
-            n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
+            if (dg.mode === 'move') { seg.start = add(s, days); seg.due = add(d, days); }
+            else if (dg.mode === 'resizeL') { var ns = add(s, days); if (_tlParseDate(ns) <= d) seg.start = ns; }
+            else if (dg.mode === 'resizeR') { var nd = add(d, days); if (_tlParseDate(nd) >= s) seg.due = nd; }
+            _tlSaveNode(n); renderTimelineView();
         }
         // 링크(의존) 드래그 — 우측 핸들 → 다른 작업 행에 드롭
         var _tlLink = null;
