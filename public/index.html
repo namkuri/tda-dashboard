@@ -448,7 +448,14 @@
         .tl-scale button { border: none; background: var(--c-card); color: var(--c-text2); font-size: 12px; font-weight: 700; padding: 5px 12px; cursor: pointer; }
         .tl-scale button.on { background: var(--c-accent); color: #fff; }
         .tl-body { flex: 1; min-height: 0; display: flex; border: 1px solid var(--c-border); border-radius: 12px; overflow: hidden; background: var(--c-paper); }
-        .tl-left { width: 280px; flex-shrink: 0; overflow: hidden; border-right: 1px solid var(--c-border); background: var(--c-card); }
+        .tl-left { width: 280px; flex-shrink: 0; overflow: hidden; border-right: 1px solid var(--c-border); background: var(--c-card); position: relative; }
+        /* [r176] 작업 컬럼 행 드래그 — 드롭 위치 미리보기(부드럽게 이동) + 드래그 중 행 + 착지 강조 */
+        .tl-drop-ind { position: absolute; height: 2px; right: 8px; background: var(--c-accent); border-radius: 2px; opacity: 0; pointer-events: none; z-index: 5; box-shadow: 0 0 6px var(--c-accent); transition: top .14s cubic-bezier(.4,0,.2,1), left .14s cubic-bezier(.4,0,.2,1), opacity .12s; }
+        .tl-drop-ind::before { content: ''; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); }
+        .tl-left-row { transition: background .12s, opacity .12s; }
+        .tl-left-row.tl-row-dragging { opacity: .4; background: var(--ios-fill); }
+        @keyframes tlRowLand { 0% { background: var(--c-accent-soft); } 100% { background: transparent; } }
+        .tl-left-row.tl-row-justmoved { animation: tlRowLand .7s ease-out; }
         .tl-left-hdr { height: 34px; display: flex; align-items: center; padding: 0 12px; font-size: 11px; font-weight: 800; color: var(--c-text3); border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-card); z-index: 2; }
         .tl-row { height: 40px; box-sizing: border-box; }
         .tl-left-row { display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--c-border); cursor: pointer; padding-right: 8px; }
@@ -22036,7 +22043,7 @@ ${intrLog}
             rows.forEach(function (r) {
                 var n = r.n; var st = WBS_STATUS[n.status] || WBS_STATUS.todo; var col = _wbsColor(n);
                 var caret = r.hasKids ? ('<span class="tl-caret" onclick="event.stopPropagation();_tlToggleCollapse(\'' + n.id + '\')">' + (r.collapsed ? '▶' : '▼') + '</span>') : '<span class="tl-caret-sp"></span>';
-                leftRows += '<div class="tl-row tl-left-row" draggable="true" ondragstart="_tlRowDragStart(event,\'' + n.id + '\')" ondragover="event.preventDefault()" ondrop="_tlRowDrop(event,\'' + n.id + '\')" style="padding-left:' + (8 + r.depth * 16) + 'px;" onclick="wbsOpenNode(\'' + n.id + '\')" oncontextmenu="_tlNodeCtx(event,\'' + n.id + '\')" title="클릭=상세 · 드래그=순서변경 · 우클릭=메뉴">'
+                leftRows += '<div class="tl-row tl-left-row" data-tl-leftid="' + n.id + '" draggable="true" ondragstart="_tlRowDragStart(event,\'' + n.id + '\')" ondragover="_tlRowDragOver(event,\'' + n.id + '\')" ondrop="_tlRowDrop(event,\'' + n.id + '\')" ondragend="_tlRowDragEnd(event)" style="padding-left:' + (8 + r.depth * 16) + 'px;" onclick="wbsOpenNode(\'' + n.id + '\')" oncontextmenu="_tlNodeCtx(event,\'' + n.id + '\')" title="클릭=상세 · 드래그=순서변경(ESC 취소) · 우클릭=메뉴">'
                     + caret + '<span class="tl-row-dot" style="background:' + col + ';"></span>'
                     + '<span class="tl-row-title">' + _sprintEsc(n.title || '(제목 없음)') + '</span>'
                     + '<span class="tl-row-st" style="color:' + st.c + ';">' + st.l + '</span></div>';
@@ -22090,6 +22097,12 @@ ${intrLog}
             var tr = document.getElementById('tl-right'); var tll = host.querySelector('.tl-left');
             if (tr && tll) tr.onscroll = function () { tll.scrollTop = tr.scrollTop; };
             setTimeout(_tlDrawDeps, 20);
+            // [r176] 방금 드래그로 옮긴 행 착지 강조
+            if (_tlJustMovedId) {
+                var _mv = host.querySelector('.tl-left-row[data-tl-leftid="' + _tlJustMovedId + '"]');
+                if (_mv) { _mv.classList.add('tl-row-justmoved'); setTimeout((function (el) { return function () { el.classList.remove('tl-row-justmoved'); }; })(_mv), 750); }
+                _tlJustMovedId = null;
+            }
         }
         function _tlSetScale(s) { _tlScale = s; renderTimelineView(); }
         function _tlToggleCollapse(id) { _tlCollapsed[id] = !_tlCollapsed[id]; renderTimelineView(); }
@@ -22259,19 +22272,66 @@ ${intrLog}
             n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
             showToast('🔗 연결 대상을 변경했습니다', 'success');
         }
-        // 행 순서 변경(드래그)
-        var _tlRowDrag = null;
-        function _tlRowDragStart(e, id) { _tlRowDrag = id; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {} }
+        // [r176] 행 순서 변경(드래그) — 드롭 위치 미리보기(부드럽게 슬라이드) + ESC 취소 + 착지 강조
+        var _tlRowDrag = null, _tlDropInd = null, _tlJustMovedId = null;
+        function _tlEnsureDropInd() {
+            var left = document.querySelector('#timeline-view .tl-left'); if (!left) return null;
+            if (!_tlDropInd || _tlDropInd.parentNode !== left) {
+                _tlDropInd = document.createElement('div'); _tlDropInd.className = 'tl-drop-ind';
+                left.appendChild(_tlDropInd);
+            }
+            return _tlDropInd;
+        }
+        function _tlRowDragStart(e, id) {
+            _tlRowDrag = { id: id, overId: null, before: false, cancelled: false };
+            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {}
+            var row = e.currentTarget; if (row && row.classList) row.classList.add('tl-row-dragging');
+            _tlEnsureDropInd();
+            window.addEventListener('keydown', _tlRowDragKey, true);
+        }
+        function _tlRowDragKey(e) {
+            if (e.key === 'Escape' && _tlRowDrag) { _tlRowDrag.cancelled = true; _tlClearRowDrag(); if (typeof showToast === 'function') showToast('이동 취소됨', 'info'); }
+        }
+        function _tlRowDragOver(e, targetId) {
+            e.preventDefault();
+            if (!_tlRowDrag || _tlRowDrag.cancelled) return;
+            try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+            var ind = _tlEnsureDropInd(); if (!ind) return;
+            if (targetId === _tlRowDrag.id) { ind.style.opacity = '0'; _tlRowDrag.overId = null; return; }
+            var row = e.currentTarget, rect = row.getBoundingClientRect();
+            var before = (e.clientY - rect.top) < rect.height / 2;
+            _tlRowDrag.overId = targetId; _tlRowDrag.before = before;
+            ind.style.top = (row.offsetTop + (before ? 0 : row.offsetHeight)) + 'px';
+            ind.style.left = (parseFloat(row.style.paddingLeft) || 8) + 'px';
+            ind.style.opacity = '1';
+        }
+        function _tlClearRowDrag() {
+            window.removeEventListener('keydown', _tlRowDragKey, true);
+            var dz = document.querySelectorAll('#timeline-view .tl-left-row.tl-row-dragging');
+            for (var i = 0; i < dz.length; i++) dz[i].classList.remove('tl-row-dragging');
+            if (_tlDropInd) _tlDropInd.style.opacity = '0';
+            _tlRowDrag = null;
+        }
+        function _tlRowDragEnd() { _tlClearRowDrag(); }    // drop·ESC·바깥 놓기 등 항상 호출 → 정리
         function _tlRowDrop(e, targetId) {
-            e.preventDefault(); var id = _tlRowDrag; _tlRowDrag = null;
-            if (!id || id === targetId) return; if (_wbsIsDescendant(id, targetId)) { showToast('하위 노드로는 이동할 수 없습니다.', 'alert'); return; }
+            e.preventDefault();
+            var drag = _tlRowDrag; var before = drag ? drag.before : false; var cancelled = drag ? drag.cancelled : true;
+            var id = drag ? drag.id : null;
+            _tlClearRowDrag();
+            if (cancelled || !id || id === targetId) { return; }
+            if (_wbsIsDescendant(id, targetId)) { showToast('하위 노드로는 이동할 수 없습니다.', 'alert'); return; }
             var src = _wbsNode(id), tgt = _wbsNode(targetId); if (!src || !tgt) return;
             src.parentId = tgt.parentId || null;
             var sibs = _wbsChildren(src.parentId).filter(function (x) { return x.id !== id; });
             var idx = sibs.findIndex(function (x) { return x.id === targetId; });
-            var next = sibs[idx + 1];
-            src.sortOrder = next ? Math.round((tgt.sortOrder + next.sortOrder) / 2) : (tgt.sortOrder + 1000);
-            src.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(src); renderTimelineView();
+            // 삽입 위치: before면 target 앞, 아니면 target 뒤 — 이웃 사이 sortOrder 보간
+            var prev = before ? sibs[idx - 1] : sibs[idx];
+            var next = before ? sibs[idx] : sibs[idx + 1];
+            if (prev && next) src.sortOrder = Math.round((prev.sortOrder + next.sortOrder) / 2);
+            else if (next) src.sortOrder = next.sortOrder - 1000;
+            else if (prev) src.sortOrder = prev.sortOrder + 1000;
+            else src.sortOrder = tgt.sortOrder;
+            src.updatedAt = Date.now(); _tlJustMovedId = id; saveData(); dbUpsertWbsNode(src); renderTimelineView();
         }
         // 타임라인 노드 컨텍스트 메뉴 (행/막대 공용)
         function _tlNodeCtx(e, id) {
