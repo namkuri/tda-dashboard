@@ -22129,12 +22129,11 @@ ${intrLog}
                 var dx = Math.max(28, (x2 - x1) * 0.45);
                 return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (end - dx) + ' ' + y2 + ', ' + end + ' ' + y2;
             }
-            // [r174] 역방향 — 소스 우측에서 수직(타깃이 아래면 아래로, 위면 위로)으로 빠져나와
-            //   타깃 좌측으로 수평 진입. 우측으로 크게 도는 루프 제거 → 자연스러운 직접 곡선.
-            var dy = Math.max(30, Math.abs(y2 - y1) * 0.5);
-            var kx = Math.min(40, Math.max(22, Math.abs(y2 - y1) * 0.3));
-            var cp1y = y1 + (y2 >= y1 ? dy : -dy);
-            return 'M' + x1 + ' ' + y1 + ' C ' + x1 + ' ' + cp1y + ', ' + (end - kx) + ' ' + y2 + ', ' + end + ' ' + y2;
+            // [r175] 역방향 — 시작/끝 모두 수평 접선으로 부드럽게. 소스 우측으로 살짝 나갔다가
+            //   타깃 좌측으로 진입(급격한 수직 출발 제거, 우측 큰 루프도 없음). 오프셋은 세로차에 비례.
+            var hx = Math.min(56, Math.max(34, Math.abs(y2 - y1) * 0.35));
+            var kx = Math.min(48, Math.max(28, Math.abs(y2 - y1) * 0.30));
+            return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + hx) + ' ' + y1 + ', ' + (end - kx) + ' ' + y2 + ', ' + end + ' ' + y2;
         }
         // 막대 드래그 — 이동 / 좌우 모서리 기간 조절
         var _tlDrag = null;
