@@ -15022,7 +15022,7 @@ return data;
             const payload = {
                 id: doc.id, project_id: doc.projectId || activeProjectId,
                 parent_id: doc.parentId || null, title: doc.title,
-                content: doc.content || '', emoji: doc.emoji || '📄',
+                emoji: doc.emoji || '📄',
                 sort_order: doc.sortOrder || 0,
                 is_collapsed: doc.isCollapsed || false,
                 is_deprecated: doc.deprecated || false,
@@ -15036,6 +15036,12 @@ return data;
                 updated_at: Date.now(),
                 updated_by: (currentUser && currentUser.id) || null // [r150] 수정자 기록 — realtime 자기수정 알람 제외용
             };
+            // [r183] ★데이터 손실 방지★ — 본문(content)은 지연 로드 필드. 메모리에 본문이 로드되지 않은
+            //   문서(_contentLoaded === false)는 content를 payload에서 제외해 DB의 기존 본문을 보존한다.
+            //   (정렬/이동/잠금/리페어 등 본문을 열지 않은 문서에 dbUpsertDoc이 호출돼도 본문이 ''로 덮어써지지 않음)
+            if (doc._contentLoaded !== false) {
+                payload.content = doc.content || '';
+            }
             let { error } = await supabaseClient.from('wiki_docs').upsert(payload);
             // [r150] updated_by 컬럼이 없는 구버전 DB → 해당 컬럼 제외하고 재시도(문서 본체는 저장)
             if (error && _isMissingCol(error, 'updated_by')) {
@@ -17257,7 +17263,8 @@ return data;
 
             // ② 메모리 반영: 즉시
             var doc = currentData.docs ? currentData.docs.find(function(d){ return d.id === activeDocId; }) : null;
-            if(doc) { doc.content = content; doc.updatedAt = Date.now(); }
+            // [r183] 사용자가 직접 편집했으므로 메모리 본문이 권위 — _contentLoaded=true로 표시해야 저장 시 content가 기록됨
+            if(doc) { doc.content = content; doc._contentLoaded = true; doc.updatedAt = Date.now(); }
 
             // ③ 미리보기: 소스 모드 아닐 때만, 1초 debounce
             clearTimeout(_docPreviewTimer);
