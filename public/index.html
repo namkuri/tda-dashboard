@@ -18018,8 +18018,8 @@ addEventListener("resize",sendPos);
         //   로컬(localStorage) 저장이라 DB 스키마 변경 불필요. 이 브라우저 기준.
         var _DH_KEY = 'pb3_dochist_v1';
         var _DH_MAX_AGE = 24 * 60 * 60 * 1000;   // 24시간 경과분 제거
-        var _DH_MAX_PER_DOC = 120;               // 문서당 최대 스냅샷 수
-        var _DH_COALESCE = 12000;                // 12초 내 연속 편집은 1개로 합침
+        var _DH_MAX_PER_DOC = 200;               // 문서당 최대 스냅샷 수
+        var _DH_COALESCE = 1200;                 // 자동저장 주기(1.5s)보다 짧게 — 같은 저장 사이클 중복만 합치고, 매 저장은 별도 시점으로 적립
         var _DH_MAX_CHARS = 300000;              // 초대형 본문은 기록 생략(용량 보호)
         var _dhApplying = false;
         var _dhPos = {};                         // docId -> 현재 포인터(메모리 전용)
