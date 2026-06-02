@@ -6946,7 +6946,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                        'colspan', 'rowspan', 'scope', 'align', 'valign', 'width', 'height',
                        'border', 'cellpadding', 'cellspacing', 'dir',
                        'open', 'datetime', 'value', 'min', 'max', 'low', 'high', 'optimum',
-                       'data-wl-type', 'data-wl-id', 'data-wl-title'], // [v40 Day3 청크1] 위키링크 앵커 + [r191] 제목 기반(옵시디언)
+                       'data-wl-type', 'data-wl-id', 'data-wl-title', 'data-wl-hash', 'data-wl-hash-raw', 'id'], // [v40 Day3 청크1] 위키링크 앵커 + [r191] 제목 기반(옵시디언) + [r193] 헤더 점프
             FORCE_BODY: false,
             ALLOW_UNKNOWN_PROTOCOLS: false
         };
@@ -7199,20 +7199,37 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // 증상: 셀 내용에 줄바꿈이 있어서 | 기호가 한 줄에 하나씩 나오는 패턴
             text = fixBrokenGfmTables(text);
 
-            // ── [r191] Obsidian식 [[제목]] / [[제목|별칭]] 위키링크 (ID 패턴 [[task:ID]]보다 먼저, 그 패턴은 다음 replace에서 처리) ──
-            //   현재 프로젝트의 문서/태스크 제목과 매칭 → 해당 wikilink-doc/task 앵커로 변환. 미해결이면 생성 가능 앵커로.
-            text = text.replace(/\[\[([^\]\[\n|:]+?)(?:\|([^\]\[\n]+))?\]\]/g, function (match, title, alias) {
-                var t = String(title).trim(); if (!t) return match;
-                if (/^(task|doc|code)$/.test(t)) return match; // ID 패턴은 아래에서 처리(예: [[doc:abc]])
-                var disp = (alias != null && alias.trim()) ? alias.trim() : t;
-                var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂';
-                var lower = t.toLowerCase();
-                var docHit = (currentData.docs || []).find(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder) && (d.title || '').toLowerCase() === lower; });
-                var taskHit = !docHit ? (currentData.tasks || []).find(function (tk) { return (tk.projectId || 'default') === activeProjectId && (tk.title || '').toLowerCase() === lower; }) : null;
+            // ── [r191/r193] Obsidian식 [[제목]] / [[제목#헤더]] / [[제목|별칭]] / [[#헤더]] 위키링크 ──
+            //   현재 프로젝트 문서/태스크 제목 매칭 → wikilink-doc/task 앵커. 미해결이면 생성 가능 앵커.
+            //   [r193] '#헤더' 부분 — 해당 문서로 이동 후 헤더 슬러그(data-wl-hash)로 스크롤.
+            //   [[#헤더]]는 현재 문서 내부 점프.
+            text = text.replace(/\[\[([^\]\[\n|]+?)(?:\|([^\]\[\n]+))?\]\]/g, function (match, target, alias) {
+                var raw = String(target).trim(); if (!raw) return match;
+                // 타입ID 패턴(task/doc/code) — 아래 replace에서 처리
+                if (/^(task|doc|code):/.test(raw)) return match;
+                // # 분리: 제목#헤더 또는 #헤더(현재 문서 내)
+                var hashIdx = raw.indexOf('#');
+                var titlePart = hashIdx >= 0 ? raw.slice(0, hashIdx).trim() : raw;
+                var hashPart = hashIdx >= 0 ? raw.slice(hashIdx + 1).trim() : '';
+                if (!titlePart && !hashPart) return match;
+                var lower = titlePart.toLowerCase();
+                var docHit = titlePart ? (currentData.docs || []).find(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder) && (d.title || '').toLowerCase() === lower; }) : null;
+                var taskHit = (titlePart && !docHit) ? (currentData.tasks || []).find(function (tk) { return (tk.projectId || 'default') === activeProjectId && (tk.title || '').toLowerCase() === lower; }) : null;
+                // 표시 라벨
+                var disp;
+                if (alias != null && alias.trim()) disp = alias.trim();
+                else if (hashPart && !titlePart) disp = '#' + hashPart;
+                else if (hashPart) disp = titlePart + ' › ' + hashPart;
+                else disp = titlePart;
+                var hashAttr = hashPart ? (' data-wl-hash="' + _sprintEsc(_wlSlug(hashPart)) + '" data-wl-hash-raw="' + _sprintEsc(hashPart) + '"') : '';
                 var anchor;
-                if (docHit) anchor = '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(docHit.id) + '" data-wl-title="' + _sprintEsc(t) + '">📄 ' + _sprintEsc(disp) + '</a>';
-                else if (taskHit) anchor = '<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="' + _sprintEsc(taskHit.id) + '" data-wl-title="' + _sprintEsc(t) + '">🗂 ' + _sprintEsc(disp) + '</a>';
-                else anchor = '<a class="wikilink wikilink-unresolved" data-wl-type="new" data-wl-title="' + _sprintEsc(t) + '" title="클릭하여 같은 이름으로 새 문서 생성">' + _sprintEsc(disp) + '</a>';
+                if (!titlePart && hashPart) {
+                    // 현재 문서 내부 점프
+                    anchor = '<a class="wikilink wikilink-doc" data-wl-type="hash"' + hashAttr + ' title="이 문서의 헤더로 이동">🔗 ' + _sprintEsc(disp) + '</a>';
+                } else if (docHit) anchor = '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(docHit.id) + '" data-wl-title="' + _sprintEsc(titlePart) + '"' + hashAttr + '>📄 ' + _sprintEsc(disp) + '</a>';
+                else if (taskHit) anchor = '<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="' + _sprintEsc(taskHit.id) + '" data-wl-title="' + _sprintEsc(titlePart) + '">🗂 ' + _sprintEsc(disp) + '</a>';
+                else anchor = '<a class="wikilink wikilink-unresolved" data-wl-type="new" data-wl-title="' + _sprintEsc(titlePart) + '"' + hashAttr + ' title="클릭하여 같은 이름으로 새 문서 생성">' + _sprintEsc(disp) + '</a>';
+                var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂';
                 inlineTableStore[ph] = anchor; _tableStore[ph] = anchor; return ph;
             });
             // ── [v40 Day3 청크1] PASS 2.5: [[task:ID]] / [[doc:ID]] 위키링크 → 인라인 앵커 ──
@@ -7265,7 +7282,36 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 html = html.split(ph).join(safeHtml);
             });
 
+            // ── [r193] PASS 5: 헤더에 슬러그 id 부여(옵시디언식 [[문서#헤더]] 점프 대상) ──
+            var _hSlugSeen = {};
+            html = html.replace(/<h([1-6])([^>]*)>([\s\S]*?)<\/h\1>/g, function (m, lvl, attrs, inner) {
+                if (/\bid\s*=/.test(attrs)) return m; // 이미 id가 있으면 유지
+                var text = inner.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                var slug = _wlSlug(text); if (!slug) return m;
+                if (_hSlugSeen[slug] != null) { _hSlugSeen[slug]++; slug = slug + '-' + _hSlugSeen[slug]; } else _hSlugSeen[slug] = 0;
+                return '<h' + lvl + ' id="' + slug + '"' + attrs + '>' + inner + '</h' + lvl + '>';
+            });
+
             return html;
+        }
+        // [r193] 헤더 슬러그 — 옵시디언/깃허브 호환. 영문 소문자화·공백/특수문자→하이픈·연속 하이픈 축약.
+        function _wlSlug(s) {
+            if (s == null) return '';
+            return String(s).toLowerCase().replace(/<[^>]+>/g, '').replace(/[\s_]+/g, '-').replace(/[^\p{L}\p{N}\-]+/gu, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+        }
+        // [r193] 문서의 헤더 목록(text + slug + level) — 자동완성/내부 점프용
+        function _wlDocHeaders(docId) {
+            var d = (currentData.docs || []).find(function (x) { return x.id === docId; });
+            if (!d || !d.content) return [];
+            var out = [], seen = {};
+            var re = /^(#{1,6})\s+(.+?)\s*#*\s*$/gm, m;
+            while ((m = re.exec(d.content)) !== null) {
+                var lvl = m[1].length, text = m[2].trim();
+                var slug = _wlSlug(text);
+                if (seen[slug] != null) { seen[slug]++; slug = slug + '-' + seen[slug]; } else seen[slug] = 0;
+                out.push({ level: lvl, text: text, slug: slug });
+            }
+            return out;
         }
 
         /**
@@ -17598,18 +17644,46 @@ return data;
             _wlac.start = open; _wlac.query = between; _wlacRender(ta);
         }
         function _wlacRender(ta) {
-            var q = (_wlac.query || '').toLowerCase().trim();
             var qRaw = (_wlac.query || '').trim();
-            var match = function (s) { return !q || (s || '').toLowerCase().indexOf(q) !== -1; };
+            var q = qRaw.toLowerCase();
+            // [r193] '#' 분리 — 제목#헤더 모드, 또는 #헤더(현재 문서) 모드
+            var hashIdx = qRaw.indexOf('#');
+            var titlePart = hashIdx >= 0 ? qRaw.slice(0, hashIdx).trim() : qRaw;
+            var hashPart = hashIdx >= 0 ? qRaw.slice(hashIdx + 1).trim() : '';
+            var hashMode = hashIdx >= 0;
+            var match = function (s) { return !titlePart || (s || '').toLowerCase().indexOf(titlePart.toLowerCase()) !== -1; };
             var items = [];
-            // [r191] 옵시디언식 제목 매칭 우선 — 입력 = 제목 그대로면 ID가 아닌 [[제목]] 으로 삽입
-            (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder); })
-                .forEach(function (d) { if (match(d.title)) items.push({ mode: 'title', type: 'doc', id: d.id, title: d.title || '', label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), kind: '문서' }); });
-            (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; })
-                .forEach(function (t) { if (match(t.title)) items.push({ mode: 'title', type: 'task', id: t.id, title: t.title || '', label: '🗂 ' + (t.title || '제목 없음'), kind: '태스크' }); });
-            items = items.slice(0, 7);
-            // 입력값과 동일 제목이 없으면 '새로 만들기' 옵션
-            if (qRaw && !items.some(function (it) { return (it.title || '').toLowerCase() === q; })) {
+            if (hashMode) {
+                // 헤더 자동완성 — 대상 문서(제목으로 매칭 / 빈 제목이면 현재 문서)의 헤더 목록
+                var docs = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder); });
+                var targets;
+                if (!titlePart) { var cur = docs.find(function (d) { return d.id === activeDocId; }); targets = cur ? [cur] : []; }
+                else targets = docs.filter(function (d) { return (d.title || '').toLowerCase() === titlePart.toLowerCase(); });
+                if (!targets.length && titlePart) targets = docs.filter(function (d) { return match(d.title); }).slice(0, 3);
+                targets.forEach(function (d) {
+                    var hs = _wlDocHeaders(d.id);
+                    var ql = hashPart.toLowerCase();
+                    var isCurrent = (d.id === activeDocId) && !titlePart;
+                    hs.filter(function (h) { return !ql || h.text.toLowerCase().indexOf(ql) >= 0; }).slice(0, 8).forEach(function (h) {
+                        items.push({
+                            mode: 'header',
+                            title: isCurrent ? '' : (d.title || ''),  // [r193] 현재 문서면 빈 제목 → [[#헤더]] 형식 삽입
+                            headerText: h.text,
+                            label: '🔗 ' + (isCurrent ? '(이 문서) ' : ((d.title || '') + ' › ')) + '#'.repeat(h.level) + ' ' + h.text,
+                            kind: '헤더'
+                        });
+                    });
+                });
+            } else {
+                // [r191] 옵시디언식 제목 매칭 — 입력 = 제목 그대로면 [[제목]] 으로 삽입
+                (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder); })
+                    .forEach(function (d) { if (match(d.title)) items.push({ mode: 'title', type: 'doc', id: d.id, title: d.title || '', label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), kind: '문서' }); });
+                (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; })
+                    .forEach(function (t) { if (match(t.title)) items.push({ mode: 'title', type: 'task', id: t.id, title: t.title || '', label: '🗂 ' + (t.title || '제목 없음'), kind: '태스크' }); });
+            }
+            items = items.slice(0, 8);
+            // 입력값과 동일 제목이 없으면 '새로 만들기' 옵션 (헤더 모드 아닐 때만)
+            if (!hashMode && qRaw && !items.some(function (it) { return (it.title || '').toLowerCase() === q; })) {
                 items.push({ mode: 'new', title: qRaw, label: '➕ "' + qRaw + '" 새 문서 만들기', kind: '신규' });
             }
             _wlac.items = items; _wlac.sel = 0;
@@ -17637,9 +17711,11 @@ return data;
             var ta = document.getElementById('doc-editor-textarea'); if (!ta) return;
             var it = _wlac.items[i != null ? i : _wlac.sel]; if (!it) { _wlacClose(); return; }
             var pos = ta.selectionStart;
-            // [r191] 옵시디언식 — 항상 [[제목]] 형식으로 삽입(ID 노출 없음). 미해결도 동일 형식.
-            var insertTitle = it.title || it.label || '';
-            var insert = '[[' + insertTitle + ']]';
+            // [r191/r193] 옵시디언식 삽입 — 헤더 선택 시 [[제목#헤더]], 일반은 [[제목]]
+            var body;
+            if (it.mode === 'header') body = (it.title || '') + '#' + (it.headerText || '');
+            else body = it.title || it.label || '';
+            var insert = '[[' + body + ']]';
             ta.value = ta.value.substring(0, _wlac.start) + insert + ta.value.substring(pos);
             var newPos = _wlac.start + insert.length;
             ta.selectionStart = ta.selectionEnd = newPos;
@@ -20313,14 +20389,31 @@ addEventListener("resize",sendPos);
             e.preventDefault(); e.stopPropagation();
             var type = wl.getAttribute('data-wl-type');
             var id = wl.getAttribute('data-wl-id');
+            var hash = wl.getAttribute('data-wl-hash'); // [r193] 헤더 슬러그
             if (type === 'task') navToTask(id);
-            else if (type === 'doc') navToDoc(id);
+            else if (type === 'doc') {
+                if (hash && id === activeDocId) { _wlScrollToHeader(hash); return; }  // 같은 문서면 스크롤만
+                navToDoc(id);
+                if (hash) setTimeout(function () { _wlScrollToHeader(hash); }, 220);  // 다른 문서 → 열린 뒤 스크롤
+            }
+            else if (type === 'hash') _wlScrollToHeader(hash); // [r193] [[#헤더]] — 현재 문서 내부 점프
             else if (type === 'code' && typeof gitGoRef === 'function') gitGoRef(id);
             else if (type === 'new') { // [r191] 미해결 [[제목]] → 같은 이름으로 새 문서 생성 후 이동
                 var newTitle = wl.getAttribute('data-wl-title') || (wl.textContent || '').replace(/✚\s*$/, '').trim();
                 if (typeof _wlCreateAndNav === 'function') _wlCreateAndNav(newTitle);
             }
         }, true);
+        // [r193] 슬러그 헤더로 부드럽게 스크롤 + 짧은 하이라이트
+        function _wlScrollToHeader(slug) {
+            if (!slug) return;
+            var container = document.querySelector('.markdown-body') || document.body;
+            var el = container.querySelector('[id="' + slug + '"]') || document.getElementById(slug);
+            if (!el) { if (typeof showToast === 'function') showToast('헤더를 찾을 수 없습니다: ' + slug, 'info'); return; }
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            var prev = el.style.backgroundColor; el.style.transition = 'background-color .4s';
+            el.style.backgroundColor = 'var(--c-accent-soft)';
+            setTimeout(function () { el.style.backgroundColor = prev || ''; }, 1400);
+        }
         // [코드 인용 임베드] 헤더 클릭=접기/펼치기, ↗Git=Git탭에서 열기 (GitHub 링크는 기본 동작)
         document.addEventListener('click', function(e) {
             if (!e.target || !e.target.closest) return;
