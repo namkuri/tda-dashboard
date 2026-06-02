@@ -17662,14 +17662,21 @@ return data;
                 if (!targets.length && titlePart) targets = docs.filter(function (d) { return match(d.title); }).slice(0, 3);
                 targets.forEach(function (d) {
                     var hs = _wlDocHeaders(d.id);
+                    // [r194] 같은 텍스트의 헤더가 여러 개면 라벨에 (n번째) 표시. 삽입 시 두 번째부터는 슬러그(콤보-1 등) 사용해 정확히 그 헤더로 이동.
+                    var txtCount = {}; hs.forEach(function (h) { txtCount[h.text] = (txtCount[h.text] || 0) + 1; });
+                    var txtSeen = {};
                     var ql = hashPart.toLowerCase();
                     var isCurrent = (d.id === activeDocId) && !titlePart;
-                    hs.filter(function (h) { return !ql || h.text.toLowerCase().indexOf(ql) >= 0; }).slice(0, 8).forEach(function (h) {
+                    hs.filter(function (h) { return !ql || h.text.toLowerCase().indexOf(ql) >= 0; }).slice(0, 12).forEach(function (h) {
+                        var occ = (txtSeen[h.text] = (txtSeen[h.text] || 0) + 1);   // 이 텍스트의 몇 번째 등장인지(1부터)
+                        var multi = txtCount[h.text] > 1;
+                        var hashForInsert = multi && occ > 1 ? h.slug : h.text;     // 첫 번째는 텍스트 그대로, 둘째부터 슬러그(콤보-1 등)
+                        var occLabel = multi ? (' (' + occ + '번째)') : '';
                         items.push({
                             mode: 'header',
                             title: isCurrent ? '' : (d.title || ''),  // [r193] 현재 문서면 빈 제목 → [[#헤더]] 형식 삽입
-                            headerText: h.text,
-                            label: '🔗 ' + (isCurrent ? '(이 문서) ' : ((d.title || '') + ' › ')) + '#'.repeat(h.level) + ' ' + h.text,
+                            headerText: hashForInsert,
+                            label: '🔗 ' + (isCurrent ? '(이 문서) ' : ((d.title || '') + ' › ')) + '#'.repeat(h.level) + ' ' + h.text + occLabel,
                             kind: '헤더'
                         });
                     });
