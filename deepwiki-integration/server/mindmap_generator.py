@@ -145,12 +145,12 @@ def _layout_radial(central_title: str, branches: List[Dict[str, Any]]) -> Dict[s
     nodes = []
     edges = []
 
-    # 중심
+    # 중심 — 마인드맵 알약 크기 (프론트가 텍스트 기반으로 폭 재계산하지만 안전한 초기값)
     central_id = uid("n")
     nodes.append({
-        "id": central_id, "x": 0, "y": 0, "w": 220, "h": 90,
+        "id": central_id, "x": 0, "y": 0, "w": 200, "h": 36,
         "part": "shared", "title": (central_title or "마인드맵")[:80],
-        "meta": "중심 주제", "body": "", "highlighted": True,
+        "meta": "", "body": "", "highlighted": True,
     })
 
     # 1단계 — 방사형 배치
@@ -165,7 +165,7 @@ def _layout_radial(central_title: str, branches: List[Dict[str, Any]]) -> Dict[s
         origin = (br.get("origin") or [])
         meta_str = " · ".join(origin[:2]) if origin else ""
         nodes.append({
-            "id": b_id, "x": bx, "y": by, "w": 200, "h": 86,
+            "id": b_id, "x": bx, "y": by, "w": 180, "h": 36,
             "part": part, "title": (br.get("title") or "")[:80],
             "meta": meta_str[:80], "body": (br.get("summary") or "")[:240],
             "highlighted": False,
@@ -190,7 +190,7 @@ def _layout_radial(central_title: str, branches: List[Dict[str, Any]]) -> Dict[s
             c_meta = " · ".join(c_origin[:2]) if c_origin else ""
             c_id = uid("n")
             nodes.append({
-                "id": c_id, "x": cx, "y": cy, "w": 180, "h": 76,
+                "id": c_id, "x": cx, "y": cy, "w": 160, "h": 36,
                 "part": part, "title": (ch.get("title") or "")[:80],
                 "meta": c_meta[:80], "body": (ch.get("summary") or "")[:200],
                 "highlighted": False,

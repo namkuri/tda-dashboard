@@ -4292,6 +4292,34 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .gph-main { overflow-y: auto; }
         body.dark .gph-canvas-wrap, body.dark-pure .gph-canvas-wrap { background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); }
         .gph-svg { width: 100%; height: 100%; display: block; }
+        /* [r199] 마인드맵 전용 스타일 — 가지별 색 곡선, 둥근 알약, 분기 마커. body { background:#1d2226; } 가정. */
+        .gph-svg.mindmap-mode { background: radial-gradient(circle at 35% 50%, rgba(43,90,108,.18), transparent 60%), var(--c-paper); cursor: grab; }
+        .gph-svg.mindmap-mode.panning { cursor: grabbing; }
+        .mm-edge { fill: none; stroke-linecap: round; stroke-width: 1.8; opacity: .9; transition: stroke-width .15s, opacity .15s; }
+        .mm-edge.hot { stroke-width: 3; opacity: 1; }
+        .mm-pill { rx: 16; ry: 16; transition: filter .14s; }
+        .mm-pill-bg { fill: rgba(40,50,55,.92); stroke: rgba(120,160,170,.35); stroke-width: 1; }
+        .mm-pill-bg.central { fill: rgba(50,90,110,.95); stroke: rgba(160,210,220,.55); stroke-width: 1.5; }
+        .mm-pill-bg.sel { stroke: var(--c-accent); stroke-width: 2; filter: drop-shadow(0 0 6px var(--c-accent)); }
+        .mm-pill-txt { fill: #d6e6ea; font-family: 'Pretendard', sans-serif; font-size: 13px; font-weight: 600; pointer-events: none; }
+        .mm-pill-txt.central { font-size: 14px; font-weight: 800; }
+        .mm-branch-marker { fill: rgba(120,160,170,.55); font-size: 11px; font-weight: 700; font-family: monospace; pointer-events: none; }
+        body.dark .mm-pill-bg { fill: rgba(40,50,55,.92); }
+        body:not(.dark) .gph-svg.mindmap-mode { background: radial-gradient(circle at 35% 50%, rgba(120,160,180,.13), transparent 60%), var(--c-paper); }
+        body:not(.dark) .mm-pill-bg { fill: rgba(245,245,245,.92); stroke: rgba(120,160,170,.45); }
+        body:not(.dark) .mm-pill-bg.central { fill: rgba(220,235,240,.96); }
+        body:not(.dark) .mm-pill-txt { fill: var(--c-text); }
+        /* [r199] 마인드맵 진행 위젯 (Deep Wiki 스타일 재사용) */
+        #mmp-prog-widget { position: fixed; right: 22px; bottom: 22px; width: 360px; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.32); z-index: 9000; padding: 12px 14px; display: none; flex-direction: column; gap: 8px; }
+        #mmp-prog-widget.on { display: flex; }
+        .mmp-prog-head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13.5px; color: var(--c-text); }
+        .mmp-prog-bar { height: 3px; background: var(--ios-fill); border-radius: 3px; overflow: hidden; position: relative; }
+        .mmp-prog-bar > div { position: absolute; left: -30%; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, var(--c-accent), transparent); animation: mmpProg 1.2s linear infinite; }
+        @keyframes mmpProg { 0% { left: -30%; } 100% { left: 100%; } }
+        .mmp-prog-stage { font-size: 12px; font-weight: 700; color: var(--c-accent); }
+        .mmp-prog-detail { font-size: 11.5px; color: var(--c-text2); line-height: 1.45; }
+        .mmp-prog-log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; max-height: 110px; overflow-y: auto; color: var(--c-text2); background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 6px; padding: 6px 8px; line-height: 1.55; white-space: pre-wrap; }
+        .mmp-prog-x { margin-left: auto; background: none; border: none; color: var(--c-text3); font-size: 16px; cursor: pointer; padding: 0 4px; }
         .gph-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--c-text3); font-size: 14px; gap: 10px; pointer-events: none; text-align: center; }
         .point-circle, .node-group, .node-rect { cursor: grab; }
         .point-circle:hover, .node-rect:hover { filter: brightness(1.06); }
@@ -28514,10 +28542,14 @@ ${intrLog}
             }
             docs.push({ title: d.title || '', content: (d.content || '').slice(0, 12000) });
         }
-        // 진행 모달
+        // [r199] 진행 위젯 (Deep Wiki 스타일, 모달 대신 우하단 플로팅)
         _mmpState.running = true; _mmpState.log = [];
-        _openSimpleModal('🧠 마인드맵 생성 중…', '<div id="mmp-log" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:7px;padding:10px;max-height:50vh;overflow-y:auto;white-space:pre-wrap;line-height:1.5;color:var(--c-text);">⏳ 시작 중…</div>');
-        function _log(line) { _mmpState.log.push(line); var el = document.getElementById('mmp-log'); if (el) { el.textContent = _mmpState.log.join('\n'); el.scrollTop = el.scrollHeight; } }
+        _closeSimpleModal();
+        _mmpProgShow('🧠 마인드맵 생성 시작', '문서 ' + docs.length + '개로 LLM 호출 준비');
+        function _log(line) {
+            _mmpState.log.push(line);
+            var el = document.getElementById('mmp-prog-log'); if (el) { el.textContent = _mmpState.log.join('\n'); el.scrollTop = el.scrollHeight; }
+        }
         try {
             var res = await fetch(url + '/mindmap/generate', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -28549,12 +28581,12 @@ ${intrLog}
                     var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.event === 'stage') _log('🔄 [' + ev.stage + '] ' + (ev.message || ''));
-                        else if (ev.event === 'progress') _log('… ' + (ev.message || ''));
-                        else if (ev.event === 'info') _log('ℹ ' + (ev.message || ''));
+                        if (ev.event === 'stage') { _mmpProgUpdate('🔄 ' + (ev.stage || ''), ev.message || ''); _log('🔄 [' + ev.stage + '] ' + (ev.message || '')); }
+                        else if (ev.event === 'progress') { _mmpProgUpdate(null, ev.message || ''); _log('… ' + (ev.message || '')); }
+                        else if (ev.event === 'info') { _mmpProgUpdate(null, ev.message || ''); _log('ℹ ' + (ev.message || '')); }
                         else if (ev.event === 'warn') _log('⚠ ' + (ev.message || ''));
-                        else if (ev.event === 'error') { _log('❌ ' + (ev.message || '오류')); throw new Error(ev.message || 'LLM 오류'); }
-                        else if (ev.event === 'done') { diagram = ev.diagram; done = true; _log('✅ 노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개 (' + ev.mode + ' 모드)'); }
+                        else if (ev.event === 'error') { _mmpProgUpdate('❌ 오류', ev.message || ''); _log('❌ ' + (ev.message || '오류')); throw new Error(ev.message || 'LLM 오류'); }
+                        else if (ev.event === 'done') { diagram = ev.diagram; done = true; _mmpProgUpdate('✅ 완료', '노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개'); _log('✅ 노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개 (' + ev.mode + ' 모드)'); }
                     } catch (parseErr) { /* JSON 라인 외엔 무시 */ }
                 }
             }
@@ -28562,13 +28594,39 @@ ${intrLog}
             // 다이어그램에 적용
             await _mmpApplyDiagram(diagram, docs);
             _mmpState.running = false;
+            _mmpProgUpdate('✅ 완료', '마인드맵이 생성되었습니다.');
+            setTimeout(_mmpProgHide, 1800);
             showToast('🧠 마인드맵이 생성되었습니다.', 'success');
         } catch (e) {
             _log('❌ 실패: ' + (e.message || e));
+            _mmpProgUpdate('❌ 실패', (e.message || e) + ' — 위젯을 닫고 다시 시도하세요.');
             showToast('마인드맵 생성 실패: ' + (e.message || e), 'alert');
             _mmpState.running = false;
         }
     }
+    // [r199] 마인드맵 진행 위젯 (Deep Wiki 스타일)
+    function _mmpProgShow(stage, detail) {
+        var w = document.getElementById('mmp-prog-widget');
+        if (!w) {
+            w = document.createElement('div'); w.id = 'mmp-prog-widget';
+            w.innerHTML = '<div class="mmp-prog-head"><span>🧠 마인드맵 생성</span><button class="mmp-prog-x" onclick="_mmpProgHide()" title="닫기">✕</button></div>'
+                + '<div class="mmp-prog-bar"><div></div></div>'
+                + '<div id="mmp-prog-stage" class="mmp-prog-stage">' + (stage || '') + '</div>'
+                + '<div id="mmp-prog-detail" class="mmp-prog-detail">' + (detail || '') + '</div>'
+                + '<div id="mmp-prog-log" class="mmp-prog-log">⏳ 시작 중…</div>';
+            document.body.appendChild(w);
+        } else {
+            var st = w.querySelector('#mmp-prog-stage'); if (st) st.textContent = stage || '';
+            var dt = w.querySelector('#mmp-prog-detail'); if (dt) dt.textContent = detail || '';
+        }
+        w.classList.add('on');
+    }
+    function _mmpProgUpdate(stage, detail) {
+        var w = document.getElementById('mmp-prog-widget'); if (!w) return;
+        if (stage != null) { var st = w.querySelector('#mmp-prog-stage'); if (st) st.textContent = stage; }
+        if (detail != null) { var dt = w.querySelector('#mmp-prog-detail'); if (dt) dt.textContent = detail; }
+    }
+    function _mmpProgHide() { var w = document.getElementById('mmp-prog-widget'); if (w) w.classList.remove('on'); }
     async function _mmpApplyDiagram(diagram, docs) {
         // target == 'new' → 새 diagram doc 생성. 'existing' → 기존 diagram에 노드 머지(좌표 오프셋)
         if (_mmpState.target === 'existing' && _mmpState.existingId) {
@@ -29076,8 +29134,11 @@ ${intrLog}
         var old = wrap.querySelector('.gph-empty'); if (old) old.remove();
         if (!d) { svg.innerHTML = ''; var e = document.createElement('div'); e.className = 'gph-empty'; e.innerHTML = '<div style="font-size:34px;opacity:.4">📈</div><div>왼쪽에서 그래프를 선택하거나<br>＋ 새 그래프로 추가하세요</div>'; wrap.appendChild(e); return; }
         var p = gphPayload(d); gphSetActiveParts(p);
-        // [r197] 마인드맵 모드는 그래프 렌더러를 그대로 사용 — 노드/엣지 동일 데이터 모델
-        if (p.mode === 'graph' || p.mode === 'mindmap') gphRenderGraphCanvas(d, p, svg); else gphRenderLinearCanvas(d, p, svg);
+        // [r197/r199] 마인드맵은 전용 렌더러(가지별 색 곡선·둥근 알약·휠줌·패닝). 그래프와 시각 분리.
+        svg.classList.toggle('mindmap-mode', p.mode === 'mindmap');
+        if (p.mode === 'mindmap') gphRenderMindmapCanvas(d, p, svg);
+        else if (p.mode === 'graph') gphRenderGraphCanvas(d, p, svg);
+        else gphRenderLinearCanvas(d, p, svg);
     }
 
     // ===== Linear =====
@@ -29215,6 +29276,132 @@ ${intrLog}
         });
         svg.onclick = function (e) { if (e.target === svg || (e.target.classList && e.target.classList.contains('add-hotspot'))) { if (gphState.connecting) { gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas(); } else { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); } } };
     }
+    // [r199] ===== Mindmap 전용 렌더러 (둥근 알약 + 가지별 곡선 + 분기 마커 + 휠 줌/패닝) =====
+    var _mmViewBox = {}; // diagramId → {x,y,w,h,initialized}
+    var MM_PALETTE = ['#6fc3df', '#a3be8c', '#d08770', '#b48ead', '#e5c07b', '#5ec4b9', '#e06c75'];
+    function _mmPillWidth(text) { return Math.max(60, Math.min(260, (text || '').length * 8 + 28)); }
+    function _mmBuildTree(loop) {
+        // central_id 우선, 없으면 entry 수가 0인 첫 노드를 중심으로 추정
+        var nodeById = {}; loop.nodes.forEach(function (n) { nodeById[n.id] = n; });
+        var centralId = loop.central_id && nodeById[loop.central_id] ? loop.central_id : null;
+        var incoming = {}; loop.edges.forEach(function (e) { incoming[e.to] = (incoming[e.to] || 0) + 1; });
+        if (!centralId) { for (var i = 0; i < loop.nodes.length; i++) { if (!incoming[loop.nodes[i].id]) { centralId = loop.nodes[i].id; break; } } }
+        if (!centralId && loop.nodes.length) centralId = loop.nodes[0].id;
+        // 자식 인접 (단방향 from→to)
+        var children = {}; loop.edges.forEach(function (e) { (children[e.from] = children[e.from] || []).push(e.to); });
+        return { centralId: centralId, children: children, nodeById: nodeById };
+    }
+    function gphRenderMindmapCanvas(d, loop, svg) {
+        var w = svg.clientWidth || 1200, h = svg.clientHeight || 600;
+        var tree = _mmBuildTree(loop), centralId = tree.centralId, byId = tree.nodeById, children = tree.children;
+        // viewBox(저장된 게 있으면 사용, 없으면 노드 바운드 기반 + 마진)
+        var vb = _mmViewBox[d.id];
+        if (!vb || !vb.initialized) {
+            var minX = 0, minY = 0, maxX = w, maxY = h;
+            if (loop.nodes.length) {
+                minX = Math.min.apply(null, loop.nodes.map(function (n) { return n.x; })) - 100;
+                minY = Math.min.apply(null, loop.nodes.map(function (n) { return n.y; })) - 100;
+                maxX = Math.max.apply(null, loop.nodes.map(function (n) { return n.x + n.w; })) + 100;
+                maxY = Math.max.apply(null, loop.nodes.map(function (n) { return n.y + n.h; })) + 100;
+            }
+            vb = { x: minX, y: minY, w: Math.max(400, maxX - minX), h: Math.max(300, maxY - minY), initialized: true };
+            _mmViewBox[d.id] = vb;
+        }
+        svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        // 가지별 색 — 중심의 자식들에 팔레트 순환, 그 자손은 부모 색 상속
+        var colorOf = {};
+        if (centralId) {
+            var roots = children[centralId] || [];
+            roots.forEach(function (cid, i) { colorOf[cid] = MM_PALETTE[i % MM_PALETTE.length]; var stk = [cid]; while (stk.length) { var x = stk.pop(); (children[x] || []).forEach(function (k) { colorOf[k] = colorOf[x]; stk.push(k); }); } });
+        }
+        var parts = [];
+        // 엣지(곡선) — 가지별 색
+        loop.edges.forEach(function (edge) {
+            var from = byId[edge.from], to = byId[edge.to]; if (!from || !to) return;
+            var col = colorOf[to.id] || colorOf[from.id] || '#6fc3df';
+            var pw = _mmPillWidth(from.title), pwT = _mmPillWidth(to.title);
+            var pH = 36;
+            // 중심점 ↔ 노드 우측/좌측 — 마인드맵은 항상 왼→오 분기
+            var x1 = from.x + pw, y1 = from.y + pH / 2;
+            var x2 = to.x, y2 = to.y + pH / 2;
+            // 단일 cubic, 측면 탄성 곡선
+            var dx = Math.max(40, (x2 - x1) * 0.55);
+            var d1 = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (x2 - dx) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+            parts.push('<path class="mm-edge" data-mm-edge="' + edge.id + '" d="' + d1 + '" stroke="' + col + '"/>');
+        });
+        // 분기 마커 ('<' 표시) — 자식이 있는 노드의 우측
+        loop.nodes.forEach(function (node) {
+            var kids = children[node.id] || []; if (!kids.length) return;
+            var pw = _mmPillWidth(node.title);
+            var mx = node.x + pw + 6, my = node.y + 36 / 2 + 3;
+            parts.push('<text class="mm-branch-marker" x="' + mx + '" y="' + my + '">&lt;</text>');
+        });
+        // 노드(둥근 알약)
+        loop.nodes.forEach(function (node) {
+            var isCentral = node.id === centralId;
+            var sel = gphState.selected && gphState.selected.type === 'node' && gphState.selected.id === node.id;
+            var col = isCentral ? '#9fd3e0' : (colorOf[node.id] || '#a8c6d0');
+            var pw = _mmPillWidth(node.title), pH = 36;
+            var clsBg = 'mm-pill-bg' + (isCentral ? ' central' : '') + (sel ? ' sel' : '');
+            var clsTxt = 'mm-pill-txt' + (isCentral ? ' central' : '');
+            parts.push('<g class="node-group" data-node-id="' + node.id + '" transform="translate(' + node.x + ',' + node.y + ')">');
+            // 좌측 컬러 점
+            if (!isCentral) parts.push('<circle cx="' + (-6) + '" cy="' + (pH / 2) + '" r="3" fill="' + col + '" opacity=".8"/>');
+            parts.push('<rect class="mm-pill ' + clsBg + '" rx="18" ry="18" x="0" y="0" width="' + pw + '" height="' + pH + '"/>');
+            parts.push('<text class="' + clsTxt + '" x="' + (pw / 2) + '" y="' + (pH / 2 + 5) + '" text-anchor="middle">' + gphEscX(node.title || '(무제)') + '</text>');
+            parts.push('</g>');
+        });
+        svg.innerHTML = parts.join('');
+        _mmWireInteractions(d, loop, svg);
+    }
+    function _mmWireInteractions(d, loop, svg) {
+        // 노드 클릭=선택, 더블클릭=상세
+        svg.querySelectorAll('.node-group').forEach(function (g) {
+            var nodeId = g.dataset.nodeId;
+            g.addEventListener('click', function (e) { e.stopPropagation(); gphState.selected = { type: 'node', id: nodeId }; gphRenderCanvas(); gphRenderPanel(); });
+            // 드래그(노드 위치 변경)
+            gphNodeDrag(g, nodeId, svg, _mmViewBox[d.id].x, _mmViewBox[d.id].y, _mmViewBox[d.id].w, _mmViewBox[d.id].h);
+        });
+        svg.onclick = function (e) { if (e.target === svg) { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); } };
+        // 휠 줌 — 커서 기준 줌인/아웃
+        if (!svg._mmWheelBound) {
+            svg._mmWheelBound = true;
+            svg.addEventListener('wheel', function (ev) {
+                var doc = gphCurrent(); if (!doc) return;
+                var pl = gphPayload(doc); if (pl.mode !== 'mindmap') return;
+                ev.preventDefault();
+                var vb = _mmViewBox[doc.id]; if (!vb) return;
+                var r = svg.getBoundingClientRect();
+                var mx = vb.x + (ev.clientX - r.left) * (vb.w / r.width);
+                var my = vb.y + (ev.clientY - r.top) * (vb.h / r.height);
+                var f = ev.deltaY < 0 ? 0.88 : 1.14;
+                var nw = Math.max(80, Math.min(8000, vb.w * f));
+                var nh = Math.max(60, Math.min(8000, vb.h * f));
+                vb.x = mx - (mx - vb.x) * (nw / vb.w);
+                vb.y = my - (my - vb.y) * (nh / vb.h);
+                vb.w = nw; vb.h = nh;
+                svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+            }, { passive: false });
+            // 패닝(빈 곳 드래그)
+            var pan = null;
+            svg.addEventListener('mousedown', function (ev) {
+                if (ev.button !== 0) return; if (ev.target.closest && ev.target.closest('.node-group')) return;
+                var doc = gphCurrent(); if (!doc) return; var pl = gphPayload(doc); if (pl.mode !== 'mindmap') return;
+                pan = { x: ev.clientX, y: ev.clientY, vb: Object.assign({}, _mmViewBox[doc.id]) };
+                svg.classList.add('panning');
+            });
+            window.addEventListener('mousemove', function (ev) {
+                if (!pan) return;
+                var doc = gphCurrent(); if (!doc) return; var vb = _mmViewBox[doc.id]; if (!vb) return;
+                var r = svg.getBoundingClientRect();
+                vb.x = pan.vb.x - (ev.clientX - pan.x) * (vb.w / r.width);
+                vb.y = pan.vb.y - (ev.clientY - pan.y) * (vb.h / r.height);
+                svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+            });
+            window.addEventListener('mouseup', function () { if (pan) { pan = null; svg.classList.remove('panning'); } });
+        }
+    }
     function gphEdgePath(from, to, style) {
         var fcx = from.x + from.w / 2, fcy = from.y + from.h / 2, tcx = to.x + to.w / 2, tcy = to.y + to.h / 2;
         var exit = gphAnchor(from, tcx, tcy), entry = gphAnchor(to, fcx, fcy);
@@ -29236,7 +29423,9 @@ ${intrLog}
     }
     function gphMid(from, to) { return { x: (from.x + from.w / 2 + to.x + to.w / 2) / 2, y: (from.y + from.h / 2 + to.y + to.h / 2) / 2 }; }
     function gphNodeDrag(g, nodeId, svg, vbX, vbY, vbW, vbH) {
-        var rect = g.querySelector('.node-rect'), down = null, isDrag = false, startPos = null;
+        // [r199] 마인드맵 모드는 .mm-pill 사용. 둘 다 지원.
+        var rect = g.querySelector('.node-rect') || g.querySelector('.mm-pill') || g; var down = null, isDrag = false, startPos = null;
+        if (!rect || !rect.addEventListener) return;
         rect.addEventListener('mousedown', function (e) { e.stopPropagation(); if (gphState.connecting) return; down = { x: e.clientX, y: e.clientY }; isDrag = false; var n = gphPayload(gphCurrent()).nodes.find(function (x) { return x.id === nodeId; }); if (n) startPos = { x: n.x, y: n.y }; document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); });
         function mv(e) { if (!down || !startPos) return; var dx = e.clientX - down.x, dy = e.clientY - down.y; if (!isDrag && Math.abs(dx) < 4 && Math.abs(dy) < 4) return; isDrag = true; var r = svg.getBoundingClientRect(); var d = gphCurrent(); if (!d) return; var n = gphPayload(d).nodes.find(function (x) { return x.id === nodeId; }); if (!n) return; n.x = startPos.x + dx * (vbW / r.width); n.y = startPos.y + dy * (vbH / r.height); gphRenderCanvas(); gphSave(d); var xi = document.getElementById('gphNodeX'), yi = document.getElementById('gphNodeY'); if (xi) xi.value = Math.round(n.x); if (yi) yi.value = Math.round(n.y); }
         function up() { down = null; startPos = null; setTimeout(function () { isDrag = false; }, 50); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
