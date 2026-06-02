@@ -4362,6 +4362,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .rel-info .rel-conn:hover { background: var(--ios-fill); }
         .rel-go { width: 100%; background: var(--c-accent); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 7px; cursor: pointer; }
         .rel-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--c-text3); font-size: 13px; text-align: center; padding: 30px; }
+        /* [r187] 링크 노드 보기 모달 */
+        .rel-lm-list { display: flex; flex-direction: column; gap: 2px; }
+        .rel-lm-h { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--c-text); margin: 12px 2px 4px; }
+        .rel-lm-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--c-border); background: var(--c-paper); margin-bottom: 3px; }
+        .rel-lm-main { flex: 1; min-width: 0; }
+        .rel-lm-name { font-size: 13px; font-weight: 600; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rel-lm-info { font-size: 11px; color: var(--c-text3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rel-lm-go { flex-shrink: 0; background: var(--c-accent-soft); color: var(--c-accent); border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; }
+        .rel-lm-go:hover { background: var(--c-accent); color: #fff; }
         </style>
         <div id="graph-view" class="hidden" onclick="event.stopPropagation()">
             <aside class="gph-side">
@@ -27892,7 +27901,13 @@ ${intrLog}
         assetFolder: { label: '에셋폴더', color: '#0ea5e9', emoji: '📁' }
     };
     var _rel = { nodes: [], edges: [], pos: {}, idx: {}, filters: {}, sel: null, view: { k: 1, x: 0, y: 0 }, _wired: false, _pan: null };
-    function relOpen() { var ov = document.getElementById('rel-overlay'); if (!ov) return; ov.classList.add('on'); _relWire(); relBuild(); }
+    function relOpen() { var ov = document.getElementById('rel-overlay'); if (!ov) return; ov.classList.add('on'); _relWire(); _relBuildWhenReady(0); }
+    // [r187] 첫 진입 시 캔버스 크기가 0이면 _relFit이 스케일을 0으로 잡아 빈 화면처럼 보임 → 크기가 잡힐 때까지 지연 후 빌드
+    function _relBuildWhenReady(tries) {
+        var wrap = document.getElementById('rel-canvas-wrap');
+        if ((!wrap || wrap.clientWidth < 40 || wrap.clientHeight < 40) && tries < 25) { setTimeout(function () { _relBuildWhenReady(tries + 1); }, 40); return; }
+        relBuild();
+    }
     function relClose() { var ov = document.getElementById('rel-overlay'); if (ov) ov.classList.remove('on'); _rel.sel = null; }
     function _relCollect() {
         var P = activeProjectId, byP = function (x) { return (x.projectId || 'default') === P; };
@@ -27959,7 +27974,8 @@ ${intrLog}
         if (!ns.length || !wrap) { _rel.view = { k: 1, x: (wrap ? wrap.clientWidth / 2 : 0), y: (wrap ? wrap.clientHeight / 2 : 0) }; return; }
         var xs = ns.map(function (n) { return _rel.pos[n.id].x; }), ys = ns.map(function (n) { return _rel.pos[n.id].y; });
         var minX = Math.min.apply(null, xs) - 70, maxX = Math.max.apply(null, xs) + 70, minY = Math.min.apply(null, ys) - 50, maxY = Math.max.apply(null, ys) + 50;
-        var bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY), cw = wrap.clientWidth || 800, ch = wrap.clientHeight || 500;
+        var bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY), cw = wrap.clientWidth || 0, ch = wrap.clientHeight || 0;
+        if (cw < 40) cw = 800; if (ch < 40) ch = 500;   // [r187] 0 크기 폴백(스케일 0 방지)
         var k = Math.min(cw / bw, ch / bh, 1.5); if (!isFinite(k) || k <= 0) k = 1;
         _rel.view = { k: k, x: cw / 2 - k * (minX + bw / 2), y: ch / 2 - k * (minY + bh / 2) };
     }
@@ -27974,7 +27990,7 @@ ${intrLog}
         var eHtml = '';
         _rel.edges.forEach(function (e) { if (!visSet[e.a] || !visSet[e.b]) return; var pa = _rel.pos[e.a], pb = _rel.pos[e.b]; var cls = 'rel-edge'; if (sel) cls += (e.a === sel || e.b === sel) ? ' hot' : ' dim'; eHtml += '<line class="' + cls + '" x1="' + pa.x.toFixed(1) + '" y1="' + pa.y.toFixed(1) + '" x2="' + pb.x.toFixed(1) + '" y2="' + pb.y.toFixed(1) + '"/>'; });
         var nHtml = '';
-        vns.forEach(function (n) { var p = _rel.pos[n.id], t = REL_TYPES[n.type] || { color: '#888', emoji: '•' }, r = 7 + Math.min(15, n.deg * 1.7); var cls = 'rel-node'; if (sel === n.id) cls += ' sel'; else if (sel && !neigh[n.id]) cls += ' dim'; var lab = gphEsc((n.label || '').slice(0, 22)); nHtml += '<g class="' + cls + '" onclick="relSelect(\'' + n.id + '\')" transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')"><circle r="' + r + '" fill="' + t.color + '"/><text x="0" y="' + (r + 11) + '" text-anchor="middle">' + t.emoji + ' ' + lab + '</text></g>'; });
+        vns.forEach(function (n) { var p = _rel.pos[n.id], t = REL_TYPES[n.type] || { color: '#888', emoji: '•' }, r = 7 + Math.min(15, n.deg * 1.7); var cls = 'rel-node'; if (sel === n.id) cls += ' sel'; else if (sel && !neigh[n.id]) cls += ' dim'; var lab = gphEsc((n.label || '').slice(0, 22)); nHtml += '<g class="' + cls + '" onclick="relSelect(\'' + n.id + '\')" oncontextmenu="relNodeCtx(event,\'' + n.id + '\')" transform="translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')"><circle r="' + r + '" fill="' + t.color + '"/><text x="0" y="' + (r + 11) + '" text-anchor="middle">' + t.emoji + ' ' + lab + '</text></g>'; });
         svg.innerHTML = '<g id="rel-g">' + eHtml + nHtml + '</g>';
         _relApplyView();
         if (sel) relInfoShow(sel); else relInfoHide();
@@ -28028,6 +28044,45 @@ ${intrLog}
         window.addEventListener('mousemove', function (e) { if (!_rel._pan) return; _rel.view.x = _rel._pan.vx + (e.clientX - _rel._pan.x); _rel.view.y = _rel._pan.vy + (e.clientY - _rel._pan.y); _relApplyView(); });
         window.addEventListener('mouseup', function () { if (_rel._pan) { _rel._pan = null; var s = document.getElementById('rel-svg'); if (s) s.classList.remove('grabbing'); } });
         svg.addEventListener('wheel', function (e) { e.preventDefault(); var wrap = document.getElementById('rel-canvas-wrap'), rect = wrap.getBoundingClientRect(); var mx = e.clientX - rect.left, my = e.clientY - rect.top; var f = e.deltaY < 0 ? 1.12 : 0.89; var nk = Math.max(0.12, Math.min(4, _rel.view.k * f)); _rel.view.x = mx - (mx - _rel.view.x) * (nk / _rel.view.k); _rel.view.y = my - (my - _rel.view.y) * (nk / _rel.view.k); _rel.view.k = nk; _relApplyView(); }, { passive: false });
+    }
+    // [r187] 노드 우클릭 컨텍스트 메뉴 + 링크 노드 보기(종류별 분류·핵심정보·바로가기)
+    function relNodeCtx(e, nid) {
+        e.preventDefault(); e.stopPropagation(); var n = _rel.idx[nid]; if (!n) return;
+        if (typeof _openCardMenu !== 'function') { relLinkedModal(nid); return; }
+        _openCardMenu(e,
+            '<div class="ctx-menu-item" onclick="hideTreeContextMenu();relLinkedModal(\'' + nid + '\')"><span>🔗</span> 링크 노드 보기</div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();relSelectAndFocus(\'' + nid + '\')"><span>◎</span> 이 노드만 강조</div>'
+            + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();relGo(\'' + nid + '\')"><span>↗</span> 해당 페이지로 이동</div>');
+    }
+    function relSelectAndFocus(nid) { _rel.sel = nid; var wrap = document.getElementById('rel-canvas-wrap'), p = _rel.pos[nid]; if (wrap && p) { _rel.view.x = wrap.clientWidth / 2 - _rel.view.k * p.x; _rel.view.y = wrap.clientHeight / 2 - _rel.view.k * p.y; } _relRender(); }
+    function relGo(nid) { if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); relNav(nid); }
+    function _relNodeInfo(n) {
+        var id = n.ref, mem = function (uid) { return (typeof getMemberName === 'function' && uid) ? getMemberName(uid) : ''; };
+        if (n.type === 'doc') { var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return ''; var k = ({ wiki: '위키', canon: '정전', personal: '개인' })[d.kind] || '문서'; return [k, (d.isLocked ? '🔒잠김' : ''), (d.deprecated ? '폐기' : '')].filter(Boolean).join(' · '); }
+        if (n.type === 'task') { var t = (currentData.tasks || []).find(function (x) { return x.id === id; }); if (!t) return ''; var st = ({ pending: '⏳대기', progress: '🔥진행', completed: '✅완료' })[t.status] || ''; return [st, (t.priority || '').toUpperCase(), mem(t.assigneeId)].filter(Boolean).join(' · '); }
+        if (n.type === 'sprint') { var s = (currentData.sprints || []).find(function (x) { return x.id === id; }); if (!s) return ''; var st = ({ active: '🏃진행중', closed: '🏁종료', planned: '📋예정' })[s.status] || ''; var cards = (currentData.tasks || []).filter(function (x) { return x.sprintId === id; }).length; var rng = (s.startDate || '') + (s.endDate ? ('~' + s.endDate) : ''); return [st, cards + '카드', rng].filter(Boolean).join(' · '); }
+        if (n.type === 'category') { return (currentData.tasks || []).filter(function (x) { return x.catId === id; }).length + '개 카드'; }
+        if (n.type === 'wbs') { var w = (currentData.wbsNodes || []).find(function (x) { return x.id === id; }); if (!w) return ''; var st = (typeof WBS_STATUS === 'object' && WBS_STATUS[w.status]) ? WBS_STATUS[w.status].l : ''; var pr = (typeof w.progress === 'number') ? (w.progress + '%') : ''; var asg = (w.assignees || []).length ? ((w.assignees || []).length + '명') : ''; return [st, pr, asg].filter(Boolean).join(' · '); }
+        if (n.type === 'asset') { var a = (currentData.assets || []).find(function (x) { return x.id === id; }); if (!a) return ''; var f = (currentData.assetFolders || []).find(function (x) { return x.id === a.folderId; }); return [(a.status || ''), (a.type || a.assetType || ''), (f ? ('📁' + f.name) : '')].filter(Boolean).join(' · '); }
+        if (n.type === 'assetFolder') { return (currentData.assets || []).filter(function (x) { return x.folderId === id; }).length + '개 에셋'; }
+        return '';
+    }
+    function relLinkedModal(nid) {
+        if (typeof hideTreeContextMenu === 'function') hideTreeContextMenu();
+        var n = _rel.idx[nid]; if (!n) return;
+        var seen = {}, neighbors = [];
+        _rel.edges.forEach(function (e) { var o = e.a === nid ? e.b : (e.b === nid ? e.a : null); if (o && _rel.idx[o] && !seen[o]) { seen[o] = true; neighbors.push(_rel.idx[o]); } });
+        var groups = {}; neighbors.forEach(function (m) { (groups[m.type] = groups[m.type] || []).push(m); });
+        var order = ['wbs', 'task', 'sprint', 'category', 'doc', 'asset', 'assetFolder'];
+        var body = '';
+        if (!neighbors.length) body = '<div class="wbs-exp-empty">연결된 노드가 없습니다 (고립 노드).</div>';
+        else order.filter(function (t) { return groups[t]; }).forEach(function (t) {
+            var c = REL_TYPES[t], arr = groups[t];
+            body += '<div class="rel-lm-h"><span class="rel-dot" style="background:' + c.color + ';width:10px;height:10px;border-radius:50%;display:inline-block;"></span>' + c.emoji + ' ' + c.label + ' <span style="color:var(--c-text3);font-weight:700;">' + arr.length + '</span></div>';
+            body += arr.map(function (m) { var info = _relNodeInfo(m); return '<div class="rel-lm-row"><div class="rel-lm-main"><div class="rel-lm-name">' + gphEsc(m.label) + '</div>' + (info ? ('<div class="rel-lm-info">' + gphEsc(info) + '</div>') : '') + '</div><button class="rel-lm-go" onclick="relGo(\'' + m.id + '\')">↗ 바로가기</button></div>'; }).join('');
+        });
+        var ci = REL_TYPES[n.type] || { emoji: '•', label: '' };
+        _openSimpleModal('🔗 연결 노드 — ' + ci.emoji + ' ' + gphEsc(n.label), '<div style="font-size:11px;color:var(--c-text3);margin-bottom:10px;">' + ci.label + ' · 연결 ' + neighbors.length + '개를 종류별로 분류했습니다. 바로가기로 해당 페이지로 이동합니다.</div><div class="rel-lm-list">' + body + '</div>');
     }
 
     function gphUid(p) { return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
