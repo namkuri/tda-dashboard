@@ -201,7 +201,7 @@ def _layout_radial(central_title: str, branches: List[Dict[str, Any]]) -> Dict[s
             })
 
     return {
-        "mode": "graph",
+        "mode": "mindmap",   # [r197] 그래프 1개에 흐름/그래프/마인드맵 중 하나 — 마인드맵 모드로 명시
         "orientation": "horizontal",
         "nodes": nodes,
         "edges": edges,

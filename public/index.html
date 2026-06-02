@@ -4392,8 +4392,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="gph-side-actions">
                     <button class="gph-btn gph-btn-primary" onclick="gphNewDiagram(null)">＋ 새 그래프</button>
                     <button class="gph-btn" onclick="gphNewFolder(null)">＋ 폴더</button>
-                    <!-- [r196] 문서→마인드맵 자동 생성 (Ollama) -->
-                    <button class="gph-btn" style="background:var(--c-accent-soft);color:var(--c-accent);font-weight:700;" onclick="mmpOpenPicker()" title="선택한 문서를 LLM으로 분석해 마인드맵 자동 생성">🧠 문서로 마인드맵</button>
+                    <!-- [r196/r197] 문서→마인드맵 자동 생성 (Ollama). 새 마인드맵으로 생성됨. -->
+                    <button class="gph-btn" style="background:var(--c-accent-soft);color:var(--c-accent);font-weight:700;" onclick="mmpOpenPicker(false)" title="선택한 문서를 LLM으로 분석해 새 마인드맵 그래프를 만듭니다">🧠 문서로 마인드맵</button>
                 </div>
             </aside>
             <main class="gph-main">
@@ -4405,6 +4405,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <div class="gph-toggle-group">
                             <button class="gph-toggle" data-mode="linear" onclick="gphSetMode('linear')">↔ 흐름</button>
                             <button class="gph-toggle" data-mode="graph" onclick="gphSetMode('graph')">⌬ 그래프</button>
+                            <button class="gph-toggle" data-mode="mindmap" onclick="gphSetMode('mindmap')">🧠 마인드맵</button>
                         </div>
                         <span class="gph-ctl-label" id="gph-orient-label">방향</span>
                         <div class="gph-toggle-group" id="gph-orient-group">
@@ -28437,10 +28438,13 @@ ${intrLog}
     // [r196] 문서 → 마인드맵 자동 생성 (Ollama). GPU/Ollama 인프라(_dwpBackendUrl) 재사용.
     // ====================================================================
     var _mmpState = { selected: {}, target: 'new', existingId: null, running: false, log: [] };
-    function mmpOpenPicker() {
+    function mmpOpenPicker(useCurrentGraph) {
         if (typeof _dwpBackendUrl !== 'function' || !_dwpBackendUrl()) { showToast('⚙️ Deep Wiki(AI) 백엔드 URL이 필요합니다. AI Agent 설정에서 먼저 등록하세요.', 'alert'); return; }
         if (!activeProjectId) { showToast('프로젝트가 선택되어 있지 않습니다.', 'alert'); return; }
-        _mmpState.selected = {}; _mmpState.target = 'new'; _mmpState.existingId = null;
+        _mmpState.selected = {};
+        // [r197] 현재 열린 그래프(마인드맵 모드)에서 호출하면 기존 그래프에 자동 추가
+        if (useCurrentGraph && gphState.currentId) { _mmpState.target = 'existing'; _mmpState.existingId = gphState.currentId; }
+        else { _mmpState.target = 'new'; _mmpState.existingId = null; }
         _openSimpleModal('🧠 문서로 마인드맵 만들기', _mmpRenderPicker());
     }
     function _mmpEligibleDocs() {
@@ -28555,7 +28559,8 @@ ${intrLog}
         if (_mmpState.target === 'existing' && _mmpState.existingId) {
             var doc = (currentData.docs || []).find(function (d) { return d.id === _mmpState.existingId; }); if (!doc) throw new Error('대상 다이어그램 없음');
             var p = gphPayload(doc);
-            p.mode = 'graph';
+            // [r197] 기존 모드가 마인드맵이면 유지, 아니면 마인드맵으로 전환(흐름/그래프/마인드맵 중 하나만)
+            if (p.mode !== 'mindmap') p.mode = 'mindmap';
             // 기존 노드 영역 우측에 새 노드 배치
             var maxX = 0; (p.nodes || []).forEach(function (n) { maxX = Math.max(maxX, n.x + (n.w || 200)); });
             var ox = (p.nodes && p.nodes.length) ? (maxX + 200) : 0;
@@ -28926,7 +28931,14 @@ ${intrLog}
                 var visIco = (!isF && gphState.scope === 'personal') ? (d.meta && d.meta.visibility === 'public' ? '🌐' : '🔒') : '';
                 html += '<div class="gph-tree-row' + active + '" draggable="true" data-gid="' + d.id + '" style="padding-left:' + (8 + depth * 14) + 'px" onclick="gphSelectDiagram(\'' + d.id + '\')" oncontextmenu="gphTreeCtx(event,\'' + d.id + '\')">';
                 html += (isF || hasKids) ? ('<span class="gph-tree-caret" onclick="event.stopPropagation();gphToggleFolder(\'' + d.id + '\')">' + (hasKids ? (exp ? '▾' : '▸') : '·') + '</span>') : '<span class="gph-tree-caret"></span>';
-                html += '<span class="gph-tw-ico">' + (isF ? (exp ? '📂' : '📁') : '📈') + '</span>';
+                // [r197] 모드별 아이콘 — 흐름(↔)·그래프(📈)·마인드맵(🧠)
+                var modeIco = '📈';
+                if (!isF && d.meta && d.meta.diagram) {
+                    var mm = d.meta.diagram.mode;
+                    if (mm === 'linear') modeIco = '↔';
+                    else if (mm === 'mindmap') modeIco = '🧠';
+                }
+                html += '<span class="gph-tw-ico">' + (isF ? (exp ? '📂' : '📁') : modeIco) + '</span>';
                 html += '<span class="gph-tw-name">' + gphEsc(d.title || '(무제)') + '</span>';
                 if (visIco) html += '<span class="gph-tw-act" style="opacity:.7" title="' + (d.meta.visibility === 'public' ? '공개' : '비공개') + '">' + visIco + '</span>';
                 if (approved) html += '<span class="gph-tw-check" title="승인됨">✔</span>';
@@ -29017,7 +29029,9 @@ ${intrLog}
             var parts = gphPartList(p).map(function (o) { return o.key; });
             legend.innerHTML = parts.map(function (pt) { var del = gphIsBasePart(pt) ? '' : '<span class="gph-legend-del" onclick="event.stopPropagation();gphRemoveCustomPart(\'' + gphEscX(pt) + '\')" title="이 사용자 정의 파트 삭제">✕</span>'; return '<div class="gph-legend-item"><span class="gph-legend-dot" style="background:' + gphPartColor(pt) + '"></span>' + gphEsc(gphPartName(pt)) + del + '</div>'; }).join('')
                 + '<button class="gph-legend-add" onclick="gphAddCustomPartCurrent()" title="사용자 정의 파트(이름·색상) 추가">➕ 파트</button>'
-                + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴') + '</div>';
+                // [r197] 마인드맵 모드에선 LLM 자동 생성 버튼 노출(현재 그래프에 머지). 다른 모드는 기존 힌트.
+                + (p.mode === 'mindmap' ? '<button class="gph-legend-add" style="background:var(--c-accent);color:#fff;border-color:var(--c-accent);" onclick="mmpOpenPicker(true)" title="문서를 LLM에 보내 마인드맵 자동 생성(이 그래프에 추가)">🧠 문서로 자동 생성</button>' : '')
+                + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : (p.mode === 'mindmap' ? '🧠 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · LLM 자동 생성 가능' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴')) + '</div>';
         }
         // 작성자 / 작성일 / 수정일 + 공개여부
         var meta = document.getElementById('gph-meta');
@@ -29047,7 +29061,8 @@ ${intrLog}
         var old = wrap.querySelector('.gph-empty'); if (old) old.remove();
         if (!d) { svg.innerHTML = ''; var e = document.createElement('div'); e.className = 'gph-empty'; e.innerHTML = '<div style="font-size:34px;opacity:.4">📈</div><div>왼쪽에서 그래프를 선택하거나<br>＋ 새 그래프로 추가하세요</div>'; wrap.appendChild(e); return; }
         var p = gphPayload(d); gphSetActiveParts(p);
-        if (p.mode === 'graph') gphRenderGraphCanvas(d, p, svg); else gphRenderLinearCanvas(d, p, svg);
+        // [r197] 마인드맵 모드는 그래프 렌더러를 그대로 사용 — 노드/엣지 동일 데이터 모델
+        if (p.mode === 'graph' || p.mode === 'mindmap') gphRenderGraphCanvas(d, p, svg); else gphRenderLinearCanvas(d, p, svg);
     }
 
     // ===== Linear =====
