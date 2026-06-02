@@ -500,6 +500,9 @@
         .tl-dep-line, .tl-dep-arrow { pointer-events: none; transition: stroke-width .12s, fill .12s, filter .12s; }
         .tl-dep:hover .tl-dep-line { stroke-width: 3.4; filter: drop-shadow(0 0 3px var(--c-accent)); }
         .tl-dep:hover .tl-dep-arrow { filter: drop-shadow(0 0 3px var(--c-accent)); }
+        /* [r190] 선택된 연결선 — 클릭 선택 후 Del로 삭제 */
+        .tl-dep.sel .tl-dep-line { stroke-width: 4; stroke-dasharray: 7 4; filter: drop-shadow(0 0 5px var(--c-accent)); }
+        .tl-dep.sel .tl-dep-arrow { filter: drop-shadow(0 0 5px var(--c-accent)); }
         /* [r177] 연결 드래그 미리보기 선 + 대상 막대 강조 */
         .tl-link-preview { pointer-events: none; opacity: .9; }
         .tl-bar-linktarget { box-shadow: 0 0 0 2px var(--c-accent), 0 0 10px var(--c-accent); transition: box-shadow .1s; }
@@ -22580,15 +22583,15 @@ ${intrLog}
                         var spTip = '🏃 ' + _sprintEsc(sp.weekLabel || '스프린트') + ' · ' + spStatusKr + ' · ' + (sp.startDate || '?') + ' ~ ' + (sp.endDate || '?') + (sp.goal ? ' · ' + _sprintEsc(sp.goal) : '');
                         spsegs += '<div class="tl-sprint-seg" data-sptip="' + spTip + '" onmousemove="_tlSegTipMove(event)" onmouseleave="_tlHideSegTip()" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'move\',\'' + seg.id + '\')" style="left:' + sl + 'px;width:' + sw + 'px;" title="">' + (active ? '<span class="tl-sprint-live">▶</span>' : '') + '</div>';
                     });
-                    var connN = (seg.sprintIds || []).length + (seg.taskIds || []).length + (seg.issueIds || []).length;
-                    var label = _sprintEsc(n.title) + (_segs.length > 1 ? (' <span style="opacity:.6">#' + (si + 1) + '</span>') : '') + (connN ? (' <span style="opacity:.6;font-size:9px;">🔗' + connN + '</span>') : '');
+                    // [r190] 라벨은 제목(+세그먼트#)만 — 연결 숫자 제거. 링크 아이콘은 막대 우측의 핸들(.tl-link-handle).
+                    var label = _sprintEsc(n.title) + (_segs.length > 1 ? (' <span style="opacity:.55;font-size:10px;">#' + (si + 1) + '</span>') : '');
                     bar += '<div class="tl-bar" data-id="' + n.id + '" data-seg="' + seg.id + '" style="left:' + left + 'px;width:' + w + 'px;background:' + col2 + '22;border-color:' + col2 + ';" oncontextmenu="_tlBarCtx(event,\'' + n.id + '\',\'' + seg.id + '\')" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'move\',\'' + seg.id + '\')" title="' + _sprintEsc(n.title) + ' · ' + (seg.start || '?') + ' ~ ' + (seg.due || '?') + ' · 클릭=연결편집, 드래그=이동, 모서리=기간조절">'
                         + '<div class="tl-bar-fill" style="width:' + prog + '%;background:' + col2 + ';"></div>'
                         + spsegs
                         + '<span class="tl-bar-label">' + label + '</span>'
                         + '<div class="tl-bar-h tl-bar-hl" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'resizeL\',\'' + seg.id + '\')"></div>'
                         + '<div class="tl-bar-h tl-bar-hr" onmousedown="_tlBarDown(event,\'' + n.id + '\',\'resizeR\',\'' + seg.id + '\')"></div>'
-                        + '<div class="tl-link-handle" title="드래그하여 다른 작업과 연결" onmousedown="_tlLinkDown(event,\'' + n.id + '\')">🔗</div>'
+                        + '<div class="tl-link-handle" title="드래그하여 이 막대를 다른 작업과 연결" onmousedown="_tlLinkDown(event,\'' + n.id + '\',\'' + seg.id + '\')">🔗</div>'
                         + '</div>';
                 });
                 if (!bar) bar = '<div class="tl-bar-none" title="빈 곳을 클릭·드래그하면 새 일정 막대가 생깁니다">기간 미설정 — 드래그로 생성</div>';
@@ -22610,6 +22613,7 @@ ${intrLog}
                 + '</div></div>';
             var tr = document.getElementById('tl-right'); var tll = host.querySelector('.tl-left');
             if (tr && tll) tr.onscroll = function () { tll.scrollTop = tr.scrollTop; };
+            _tlEnsureDepKeys();
             setTimeout(_tlDrawDeps, 20);
             // [r176] 방금 드래그로 옮긴 행 착지 강조
             if (_tlJustMovedId) {
@@ -22621,33 +22625,56 @@ ${intrLog}
         function _tlSetScale(s) { _tlScale = s; renderTimelineView(); }
         function _tlToggleCollapse(id) { _tlCollapsed[id] = !_tlCollapsed[id]; renderTimelineView(); }
         function _tlAxisWheel(e) { e.preventDefault(); var order = ['quarters', 'months', 'weeks']; var i = order.indexOf(_tlScale); if (e.deltaY < 0) { if (i < order.length - 1) _tlScale = order[i + 1]; } else { if (i > 0) _tlScale = order[i - 1]; } renderTimelineView(); }
-        // 의존(링크) 화살표 — source 막대 우측 → target 막대 좌측
+        // [r190] 의존(링크) 화살표 — 세그먼트(막대) 단위. 클릭=선택, Del=삭제, 다른 곳 클릭=선택해제.
+        var _tlSelDep = null; // 선택된 연결선 key
         function _tlDrawDeps() {
             var rowsEl = document.getElementById('tl-rows'); var svg = document.getElementById('tl-dep-svg'); if (!rowsEl || !svg) return;
             var rr = rowsEl.getBoundingClientRect(); var paths = '';
+            var emit = function (srcBar, tgtBar, key) {
+                if (!srcBar || !tgtBar) return;
+                var sr = srcBar.getBoundingClientRect(), trc = tgtBar.getBoundingClientRect();
+                var x1 = sr.right - rr.left, y1 = sr.top + sr.height / 2 - rr.top;
+                var x2 = trc.left - rr.left, y2 = trc.top + trc.height / 2 - rr.top;
+                var d = _tlDepRoute(x1, y1, x2, y2);
+                var arrowD = 'M' + (x2 - 6) + ' ' + (y2 - 4) + ' L' + x2 + ' ' + y2 + ' L' + (x2 - 6) + ' ' + (y2 + 4);
+                var selCls = (key === _tlSelDep) ? ' sel' : '';
+                paths += '<g class="tl-dep' + selCls + '" data-depkey="' + key + '">'
+                    + '<path class="tl-dep-hit" d="' + d + '" fill="none" stroke="transparent" stroke-width="14" onclick="_tlDepSelect(event,\'' + key + '\')"/>'
+                    + '<path class="tl-dep-line" d="' + d + '" fill="none" stroke="var(--c-accent)" stroke-width="1.6"/>'
+                    + '<path class="tl-dep-arrow" d="' + arrowD + '" fill="var(--c-accent)"/>'
+                    + '</g>';
+            };
             (_wbsAll() || []).forEach(function (n) {
-                var ids = (n.links && n.links.linkIds) || []; if (!ids.length) return;
-                var srcBar = rowsEl.querySelector('.tl-bar[data-id="' + n.id + '"]'); if (!srcBar) return;
-                var sr = srcBar.getBoundingClientRect();
-                ids.forEach(function (tid) {
-                    var tgtBar = rowsEl.querySelector('.tl-bar[data-id="' + tid + '"]'); if (!tgtBar) return;
-                    var trc = tgtBar.getBoundingClientRect();
-                    var x1 = sr.right - rr.left, y1 = sr.top + sr.height / 2 - rr.top;
-                    var x2 = trc.left - rr.left, y2 = trc.top + trc.height / 2 - rr.top;
-                    // [r181] 화살표는 항상 타깃 좌측(진행바 시작)으로 진입, 우향. 역/정방향 모두 동일.
-                    var d = _tlDepRoute(x1, y1, x2, y2);
-                    var arrowD = 'M' + (x2 - 6) + ' ' + (y2 - 4) + ' L' + x2 + ' ' + y2 + ' L' + (x2 - 6) + ' ' + (y2 + 4);
-                    // [r172] hit(넓은 투명) → line(곡선) → arrow 순. 그룹 hover 시 line/arrow 하이라이트
-                    paths += '<g class="tl-dep">'
-                        + '<path class="tl-dep-hit" d="' + d + '" fill="none" stroke="transparent" stroke-width="12"/>'
-                        + '<path class="tl-dep-line" d="' + d + '" fill="none" stroke="var(--c-accent)" stroke-width="1.6"/>'
-                        + '<path class="tl-dep-arrow" d="' + arrowD + '" fill="var(--c-accent)"/>'
-                        // [r173] 화살표 끝 그랩 핸들 — 드래그로 다른 작업에 재연결, 허공에 놓으면 삭제
-                        + '<circle class="tl-dep-grip" cx="' + (x2 - 5) + '" cy="' + y2 + '" r="8" fill="transparent" stroke="transparent" onmousedown="_tlRelinkDown(event,\'' + n.id + '\',\'' + tid + '\')"><title>드래그=다른 작업에 재연결 · 허공=연결 삭제</title></circle>'
-                        + '</g>';
+                // 레거시 노드 단위 링크(구 데이터) — 첫 막대 → 타깃 첫 막대
+                ((n.links && n.links.linkIds) || []).forEach(function (tid) {
+                    emit(rowsEl.querySelector('.tl-bar[data-id="' + n.id + '"]'), rowsEl.querySelector('.tl-bar[data-id="' + tid + '"]'), 'L|' + n.id + '|' + tid);
+                });
+                // 세그먼트 단위 링크 — 해당 막대 → 타깃의 해당 막대
+                _tlSegs(n).forEach(function (seg) {
+                    (seg.deps || []).forEach(function (dep) {
+                        emit(rowsEl.querySelector('.tl-bar[data-id="' + n.id + '"][data-seg="' + seg.id + '"]'), rowsEl.querySelector('.tl-bar[data-id="' + dep.n + '"][data-seg="' + dep.s + '"]'), 'S|' + n.id + '|' + seg.id + '|' + dep.n + '|' + dep.s);
+                    });
                 });
             });
             svg.style.width = rowsEl.scrollWidth + 'px'; svg.style.height = rowsEl.scrollHeight + 'px'; svg.innerHTML = paths;
+        }
+        function _tlDepSelect(e, key) { if (e) { e.stopPropagation(); e.preventDefault(); } _tlSelDep = key; _tlDrawDeps(); }
+        function _tlDepDeselect() { if (_tlSelDep) { _tlSelDep = null; _tlDrawDeps(); } }
+        function _tlDepDelete(key) {
+            var p = key.split('|');
+            if (p[0] === 'L') { var n = _wbsNode(p[1]); if (n && n.links && Array.isArray(n.links.linkIds)) { n.links.linkIds = n.links.linkIds.filter(function (x) { return x !== p[2]; }); n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); } }
+            else if (p[0] === 'S') { var n2 = _wbsNode(p[1]); if (n2) { _tlEnsureSegs(n2); var seg = _tlSegById(n2, p[2]); if (seg && Array.isArray(seg.deps)) { seg.deps = seg.deps.filter(function (d) { return !(d.n === p[3] && d.s === p[4]); }); _tlSaveNode(n2); } } }
+        }
+        function _tlEnsureDepKeys() {
+            if (window._tlDepKeyBound) return; window._tlDepKeyBound = true;
+            document.addEventListener('keydown', function (e) {
+                if (currentView !== 'timeline' || !_tlSelDep) return;
+                var ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+                if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); _tlDepDelete(_tlSelDep); _tlSelDep = null; renderTimelineView(); if (typeof showToast === 'function') showToast('🔗 연결선 삭제됨', 'info'); }
+                else if (e.key === 'Escape') { _tlDepDeselect(); }
+            });
+            // 다른 곳(연결선이 아닌 곳) 클릭 → 선택 해제
+            document.addEventListener('mousedown', function (e) { if (!_tlSelDep) return; if (e.target && e.target.closest && e.target.closest('.tl-dep')) return; _tlDepDeselect(); }, true);
         }
         // [r172] 의존선 곡선(베지어) 라우팅. 타깃이 우측이면 부드러운 수평 S곡선,
         //   타깃이 좌측(역방향)이면 소스에서 수직으로 빠져 타깃 좌측으로 직접 진입.
@@ -22743,23 +22770,32 @@ ${intrLog}
             if (!id) { var rw = barEl.closest('[data-tl-id]'); id = rw ? rw.getAttribute('data-tl-id') : null; }
             return id || null;
         }
+        // [r190] 커서 지점의 막대 → {node, seg}. 막대 위면 그 세그먼트, 기간미설정 위면 그 노드의 첫 세그먼트.
+        function _tlBarSegAt(x, y) {
+            var tgt = document.elementFromPoint(x, y);
+            var barEl = tgt && tgt.closest ? tgt.closest('.tl-bar') : null;
+            if (barEl) return { node: barEl.getAttribute('data-id'), seg: barEl.getAttribute('data-seg') };
+            var bn = tgt && tgt.closest ? tgt.closest('.tl-bar-none') : null;
+            if (bn) { var rw = bn.closest('[data-tl-id]'); var nid = rw ? rw.getAttribute('data-tl-id') : null; if (!nid) return null; var tn = _wbsNode(nid); var segs = tn ? _tlSegs(tn) : []; return { node: nid, seg: segs.length ? segs[0].id : null }; }
+            return null;
+        }
         // [r177] 연결선 드래그 중 실시간 미리보기 — 소스 막대 우측 → 커서까지 점선 곡선 + 대상 막대 강조
         var _tlLinkPv = null;
-        function _tlLinkPreviewStart(fromId) {
+        function _tlLinkPreviewStart(fromId, fromSeg) {
             var rowsEl = document.getElementById('tl-rows'); var svg = document.getElementById('tl-dep-svg');
             if (!rowsEl || !svg) return;
-            var bar = rowsEl.querySelector('.tl-bar[data-id="' + fromId + '"]'); if (!bar) return;
+            var bar = (fromSeg ? rowsEl.querySelector('.tl-bar[data-id="' + fromId + '"][data-seg="' + fromSeg + '"]') : null) || rowsEl.querySelector('.tl-bar[data-id="' + fromId + '"]'); if (!bar) return;
             var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             p.setAttribute('class', 'tl-link-preview'); p.setAttribute('fill', 'none');
             p.setAttribute('stroke', 'var(--c-accent)'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-dasharray', '5 4');
             svg.appendChild(p);
-            _tlLinkPv = { fromId: fromId, rowsEl: rowsEl, path: p, hl: null, hlId: null };
+            _tlLinkPv = { fromId: fromId, fromSeg: fromSeg || null, rowsEl: rowsEl, path: p, hl: null, hlId: null };
             window.addEventListener('mousemove', _tlLinkPreviewMove);
         }
         function _tlLinkPreviewMove(e) {
             if (!_tlLinkPv) return;
             var rowsEl = _tlLinkPv.rowsEl, rr = rowsEl.getBoundingClientRect();
-            var bar = rowsEl.querySelector('.tl-bar[data-id="' + _tlLinkPv.fromId + '"]'); if (!bar) return;
+            var bar = (_tlLinkPv.fromSeg ? rowsEl.querySelector('.tl-bar[data-id="' + _tlLinkPv.fromId + '"][data-seg="' + _tlLinkPv.fromSeg + '"]') : null) || rowsEl.querySelector('.tl-bar[data-id="' + _tlLinkPv.fromId + '"]'); if (!bar) return;
             var br = bar.getBoundingClientRect();
             var x1 = br.right - rr.left, y1 = br.top + br.height / 2 - rr.top;
             var cx = e.clientX - rr.left, cy = e.clientY - rr.top;
@@ -22779,26 +22815,21 @@ ${intrLog}
                 _tlLinkPv = null;
             }
         }
-        function _tlLinkDown(e, id) { e.stopPropagation(); e.preventDefault(); _tlLink = { from: id }; document.body.style.cursor = 'crosshair'; _tlLinkPreviewStart(id); window.addEventListener('mouseup', _tlLinkUp); }
+        function _tlLinkDown(e, id, segId) { e.stopPropagation(); e.preventDefault(); _tlLink = { from: id, fromSeg: segId }; document.body.style.cursor = 'crosshair'; _tlLinkPreviewStart(id, segId); window.addEventListener('mouseup', _tlLinkUp); }
         function _tlLinkUp(e) {
             window.removeEventListener('mouseup', _tlLinkUp); document.body.style.cursor = ''; _tlLinkPreviewEnd();
             var lk = _tlLink; _tlLink = null; if (!lk) return;
             var n = _wbsNode(lk.from); if (!n) return;
-            var toId = _tlBarNodeAt(e.clientX, e.clientY);
-            if (!toId) {
-                // 허공 드롭 → 새 연결 시도면 취소(무동작), 기존 연결 있으면 해제
-                var had = (n.links && Array.isArray(n.links.linkIds)) ? n.links.linkIds.length : 0;
-                if (!had) return;
-                n.links.linkIds = [];
-                n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
-                showToast(had > 1 ? ('🔗 연결 ' + had + '개 해제됨') : '🔗 연결이 해제되었습니다', 'info');
-                return;
-            }
-            if (toId === lk.from) return;
-            if (!n.links) n.links = {}; if (!Array.isArray(n.links.linkIds)) n.links.linkIds = [];
-            if (n.links.linkIds.indexOf(toId) < 0) n.links.linkIds.push(toId);
-            n.updatedAt = Date.now(); saveData(); dbUpsertWbsNode(n); renderTimelineView();
-            showToast('🔗 작업이 연결되었습니다', 'success');
+            var tgt = _tlBarSegAt(e.clientX, e.clientY);
+            if (!tgt || !tgt.node) return; // 허공 → 취소(연결 삭제는 선 선택+Del)
+            var ts = tgt.seg; if (!ts) { var tn = _wbsNode(tgt.node); var tsegs = tn ? _tlSegs(tn) : []; ts = tsegs.length ? tsegs[0].id : null; }
+            if (!ts) { showToast('대상 작업에 일정 막대가 없습니다. 먼저 기간을 만들어 주세요.', 'alert'); return; }
+            if (tgt.node === lk.from && ts === lk.fromSeg) return; // 자기 자신
+            _tlEnsureSegs(n); var seg = _tlSegById(n, lk.fromSeg); if (!seg) return;
+            if (!Array.isArray(seg.deps)) seg.deps = [];
+            if (!seg.deps.some(function (d) { return d.n === tgt.node && d.s === ts; })) seg.deps.push({ n: tgt.node, s: ts });
+            _tlSaveNode(n); renderTimelineView();
+            showToast('🔗 일정이 연결되었습니다', 'success');
         }
         // [r173] 화살표 끝(그랩 핸들) 드래그 → 기존 연결을 다른 작업으로 재연결, 허공이면 해제
         var _tlRelink = null;
