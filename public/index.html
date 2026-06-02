@@ -22122,17 +22122,19 @@ ${intrLog}
             svg.style.width = rowsEl.scrollWidth + 'px'; svg.style.height = rowsEl.scrollHeight + 'px'; svg.innerHTML = paths;
         }
         // [r172] 의존선 곡선(베지어) 라우팅. 타깃이 우측이면 부드러운 수평 S곡선,
-        //   타깃이 좌측(역방향)·근접이면 제어점을 노드 위 레인에 둬 활처럼 넘어가 좌측에서 진입(노드 관통 방지).
+        //   타깃이 좌측(역방향)이면 소스에서 수직으로 빠져 타깃 좌측으로 직접 진입.
         function _tlDepRoute(x1, y1, x2, y2) {
             var arrow = 6, end = x2 - arrow;
             if (x2 >= x1 + 24) {
                 var dx = Math.max(28, (x2 - x1) * 0.45);
                 return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (end - dx) + ' ' + y2 + ', ' + end + ' ' + y2;
             }
-            // [r173] 활 방향을 타깃 위치에 맞춤: 타깃이 위면 위로, 아래면 아래로 휘게(노드 관통 방지)
-            var bow = 34;
-            var lane = (y2 <= y1) ? (Math.min(y1, y2) - 30) : (Math.max(y1, y2) + 30);
-            return 'M' + x1 + ' ' + y1 + ' C ' + (x1 + bow) + ' ' + lane + ', ' + (end - bow) + ' ' + lane + ', ' + end + ' ' + y2;
+            // [r174] 역방향 — 소스 우측에서 수직(타깃이 아래면 아래로, 위면 위로)으로 빠져나와
+            //   타깃 좌측으로 수평 진입. 우측으로 크게 도는 루프 제거 → 자연스러운 직접 곡선.
+            var dy = Math.max(30, Math.abs(y2 - y1) * 0.5);
+            var kx = Math.min(40, Math.max(22, Math.abs(y2 - y1) * 0.3));
+            var cp1y = y1 + (y2 >= y1 ? dy : -dy);
+            return 'M' + x1 + ' ' + y1 + ' C ' + x1 + ' ' + cp1y + ', ' + (end - kx) + ' ' + y2 + ', ' + end + ' ' + y2;
         }
         // 막대 드래그 — 이동 / 좌우 모서리 기간 조절
         var _tlDrag = null;
