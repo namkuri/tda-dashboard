@@ -2871,6 +2871,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .simple-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--c-border); font-weight: 800; font-size: 15px; color: var(--c-text); }
         .simple-modal-x { background: none; border: none; color: var(--c-text3); font-size: 17px; cursor: pointer; line-height: 1; }
         .simple-modal-body { padding: 12px 16px 16px; overflow-y: auto; }
+        /* [r182] 연결 탐색기 (작업 구조화/타임라인 노드 연결) */
+        .wbs-exp { font-size: 13px; }
+        .wbs-exp-bc { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-bottom: 6px; }
+        .wbs-exp-crumb { color: var(--c-accent); cursor: pointer; font-weight: 700; font-size: 12px; padding: 2px 5px; border-radius: 5px; }
+        .wbs-exp-crumb:hover { background: var(--c-accent-soft); }
+        .wbs-exp-sep { color: var(--c-text3); font-size: 11px; }
+        .wbs-exp-up { margin-left: auto; background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 6px; font-size: 11px; font-weight: 700; padding: 3px 9px; cursor: pointer; }
+        .wbs-exp-hint { font-size: 11px; color: var(--c-text3); margin-bottom: 8px; }
+        .wbs-exp-list { max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+        .wbs-exp-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+        .wbs-exp-row:hover { background: var(--ios-fill); }
+        .wbs-exp-folder:hover { border-color: var(--c-border); }
+        .wbs-exp-row.on { background: var(--c-accent-soft); }
+        .wbs-exp-ico { font-size: 15px; flex-shrink: 0; width: 18px; text-align: center; }
+        .wbs-exp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-text); font-weight: 600; }
+        .wbs-exp-count { font-size: 11px; color: var(--c-text3); flex-shrink: 0; }
+        .wbs-exp-chev { color: var(--c-text3); font-size: 15px; flex-shrink: 0; font-weight: 700; }
+        .wbs-exp-cb { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--c-border); background: var(--c-paper); color: #fff; font-size: 12px; line-height: 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; padding: 0; }
+        .wbs-exp-cb.on { background: var(--c-accent); border-color: var(--c-accent); }
+        .wbs-exp-cb-sp { width: 20px; flex-shrink: 0; }
+        .wbs-exp-empty { padding: 24px 10px; text-align: center; color: var(--c-text3); font-size: 12px; }
         .dvh-list { display: flex; flex-direction: column; gap: 6px; }
         .dvh-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 8px 11px; border: 1px solid var(--c-border); border-radius: 9px; background: var(--c-paper); font-size: 12.5px; color: var(--c-text); }
         .dvh-row.dvh-cur { border-color: var(--c-accent); background: var(--c-accent-soft); }
@@ -21916,12 +21937,9 @@ ${intrLog}
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsRename(\'' + id + '\')"><span>✏️</span> 이름 변경</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsAssigneePicker(\'' + id + '\')"><span>👤</span> 담당자 변경</div>'
                 + '<div class="ctx-menu-sep"></div>'
+                + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">연결</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkExplorer(\'' + id + '\')"><span>🔗</span> 연결… (탐색기)</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsDeriveSprint(\'' + id + '\')"><span>🏃</span> 스프린트 파생</div>'
-                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'sprint\')"><span>🔗</span> 스프린트 연결</div>'
-                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'category\')"><span>🗂</span> 카테고리 연결</div>'
-                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'task\')"><span>📋</span> 태스크 연결</div>'
-                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'assetFolder\')"><span>📁</span> 에셋 폴더 연결</div>'
-                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkPicker(\'' + id + '\',\'asset\')"><span>🎮</span> 에셋 연결</div>'
                 + '<div class="ctx-menu-sep"></div>'
                 + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">상태</div>' + stItems
                 + '<div class="ctx-menu-sep"></div>'
@@ -21966,6 +21984,87 @@ ${intrLog}
                 return '<div class="ctx-menu-item" style="cursor:pointer;" onclick="wbsToggleLink(\'' + nodeId + '\',\'' + kind + '\',\'' + p.id + '\')">' + (on ? '<span>✓</span>' : '<span style="width:14px;display:inline-block;"></span>') + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sprintEsc(p.label) + '</span></div>';
             }).join('') : '<div style="padding:10px;color:var(--c-text3);font-size:12px;text-align:center;">연결할 항목이 없습니다.</div>';
             _openSimpleModal(title + ' — ' + _sprintEsc(n.title || ''), '<div style="font-size:11px;color:var(--c-text3);margin-bottom:8px;">클릭하여 연결/해제 (복수 선택 가능). 닫으면 적용됩니다.</div><div class="dvh-list">' + rows + '</div>');
+        }
+        // [r182] 연결 탐색기 — 스프린트/카테고리/태스크/에셋폴더/에셋을 탐색기처럼 들어가며 연결
+        var _wbsExp = null;
+        function wbsLinkExplorer(nodeId) {
+            var n = _wbsNode(nodeId); if (!n) return;
+            _wbsExp = { nodeId: nodeId, path: [] };
+            _openSimpleModal('🔗 연결 — ' + _sprintEsc(n.title || '작업'), '<div id="wbs-exp-body" class="wbs-exp">' + _wbsExpRender() + '</div>');
+        }
+        function _wbsExpRerender() { var b = document.getElementById('wbs-exp-body'); if (b) b.innerHTML = _wbsExpRender(); }
+        function _wbsExpInto(t, id) { if (!_wbsExp) return; _wbsExp.path.push({ t: t, id: id }); _wbsExpRerender(); }
+        function _wbsExpGoTo(i) { if (!_wbsExp) return; _wbsExp.path = _wbsExp.path.slice(0, i + 1); _wbsExpRerender(); }
+        function _wbsExpToggle(kind, itemId) {
+            if (!_wbsExp) return; var n = _wbsNode(_wbsExp.nodeId); if (!n) return;
+            _wbsToggleLinkId(n, _WBS_LINK_KEY[kind], itemId);
+            if (currentView === 'timeline' && typeof renderTimelineView === 'function') renderTimelineView();
+            _wbsExpRerender();
+        }
+        function _wbsExpEmpty(msg) { return '<div class="wbs-exp-empty">' + _sprintEsc(msg || '항목이 없습니다.') + '</div>'; }
+        function _wbsExpCrumbLabel(p) {
+            if (p.t === 'group') return ({ sprint: '🏃 스프린트', category: '🗂 카테고리', task: '📋 태스크', assetFolder: '📁 에셋 폴더', asset: '🎮 에셋' })[p.id] || p.id;
+            if (p.t === 'cat') { var c = (currentData.categories || []).find(function (x) { return x.id === p.id; }); return '🗂 ' + ((c && c.title) || '카테고리'); }
+            if (p.t === 'folder') { var f = (currentData.assetFolders || []).find(function (x) { return x.id === p.id; }); return '📁 ' + ((f && f.name) || '폴더'); }
+            return '';
+        }
+        function _wbsExpRender() {
+            var st = _wbsExp; if (!st) return ''; var n = _wbsNode(st.nodeId); if (!n) return '';
+            var byProj = function (x) { return (x.projectId || 'default') === activeProjectId; };
+            var links = n.links || {};
+            var isOn = function (key, id) { return ((links[key]) || []).indexOf(id) >= 0; };
+            var path = st.path, last = path[path.length - 1] || null;
+            // breadcrumb
+            var bc = '<span class="wbs-exp-crumb" onclick="_wbsExpGoTo(-1)">🔗 전체</span>';
+            path.forEach(function (p, i) { bc += '<span class="wbs-exp-sep">›</span><span class="wbs-exp-crumb" onclick="_wbsExpGoTo(' + i + ')">' + _sprintEsc(_wbsExpCrumbLabel(p)) + '</span>'; });
+            var folderRow = function (t, id, label, count, toggleKind) {
+                var on = toggleKind ? isOn(_WBS_LINK_KEY[toggleKind], id) : false;
+                var cb = toggleKind ? ('<button class="wbs-exp-cb' + (on ? ' on' : '') + '" onclick="event.stopPropagation();_wbsExpToggle(\'' + toggleKind + '\',\'' + id + '\')" title="이 항목 직접 연결/해제">' + (on ? '✓' : '') + '</button>') : '<span class="wbs-exp-cb-sp"></span>';
+                return '<div class="wbs-exp-row wbs-exp-folder' + (on ? ' on' : '') + '" onclick="_wbsExpInto(\'' + t + '\',\'' + id + '\')">' + cb + '<span class="wbs-exp-ico">📁</span><span class="wbs-exp-name">' + _sprintEsc(label) + '</span><span class="wbs-exp-count">' + (count != null ? count : '') + '</span><span class="wbs-exp-chev">›</span></div>';
+            };
+            var itemRow = function (kind, id, label, ico) {
+                var on = isOn(_WBS_LINK_KEY[kind], id);
+                return '<div class="wbs-exp-row wbs-exp-item' + (on ? ' on' : '') + '" onclick="_wbsExpToggle(\'' + kind + '\',\'' + id + '\')"><span class="wbs-exp-cb' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span><span class="wbs-exp-ico">' + ico + '</span><span class="wbs-exp-name">' + _sprintEsc(label) + '</span></div>';
+            };
+            var groupRow = function (key, label, ico, count) {
+                return '<div class="wbs-exp-row wbs-exp-folder" onclick="_wbsExpInto(\'group\',\'' + key + '\')"><span class="wbs-exp-cb-sp"></span><span class="wbs-exp-ico">' + ico + '</span><span class="wbs-exp-name">' + label + '</span><span class="wbs-exp-count">' + count + '</span><span class="wbs-exp-chev">›</span></div>';
+            };
+            var rows = '';
+            if (!last) {
+                rows = groupRow('sprint', '스프린트', '🏃', (currentData.sprints || []).filter(byProj).length)
+                    + groupRow('category', '카테고리', '🗂', (currentData.categories || []).filter(byProj).length)
+                    + groupRow('task', '태스크', '📋', (currentData.tasks || []).filter(byProj).length)
+                    + groupRow('assetFolder', '에셋 폴더', '📁', (currentData.assetFolders || []).filter(byProj).length)
+                    + groupRow('asset', '에셋', '🎮', (currentData.assets || []).filter(byProj).length);
+            } else if (last.t === 'group' && last.id === 'sprint') {
+                var sp = (currentData.sprints || []).filter(byProj);
+                rows = sp.length ? sp.map(function (s) { return itemRow('sprint', s.id, s.weekLabel || '스프린트', '🏃'); }).join('') : _wbsExpEmpty('스프린트가 없습니다.');
+            } else if (last.t === 'group' && last.id === 'category') {
+                var cats = (currentData.categories || []).filter(byProj);
+                rows = cats.length ? cats.map(function (c) { var tc = (currentData.tasks || []).filter(function (t) { return byProj(t) && t.catId === c.id; }).length; return folderRow('cat', c.id, c.title || '카테고리', '📋 ' + tc, 'category'); }).join('') : _wbsExpEmpty('카테고리가 없습니다.');
+            } else if (last.t === 'group' && last.id === 'task') {
+                var tsk = (currentData.tasks || []).filter(byProj);
+                rows = tsk.length ? tsk.map(function (t) { return itemRow('task', t.id, t.title || '태스크', '📋'); }).join('') : _wbsExpEmpty('태스크가 없습니다.');
+            } else if (last.t === 'group' && last.id === 'assetFolder') {
+                var topF = (currentData.assetFolders || []).filter(byProj).filter(function (f) { return !(f.parentId || null); });
+                rows = topF.length ? topF.map(function (f) { var sub = (currentData.assetFolders || []).filter(function (x) { return (x.parentId || null) === f.id; }).length; var ac = (currentData.assets || []).filter(function (a) { return a.folderId === f.id; }).length; return folderRow('folder', f.id, f.name || '폴더', (sub ? '📁' + sub + ' ' : '') + '🎮' + ac, 'assetFolder'); }).join('') : _wbsExpEmpty('에셋 폴더가 없습니다.');
+            } else if (last.t === 'group' && last.id === 'asset') {
+                var asa = (currentData.assets || []).filter(byProj);
+                rows = asa.length ? asa.map(function (a) { return itemRow('asset', a.id, a.name || '에셋', '🎮'); }).join('') : _wbsExpEmpty('에셋이 없습니다.');
+            } else if (last.t === 'cat') {
+                var tks = (currentData.tasks || []).filter(function (t) { return byProj(t) && t.catId === last.id; });
+                rows = tks.length ? tks.map(function (t) { return itemRow('task', t.id, t.title || '태스크', '📋'); }).join('') : _wbsExpEmpty('이 카테고리에 태스크가 없습니다.');
+            } else if (last.t === 'folder') {
+                var subF = (currentData.assetFolders || []).filter(function (f) { return (f.parentId || null) === last.id; });
+                var inA = (currentData.assets || []).filter(function (a) { return a.folderId === last.id; });
+                rows = subF.map(function (f) { var sub = (currentData.assetFolders || []).filter(function (x) { return (x.parentId || null) === f.id; }).length; var ac = (currentData.assets || []).filter(function (a) { return a.folderId === f.id; }).length; return folderRow('folder', f.id, f.name || '폴더', (sub ? '📁' + sub + ' ' : '') + '🎮' + ac, 'assetFolder'); }).join('')
+                    + inA.map(function (a) { return itemRow('asset', a.id, a.name || '에셋', '🎮'); }).join('');
+                if (!subF.length && !inA.length) rows = _wbsExpEmpty('이 폴더가 비어 있습니다.');
+            }
+            var linkedCount = ['sprintIds', 'categoryIds', 'taskIds', 'assetFolderIds', 'assetIds'].reduce(function (s, k) { return s + ((links[k] || []).length); }, 0);
+            return '<div class="wbs-exp-bc">' + bc + (path.length ? '<button class="wbs-exp-up" onclick="_wbsExpGoTo(' + (path.length - 2) + ')">↑ 뒤로</button>' : '') + '</div>'
+                + '<div class="wbs-exp-hint">📁 폴더는 클릭해 들어가고, 항목은 클릭해 연결/해제합니다. 폴더 왼쪽 체크는 폴더 자체를 연결합니다. (현재 ' + linkedCount + '개 연결)</div>'
+                + '<div class="wbs-exp-list">' + rows + '</div>';
         }
         // 첨부 (드라이브 재사용)
         function wbsAttachFile(nodeId) {
@@ -22439,6 +22538,10 @@ ${intrLog}
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsOpenNode(\'' + id + '\')"><span>⚙️</span> 상세 설정</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsAddAt(\'' + id + '\',\'after\')"><span>↔</span> 동일 계층에 새 노드</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsAddAt(\'' + id + '\',\'child\')"><span>➕</span> 자식 계층에 새 노드</div>'
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">연결</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsLinkExplorer(\'' + id + '\')"><span>🔗</span> 연결… (탐색기)</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();wbsDeriveSprint(\'' + id + '\')"><span>🏃</span> 스프린트 파생</div>'
                 + '<div class="ctx-menu-sep"></div>'
                 + '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">막대 색상</div>' + sw
                 + '<div class="ctx-menu-sep"></div>'
