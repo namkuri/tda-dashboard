@@ -4383,9 +4383,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="gph-btn gph-btn-primary" onclick="gphNewDiagram(null)">＋ 새 그래프</button>
                     <button class="gph-btn" onclick="gphNewFolder(null)">＋ 폴더</button>
                 </div>
-                <div class="gph-side-actions" style="border-top:1px solid var(--c-border);padding-top:8px;">
-                    <button class="gph-btn" style="width:100%;background:var(--c-accent-soft);color:var(--c-accent);font-weight:700;" onclick="relOpen()" title="문서·태스크·스프린트·작업구조화·에셋의 연결 상태를 자동으로 통합 시각화">🔮 프로젝트 관계도</button>
-                </div>
             </aside>
             <main class="gph-main">
                 <div class="gph-header" id="gph-header">
@@ -4411,22 +4408,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div class="gph-canvas-wrap" id="gph-canvas-wrap">
                     <svg class="gph-svg" id="gph-svg" preserveAspectRatio="xMidYMid meet"></svg>
                     <div class="gph-tooltip" id="gph-tooltip"></div>
-                    <!-- [r186] 프로젝트 관계도 (자동 그래프) 오버레이 -->
-                    <div id="rel-overlay">
-                        <div class="rel-bar">
-                            <span class="rel-title">🔮 프로젝트 관계도</span>
-                            <span class="rel-stat" id="rel-stat"></span>
-                            <span id="rel-chips" style="display:flex;gap:5px;flex-wrap:wrap;"></span>
-                            <input class="rel-search" id="rel-search" type="text" placeholder="🔍 노드 검색" oninput="relSearch(this.value)">
-                            <button class="rel-xbtn" onclick="relBuild()" title="다시 계산">↻ 새로고침</button>
-                            <button class="rel-xbtn" onclick="relClose()">✕ 닫기</button>
-                        </div>
-                        <div class="rel-canvas-wrap" id="rel-canvas-wrap">
-                            <svg id="rel-svg"></svg>
-                            <div class="rel-info" id="rel-info"></div>
-                            <div class="rel-empty" id="rel-empty" style="display:none;"></div>
-                        </div>
-                    </div>
                 </div>
                 <div class="gph-panel" id="gph-panel"></div>
             </main>
@@ -13692,9 +13673,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             diagram:  { color:'#5e91b8', label:'흐름/그래프',   r:9  },
             review:   { color:'#9b72bf', label:'리뷰',          r:8  },
             comment:  { color:'#cf8aa0', label:'코멘트',        r:5  },
-            git:      { color:'#a06a4e', label:'Git',           r:9  }
+            git:      { color:'#a06a4e', label:'Git',           r:9  },
+            // [r188] 신규 페이지 통합
+            wbs:      { color:'#8b5cf6', label:'작업노드',      r:10 },
+            asset:    { color:'#ec4899', label:'에셋',          r:8  },
+            assetFolder:{ color:'#0ea5e9', label:'에셋폴더',    r:9  },
+            issue:    { color:'#e0533d', label:'이슈',          r:7  }
         };
-        var GV_TYPE_ORDER = ['project','sprint','category','card','doc','canon','diagram','review','comment','git'];
+        var GV_TYPE_ORDER = ['project','wbs','sprint','category','card','doc','canon','diagram','asset','assetFolder','issue','review','comment','git'];
         function gvCanvas() { return document.getElementById('gv-canvas'); }
         function gvCssVar(n) { try { var v = getComputedStyle(document.body).getPropertyValue(n).trim(); if (!v) v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v; } catch(e){ return ''; } }
         function gvEsc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -13786,6 +13772,51 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (r.targetDocId && byId['doc:'+r.targetDocId]) { link('doc:'+r.targetDocId, id, true); linked = true; }
                 if (r.targetTaskId && byId['cd:'+r.targetTaskId]) { link('cd:'+r.targetTaskId, id, true); linked = true; }
                 if (!linked) link(rootId, id);
+            });
+            // [r188] ── 신규 페이지 통합: 에셋폴더·에셋·작업노드(WBS)·이슈 + 교차 링크 ──
+            // 에셋 폴더(중첩)
+            (currentData.assetFolders || []).filter(function(f){ return (f.projectId||'default')===pid; }).forEach(function(f){
+                add('af:'+f.id, 'assetFolder', f.name || '폴더', { kind:'assetFolder', id:f.id });
+            });
+            (currentData.assetFolders || []).filter(function(f){ return (f.projectId||'default')===pid; }).forEach(function(f){
+                if (f.parentId && byId['af:'+f.parentId]) link('af:'+f.parentId, 'af:'+f.id, true); else link(rootId, 'af:'+f.id);
+            });
+            // 에셋 → 폴더
+            (currentData.assets || []).filter(function(a){ return (a.projectId||'default')===pid; }).forEach(function(a){
+                add('as:'+a.id, 'asset', a.name || '에셋', { kind:'asset', id:a.id }, { status:a.status });
+                if (a.folderId && byId['af:'+a.folderId]) link('af:'+a.folderId, 'as:'+a.id, true); else link(rootId, 'as:'+a.id);
+            });
+            // 작업 구조화(WBS) — 부모/자식 + 스프린트·카테고리·태스크·에셋·폴더·타임라인의존 링크
+            (currentData.wbsNodes || []).filter(function(w){ return (w.projectId||'default')===pid; }).forEach(function(w){
+                add('wbs:'+w.id, 'wbs', w.title || '작업', { kind:'wbs', id:w.id }, { status:w.status, progress:w.progress });
+            });
+            (currentData.wbsNodes || []).filter(function(w){ return (w.projectId||'default')===pid; }).forEach(function(w){
+                var wid = 'wbs:'+w.id;
+                if (w.parentId && byId['wbs:'+w.parentId]) link('wbs:'+w.parentId, wid, true); else link(rootId, wid);
+                var L = w.links || {};
+                (L.sprintIds||[]).forEach(function(id){ link(wid, 'sp:'+id, true); });
+                (L.categoryIds||[]).forEach(function(id){ link(wid, 'cat:'+id); });
+                (L.taskIds||[]).forEach(function(id){ link(wid, 'cd:'+id, true); });
+                (L.assetIds||[]).forEach(function(id){ link(wid, 'as:'+id); });
+                (L.assetFolderIds||[]).forEach(function(id){ link(wid, 'af:'+id); });
+                (L.linkIds||[]).forEach(function(id){ link(wid, 'wbs:'+id); });
+            });
+            // 이슈 — 대상이 카드/문서 id면 연결, 아니면 루트
+            (currentData.issues || []).filter(function(i){ return (i.projectId||'default')===pid; }).forEach(function(i){
+                var iid = 'iss:'+i.id;
+                add(iid, 'issue', i.title || '이슈', { kind:'issue', id:i.id }, { status:i.status, priority:i.priority });
+                var tg = i.target, done = false;
+                if (tg && byId['cd:'+tg]) { link('cd:'+tg, iid, true); done = true; }
+                if (tg && byId['doc:'+tg]) { link('doc:'+tg, iid, true); done = true; }
+                if (!done) link(rootId, iid);
+            });
+            // [r188] 교차 링크 보강 — 태스크↔문서, 문서↔문서/태스크
+            (currentData.tasks || []).filter(function(t){ return (t.projectId||'default')===pid; }).forEach(function(t){
+                (t.linkedDocIds||[]).forEach(function(did){ link('cd:'+t.id, 'doc:'+did); });
+            });
+            (currentData.docs || []).filter(function(d){ return (d.projectId||'default')===pid && (d.kind==='wiki'||d.kind==='canon'); }).forEach(function(d){
+                (d.linkedTaskIds||[]).forEach(function(tid){ link('doc:'+d.id, 'cd:'+tid); });
+                (d.linkedDocIds||[]).forEach(function(did){ link('doc:'+d.id, 'doc:'+did); });
             });
             // [r65] 연결도(degree) + 인접목록 + degree 기반 노드 크기(옵시디언식: 허브일수록 큼)
             var adj = {}; nodes.forEach(function(nd){ adj[nd.id] = {}; });
@@ -13970,6 +14001,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
         function gvRelXY(ev) { var r = gvCanvas().getBoundingClientRect(); return { x: ev.clientX-r.left, y: ev.clientY-r.top }; }
         function gvOnDown(ev) {
+            if (ev.button !== 0) return; // [r188] 좌클릭만 드래그/이동 — 우클릭은 contextmenu가 처리(이동 방지)
             var p = gvRelXY(ev); gvState.downAt = { x:p.x, y:p.y }; gvState.moved = 0;
             var node = gvPick(p.x, p.y);
             if (node) { gvState.drag = node; }
@@ -14046,10 +14078,70 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     if (typeof openReviewInbox === 'function') openReviewInbox(); else switchView('review');
                 } else if (ref.kind === 'git') {
                     switchView('git');
+                } else if (ref.kind === 'wbs') {
+                    switchView('wbs'); if (ref.id) setTimeout(function(){ if (typeof wbsOpenNode==='function') wbsOpenNode(ref.id); }, 120);
+                } else if (ref.kind === 'asset') {
+                    switchView('assets'); if (ref.id) setTimeout(function(){ if (typeof amEditAsset==='function') amEditAsset(ref.id); }, 80);
+                } else if (ref.kind === 'assetFolder') {
+                    switchView('assets');
+                } else if (ref.kind === 'issue') {
+                    switchView('issues'); if (ref.id) setTimeout(function(){ if (typeof issEditIssue==='function') issEditIssue(ref.id); }, 80);
                 } else if (ref.kind === 'project') {
                     if (typeof showToast === 'function') showToast('프로젝트 루트 노드입니다', '');
                 }
             } catch (e) { console.warn('[gv] navigate error', e); }
+        }
+        // [r188] 노드 우클릭 → 컨텍스트 메뉴(링크 노드 보기 / 이동 / 강조)
+        function gvOnContext(ev) {
+            ev.preventDefault();
+            var p = gvRelXY(ev); var node = gvPick(p.x, p.y); if (!node) return;
+            if (typeof _openCardMenu !== 'function') { gvLinkedModal(node.id); return; }
+            var t = GV_TYPES[node.type] || {};
+            _openCardMenu(ev,
+                '<div style="padding:4px 14px 2px;font-size:10.5px;font-weight:700;color:var(--c-text3);">' + gvEsc((t.label||'') + ' · ' + (node.label||'')).slice(0,40) + '</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gvLinkedModal(\'' + node.id + '\')"><span>🔗</span> 링크 노드 보기</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gvFocusNode(\'' + node.id + '\')"><span>◎</span> 이 노드만 강조</div>'
+                + (node.type !== 'project' ? '<div class="ctx-menu-item" onclick="hideTreeContextMenu();gvGo(\'' + node.id + '\')"><span>↗</span> 해당 페이지로 이동</div>' : ''));
+        }
+        function gvFocusNode(id) {
+            var n = gvState.byId[id]; if (!n) return;
+            gvState.hover = n; var hs = {}; hs[id] = 1; var ad = (gvState.adj && gvState.adj[id]) || {}; for (var k in ad) hs[k] = 1; gvState.hoverSet = hs;
+            gvState.tx = -n.x * gvState.scale; gvState.ty = -n.y * gvState.scale; // 화면 중앙으로
+            gvStartLoop();
+        }
+        function gvGo(id) { if (typeof _closeSimpleModal === 'function') _closeSimpleModal(); var n = gvState.byId[id]; if (n) gvNavigate(n); }
+        function _gvNodeInfo(n) {
+            var ex = n.extra || {}, id = (n.ref && n.ref.id);
+            var mem = function (uid) { return (typeof getMemberName === 'function' && uid) ? getMemberName(uid) : ''; };
+            if (n.type === 'card') { var st = ({ pending: '⏳대기', progress: '🔥진행', completed: '✅완료' })[ex.status] || ''; var asg = (ex.assignees && ex.assignees[0]) ? mem(ex.assignees[0]) : ''; return [st, asg].filter(Boolean).join(' · '); }
+            if (n.type === 'sprint') { var st = ({ active: '🏃진행중', closed: '🏁종료', planned: '📋예정' })[ex.status] || ''; var cards = (currentData.tasks || []).filter(function (x) { return x.sprintId === id; }).length; return [st, cards + '카드'].filter(Boolean).join(' · '); }
+            if (n.type === 'category') { return (currentData.tasks || []).filter(function (x) { return x.catId === id; }).length + '개 카드'; }
+            if (n.type === 'wbs') { var w = (currentData.wbsNodes || []).find(function (x) { return x.id === id; }); if (!w) return ''; var st = (typeof WBS_STATUS === 'object' && WBS_STATUS[w.status]) ? WBS_STATUS[w.status].l : ''; var pr = (typeof w.progress === 'number') ? (w.progress + '%') : ''; return [st, pr].filter(Boolean).join(' · '); }
+            if (n.type === 'doc' || n.type === 'canon') { var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return ''; return [(n.type === 'canon' ? '정전위키' : '위키'), (d.isLocked ? '🔒잠김' : '')].filter(Boolean).join(' · '); }
+            if (n.type === 'asset') { var a = (currentData.assets || []).find(function (x) { return x.id === id; }); return a ? [(a.status || ''), (a.type || a.assetType || '')].filter(Boolean).join(' · ') : ''; }
+            if (n.type === 'assetFolder') { return (currentData.assets || []).filter(function (x) { return x.folderId === id; }).length + '개 에셋'; }
+            if (n.type === 'issue') { var st2 = ({ open: '📋열림', progress: '🔥진행', closed: '✅종료', wont: '⛔보류' })[ex.status] || ''; return [st2, (ex.priority || '').toUpperCase()].filter(Boolean).join(' · '); }
+            if (n.type === 'review') { return (ex.status || '') + (ex.rtype ? (' · ' + ex.rtype) : ''); }
+            if (n.type === 'comment') { return ex.author ? ('🖊 ' + ex.author) : ''; }
+            return '';
+        }
+        // [r188] 링크 노드 보기 — 연결 노드를 종류별로 분류·핵심정보·바로가기
+        function gvLinkedModal(id) {
+            if (typeof hideTreeContextMenu === 'function') hideTreeContextMenu();
+            var node = gvState.byId[id]; if (!node) return;
+            var adj = (gvState.adj && gvState.adj[id]) || {};
+            var groups = {};
+            Object.keys(adj).forEach(function (nid) { var m = gvState.byId[nid]; if (!m) return; (groups[m.type] = groups[m.type] || []).push(m); });
+            var total = Object.keys(adj).length;
+            var body = '';
+            if (!total) body = '<div class="wbs-exp-empty">연결된 노드가 없습니다 (고립 노드).</div>';
+            else GV_TYPE_ORDER.filter(function (t) { return groups[t]; }).forEach(function (t) {
+                var ty = GV_TYPES[t], arr = groups[t];
+                body += '<div class="rel-lm-h"><span style="background:' + ty.color + ';width:10px;height:10px;border-radius:50%;display:inline-block;"></span>' + ty.label + ' <span style="color:var(--c-text3);font-weight:700;">' + arr.length + '</span></div>';
+                body += arr.map(function (m) { var info = _gvNodeInfo(m); var canGo = (m.type !== 'project' && m.type !== 'comment'); return '<div class="rel-lm-row"><div class="rel-lm-main"><div class="rel-lm-name">' + gvEsc(m.label) + '</div>' + (info ? ('<div class="rel-lm-info">' + gvEsc(info) + '</div>') : '') + '</div>' + (canGo ? '<button class="rel-lm-go" onclick="gvGo(\'' + m.id + '\')">↗ 바로가기</button>' : '') + '</div>'; }).join('');
+            });
+            var ti = GV_TYPES[node.type] || { label: '' };
+            _openSimpleModal('🔗 연결 노드 — ' + gvEsc(node.label), '<div style="font-size:11px;color:var(--c-text3);margin-bottom:10px;">' + gvEsc(ti.label) + ' · 연결 ' + total + '개를 종류별로 분류했습니다. 바로가기로 해당 페이지로 이동합니다.</div><div class="rel-lm-list">' + body + '</div>');
         }
         function gvRenderLegend() {
             var el = document.getElementById('gv-legend'); if (!el) return;
@@ -14079,6 +14171,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var cv = gvCanvas(); if (!cv || cv._gvBound) return; cv._gvBound = true;
             cv.addEventListener('wheel', gvOnWheel, { passive:false });
             cv.addEventListener('mousedown', gvOnDown);
+            cv.addEventListener('contextmenu', gvOnContext); // [r188] 노드 우클릭 메뉴
             window.addEventListener('mousemove', gvOnMoveWin);
             window.addEventListener('mouseup', gvOnUpWin);
             cv.addEventListener('mouseleave', function(){ if (!gvState.drag && !gvState.panning) { gvState.hover=null; gvState.hoverSet=null; gvHideTip(); gvStartLoop(); } });
@@ -15770,6 +15863,8 @@ return data;
                 updateJsonEditorView(); renderBoard(); renderProgress(); renderCommentsSidebar(); updateProjectTitle(); renderDocTree();
                 // [r158] DB 로드 후 현재 보고 있는 WBS 화면 재렌더 — 루트(프로젝트명)·하위 노드 즉시 표시
                 if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView();
+                // [r188] DB 로드 후 그래프 뷰를 보고 있으면 재빌드 — 데이터 준비 전 빌드돼 "항목 없음"이 뜨던 문제 수정
+                if (currentView === 'gview' && typeof gvOpen === 'function') gvOpen();
 
                 // [v40 청크 3] 빈 프로젝트면 5종 위키 폴더 자동 시드
                 await seedWikiFoldersIfEmpty();
