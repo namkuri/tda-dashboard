@@ -5686,7 +5686,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     linkedTaskIds: [],
                     linkedDocIds: [],
                     isLocked: false,
-                    refMeta: {}
+                    refMeta: {},
+                    // [r192] 작성자/수정자 — 시드 문서도 현재 사용자로 명시 기록(미상 방지)
+                    createdBy: d.created_by || (currentUser && currentUser.id) || null,
+                    updatedBy: d.updated_by || (currentUser && currentUser.id) || null,
+                    createdAt: d.created_at ? new Date(d.created_at).getTime() : Date.now(),
+                    updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : Date.now()
                 });
             });
             // 트리 다시 그리기
@@ -15208,6 +15213,11 @@ return data;
         }
         async function dbUpsertDoc(doc) {
             if (!supabaseClient) return;
+            // [r192] ★작성자 미상 차단★ — 새 문서이거나 createdBy가 비어있으면 현재 사용자로 백필.
+            //   메모리(doc.createdBy)에도 보존되어 다음 저장·표시에서 사라지지 않음.
+            if (!doc.createdBy && currentUser && currentUser.id) doc.createdBy = currentUser.id;
+            if (currentUser && currentUser.id) doc.updatedBy = currentUser.id;
+            if (!doc.createdAt) doc.createdAt = Date.now();
             const payload = {
                 id: doc.id, project_id: doc.projectId || activeProjectId,
                 parent_id: doc.parentId || null, title: doc.title,
@@ -15223,7 +15233,8 @@ return data;
                 kind: doc.kind || 'wiki', // [통합 문서엔진] 문서/게임위키 구분
                 meta: doc.meta || {}, // [게임위키] 버전/승인 등
                 updated_at: Date.now(),
-                updated_by: (currentUser && currentUser.id) || null // [r150] 수정자 기록 — realtime 자기수정 알람 제외용
+                created_by: doc.createdBy || null, // [r192] 작성자 — 새 문서면 백필값, 기존 문서면 그대로 유지(UPSERT가 NULL로 덮지 않게 백필 보장)
+                updated_by: (currentUser && currentUser.id) || doc.updatedBy || null // [r150/r192] 수정자 기록
             };
             // [r183] ★데이터 손실 방지★ — 본문(content)은 지연 로드 필드. 메모리에 본문이 로드되지 않은
             //   문서(_contentLoaded === false)는 content를 payload에서 제외해 DB의 기존 본문을 보존한다.
@@ -15236,6 +15247,12 @@ return data;
             if (error && _isMissingCol(error, 'updated_by')) {
                 console.warn('[dbUpsertDoc] updated_by 컬럼 없음 — 제외 재저장. SQL: alter table wiki_docs add column if not exists updated_by text;');
                 delete payload.updated_by;
+                ({ error } = await supabaseClient.from('wiki_docs').upsert(payload));
+            }
+            // [r192] created_by 컬럼이 없는 구버전 DB → 제외하고 재시도
+            if (error && _isMissingCol(error, 'created_by')) {
+                console.warn('[dbUpsertDoc] created_by 컬럼 없음 — 제외 재저장. SQL: alter table wiki_docs add column if not exists created_by text;');
+                delete payload.created_by;
                 ({ error } = await supabaseClient.from('wiki_docs').upsert(payload));
             }
             if (error && _isIntOverflow(error)) {
@@ -15901,6 +15918,18 @@ return data;
                 if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView();
                 // [r188] DB 로드 후 그래프 뷰를 보고 있으면 재빌드 — 데이터 준비 전 빌드돼 "항목 없음"이 뜨던 문제 수정
                 if (currentView === 'gview' && typeof gvOpen === 'function') gvOpen();
+                // [r192] 기존 문서 작성자 미상 복구 — 활동 로그에서 'create'를 찾아 createdBy 백필.
+                //   (앞으로 새로 생성되는 문서는 dbUpsertDoc 백필로 보장됨. 과거 데이터는 이 패스가 1회 보정.)
+                try {
+                    var _missing = (currentData.docs || []).filter(function (d) { return !d.createdBy; });
+                    if (_missing.length && Array.isArray(currentData.activity)) {
+                        var creates = currentData.activity.filter(function (a) { return a.action === 'create' && a.target_id; });
+                        var byTarget = {}; creates.forEach(function (a) { if (!byTarget[a.target_id]) byTarget[a.target_id] = a; });
+                        var fixed = 0;
+                        _missing.forEach(function (d) { var a = byTarget[d.id]; if (a && a.actor_id) { d.createdBy = a.actor_id; d.updatedBy = d.updatedBy || a.actor_id; fixed++; } });
+                        if (fixed) console.log('[r192] 작성자 미상 복구:', fixed, '건 (활동 로그 기반)');
+                    }
+                } catch (e) { /* 복구 실패는 무시 */ }
 
                 // [v40 청크 3] 빈 프로젝트면 5종 위키 폴더 자동 시드
                 await seedWikiFoldersIfEmpty();
@@ -15933,6 +15962,11 @@ return data;
                                 doc.title = u.title;
                                 doc.emoji = u.emoji; doc.sortOrder = u.sort_order;
                                 doc.is_collapsed = u.is_collapsed; doc.deprecated = u.is_deprecated;
+                                // [r192] 작성자/수정자/타임스탬프도 동기화 — 메모리에서 누락되어 '미상'으로 표시되던 문제 차단
+                                if (typeof u.created_by !== 'undefined' && u.created_by) doc.createdBy = u.created_by;
+                                if (typeof u.updated_by !== 'undefined') doc.updatedBy = u.updated_by || null;
+                                if (typeof u.created_at !== 'undefined' && u.created_at) doc.createdAt = new Date(u.created_at).getTime();
+                                if (typeof u.updated_at !== 'undefined' && u.updated_at) doc.updatedAt = (typeof u.updated_at === 'number') ? u.updated_at : new Date(u.updated_at).getTime();
                                 // [v40 Day3 청크1] 다른 사용자가 추가/변경한 링크 반영
                                 if (typeof u.linked_task_ids !== 'undefined') doc.linkedTaskIds = u.linked_task_ids || [];
                                 if (typeof u.linked_doc_ids !== 'undefined') doc.linkedDocIds = u.linked_doc_ids || [];
@@ -15974,6 +16008,12 @@ return data;
                                     sortOrder: d.sort_order, isCollapsed: d.is_collapsed,
                                     deprecated: d.is_deprecated,
                                     kind: d.kind || 'wiki', meta: d.meta || {},
+                                    // [r192] 작성자/수정자 정보 — INSERT 시 누락되어 '미상'으로 표시되던 문제 차단
+                                    linkedTaskIds: d.linked_task_ids || [], linkedDocIds: d.linked_doc_ids || [],
+                                    docType: d.doc_type || 'plan', isLocked: !!d.is_locked,
+                                    createdBy: d.created_by || null, updatedBy: d.updated_by || null,
+                                    createdAt: d.created_at ? new Date(d.created_at).getTime() : Date.now(),
+                                    updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : Date.now(),
                                     _contentLoaded: typeof d.content === 'string' // payload에 content가 있으면 true
                                 });
                                 if (currentView === 'docs') renderDocTree();
@@ -17111,6 +17151,10 @@ return data;
 
             // [v21 PERF B5] content가 아직 로드되지 않았으면 단건 fetch
             if (_initDoc && _initDoc._contentLoaded === false && supabaseClient) {
+                // [r192] ★콘텐츠 손실 차단★ — fetch 완료 전엔 textarea를 잠금. 사용자가 빈 화면에 입력해
+                //   기존 본문을 ''로 덮어쓰는 경로를 원천 차단.
+                var _ta_lock = document.getElementById('doc-editor-textarea');
+                if (_ta_lock) { _ta_lock.readOnly = true; _ta_lock.placeholder = '⏳ 본문을 불러오는 중…'; }
                 _fetchDocContent(docId).then(function(content) {
                     if (activeDocId !== docId) return; // 다른 문서로 전환됨
                     _initDoc.content = content || '';
@@ -17120,6 +17164,7 @@ return data;
                     if (typeof _dhRecord === 'function') _dhRecord(docId, content || '');
                     if (typeof _dhUpdateButtons === 'function') _dhUpdateButtons();
                     updateDocEditorUI();
+                    var _ta2 = document.getElementById('doc-editor-textarea'); if (_ta2) { _ta2.readOnly = false; _ta2.placeholder = '# 마크다운으로 내용을 작성하세요...'; }
                     if (_initDoc.userHighlights) userHighlights[docId] = _initDoc.userHighlights;
                     setTimeout(function() {
                         if (typeof applyAnnotationHighlights === 'function') applyAnnotationHighlights(); else renderAnnotationsPanelPositioned(); // [r50] 코멘트 하이라이트 재적용(reopen 시 사라지던 문제)
@@ -17127,7 +17172,9 @@ return data;
                     }, 80);
                 }).catch(function(err) {
                     console.warn('[B5] content fetch 실패:', err);
-                    showToast('⚠️ 문서 내용 로드 실패', 'alert');
+                    // [r192] 실패 시 textarea는 잠금 상태 유지 — 빈 본문 덮어쓰기 차단. 사용자에게 재시도 안내.
+                    var _ta3 = document.getElementById('doc-editor-textarea'); if (_ta3) _ta3.placeholder = '⚠️ 본문 로드 실패 — 새로고침 후 다시 열어주세요(저장이 차단된 상태)';
+                    showToast('⚠️ 문서 내용 로드 실패 — 저장이 차단됩니다(데이터 보호). 새로고침 후 다시 시도하세요.', 'alert');
                 });
             }
 
@@ -17339,11 +17386,39 @@ return data;
             if(!activeDocId) { _cb(new Error('활성 문서가 없습니다')); return; }
             var doc = currentData.docs ? currentData.docs.find(function(d){ return d.id === activeDocId; }) : null;
             if(!doc) { _cb(new Error('문서를 찾을 수 없습니다')); return; }
+            // [r192] ★콘텐츠 손실 차단★ — 본문 미로드 문서(_contentLoaded=false)는 저장 차단.
+            //   메모리상 content는 빈 문자열이라 저장하면 DB의 실제 본문이 ''로 덮어써짐.
+            if (doc._contentLoaded === false) { console.warn('[flushDocSave] 본문 미로드 — 저장 차단(데이터 보호)'); _cb(new Error('본문이 아직 로드되지 않았습니다')); return; }
             var content = doc.content || '';
             var statusEl = document.getElementById('doc-save-status');
 
             // 이미 저장된 내용이면 스킵 (콜백은 성공으로 처리 — 변경 없음 = 이미 최신 상태)
             if(_docLastSavedContent === content) { _cb(null); return; }
+
+            // [r192] ★콘텐츠 손실 차단★ — 본문이 급격히 줄어드는 저장은 사용자 확인 받음.
+            //   - 직전 저장값이 200자 이상이고
+            //   - 새 값이 50자 이하 또는 5% 미만으로 줄었을 때만 발동(편집/탭전환/리로드 등 정상 케이스는 막지 않음)
+            //   이전 본문은 _dhRecord 당일기록에 보존되어 복원 가능. 사용자가 거부하면 저장 취소(데이터 보존).
+            try {
+                var prev = (typeof _docLastSavedContent === 'string') ? _docLastSavedContent : '';
+                var prevL = prev.length, newL = content.length;
+                if (prevL >= 200 && (newL <= 50 || newL * 20 < prevL) && !window._dhApplying) {
+                    if (typeof uiConfirm === 'function') {
+                        var ratio = Math.round((newL / prevL) * 100);
+                        uiConfirm({ title: '⚠️ 본문이 크게 줄어듭니다', message: '저장하면 본문이 ' + prevL + '자 → ' + newL + '자 (' + ratio + '%)로 줄어듭니다.\n실수로 지운 게 아니라면 "저장"을, 복원이 필요하면 "취소"를 누르세요.\n취소 후 🕘 당일기록에서 직전 시점으로 되돌릴 수 있습니다.', confirmText: '저장', danger: true }).then(function (ok) {
+                            if (!ok) {
+                                if (statusEl) { statusEl.textContent = '⚠️ 저장 취소됨'; statusEl.style.color = '#c0392b'; }
+                                if (typeof showToast === 'function') showToast('저장이 취소되었습니다. 🕘 당일기록에서 복원하세요.', 'alert');
+                                _cb(new Error('사용자 취소'));
+                            } else {
+                                _docLastSavedContent = null; // 재저장 강제(자기 자신과 같아 스킵되지 않게)
+                                flushDocSave(onComplete);
+                            }
+                        });
+                        return;
+                    }
+                }
+            } catch (gErr) { /* 가드 자체 실패는 무시 — 저장은 진행 */ }
 
             // [r184] 당일 자동 편집 기록(undo/redo·시점복원용) — 내용이 바뀐 커밋 시점에 스냅샷 적립
             if (typeof _dhRecord === 'function') _dhRecord(activeDocId, content);
