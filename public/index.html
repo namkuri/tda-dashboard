@@ -2340,6 +2340,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .wikilink { color: var(--c-accent); border-bottom-color: var(--c-accent-soft); }
         .wikilink:hover { background: var(--c-accent-soft); }
         .wikilink-doc { color: var(--ios-purple); border-bottom-color: var(--ios-purple); }
+        /* [r191] Obsidian식 미해결 위키링크([[없는 제목]]) — 클릭 시 생성 */
+        .wikilink-unresolved { color: var(--c-text3); border-bottom: 1px dashed var(--c-text3); opacity: 0.85; }
+        .wikilink-unresolved::after { content: ' ✚'; font-size: 0.8em; opacity: 0.7; }
+        .wikilink-unresolved:hover { color: var(--c-accent); border-bottom-color: var(--c-accent); background: var(--c-accent-soft); }
         body.dark .wikilink { color: var(--c-accent); }
         body.dark .wikilink-doc { color: var(--ios-purple); }
         body.dark .wikilink:hover { background: var(--c-accent-soft); }
@@ -6937,7 +6941,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                        'colspan', 'rowspan', 'scope', 'align', 'valign', 'width', 'height',
                        'border', 'cellpadding', 'cellspacing', 'dir',
                        'open', 'datetime', 'value', 'min', 'max', 'low', 'high', 'optimum',
-                       'data-wl-type', 'data-wl-id'], // [v40 Day3 청크1] 위키링크 앵커
+                       'data-wl-type', 'data-wl-id', 'data-wl-title'], // [v40 Day3 청크1] 위키링크 앵커 + [r191] 제목 기반(옵시디언)
             FORCE_BODY: false,
             ALLOW_UNKNOWN_PROTOCOLS: false
         };
@@ -7190,6 +7194,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // 증상: 셀 내용에 줄바꿈이 있어서 | 기호가 한 줄에 하나씩 나오는 패턴
             text = fixBrokenGfmTables(text);
 
+            // ── [r191] Obsidian식 [[제목]] / [[제목|별칭]] 위키링크 (ID 패턴 [[task:ID]]보다 먼저, 그 패턴은 다음 replace에서 처리) ──
+            //   현재 프로젝트의 문서/태스크 제목과 매칭 → 해당 wikilink-doc/task 앵커로 변환. 미해결이면 생성 가능 앵커로.
+            text = text.replace(/\[\[([^\]\[\n|:]+?)(?:\|([^\]\[\n]+))?\]\]/g, function (match, title, alias) {
+                var t = String(title).trim(); if (!t) return match;
+                if (/^(task|doc|code)$/.test(t)) return match; // ID 패턴은 아래에서 처리(예: [[doc:abc]])
+                var disp = (alias != null && alias.trim()) ? alias.trim() : t;
+                var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂';
+                var lower = t.toLowerCase();
+                var docHit = (currentData.docs || []).find(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder) && (d.title || '').toLowerCase() === lower; });
+                var taskHit = !docHit ? (currentData.tasks || []).find(function (tk) { return (tk.projectId || 'default') === activeProjectId && (tk.title || '').toLowerCase() === lower; }) : null;
+                var anchor;
+                if (docHit) anchor = '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(docHit.id) + '" data-wl-title="' + _sprintEsc(t) + '">📄 ' + _sprintEsc(disp) + '</a>';
+                else if (taskHit) anchor = '<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="' + _sprintEsc(taskHit.id) + '" data-wl-title="' + _sprintEsc(t) + '">🗂 ' + _sprintEsc(disp) + '</a>';
+                else anchor = '<a class="wikilink wikilink-unresolved" data-wl-type="new" data-wl-title="' + _sprintEsc(t) + '" title="클릭하여 같은 이름으로 새 문서 생성">' + _sprintEsc(disp) + '</a>';
+                inlineTableStore[ph] = anchor; _tableStore[ph] = anchor; return ph;
+            });
             // ── [v40 Day3 청크1] PASS 2.5: [[task:ID]] / [[doc:ID]] 위키링크 → 인라인 앵커 ──
             // placeholder로 보호 후 PASS 4에서 복원 (marked가 ⌂ 문자를 건드리지 않음)
             text = text.replace(/\[\[(task|doc|code):([A-Za-z0-9_-]+)\]\]/g, function(match, type, id) {
@@ -17504,20 +17524,26 @@ return data;
         }
         function _wlacRender(ta) {
             var q = (_wlac.query || '').toLowerCase().trim();
+            var qRaw = (_wlac.query || '').trim();
             var match = function (s) { return !q || (s || '').toLowerCase().indexOf(q) !== -1; };
             var items = [];
-            (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId; })
-                .forEach(function (d) { if (match(d.title)) items.push({ type: 'doc', id: d.id, label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), kind: '문서' }); });
+            // [r191] 옵시디언식 제목 매칭 우선 — 입력 = 제목 그대로면 ID가 아닌 [[제목]] 으로 삽입
+            (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder); })
+                .forEach(function (d) { if (match(d.title)) items.push({ mode: 'title', type: 'doc', id: d.id, title: d.title || '', label: (d.emoji || '📄') + ' ' + (d.title || '제목 없음'), kind: '문서' }); });
             (currentData.tasks || []).filter(function (t) { return (t.projectId || 'default') === activeProjectId; })
-                .forEach(function (t) { if (match(t.title)) items.push({ type: 'task', id: t.id, label: '🗂 ' + (t.title || '제목 없음'), kind: '태스크' }); });
-            items = items.slice(0, 8);
+                .forEach(function (t) { if (match(t.title)) items.push({ mode: 'title', type: 'task', id: t.id, title: t.title || '', label: '🗂 ' + (t.title || '제목 없음'), kind: '태스크' }); });
+            items = items.slice(0, 7);
+            // 입력값과 동일 제목이 없으면 '새로 만들기' 옵션
+            if (qRaw && !items.some(function (it) { return (it.title || '').toLowerCase() === q; })) {
+                items.push({ mode: 'new', title: qRaw, label: '➕ "' + qRaw + '" 새 문서 만들기', kind: '신규' });
+            }
             _wlac.items = items; _wlac.sel = 0;
             var box = document.getElementById('wikilink-ac');
             if (!box) { box = document.createElement('div'); box.id = 'wikilink-ac'; document.body.appendChild(box); }
             if (!items.length) {
                 box.innerHTML = '<div class="wlac-hint">위키링크 삽입</div><div class="wlac-empty">일치하는 문서·태스크 없음</div>';
             } else {
-                box.innerHTML = '<div class="wlac-hint">↑↓ 이동 · Enter 삽입 · Esc 닫기</div>' + items.map(function (it, i) {
+                box.innerHTML = '<div class="wlac-hint">↑↓ 이동 · Enter 삽입 · Esc 닫기 · [[제목]] 형식</div>' + items.map(function (it, i) {
                     return '<div class="wlac-item' + (i === 0 ? ' sel' : '') + '" onmousedown="event.preventDefault();_wlacPick(' + i + ')"><span>' + _wlacEsc(it.label) + '</span><span class="wlac-kind">' + it.kind + '</span></div>';
                 }).join('');
             }
@@ -17535,12 +17561,44 @@ return data;
         function _wlacPick(i) {
             var ta = document.getElementById('doc-editor-textarea'); if (!ta) return;
             var it = _wlac.items[i != null ? i : _wlac.sel]; if (!it) { _wlacClose(); return; }
-            var pos = ta.selectionStart; var insert = '[[' + it.type + ':' + it.id + ']]';
+            var pos = ta.selectionStart;
+            // [r191] 옵시디언식 — 항상 [[제목]] 형식으로 삽입(ID 노출 없음). 미해결도 동일 형식.
+            var insertTitle = it.title || it.label || '';
+            var insert = '[[' + insertTitle + ']]';
             ta.value = ta.value.substring(0, _wlac.start) + insert + ta.value.substring(pos);
             var newPos = _wlac.start + insert.length;
             ta.selectionStart = ta.selectionEnd = newPos;
             _wlacClose(); ta.focus();
             handleDocInput({ target: ta });
+        }
+        // [r191] 미해결 [[제목]] 클릭 → 같은 이름으로 새 문서 생성 후 이동
+        async function _wlCreateAndNav(title) {
+            if (!title) return;
+            title = String(title).trim(); if (!title) return;
+            var existing = (currentData.docs || []).find(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder) && (d.title || '').toLowerCase() === title.toLowerCase(); });
+            if (existing) { if (typeof navToDoc === 'function') navToDoc(existing.id); return; }
+            if (!currentUser) { if (typeof showToast === 'function') showToast('로그인이 필요합니다.', 'alert'); return; }
+            // 같은 위치(현재 문서의 부모)에 새 문서 생성
+            var parentId = null;
+            if (typeof activeDocId === 'string' && activeDocId) {
+                var cur = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
+                if (cur) parentId = cur.parentId || null;
+            }
+            var newDoc = {
+                id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId,
+                title: title, emoji: '📄', isCollapsed: false,
+                content: '# ' + title + '\n\n',
+                createdAt: Date.now(), updatedAt: Date.now(),
+                kind: (typeof currentDocKind !== 'undefined' && currentDocKind) ? currentDocKind : 'wiki',
+                meta: {}, sortOrder: Date.now(),
+                createdBy: currentUser.id, updatedBy: currentUser.id,
+                _contentLoaded: true
+            };
+            if (!Array.isArray(currentData.docs)) currentData.docs = [];
+            currentData.docs.push(newDoc); saveData(); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(newDoc);
+            if (typeof showToast === 'function') showToast('📄 새 문서 생성됨: ' + title, 'success');
+            if (typeof renderDocTree === 'function') renderDocTree();
+            if (typeof navToDoc === 'function') navToDoc(newDoc.id);
         }
         function initWikilinkAutocomplete() {
             var ta = document.getElementById('doc-editor-textarea'); if (!ta) return;
@@ -20183,6 +20241,10 @@ addEventListener("resize",sendPos);
             if (type === 'task') navToTask(id);
             else if (type === 'doc') navToDoc(id);
             else if (type === 'code' && typeof gitGoRef === 'function') gitGoRef(id);
+            else if (type === 'new') { // [r191] 미해결 [[제목]] → 같은 이름으로 새 문서 생성 후 이동
+                var newTitle = wl.getAttribute('data-wl-title') || (wl.textContent || '').replace(/✚\s*$/, '').trim();
+                if (typeof _wlCreateAndNav === 'function') _wlCreateAndNav(newTitle);
+            }
         }, true);
         // [코드 인용 임베드] 헤더 클릭=접기/펼치기, ↗Git=Git탭에서 열기 (GitHub 링크는 기본 동작)
         document.addEventListener('click', function(e) {
@@ -22466,17 +22528,30 @@ ${intrLog}
             var issues = (currentData.issues || []).filter(byP).map(function (i) { return { id: i.id, label: i.title || '이슈' }; });
             var cols = ['#c96442', '#d49a1c', '#2e9e5b', '#3b82f6', '#8b5cf6', '#ec4899', '#8a8a8a'];
             var sw = cols.map(function (c) { return '<span onclick="_tlSegSetColor(\'' + nodeId + '\',\'' + segId + '\',\'' + c + '\')" style="width:20px;height:20px;border-radius:50%;background:' + c + ';cursor:pointer;border:' + (seg.color === c ? '2px solid var(--c-text)' : '1px solid rgba(0,0,0,.2)') + ';"></span>'; }).join('') + '<span onclick="_tlSegSetColor(\'' + nodeId + '\',\'' + segId + '\',null)" title="기본(상태색)" style="width:20px;height:20px;border-radius:50%;background:var(--ios-fill);border:1px solid var(--c-border);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✕</span>';
-            var html = '<div style="font-size:11px;color:var(--c-text3);margin-bottom:8px;">이 막대(일정)만의 기간·연결입니다. 같은 작업이라도 막대마다 다른 스프린트·태스크·이슈를 가질 수 있습니다.</div>'
-                + '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">'
-                + '<label style="font-size:12px;color:var(--c-text2);">시작 <input type="date" value="' + (seg.start || '') + '" onchange="_tlSegSetDate(\'' + nodeId + '\',\'' + segId + '\',\'start\',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>'
-                + '<label style="font-size:12px;color:var(--c-text2);">마감 <input type="date" value="' + (seg.due || '') + '" onchange="_tlSegSetDate(\'' + nodeId + '\',\'' + segId + '\',\'due\',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>'
+            var stOpts = WBS_STATUS_ORDER.map(function (s) { return '<option value="' + s + '"' + (n.status === s ? ' selected' : '') + '>' + WBS_STATUS[s].l + '</option>'; }).join('');
+            var multi = (n.segments || []).length > 1;
+            var html =
+                '<div class="wbs-fld"><span>제목</span><input type="text" value="' + _sprintEsc(n.title || '').replace(/"/g, '&quot;') + '" onchange="wbsUpdateField(\'' + nodeId + '\',\'title\',this.value);renderTimelineView()"></div>'
+                + '<div style="display:flex;gap:10px;"><div class="wbs-fld" style="flex:1;"><span>상태</span><select onchange="wbsUpdateField(\'' + nodeId + '\',\'status\',this.value);renderTimelineView()">' + stOpts + '</select></div>'
+                + '<div class="wbs-fld" style="flex:1.4;"><span>진척률 <span id="wbs-prog-label" style="color:var(--c-accent);">' + (n.progress || 0) + '%</span></span><input type="range" min="0" max="100" step="5" value="' + (n.progress || 0) + '" style="width:100%;" oninput="wbsUpdateField(\'' + nodeId + '\',\'progress\',this.value)" onchange="renderTimelineView()"></div></div>'
+                // ── 이 막대(세그먼트)만의 기간·연결 ──
+                + '<div style="background:var(--c-accent-soft);border:1px solid var(--c-border);border-radius:10px;padding:10px 12px;margin:6px 0;">'
+                + '<div style="font-size:11px;font-weight:800;color:var(--c-accent);margin-bottom:8px;">📊 이 일정 막대' + (multi ? (' #' + idx) : '') + ' — 막대마다 다른 기간·스프린트·태스크·이슈 가능</div>'
+                + '<div style="display:flex;gap:10px;flex-wrap:wrap;"><div class="wbs-fld" style="flex:1;min-width:120px;"><span>📅 시작일</span><input type="date" value="' + (seg.start || '') + '" onchange="_tlSegSetDate(\'' + nodeId + '\',\'' + segId + '\',\'start\',this.value)"></div>'
+                + '<div class="wbs-fld" style="flex:1;min-width:120px;"><span>📅 마감일</span><input type="date" value="' + (seg.due || '') + '" onchange="_tlSegSetDate(\'' + nodeId + '\',\'' + segId + '\',\'due\',this.value)"></div></div>'
+                + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 2px;"><span style="font-size:11px;font-weight:700;color:var(--c-text3);">막대 색상</span>' + sw + '</div>'
+                + '<div class="rel-lm-h" style="margin-top:8px;">🏃 스프린트</div><div class="dvh-list" style="max-height:16vh;overflow:auto;">' + listHtml('sprintIds', sprints, '🏃') + '</div>'
+                + '<div class="rel-lm-h">📋 태스크</div><div class="dvh-list" style="max-height:16vh;overflow:auto;">' + listHtml('taskIds', tasks, '📋') + '</div>'
+                + '<div class="rel-lm-h">🐛 이슈</div><div class="dvh-list" style="max-height:16vh;overflow:auto;">' + listHtml('issueIds', issues, '🐛') + '</div>'
+                + '<div style="text-align:right;margin-top:8px;"><button onclick="_tlSegDelete(\'' + nodeId + '\',\'' + segId + '\')" style="background:#c0392b;color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;padding:5px 11px;cursor:pointer;">🗑 이 막대 삭제</button></div>'
                 + '</div>'
-                + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px;"><span style="font-size:11px;font-weight:700;color:var(--c-text3);">막대 색상</span>' + sw + '</div>'
-                + '<div class="rel-lm-h">🏃 스프린트 연결</div><div class="dvh-list" style="max-height:20vh;overflow:auto;">' + listHtml('sprintIds', sprints, '🏃') + '</div>'
-                + '<div class="rel-lm-h">📋 태스크 연결</div><div class="dvh-list" style="max-height:20vh;overflow:auto;">' + listHtml('taskIds', tasks, '📋') + '</div>'
-                + '<div class="rel-lm-h">🐛 이슈 연결</div><div class="dvh-list" style="max-height:20vh;overflow:auto;">' + listHtml('issueIds', issues, '🐛') + '</div>'
-                + '<div style="margin-top:12px;text-align:right;"><button onclick="_tlSegDelete(\'' + nodeId + '\',\'' + segId + '\')" style="background:#c0392b;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;padding:6px 12px;cursor:pointer;">🗑 이 막대 삭제</button></div>';
-            _openSimpleModal('📊 일정 막대 #' + idx + ' — ' + _sprintEsc(n.title || ''), html);
+                // ── 노드(작업) 공통 ──
+                + '<div class="wbs-fld"><span>👤 담당자 <button class="wbs-mini-btn" onclick="wbsAssigneePicker(\'' + nodeId + '\')">＋ 추가/변경</button></span><div>' + _wbsAssigneeChips(n) + '</div></div>'
+                + '<div class="wbs-fld"><span>내용 (Markdown)</span><textarea rows="4" placeholder="작업 설명·체크리스트·메모…" onchange="wbsUpdateField(\'' + nodeId + '\',\'desc\',this.value)">' + _sprintEsc(n.desc || '') + '</textarea></div>'
+                + '<div class="wbs-fld"><span>🗂 카테고리 <button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + nodeId + '\',\'category\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'category') + '</div></div>'
+                + '<div class="wbs-fld"><span>📁 에셋 폴더 <button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + nodeId + '\',\'assetFolder\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'assetFolder') + '</div></div>'
+                + '<div class="wbs-fld"><span>🎮 에셋 <button class="wbs-mini-btn" onclick="wbsLinkPicker(\'' + nodeId + '\',\'asset\')">＋ 연결</button></span><div>' + _wbsLinkChips(n, 'asset') + '</div></div>';
+            _openSimpleModal('🗂️ 작업 노드' + (multi ? (' · 막대 #' + idx) : '') + ' — ' + _sprintEsc(n.title || ''), html);
         }
         function _tlSegToggle(nodeId, segId, key, itemId) { var n = _wbsNode(nodeId); if (!n) return; _tlEnsureSegs(n); var seg = _tlSegById(n, segId); if (!seg) return; if (!Array.isArray(seg[key])) seg[key] = []; var i = seg[key].indexOf(itemId); if (i >= 0) seg[key].splice(i, 1); else seg[key].push(itemId); _tlSaveNode(n); _tlSegOpen(nodeId, segId); if (currentView === 'timeline') renderTimelineView(); }
         function _tlSegSetColor(nodeId, segId, c) { var n = _wbsNode(nodeId); if (!n) return; _tlEnsureSegs(n); var seg = _tlSegById(n, segId); if (!seg) return; seg.color = c || null; _tlSaveNode(n); if (document.getElementById('simple-modal-overlay') && document.getElementById('simple-modal-overlay').style.display !== 'none') _tlSegOpen(nodeId, segId); if (currentView === 'timeline') renderTimelineView(); }
