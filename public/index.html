@@ -16011,6 +16011,8 @@ return data;
                 if (currentView === 'wbs' && typeof renderWbsView === 'function') renderWbsView();
                 // [r188] DB 로드 후 그래프 뷰를 보고 있으면 재빌드 — 데이터 준비 전 빌드돼 "항목 없음"이 뜨던 문제 수정
                 if (currentView === 'gview' && typeof gvOpen === 'function') gvOpen();
+                // [r201] 새로고침 시 그래프 뷰가 활성이면 다이어그램 리스트가 비어 보이던 문제 — DB 로드 직후 재렌더
+                if (currentView === 'graph' && typeof gphRender === 'function') gphRender();
                 // [r192] 기존 문서 작성자 미상 복구 — 활동 로그에서 'create'를 찾아 createdBy 백필.
                 //   (앞으로 새로 생성되는 문서는 dbUpsertDoc 백필로 보장됨. 과거 데이터는 이 패스가 1회 보정.)
                 try {
@@ -28655,7 +28657,8 @@ ${intrLog}
             setTimeout(function () { gphRender(); }, 50);
         } else {
             // 새 diagram
-            var title = docs.length === 1 ? ('🧠 ' + docs[0].title + ' — 마인드맵') : ('🧠 마인드맵 — ' + docs.length + '개 문서');
+            // [r201] 제목에 두뇌 이모지 제거 — 트리 아이콘이 이미 🧠으로 마인드맵을 표시함
+            var title = docs.length === 1 ? (docs[0].title + ' — 마인드맵') : ('마인드맵 — ' + docs.length + '개 문서');
             var newDoc = {
                 id: gphUid('doc'), projectId: activeProjectId, parentId: null,
                 title: title, emoji: '🧠', kind: 'diagram', content: '',
@@ -29326,8 +29329,10 @@ ${intrLog}
     function _mmPlaceTree(tree, loop) {
         // 좌→우 트리 자동 배치. 깊이별 X = depth * DEPTH_GAP, 같은 부모 자식들은 세로 균등.
         // 백엔드 좌표 무시(마인드맵은 우리가 계산).
+        var placed = {};
         var place = function (nodeId, depth, yCenter) {
-            var n = tree.nodeById[nodeId]; if (!n) return;
+            var n = tree.nodeById[nodeId]; if (!n || placed[nodeId]) return;
+            placed[nodeId] = true;
             n.x = depth * _MM_DEPTH_GAP;
             n.y = yCenter - _MM_NODE_H / 2;
             n.h = _MM_NODE_H;
@@ -29343,6 +29348,22 @@ ${intrLog}
             });
         };
         if (tree.centralId) place(tree.centralId, 0, 0);
+        // [r201] ★겹침 방지★ — 트리로 못 잡힌 미배치 노드는 강제로 일렬(우측)에 배치(좌표 0,0 누적 방지)
+        var unplaced = loop.nodes.filter(function (n) { return !placed[n.id]; });
+        if (unplaced.length) {
+            var maxDepthX = 0; loop.nodes.forEach(function (n) { if (placed[n.id]) maxDepthX = Math.max(maxDepthX, n.x); });
+            var fx = maxDepthX + _MM_DEPTH_GAP;
+            unplaced.forEach(function (n, i) {
+                n.w = _mmPillWidth(n.title); n.h = _MM_NODE_H;
+                n.x = fx;
+                n.y = (i - (unplaced.length - 1) / 2) * (_MM_NODE_H + _MM_V_GAP);
+            });
+            // 시인성을 위해 visible 집합에도 추가하기 위해 children[central]에 매단다(중복 방지)
+            if (tree.centralId) {
+                tree.children[tree.centralId] = tree.children[tree.centralId] || [];
+                unplaced.forEach(function (n) { if (tree.children[tree.centralId].indexOf(n.id) < 0) tree.children[tree.centralId].push(n.id); });
+            }
+        }
     }
     function _mmVisibleSet(tree) {
         // 접힌 노드의 자손은 숨김
