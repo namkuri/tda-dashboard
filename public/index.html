@@ -28523,7 +28523,22 @@ ${intrLog}
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ docs: docs, mode: 'auto', project_id: activeProjectId })
             });
-            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            // [r198] 404 = 서버 코드 미반영(엔드포인트 없음). 사용자가 원인을 바로 알 수 있게 안내.
+            if (res.status === 404) {
+                _log('❌ HTTP 404 — 서버에 /mindmap/generate 엔드포인트가 없습니다.');
+                _log('💡 원인: 백엔드 서버가 r196 이전 버전입니다. 서버 PC에서 다음을 실행하세요:');
+                _log('   1) cd <tda-dashboard>/deepwiki-integration/server');
+                _log('   2) git pull');
+                _log('   3) ls mindmap_generator.py  (파일이 있어야 함)');
+                _log('   4) 서버 중지 후 재시작 (run.bat 다시 실행)');
+                _log('💡 확인: ' + url + '/docs 에서 /mindmap/generate 노출 여부 확인.');
+                throw new Error('HTTP 404 — 백엔드 서버를 최신 코드로 업데이트하세요');
+            }
+            if (!res.ok || !res.body) {
+                var bodyText = '';
+                try { bodyText = (await res.text()).slice(0, 200); } catch (_) {}
+                throw new Error('HTTP ' + res.status + (bodyText ? (' — ' + bodyText) : ''));
+            }
             var reader = res.body.getReader(), dec = new TextDecoder(), buf = '', diagram = null, done = false;
             while (!done) {
                 var ch = await reader.read(); if (ch.done) break;
