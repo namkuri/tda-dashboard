@@ -453,6 +453,7 @@ async def wiki_generate(req: WikiGenerateRequest):
 class MindmapDoc(BaseModel):
     title: str
     content: str
+    attachment_urls: List[str] = []  # [r202] HTML/DOCX/TXT/MD 등 첨부 파일 URL
 
 
 class MindmapGenerateRequest(BaseModel):
@@ -473,7 +474,7 @@ async def mindmap_generate(req: MindmapGenerateRequest):
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         return StreamingResponse(busy_gen(), media_type="text/event-stream")
-    docs = [{"title": d.title, "content": d.content} for d in (req.docs or [])]
+    docs = [{"title": d.title, "content": d.content, "attachment_urls": (d.attachment_urls or [])} for d in (req.docs or [])]
     return _sse_indexer(generate_mindmap(
         docs=docs,
         model=req.model,

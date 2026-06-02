@@ -28549,7 +28549,9 @@ ${intrLog}
             if (d._contentLoaded === false && typeof _fetchDocContent === 'function') {
                 try { d.content = await _fetchDocContent(d.id); d._contentLoaded = true; } catch (e) {}
             }
-            docs.push({ title: d.title || '', content: (d.content || '').slice(0, 12000) });
+            // [r202] 첨부 파일(HTML/DOCX/TXT/MD) URL 수집 — 백엔드가 받아 텍스트로 변환해 본문에 합침
+            var attUrls = _mmpCollectAttachments(d);
+            docs.push({ title: d.title || '', content: (d.content || '').slice(0, 16000), attachment_urls: attUrls });
         }
         // [r199] 진행 위젯 (Deep Wiki 스타일, 모달 대신 우하단 플로팅)
         _mmpState.running = true; _mmpState.log = [];
@@ -28612,6 +28614,29 @@ ${intrLog}
             showToast('마인드맵 생성 실패: ' + (e.message || e), 'alert');
             _mmpState.running = false;
         }
+    }
+    // [r202] 첨부 파일 URL 수집 — driveState.linkedDocIds + 본문 마크다운 링크에서 .html/.docx/.txt/.md만
+    function _mmpCollectAttachments(doc) {
+        var urls = [], seen = {};
+        var keep = function (u) {
+            if (!u || seen[u]) return; var low = u.toLowerCase().split('?')[0];
+            if (!/\.(html?|docx|txt|md|markdown)$/.test(low)) return;
+            seen[u] = true; urls.push(u);
+        };
+        try {
+            if (typeof driveState !== 'undefined' && Array.isArray(driveState.files)) {
+                driveState.files.forEach(function (f) { if (!f || !f.url) return; if (Array.isArray(f.linkedDocIds) && f.linkedDocIds.indexOf(doc.id) >= 0) keep(f.url); });
+            }
+        } catch (e) {}
+        try {
+            var md = doc.content || '';
+            var re = /\[[^\]]+\]\((https?:\/\/[^\s)]+)\)/g, m;
+            while ((m = re.exec(md)) !== null) keep(m[1]);
+            // bare URL도 시도
+            var re2 = /(https?:\/\/[^\s<>"']+\.(?:html?|docx|txt|md|markdown))/gi;
+            while ((m = re2.exec(md)) !== null) keep(m[1]);
+        } catch (e) {}
+        return urls.slice(0, 6); // 문서당 최대 6개
     }
     // [r199] 마인드맵 진행 위젯 (Deep Wiki 스타일)
     function _mmpProgShow(stage, detail) {
@@ -29327,13 +29352,31 @@ ${intrLog}
         return Math.max(_MM_NODE_H, sum);
     }
     function _mmPlaceTree(tree, loop) {
-        // 좌→우 트리 자동 배치. 깊이별 X = depth * DEPTH_GAP, 같은 부모 자식들은 세로 균등.
-        // 백엔드 좌표 무시(마인드맵은 우리가 계산).
+        // [r202] 깊이별 X 동적 누적 — 각 깊이의 최대 노드 폭에 곡선 여유 100px을 더해 곡선 겹침 방지.
+        var depthWidths = {};
+        var collectDepth = function (id, d) {
+            var n = tree.nodeById[id]; if (!n) return;
+            depthWidths[d] = Math.max(depthWidths[d] || 0, _mmPillWidth(n.title));
+            if (_mmCollapsed[id]) return;
+            (tree.children[id] || []).forEach(function (c) { collectDepth(c, d + 1); });
+        };
+        if (tree.centralId) collectDepth(tree.centralId, 0);
+        var depthX = [0];
+        var maxD = 0; Object.keys(depthWidths).forEach(function (k) { var dd = parseInt(k, 10); if (dd > maxD) maxD = dd; });
+        for (var dd = 0; dd < maxD; dd++) {
+            depthX[dd + 1] = depthX[dd] + (depthWidths[dd] || 200) + 140; // 노드 폭 + 곡선/마커 여유
+        }
+
+        // [r202] 접힘 자손 추적 — unplaced 폴백에서 제외하기 위함(접은 자손이 강제로 보이던 문제)
+        var hidden = {};
+        var markHidden = function (id) { (tree.children[id] || []).forEach(function (c) { hidden[c] = true; markHidden(c); }); };
+        Object.keys(_mmCollapsed).forEach(function (id) { if (_mmCollapsed[id]) markHidden(id); });
+
         var placed = {};
         var place = function (nodeId, depth, yCenter) {
             var n = tree.nodeById[nodeId]; if (!n || placed[nodeId]) return;
             placed[nodeId] = true;
-            n.x = depth * _MM_DEPTH_GAP;
+            n.x = (depthX[depth] != null) ? depthX[depth] : (depth * _MM_DEPTH_GAP);
             n.y = yCenter - _MM_NODE_H / 2;
             n.h = _MM_NODE_H;
             n.w = _mmPillWidth(n.title);
@@ -29348,17 +29391,17 @@ ${intrLog}
             });
         };
         if (tree.centralId) place(tree.centralId, 0, 0);
-        // [r201] ★겹침 방지★ — 트리로 못 잡힌 미배치 노드는 강제로 일렬(우측)에 배치(좌표 0,0 누적 방지)
-        var unplaced = loop.nodes.filter(function (n) { return !placed[n.id]; });
+
+        // [r201/r202] 트리 도달 못한 진짜 고아만 폴백 — 접힘 자손은 제외(접기 무효화 방지)
+        var unplaced = loop.nodes.filter(function (n) { return !placed[n.id] && !hidden[n.id] && n.id !== tree.centralId; });
         if (unplaced.length) {
             var maxDepthX = 0; loop.nodes.forEach(function (n) { if (placed[n.id]) maxDepthX = Math.max(maxDepthX, n.x); });
-            var fx = maxDepthX + _MM_DEPTH_GAP;
+            var fx = maxDepthX + 240;
             unplaced.forEach(function (n, i) {
                 n.w = _mmPillWidth(n.title); n.h = _MM_NODE_H;
                 n.x = fx;
                 n.y = (i - (unplaced.length - 1) / 2) * (_MM_NODE_H + _MM_V_GAP);
             });
-            // 시인성을 위해 visible 집합에도 추가하기 위해 children[central]에 매단다(중복 방지)
             if (tree.centralId) {
                 tree.children[tree.centralId] = tree.children[tree.centralId] || [];
                 unplaced.forEach(function (n) { if (tree.children[tree.centralId].indexOf(n.id) < 0) tree.children[tree.centralId].push(n.id); });

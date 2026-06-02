@@ -19,10 +19,81 @@ SSE 이벤트:
 """
 import json
 import re
+from io import BytesIO
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
 from wiki_generator import _safe_format  # [r147] brace KeyError 방지
+
+# [r202] 첨부 파일 텍스트 추출 — HTML/DOCX/TXT/MD 지원. 실패해도 본문 생성은 진행.
+try:
+    import httpx  # type: ignore
+    _HAS_HTTPX = True
+except Exception:
+    _HAS_HTTPX = False
+try:
+    from docx import Document as _DocxDoc  # python-docx
+    _HAS_DOCX = True
+except Exception:
+    _HAS_DOCX = False
+
+
+def _strip_html(text: str) -> str:
+    text = re.sub(r"<script[^>]*>.*?</script>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&amp;", "&", text)
+    text = re.sub(r"&lt;", "<", text)
+    text = re.sub(r"&gt;", ">", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+async def _fetch_attachment(url: str, max_chars: int = 24000) -> str:
+    """첨부 파일을 다운받아 텍스트로 변환. 실패 시 빈 문자열."""
+    if not _HAS_HTTPX or not url:
+        return ""
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as cli:
+            r = await cli.get(url)
+            if r.status_code != 200:
+                return ""
+            ct = (r.headers.get("content-type", "") or "").lower()
+            lower_url = url.lower().split("?")[0]
+            if "html" in ct or lower_url.endswith((".html", ".htm")):
+                try:
+                    txt = r.text
+                except Exception:
+                    txt = r.content.decode("utf-8", errors="ignore")
+                return _strip_html(txt)[:max_chars]
+            if "wordprocessingml" in ct or lower_url.endswith(".docx"):
+                if not _HAS_DOCX:
+                    return ""
+                try:
+                    d = _DocxDoc(BytesIO(r.content))
+                    parts = []
+                    for p in d.paragraphs:
+                        t = (p.text or "").strip()
+                        if t:
+                            parts.append(t)
+                    # 표 내용도 추출
+                    for tb in d.tables:
+                        for row in tb.rows:
+                            row_txt = " | ".join((cell.text or "").strip() for cell in row.cells)
+                            if row_txt.strip():
+                                parts.append(row_txt)
+                    return "\n".join(parts)[:max_chars]
+                except Exception:
+                    return ""
+            if "text/" in ct or lower_url.endswith((".txt", ".md", ".markdown")):
+                try:
+                    return r.text[:max_chars]
+                except Exception:
+                    return r.content.decode("utf-8", errors="ignore")[:max_chars]
+            return ""
+    except Exception:
+        return ""
 
 
 _SINGLE_PROMPT = """당신은 문서를 마인드맵으로 정리하는 전문가입니다.
@@ -38,14 +109,18 @@ _SINGLE_PROMPT = """당신은 문서를 마인드맵으로 정리하는 전문�
 이 문서의 모든 의미 있는 개념을 추출해 **풍부한 마인드맵**으로 정리하세요. 핵심만 뽑지 말고
 문서가 다루는 거의 모든 주제를 포함하세요.
 
-### 규칙 (적게 만들지 마세요. 문서가 길수록 더 많이.)
+### 규칙 (적게 만들지 마세요. 의미 단위로 자연스럽게.)
 - 중심 노드 1개(문서 주제 한 줄)
-- 1단계 분기 **5~12개**(주요 카테고리·섹션·축)
-- 각 1단계 분기 아래 2단계 분기 **3~8개**(개념·하위 항목)
-- 각 2단계 분기 아래 3단계 분기 **2~6개**(세부·예시·근거) — 필요한 곳에만 추가
-- 깊이는 최대 **4단계**까지 가능(꼭 필요한 가지에만)
+- 1단계 분기 **5~14개**(주요 카테고리·섹션·축)
+- 2단계 분기 **3~9개**(개념·하위 항목)
+- 3단계 분기 **2~8개**(세부·예시·근거)
+- 4단계 분기 **2~6개**(더 깊은 세부) — 의미상 더 풀 게 있으면 주저 말고
+- **각 분기의 자식 개수는 균일하게 만들지 마세요.** 풍부한 가지는 많이(5~10),
+  단순한 가지는 적게(2~3). 마지막 계층도 기계적으로 2개로 끊지 마세요 —
+  문서가 충분히 다룬 부분이면 6~10개까지 자세히 풀고, 짧게 다룬 부분만 2~3개.
+- 깊이는 최대 5단계까지 가능. 가능하면 의미상 자연스러운 곳까지 깊이 들어가세요.
 - 노드 제목은 짧고 명확하게(2~12단어). 본문 문장 그대로 옮기지 말고 요약된 라벨로.
-- 가능한 한 문서의 표·리스트·소제목·예시·반대 의견까지 노드로 추출
+- 문서의 표·리스트·소제목·예시·반대 의견·각주·정의·인용·근거까지 모두 노드로 추출
 - 한국어로 작성(원문이 영어면 영어 라벨 유지 OK)
 
 ### 출력 형식 — JSON만 출력(설명 텍스트 금지)
@@ -84,13 +159,17 @@ _MULTI_PROMPT = """당신은 여러 문서를 통합 마인드맵으로 정리�
 위 문서들의 **공통 주제·핵심 개념·문서 간 관계**를 통합한 **풍부한 마인드맵**을 만드세요.
 각 문서의 핵심을 모두 포함하면서 공통 구조를 찾으세요.
 
-### 규칙 (적게 만들지 마세요)
+### 규칙 (적게 만들지 마세요. 의미 단위로 자연스럽게.)
 - 중심 노드 1개(모든 문서를 아우르는 공통 주제)
-- 1단계 분기 **6~14개**: 공통 카테고리(개념별 묶음). origin 배열에 어느 문서들에서 나왔는지 표기.
-- 2단계 분기 **3~7개**: 카테고리 안의 세부 개념(또는 특정 문서 고유 개념)
-- 3단계 분기 **2~5개**: 추가 세부(필요한 곳만)
-- 깊이 최대 **4단계**까지
+- 1단계 분기 **6~16개**: 공통 카테고리(개념별 묶음). origin 배열에 어느 문서들에서 나왔는지 표기.
+- 2단계 분기 **3~9개**: 카테고리 안의 세부 개념(또는 특정 문서 고유 개념)
+- 3단계 분기 **2~8개**: 추가 세부
+- 4단계 분기 **2~6개**: 더 깊은 세부(필요한 곳만)
+- **자식 개수를 균일하게 만들지 마세요.** 풍부한 가지는 많이, 단순한 가지는 적게.
+  마지막 계층도 2개로 끊지 마세요 — 문서가 충분히 다룬 부분이면 5~10개까지.
+- 깊이 최대 5단계까지 가능. 의미상 자연스러운 곳까지 깊이.
 - 문서 간 관계가 있으면 cross_links에 기록(예: 문서A의 X가 문서B의 Y와 연결)
+- 문서의 표·리스트·소제목·예시·근거·인용·정의까지 노드로 추출
 - 한국어로 작성. 노드 제목은 짧게(2~12단어).
 
 ### 출력 형식 — JSON만(설명 금지)
@@ -186,8 +265,8 @@ def _layout_radial(central_title: str, branches: List[Dict[str, Any]]) -> Dict[s
             "id": uid("e"), "from": parent_id, "to": b_id,
             "label": "", "style": "curve",
         })
-        # 자손 재귀 (깊이 가드 4)
-        if depth < 4:
+        # 자손 재귀 (깊이 가드 5) — [r202]
+        if depth < 5:
             for ch in (br.get("children") or []):
                 add_branch(b_id, ch, depth + 1, root_part)
 
@@ -248,6 +327,24 @@ async def generate_mindmap(
 
     yield {"event": "stage", "stage": "collect", "message": f"{len(docs)}개 문서 수집됨"}
 
+    # [r202] 첨부 파일(HTML/DOCX/TXT/MD) 다운로드 후 본문에 합치기 — 문서의 첨부도 함께 분석
+    att_total = 0
+    for d in docs:
+        urls = d.get("attachment_urls") or []
+        if not urls:
+            continue
+        chunks_att = []
+        for url in urls[:6]:  # 문서당 최대 6개
+            yield {"event": "progress", "current": 0, "total": 0, "message": f"📎 첨부 읽는 중: {url[:90]}"}
+            txt = await _fetch_attachment(url, max_chars=18000)
+            if txt:
+                chunks_att.append(f"\n\n--- 첨부 파일 ({url}) ---\n{txt}")
+                att_total += 1
+        if chunks_att:
+            d["content"] = (d.get("content") or "") + "".join(chunks_att)
+    if att_total:
+        yield {"event": "info", "message": f"📎 첨부 파일 {att_total}개 본문 합쳐짐(HTML/DOCX/TXT/MD)"}
+
     # 본문 컷(단일 모드는 넉넉히, 다중은 빠르게)
     is_multi = (mode == "multi") or (mode == "auto" and len(docs) > 1)
 
@@ -277,7 +374,7 @@ async def generate_mindmap(
                 {"role": "user", "content": prompt},
             ],
             model=model,
-            temperature=0.3,
+            temperature=0.55,  # [r202] 다양성 ↑ — 마지막 계층이 기계적으로 2개로 끊기던 문제 완화
         ):
             chunks.append(delta)
             # 100자마다 진행 알림
