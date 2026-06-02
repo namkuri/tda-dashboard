@@ -4309,9 +4309,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         body:not(.dark) .mm-pill-bg { fill: rgba(245,245,245,.92); stroke: rgba(120,160,170,.45); }
         body:not(.dark) .mm-pill-bg.central { fill: rgba(220,235,240,.96); }
         body:not(.dark) .mm-pill-txt { fill: var(--c-text); }
-        /* [r199] 마인드맵 진행 위젯 (Deep Wiki 스타일 재사용) */
-        #mmp-prog-widget { position: fixed; right: 22px; bottom: 22px; width: 360px; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.32); z-index: 9000; padding: 12px 14px; display: none; flex-direction: column; gap: 8px; }
+        /* [r199/r200] 마인드맵 진행 위젯 (Deep Wiki 스타일 재사용) — 최소화 지원 */
+        #mmp-prog-widget { position: fixed; right: 22px; bottom: 22px; width: 360px; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.32); z-index: 9000; padding: 12px 14px; display: none; flex-direction: column; gap: 8px; transition: width .18s, height .18s, padding .18s; }
         #mmp-prog-widget.on { display: flex; }
+        #mmp-prog-widget.mini { width: 60px; padding: 8px; align-items: center; gap: 0; cursor: pointer; }
+        #mmp-prog-widget.mini > :not(.mmp-prog-head) { display: none; }
+        #mmp-prog-widget.mini .mmp-prog-head { font-size: 18px; }
+        #mmp-prog-widget.mini .mmp-prog-head > :not(.mmp-prog-mini-ico) { display: none; }
+        .mmp-prog-mini-ico { display: none; font-size: 22px; }
+        #mmp-prog-widget.mini .mmp-prog-mini-ico { display: inline-block; animation: mmpSpin 1.4s linear infinite; }
+        @keyframes mmpSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .mmp-prog-head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13.5px; color: var(--c-text); }
         .mmp-prog-bar { height: 3px; background: var(--ios-fill); border-radius: 3px; overflow: hidden; position: relative; }
         .mmp-prog-bar > div { position: absolute; left: -30%; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, var(--c-accent), transparent); animation: mmpProg 1.2s linear infinite; }
@@ -28609,7 +28616,8 @@ ${intrLog}
         var w = document.getElementById('mmp-prog-widget');
         if (!w) {
             w = document.createElement('div'); w.id = 'mmp-prog-widget';
-            w.innerHTML = '<div class="mmp-prog-head"><span>🧠 마인드맵 생성</span><button class="mmp-prog-x" onclick="_mmpProgHide()" title="닫기">✕</button></div>'
+            // [r200] 최소화(−) + 닫기(✕) 둘 다. 최소화 시 위젯 전체 클릭으로 복원.
+            w.innerHTML = '<div class="mmp-prog-head" onclick="if(this.parentNode.classList.contains(\'mini\'))_mmpProgRestore()"><span class="mmp-prog-mini-ico">🧠</span><span>🧠 마인드맵 생성</span><button class="mmp-prog-x" onclick="event.stopPropagation();_mmpProgMinimize()" title="최소화" style="margin-left:auto;">−</button><button class="mmp-prog-x" onclick="event.stopPropagation();_mmpProgHide()" title="닫기">✕</button></div>'
                 + '<div class="mmp-prog-bar"><div></div></div>'
                 + '<div id="mmp-prog-stage" class="mmp-prog-stage">' + (stage || '') + '</div>'
                 + '<div id="mmp-prog-detail" class="mmp-prog-detail">' + (detail || '') + '</div>'
@@ -28626,7 +28634,9 @@ ${intrLog}
         if (stage != null) { var st = w.querySelector('#mmp-prog-stage'); if (st) st.textContent = stage; }
         if (detail != null) { var dt = w.querySelector('#mmp-prog-detail'); if (dt) dt.textContent = detail; }
     }
-    function _mmpProgHide() { var w = document.getElementById('mmp-prog-widget'); if (w) w.classList.remove('on'); }
+    function _mmpProgHide() { var w = document.getElementById('mmp-prog-widget'); if (w) { w.classList.remove('on'); w.classList.remove('mini'); } }
+    function _mmpProgMinimize() { var w = document.getElementById('mmp-prog-widget'); if (w) w.classList.add('mini'); }
+    function _mmpProgRestore() { var w = document.getElementById('mmp-prog-widget'); if (w) w.classList.remove('mini'); }
     async function _mmpApplyDiagram(diagram, docs) {
         // target == 'new' → 새 diagram doc 생성. 'existing' → 기존 diagram에 노드 머지(좌표 오프셋)
         if (_mmpState.target === 'existing' && _mmpState.existingId) {
@@ -29276,10 +29286,12 @@ ${intrLog}
         });
         svg.onclick = function (e) { if (e.target === svg || (e.target.classList && e.target.classList.contains('add-hotspot'))) { if (gphState.connecting) { gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas(); } else { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); } } };
     }
-    // [r199] ===== Mindmap 전용 렌더러 (둥근 알약 + 가지별 곡선 + 분기 마커 + 휠 줌/패닝) =====
+    // [r199/r200] ===== Mindmap 전용 렌더러 — 트리 자동 레이아웃(좌→우) + 접기/펼치기 =====
     var _mmViewBox = {}; // diagramId → {x,y,w,h,initialized}
+    var _mmCollapsed = {}; // nodeId → true(접힘)
     var MM_PALETTE = ['#6fc3df', '#a3be8c', '#d08770', '#b48ead', '#e5c07b', '#5ec4b9', '#e06c75'];
-    function _mmPillWidth(text) { return Math.max(60, Math.min(260, (text || '').length * 8 + 28)); }
+    var _MM_DEPTH_GAP = 240, _MM_NODE_H = 36, _MM_V_GAP = 14;
+    function _mmPillWidth(text) { return Math.max(80, Math.min(260, (text || '').length * 8 + 32)); }
     function _mmBuildTree(loop) {
         // central_id 우선, 없으면 entry 수가 0인 첫 노드를 중심으로 추정
         var nodeById = {}; loop.nodes.forEach(function (n) { nodeById[n.id] = n; });
@@ -29287,81 +29299,148 @@ ${intrLog}
         var incoming = {}; loop.edges.forEach(function (e) { incoming[e.to] = (incoming[e.to] || 0) + 1; });
         if (!centralId) { for (var i = 0; i < loop.nodes.length; i++) { if (!incoming[loop.nodes[i].id]) { centralId = loop.nodes[i].id; break; } } }
         if (!centralId && loop.nodes.length) centralId = loop.nodes[0].id;
-        // 자식 인접 (단방향 from→to)
-        var children = {}; loop.edges.forEach(function (e) { (children[e.from] = children[e.from] || []).push(e.to); });
+        // 자식 인접 (단방향 from→to) — 사이클 방지: 이미 본 노드는 자식으로 추가 안함
+        var children = {}, seen = {}; if (centralId) seen[centralId] = true;
+        var queue = centralId ? [centralId] : [];
+        while (queue.length) {
+            var u = queue.shift();
+            loop.edges.forEach(function (e) {
+                if (e.from !== u) return;
+                if (seen[e.to]) return;   // 이미 다른 부모가 잡았거나 중심
+                seen[e.to] = true;
+                (children[u] = children[u] || []).push(e.to);
+                queue.push(e.to);
+            });
+        }
+        // 고아 노드(중심에서 도달 못함) — 중심 아래에 매단다
+        if (centralId) loop.nodes.forEach(function (n) { if (!seen[n.id] && n.id !== centralId) { (children[centralId] = children[centralId] || []).push(n.id); seen[n.id] = true; } });
         return { centralId: centralId, children: children, nodeById: nodeById };
+    }
+    function _mmSubtreeHeight(nodeId, children) {
+        var kids = children[nodeId] || [];
+        if (_mmCollapsed[nodeId] || !kids.length) return _MM_NODE_H;
+        var sum = 0;
+        kids.forEach(function (k, i) { sum += _mmSubtreeHeight(k, children); if (i < kids.length - 1) sum += _MM_V_GAP; });
+        return Math.max(_MM_NODE_H, sum);
+    }
+    function _mmPlaceTree(tree, loop) {
+        // 좌→우 트리 자동 배치. 깊이별 X = depth * DEPTH_GAP, 같은 부모 자식들은 세로 균등.
+        // 백엔드 좌표 무시(마인드맵은 우리가 계산).
+        var place = function (nodeId, depth, yCenter) {
+            var n = tree.nodeById[nodeId]; if (!n) return;
+            n.x = depth * _MM_DEPTH_GAP;
+            n.y = yCenter - _MM_NODE_H / 2;
+            n.h = _MM_NODE_H;
+            n.w = _mmPillWidth(n.title);
+            if (_mmCollapsed[nodeId]) return;
+            var kids = tree.children[nodeId] || []; if (!kids.length) return;
+            var heights = kids.map(function (k) { return _mmSubtreeHeight(k, tree.children); });
+            var total = heights.reduce(function (s, h) { return s + h; }, 0) + (kids.length - 1) * _MM_V_GAP;
+            var curY = yCenter - total / 2;
+            kids.forEach(function (k, i) {
+                place(k, depth + 1, curY + heights[i] / 2);
+                curY += heights[i] + _MM_V_GAP;
+            });
+        };
+        if (tree.centralId) place(tree.centralId, 0, 0);
+    }
+    function _mmVisibleSet(tree) {
+        // 접힌 노드의 자손은 숨김
+        var vis = {};
+        var dfs = function (id) {
+            vis[id] = true;
+            if (_mmCollapsed[id]) return;
+            (tree.children[id] || []).forEach(dfs);
+        };
+        if (tree.centralId) dfs(tree.centralId);
+        return vis;
     }
     function gphRenderMindmapCanvas(d, loop, svg) {
         var w = svg.clientWidth || 1200, h = svg.clientHeight || 600;
         var tree = _mmBuildTree(loop), centralId = tree.centralId, byId = tree.nodeById, children = tree.children;
-        // viewBox(저장된 게 있으면 사용, 없으면 노드 바운드 기반 + 마진)
+        // [r200] 트리 자동 레이아웃 — 백엔드 좌표 무시. 좌→우, 깊이=계층, 세로 균등 분포.
+        _mmPlaceTree(tree, loop);
+        var visible = _mmVisibleSet(tree);
+        // viewBox — 보이는 노드 바운드 기반(저장된 게 있으면 사용)
         var vb = _mmViewBox[d.id];
         if (!vb || !vb.initialized) {
-            var minX = 0, minY = 0, maxX = w, maxY = h;
-            if (loop.nodes.length) {
-                minX = Math.min.apply(null, loop.nodes.map(function (n) { return n.x; })) - 100;
-                minY = Math.min.apply(null, loop.nodes.map(function (n) { return n.y; })) - 100;
-                maxX = Math.max.apply(null, loop.nodes.map(function (n) { return n.x + n.w; })) + 100;
-                maxY = Math.max.apply(null, loop.nodes.map(function (n) { return n.y + n.h; })) + 100;
+            var visNodes = loop.nodes.filter(function (n) { return visible[n.id]; });
+            var minX = -40, minY = -200, maxX = 800, maxY = 200;
+            if (visNodes.length) {
+                minX = Math.min.apply(null, visNodes.map(function (n) { return n.x; })) - 60;
+                minY = Math.min.apply(null, visNodes.map(function (n) { return n.y; })) - 80;
+                maxX = Math.max.apply(null, visNodes.map(function (n) { return n.x + n.w; })) + 60;
+                maxY = Math.max.apply(null, visNodes.map(function (n) { return n.y + n.h; })) + 80;
             }
-            vb = { x: minX, y: minY, w: Math.max(400, maxX - minX), h: Math.max(300, maxY - minY), initialized: true };
+            vb = { x: minX, y: minY, w: Math.max(500, maxX - minX), h: Math.max(300, maxY - minY), initialized: true };
             _mmViewBox[d.id] = vb;
         }
         svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        // 가지별 색 — 중심의 자식들에 팔레트 순환, 그 자손은 부모 색 상속
+        // 가지별 색 — 중심의 자식부터 팔레트 순환, 자손은 상속
         var colorOf = {};
         if (centralId) {
-            var roots = children[centralId] || [];
-            roots.forEach(function (cid, i) { colorOf[cid] = MM_PALETTE[i % MM_PALETTE.length]; var stk = [cid]; while (stk.length) { var x = stk.pop(); (children[x] || []).forEach(function (k) { colorOf[k] = colorOf[x]; stk.push(k); }); } });
+            (children[centralId] || []).forEach(function (cid, i) {
+                colorOf[cid] = MM_PALETTE[i % MM_PALETTE.length];
+                var stk = [cid]; while (stk.length) { var x = stk.pop(); (children[x] || []).forEach(function (k) { colorOf[k] = colorOf[x]; stk.push(k); }); }
+            });
         }
         var parts = [];
-        // 엣지(곡선) — 가지별 색
+        // 엣지 — from의 우측 정중앙 → to의 좌측 정중앙
         loop.edges.forEach(function (edge) {
             var from = byId[edge.from], to = byId[edge.to]; if (!from || !to) return;
+            if (!visible[from.id] || !visible[to.id]) return;
             var col = colorOf[to.id] || colorOf[from.id] || '#6fc3df';
-            var pw = _mmPillWidth(from.title), pwT = _mmPillWidth(to.title);
-            var pH = 36;
-            // 중심점 ↔ 노드 우측/좌측 — 마인드맵은 항상 왼→오 분기
-            var x1 = from.x + pw, y1 = from.y + pH / 2;
-            var x2 = to.x, y2 = to.y + pH / 2;
-            // 단일 cubic, 측면 탄성 곡선
+            var x1 = from.x + from.w, y1 = from.y + from.h / 2;
+            var x2 = to.x,             y2 = to.y + to.h / 2;
             var dx = Math.max(40, (x2 - x1) * 0.55);
             var d1 = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (x2 - dx) + ' ' + y2 + ', ' + x2 + ' ' + y2;
             parts.push('<path class="mm-edge" data-mm-edge="' + edge.id + '" d="' + d1 + '" stroke="' + col + '"/>');
         });
-        // 분기 마커 ('<' 표시) — 자식이 있는 노드의 우측
+        // 노드 + 접기/펼치기 토글
         loop.nodes.forEach(function (node) {
-            var kids = children[node.id] || []; if (!kids.length) return;
-            var pw = _mmPillWidth(node.title);
-            var mx = node.x + pw + 6, my = node.y + 36 / 2 + 3;
-            parts.push('<text class="mm-branch-marker" x="' + mx + '" y="' + my + '">&lt;</text>');
-        });
-        // 노드(둥근 알약)
-        loop.nodes.forEach(function (node) {
+            if (!visible[node.id]) return;
             var isCentral = node.id === centralId;
             var sel = gphState.selected && gphState.selected.type === 'node' && gphState.selected.id === node.id;
             var col = isCentral ? '#9fd3e0' : (colorOf[node.id] || '#a8c6d0');
-            var pw = _mmPillWidth(node.title), pH = 36;
+            var pw = node.w, pH = node.h;
             var clsBg = 'mm-pill-bg' + (isCentral ? ' central' : '') + (sel ? ' sel' : '');
             var clsTxt = 'mm-pill-txt' + (isCentral ? ' central' : '');
             parts.push('<g class="node-group" data-node-id="' + node.id + '" transform="translate(' + node.x + ',' + node.y + ')">');
-            // 좌측 컬러 점
-            if (!isCentral) parts.push('<circle cx="' + (-6) + '" cy="' + (pH / 2) + '" r="3" fill="' + col + '" opacity=".8"/>');
+            if (!isCentral) parts.push('<circle cx="-6" cy="' + (pH / 2) + '" r="3" fill="' + col + '" opacity=".8"/>');
             parts.push('<rect class="mm-pill ' + clsBg + '" rx="18" ry="18" x="0" y="0" width="' + pw + '" height="' + pH + '"/>');
             parts.push('<text class="' + clsTxt + '" x="' + (pw / 2) + '" y="' + (pH / 2 + 5) + '" text-anchor="middle">' + gphEscX(node.title || '(무제)') + '</text>');
+            // [r200] 접기/펼치기 토글 — 자식 있는 노드만. 접힘=▶, 펼침=◀
+            var kids = children[node.id] || [];
+            if (kids.length) {
+                var collapsed = !!_mmCollapsed[node.id];
+                var mx = pw + 4, my = pH / 2, hint = collapsed ? ('▶ ' + kids.length) : '◀';
+                parts.push('<g class="mm-toggle" data-toggle-for="' + node.id + '" transform="translate(' + mx + ',' + my + ')" style="cursor:pointer;">'
+                    + '<circle cx="10" cy="0" r="10" fill="' + (collapsed ? col : 'rgba(120,160,170,.18)') + '" stroke="' + col + '" stroke-width="1.2"/>'
+                    + '<text x="10" y="4" text-anchor="middle" font-size="10" font-weight="800" fill="' + (collapsed ? '#fff' : col) + '" font-family="monospace" pointer-events="none">' + hint + '</text>'
+                    + '</g>');
+            }
             parts.push('</g>');
         });
         svg.innerHTML = parts.join('');
         _mmWireInteractions(d, loop, svg);
     }
+    // [r200] 노드 접기/펼치기
+    function _mmToggleCollapse(nodeId) {
+        _mmCollapsed[nodeId] = !_mmCollapsed[nodeId];
+        // 자동 레이아웃 변경되므로 viewBox 초기화해 자동 fit
+        var d = gphCurrent(); if (d && _mmViewBox[d.id]) _mmViewBox[d.id].initialized = false;
+        gphRenderCanvas();
+    }
     function _mmWireInteractions(d, loop, svg) {
-        // 노드 클릭=선택, 더블클릭=상세
+        // [r200] 접기/펼치기 토글 — 노드 클릭 핸들러보다 먼저 (stopPropagation)
+        svg.querySelectorAll('.mm-toggle').forEach(function (t) {
+            t.addEventListener('click', function (e) { e.stopPropagation(); _mmToggleCollapse(t.dataset.toggleFor); });
+        });
+        // 노드 클릭=선택. 마인드맵은 트리 자동 레이아웃이라 드래그 비활성(노드 위치 직접 편집 X).
         svg.querySelectorAll('.node-group').forEach(function (g) {
             var nodeId = g.dataset.nodeId;
             g.addEventListener('click', function (e) { e.stopPropagation(); gphState.selected = { type: 'node', id: nodeId }; gphRenderCanvas(); gphRenderPanel(); });
-            // 드래그(노드 위치 변경)
-            gphNodeDrag(g, nodeId, svg, _mmViewBox[d.id].x, _mmViewBox[d.id].y, _mmViewBox[d.id].w, _mmViewBox[d.id].h);
         });
         svg.onclick = function (e) { if (e.target === svg) { gphState.selected = null; gphRenderCanvas(); gphRenderPanel(); } };
         // 휠 줌 — 커서 기준 줌인/아웃

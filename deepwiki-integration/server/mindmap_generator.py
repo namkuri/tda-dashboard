@@ -35,15 +35,18 @@ _SINGLE_PROMPT = """당신은 문서를 마인드맵으로 정리하는 전문�
 ```
 
 ## 작업
-이 문서의 핵심 개념을 추출해 **마인드맵** 구조로 정리하세요.
+이 문서의 모든 의미 있는 개념을 추출해 **풍부한 마인드맵**으로 정리하세요. 핵심만 뽑지 말고
+문서가 다루는 거의 모든 주제를 포함하세요.
 
-### 규칙
-- 중심 노드 1개(문서 주제)
-- 1단계 분기 3~7개(주요 카테고리)
-- 각 1단계 분기 아래 2단계 분기 2~5개(세부 개념)
-- 최대 2단계 깊이까지만
-- 노드 제목은 짧고 명확하게(2~10단어). 긴 문장 금지.
-- 한국어로 작성
+### 규칙 (적게 만들지 마세요. 문서가 길수록 더 많이.)
+- 중심 노드 1개(문서 주제 한 줄)
+- 1단계 분기 **5~12개**(주요 카테고리·섹션·축)
+- 각 1단계 분기 아래 2단계 분기 **3~8개**(개념·하위 항목)
+- 각 2단계 분기 아래 3단계 분기 **2~6개**(세부·예시·근거) — 필요한 곳에만 추가
+- 깊이는 최대 **4단계**까지 가능(꼭 필요한 가지에만)
+- 노드 제목은 짧고 명확하게(2~12단어). 본문 문장 그대로 옮기지 말고 요약된 라벨로.
+- 가능한 한 문서의 표·리스트·소제목·예시·반대 의견까지 노드로 추출
+- 한국어로 작성(원문이 영어면 영어 라벨 유지 OK)
 
 ### 출력 형식 — JSON만 출력(설명 텍스트 금지)
 
@@ -55,8 +58,15 @@ _SINGLE_PROMPT = """당신은 문서를 마인드맵으로 정리하는 전문�
       "title": "주요 카테고리 1",
       "summary": "1~2문장 요약",
       "children": [
-        { "title": "세부 개념 1-1", "summary": "짧은 설명" },
-        { "title": "세부 개념 1-2", "summary": "짧은 설명" }
+        {
+          "title": "하위 개념 1-1",
+          "summary": "짧은 설명",
+          "children": [
+            { "title": "세부 1-1-1", "summary": "..." },
+            { "title": "세부 1-1-2", "summary": "..." }
+          ]
+        },
+        { "title": "하위 개념 1-2", "summary": "짧은 설명" }
       ]
     }
   ]
@@ -71,14 +81,17 @@ _MULTI_PROMPT = """당신은 여러 문서를 통합 마인드맵으로 정리�
 {doc_summaries}
 
 ## 작업
-위 문서들의 **공통 주제·핵심 개념·문서 간 관계**를 통합한 **마인드맵**을 만드세요.
+위 문서들의 **공통 주제·핵심 개념·문서 간 관계**를 통합한 **풍부한 마인드맵**을 만드세요.
+각 문서의 핵심을 모두 포함하면서 공통 구조를 찾으세요.
 
-### 규칙
+### 규칙 (적게 만들지 마세요)
 - 중심 노드 1개(모든 문서를 아우르는 공통 주제)
-- 1단계 분기는 **공통 카테고리**(개념별 묶음). 가능하면 어떤 문서에서 왔는지 origin 배열에 문서 제목 표기.
-- 2단계 분기는 카테고리 안의 세부 개념(또는 특정 문서의 고유 개념)
+- 1단계 분기 **6~14개**: 공통 카테고리(개념별 묶음). origin 배열에 어느 문서들에서 나왔는지 표기.
+- 2단계 분기 **3~7개**: 카테고리 안의 세부 개념(또는 특정 문서 고유 개념)
+- 3단계 분기 **2~5개**: 추가 세부(필요한 곳만)
+- 깊이 최대 **4단계**까지
 - 문서 간 관계가 있으면 cross_links에 기록(예: 문서A의 X가 문서B의 Y와 연결)
-- 한국어로 작성. 노드 제목은 짧게(2~10단어).
+- 한국어로 작성. 노드 제목은 짧게(2~12단어).
 
 ### 출력 형식 — JSON만(설명 금지)
 
@@ -132,20 +145,20 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 
 
 def _layout_radial(central_title: str, branches: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """마인드맵 트리 → gph diagram payload(nodes, edges, parts) 정규화 + 방사형 좌표 부여."""
-    import math
+    """마인드맵 트리 → gph diagram payload(nodes, edges) 정규화.
+
+    좌표는 임의(0,0)로 둔다 — 프론트가 트리 자동 레이아웃(좌→우)으로 재배치하므로 무의미.
+    재귀로 N단계 깊이까지 모두 펼친다.
+    """
     import time
-
     uid_counter = [0]
-
     def uid(prefix: str) -> str:
         uid_counter[0] += 1
         return f"{prefix}_{int(time.time() * 1000)}_{uid_counter[0]}"
 
-    nodes = []
-    edges = []
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
 
-    # 중심 — 마인드맵 알약 크기 (프론트가 텍스트 기반으로 폭 재계산하지만 안전한 초기값)
     central_id = uid("n")
     nodes.append({
         "id": central_id, "x": 0, "y": 0, "w": 200, "h": 36,
@@ -153,55 +166,37 @@ def _layout_radial(central_title: str, branches: List[Dict[str, Any]]) -> Dict[s
         "meta": "", "body": "", "highlighted": True,
     })
 
-    # 1단계 — 방사형 배치
-    n1 = max(1, len(branches))
-    R1 = 360
-    for i, br in enumerate(branches):
-        angle = (2 * math.pi * i) / n1 - math.pi / 2
-        bx = math.cos(angle) * R1
-        by = math.sin(angle) * R1
-        part = _PARTS[i % len(_PARTS)]
+    def add_branch(parent_id: str, br: Dict[str, Any], depth: int, root_part: str):
+        if not isinstance(br, dict):
+            return
         b_id = uid("n")
         origin = (br.get("origin") or [])
         meta_str = " · ".join(origin[:2]) if origin else ""
         nodes.append({
-            "id": b_id, "x": bx, "y": by, "w": 180, "h": 36,
-            "part": part, "title": (br.get("title") or "")[:80],
-            "meta": meta_str[:80], "body": (br.get("summary") or "")[:240],
+            "id": b_id, "x": 0, "y": 0,
+            "w": 180 if depth == 1 else 160,
+            "h": 36,
+            "part": root_part,
+            "title": (br.get("title") or "")[:80],
+            "meta": meta_str[:80],
+            "body": (br.get("summary") or "")[:240],
             "highlighted": False,
         })
         edges.append({
-            "id": uid("e"), "from": central_id, "to": b_id,
+            "id": uid("e"), "from": parent_id, "to": b_id,
             "label": "", "style": "curve",
         })
+        # 자손 재귀 (깊이 가드 4)
+        if depth < 4:
+            for ch in (br.get("children") or []):
+                add_branch(b_id, ch, depth + 1, root_part)
 
-        # 2단계 — 1단계 노드 주변에 부채꼴로
-        children = br.get("children") or []
-        n2 = max(1, len(children))
-        R2 = 220
-        spread = math.pi / 1.8  # 부채각
-        base_angle = angle
-        for j, ch in enumerate(children):
-            t = (j - (n2 - 1) / 2) / max(1, n2 - 1) if n2 > 1 else 0
-            cangle = base_angle + t * spread
-            cx = bx + math.cos(cangle) * R2
-            cy = by + math.sin(cangle) * R2
-            c_origin = (ch.get("origin") or [])
-            c_meta = " · ".join(c_origin[:2]) if c_origin else ""
-            c_id = uid("n")
-            nodes.append({
-                "id": c_id, "x": cx, "y": cy, "w": 160, "h": 36,
-                "part": part, "title": (ch.get("title") or "")[:80],
-                "meta": c_meta[:80], "body": (ch.get("summary") or "")[:200],
-                "highlighted": False,
-            })
-            edges.append({
-                "id": uid("e"), "from": b_id, "to": c_id,
-                "label": "", "style": "curve",
-            })
+    for i, br in enumerate(branches or []):
+        root_part = _PARTS[i % len(_PARTS)]
+        add_branch(central_id, br, 1, root_part)
 
     return {
-        "mode": "mindmap",   # [r197] 그래프 1개에 흐름/그래프/마인드맵 중 하나 — 마인드맵 모드로 명시
+        "mode": "mindmap",
         "orientation": "horizontal",
         "nodes": nodes,
         "edges": edges,
