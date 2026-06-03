@@ -10440,7 +10440,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r217';
+        var _AHUB_FRONT_REV = 'r218';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -30202,17 +30202,99 @@ ${intrLog}
         return null;
     }
 
+    // [r218] 기존 마인드맵 자동 백필 — meta.mindmap.sourceDocs (제목 배열)로
+    // 현재 프로젝트 wiki_docs 제목 매칭해 mindmap_sources 생성.
+    function _mmpBackfillSources(doc) {
+        if (!doc || !doc.meta) return [];
+        if (Array.isArray(doc.meta.mindmap_sources) && doc.meta.mindmap_sources.length) return doc.meta.mindmap_sources;
+        var titles = (doc.meta.mindmap && Array.isArray(doc.meta.mindmap.sourceDocs)) ? doc.meta.mindmap.sourceDocs : [];
+        if (!titles.length) return [];
+        var allDocs = (currentData.docs || []);
+        var resolved = [];
+        titles.forEach(function (t) {
+            if (!t) return;
+            var tt = String(t).trim().toLowerCase();
+            var hit = allDocs.find(function (d) {
+                if (!d || d.kind === 'diagram') return false;
+                return (d.title || '').trim().toLowerCase() === tt;
+            });
+            if (hit) resolved.push({ id: hit.id, title: hit.title || t });
+        });
+        if (resolved.length) {
+            doc.meta.mindmap_sources = resolved;
+            doc.updatedAt = Date.now();
+            try { if (typeof gphSave === 'function') gphSave(doc); } catch (e) {}
+            console.log('[mmp] sources 자동 백필', resolved.length, '/', titles.length);
+        }
+        return resolved;
+    }
+    // [r218] nodes/edges → branches 트리 복원 (중심 노드부터 BFS).
+    // central(highlighted) 노드를 루트로, 엣지 방향(또는 양방향) 으로 자식 추적.
+    function _mmpRestoreBranches(p) {
+        if (!p) return { central: '마인드맵', branches: [] };
+        var nodes = p.nodes || [], edges = p.edges || [];
+        if (!nodes.length) return { central: '마인드맵', branches: [] };
+        // 1) central 찾기 — highlighted 우선, 없으면 들어오는 엣지 없는 노드, 그래도 없으면 첫 노드
+        var central = nodes.find(function (n) { return n.highlighted; });
+        if (!central) {
+            var hasIncoming = {};
+            edges.forEach(function (e) { hasIncoming[e.to || e.target] = true; });
+            central = nodes.find(function (n) { return !hasIncoming[n.id]; }) || nodes[0];
+        }
+        // 2) 인접 리스트 (방향 무시 — 사용자가 양쪽으로 그리는 경우 대비)
+        var adj = {};
+        nodes.forEach(function (n) { adj[n.id] = []; });
+        edges.forEach(function (e) {
+            var a = e.from || e.source, b = e.to || e.target;
+            if (a && b && adj[a] && adj[b]) {
+                adj[a].push(b);
+                // 단방향만 — central 방향 트리 보장. 양쪽이면 BFS 가 visited 로 막음.
+            }
+        });
+        // 3) BFS 트리 빌드
+        var byId = {}; nodes.forEach(function (n) { byId[n.id] = n; });
+        var visited = {}; visited[central.id] = true;
+        function build(id) {
+            var n = byId[id]; if (!n) return null;
+            var kids = (adj[id] || []).filter(function (cid) { return !visited[cid]; });
+            kids.forEach(function (cid) { visited[cid] = true; });
+            return {
+                title: n.title || '',
+                children: kids.map(build).filter(Boolean),
+            };
+        }
+        var rootKids = (adj[central.id] || []).filter(function (cid) { return !visited[cid]; });
+        rootKids.forEach(function (cid) { visited[cid] = true; });
+        return {
+            central: central.title || '마인드맵',
+            branches: rootKids.map(build).filter(Boolean),
+        };
+    }
     async function mmpExplainOpen(docId, nodeTitle, opts) {
         opts = opts || {};
         var doc = (currentData.docs || []).find(function (d) { return d.id === docId; });
         if (!doc) { showToast('마인드맵을 찾지 못함', 'alert'); return; }
-        var meta = doc.meta || {};
-        var sources = Array.isArray(meta.mindmap_sources) ? meta.mindmap_sources : [];
-        var branches = Array.isArray(meta.mindmap_branches) ? meta.mindmap_branches : [];
-        var central = meta.mindmap_central || (doc.title || '마인드맵');
+        if (!doc.meta) doc.meta = {};
+        // [r218] 백필 — 소스 메타 없으면 mindmap.sourceDocs 제목으로 자동 매칭
+        var sources = Array.isArray(doc.meta.mindmap_sources) && doc.meta.mindmap_sources.length
+            ? doc.meta.mindmap_sources : _mmpBackfillSources(doc);
         if (!sources.length) {
-            showToast('이 마인드맵에 등록된 소스 문서가 없습니다. 새로 생성하거나 소스를 추가하세요.', 'alert');
+            showToast('이 마인드맵에 등록된 소스 문서가 없습니다. 소스를 추가해 주세요.', 'alert');
+            // 자동으로 소스 관리 다이얼로그 열기
+            setTimeout(mmpSrcOpenManager, 100);
             return;
+        }
+        // [r218] branches/central 누락 시 nodes/edges 에서 트리 복원
+        var branches = Array.isArray(doc.meta.mindmap_branches) ? doc.meta.mindmap_branches : [];
+        var central = doc.meta.mindmap_central || (doc.title || '마인드맵');
+        if (!branches.length) {
+            try {
+                var p = gphPayload(doc);
+                var restored = _mmpRestoreBranches(p);
+                branches = restored.branches;
+                central = restored.central || central;
+                console.log('[mmp] branches 복원 — ', branches.length, '개 1레벨, central:', central);
+            } catch (e) { console.warn('[mmp] branches 복원 실패', e); }
         }
         // 이전 요청 중단
         if (_mmpExState.abort) { try { _mmpExState.abort.abort(); } catch (e) {} _mmpExState.abort = null; }
@@ -30940,7 +31022,7 @@ ${intrLog}
                 + (p.mode === 'mindmap' ? '<button class="gph-legend-add" style="background:var(--c-accent);color:#fff;border-color:var(--c-accent);" onclick="mmpOpenPicker(true)" title="문서를 LLM에 보내 마인드맵 자동 생성(이 그래프에 추가)">🧠 문서로 자동 생성</button>' : '')
                 // [r217] 마인드맵 모드 — 소스 관리 버튼
                 + (p.mode === 'mindmap' ? '<button class="gph-legend-add" onclick="mmpSrcOpenManager()" title="이 마인드맵의 소스 문서 관리">📚 소스 ' + (((gphCurrent() && gphCurrent().meta && gphCurrent().meta.mindmap_sources) || []).length) + '</button>' : '')
-                + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : (p.mode === 'mindmap' ? '🧠 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · LLM 자동 생성 가능' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴')) + '</div>';
+                + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : (p.mode === 'mindmap' ? '🧠 빈 곳 더블클릭 = 새 노드 · 노드 클릭 = AI 설명(소스 등록 시) · → 핸들 드래그 = 엣지' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴')) + '</div>';
         }
         // 작성자 / 작성일 / 수정일 + 공개여부
         var meta = document.getElementById('gph-meta');
@@ -31111,11 +31193,13 @@ ${intrLog}
                 } else if (!gphState.connecting) {
                     gphState.selected = { type: 'node', id: nodeId };
                     gphRenderCanvas(); gphRenderPanel();
-                    // [r217] 마인드맵 모드 + sources/branches 메타가 있으면 클릭 시 AI 설명 패널
+                    // [r217/r218] 마인드맵 모드 — 클릭 시 AI 설명 패널.
+                    // 소스 메타가 없으면 mmpExplainOpen 내부에서 자동 백필 시도 →
+                    // 그래도 없으면 소스 관리 다이얼로그 자동 열림.
                     try {
                         var doc = gphCurrent();
                         var p = doc && gphPayload(doc);
-                        if (p && p.mode === 'mindmap' && doc.meta && Array.isArray(doc.meta.mindmap_sources) && doc.meta.mindmap_sources.length) {
+                        if (p && p.mode === 'mindmap') {
                             var node = (p.nodes || []).find(function (x) { return x.id === nodeId; });
                             if (node && typeof mmpExplainOpen === 'function') {
                                 mmpExplainOpen(doc.id, node.title || '');
