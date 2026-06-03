@@ -10460,7 +10460,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r220';
+        var _AHUB_FRONT_REV = 'r221';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -19236,6 +19236,8 @@ document.addEventListener("contextmenu",function(e){var t="";try{t=(window.getSe
 function sendPos(){try{var ms=document.querySelectorAll("[data-tdaann]");var p={};for(var i=0;i<ms.length;i++){var r=ms[i].getBoundingClientRect();p[ms[i].getAttribute("data-tdaann")]=r.top+(window.pageYOffset||0)}post({type:"tda-embed-ann-pos",embedId:EID,pos:p})}catch(_){}}
 function hl(anns){if(!anns||!anns.length){sendPos();return}anns.forEach(function(a){if(!a.quote)return;if(document.querySelector('[data-tdaann="'+a.id+'"]'))return;var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);var n,nodes=[];while((n=w.nextNode()))nodes.push(n);for(var i=0;i<nodes.length;i++){var nd=nodes[i];if(nd.parentNode&&nd.parentNode.closest&&nd.parentNode.closest("[data-tdaann]"))continue;var s=nd.textContent.indexOf(a.quote);if(s<0)continue;var bf=nd.textContent.slice(0,s),af=nd.textContent.slice(s+a.quote.length);var mk=document.createElement("mark");mk.setAttribute("data-tdaann",a.id);mk.style.background=a.color||"#fde68a";mk.style.cursor="pointer";mk.style.borderRadius="2px";mk.style.padding="0 1px";mk.title="클릭: 코멘트 열기/닫기";mk.textContent=a.quote;mk.addEventListener("click",function(ev){ev.stopPropagation();post({type:"tda-embed-ann-click",embedId:EID,annId:this.getAttribute("data-tdaann")})});var fr=document.createDocumentFragment();if(bf)fr.appendChild(document.createTextNode(bf));fr.appendChild(mk);if(af)fr.appendChild(document.createTextNode(af));nd.parentNode.replaceChild(fr,nd);break}});sendPos()}
 window.addEventListener("message",function(e){if(!e.data||e.data.type!=="tda-embed-anns")return;if(e.data.embedId&&e.data.embedId!==EID)return;hl(e.data.anns)});
+// [r221] 부모 → iframe 검색·강조 — {type:"tda-embed-find", text}. 매칭 첫 노드 scrollIntoView + 임시 노란 강조.
+window.addEventListener("message",function(e){if(!e.data||e.data.type!=="tda-embed-find"||!e.data.text)return;var q=String(e.data.text).trim();if(!q)return;var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);var n,hit=null;var ql=q.toLowerCase();while((n=w.nextNode())){if(n.parentNode&&n.parentNode.closest&&n.parentNode.closest("[data-tda-find-mark]"))continue;if((n.nodeValue||"").toLowerCase().indexOf(ql)>=0){hit=n;break}}if(!hit)return;var par=hit.parentElement;while(par&&!/^(P|DIV|LI|TD|TH|H[1-6]|BLOCKQUOTE|SECTION|ARTICLE)$/.test(par.tagName||"")&&par.parentElement&&par!==document.body){par=par.parentElement}var target=par||hit.parentElement;if(!target)return;try{target.scrollIntoView({behavior:"smooth",block:"center"})}catch(_){target.scrollIntoView()}target.setAttribute("data-tda-find-mark","1");var pb=target.style.backgroundColor||"",po=target.style.outline||"",pt=target.style.transition||"";target.style.transition="background-color 1.6s ease-out, outline 1.6s ease-out";target.style.outline="2px solid rgba(245,158,11,.85)";target.style.backgroundColor="rgba(245,158,11,.22)";setTimeout(function(){target.style.backgroundColor=pb;target.style.outline=po;target.removeAttribute("data-tda-find-mark");setTimeout(function(){target.style.transition=pt},1600)},2000)});
 function ready(){post({type:"tda-embed-ready",embedId:EID})}
 ready();addEventListener("load",ready);setTimeout(ready,300);setTimeout(ready,1000);
 addEventListener("resize",sendPos);
@@ -30531,22 +30533,85 @@ ${intrLog}
         var lastA = null;
         for (var k = msgs.length - 1; k >= 0; k--) if (msgs[k].kind === 'a') { lastA = msgs[k]; break; }
         var s = lastA && (lastA.sources || []).find(function (x) { return x.idx === idx; });
-        if (!s || !s.id) { showToast('소스 정보가 부족합니다', 'alert'); return; }
-        try {
-            switchView('docs');
-            setTimeout(function () { if (typeof openDoc === 'function') openDoc(s.id); }, 80);
-        } catch (e) { showToast('점프 실패: ' + (e.message || e), 'alert'); }
+        _mmpExGoToSource(s);
     }
     // [r220] 특정 메시지의 sources 기준 점프
     function mmpExSrcJumpFor(msgIdx, srcIdx) {
         var msgs = _mmpExState.messages || [];
         var m = msgs[msgIdx]; if (!m) return;
         var s = (m.sources || []).find(function (x) { return x.idx === srcIdx; });
+        _mmpExGoToSource(s);
+    }
+    // [r221] 공용 점프 — 같은 문서면 재로드 안 함(임베디드 깜빡임 방지) + 노드 title 위치로 스크롤·강조
+    function _mmpExGoToSource(s) {
         if (!s || !s.id) { showToast('소스 정보가 부족합니다', 'alert'); return; }
         try {
-            switchView('docs');
-            setTimeout(function () { if (typeof openDoc === 'function') openDoc(s.id); }, 80);
+            // 1) 문서 뷰가 아니면 전환
+            var needSwitch = (typeof currentView !== 'undefined' && currentView !== 'docs');
+            if (needSwitch) switchView('docs');
+            // 2) 같은 문서면 재로드 없이 강조만. 다른 문서면 openDoc.
+            var sameDoc = (typeof activeDocId !== 'undefined' && activeDocId === s.id);
+            if (!sameDoc) {
+                setTimeout(function () { if (typeof openDoc === 'function') openDoc(s.id); _mmpExHighlightInDoc(); }, needSwitch ? 100 : 30);
+            } else {
+                _mmpExHighlightInDoc();
+            }
         } catch (e) { showToast('점프 실패: ' + (e.message || e), 'alert'); }
+    }
+    // [r221] 현재 활성 문서에서 노드 title 첫 매칭으로 스크롤 + 임시 노란 강조 + 임베디드 검색
+    function _mmpExHighlightInDoc() {
+        try {
+            var needle = (_mmpExState && _mmpExState.nodeTitle) || '';
+            if (!needle) return;
+            // 미리보기/에디터 컨테이너 안에서 텍스트 찾기
+            var preview = document.querySelector('#doc-preview, .doc-preview, #wiki-preview, .wiki-preview') || document.querySelector('.doc-body, .preview-html');
+            var found = null;
+            if (preview) found = _mmpExFindTextNode(preview, needle);
+            if (found) {
+                _mmpExFlashElement(found);
+                try { found.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { found.scrollIntoView(); }
+            }
+            // 임베디드 iframe 들에 검색 요청 — 매칭된 거 있으면 자체 강조
+            document.querySelectorAll('.tda-embed-body iframe').forEach(function (ifr) {
+                try {
+                    if (ifr.contentWindow) ifr.contentWindow.postMessage({ type: 'tda-embed-find', text: needle }, '*');
+                } catch (e) {}
+            });
+        } catch (e) { console.warn('[mmpExplain] highlight failed', e); }
+    }
+    // 텍스트 노드 검색 — needle 을 포함하는 가장 가까운 element
+    function _mmpExFindTextNode(root, needle) {
+        var n = (needle || '').trim(); if (!n || !root) return null;
+        var low = n.toLowerCase();
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        var tn;
+        while ((tn = walker.nextNode())) {
+            if ((tn.nodeValue || '').toLowerCase().indexOf(low) >= 0) {
+                // 가장 가까운 block element 반환
+                var el = tn.parentElement;
+                while (el && el !== root && !/^(P|DIV|LI|TD|TH|H[1-6]|BLOCKQUOTE|SECTION|ARTICLE)$/.test(el.tagName || '')) {
+                    el = el.parentElement;
+                }
+                return el || tn.parentElement;
+            }
+        }
+        return null;
+    }
+    function _mmpExFlashElement(el) {
+        if (!el) return;
+        // 임시 노란 박스 강조 — outline + background 페이드
+        var prevBg = el.style.backgroundColor || '';
+        var prevOl = el.style.outline || '';
+        var prevTr = el.style.transition || '';
+        el.style.transition = 'background-color 1.6s ease-out, outline 1.6s ease-out';
+        el.style.outline = '2px solid rgba(245,158,11,.85)';
+        el.style.backgroundColor = 'rgba(245,158,11,.22)';
+        setTimeout(function () {
+            el.style.backgroundColor = prevBg;
+            el.style.outline = prevOl;
+            // 1.8초 뒤 transition 원복
+            setTimeout(function () { el.style.transition = prevTr; }, 1600);
+        }, 50);
     }
 
     async function mmpExFollowup(idx) {
