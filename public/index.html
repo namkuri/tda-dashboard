@@ -4675,6 +4675,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .point-circle.selected, .node-rect.selected { stroke: var(--c-text) !important; stroke-width: 3 !important; }
         .node-connector { cursor: crosshair; opacity: 0; transition: opacity .15s; }
         .node-group:hover .node-connector { opacity: 1; }
+        /* [r219] 마인드맵 노드 호버 시 ✦ AI 설명 보조 버튼 — 좌상단 외곽 */
+        .node-explain { cursor: pointer; opacity: 0; transition: opacity .15s, transform .15s; }
+        .node-group:hover .node-explain { opacity: 1; }
+        .node-group .node-explain:hover { transform: scale(1.15); transform-origin: center; }
+        .node-explain circle { filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
         .node-rect.connecting-source { stroke-dasharray: 5,3; }
         .edge-path { fill: none; } .edge-path:hover { stroke-width: 4; }
         .edge-path.selected { stroke-width: 4 !important; }
@@ -10440,7 +10445,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r218';
+        var _AHUB_FRONT_REV = 'r219';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31022,7 +31027,7 @@ ${intrLog}
                 + (p.mode === 'mindmap' ? '<button class="gph-legend-add" style="background:var(--c-accent);color:#fff;border-color:var(--c-accent);" onclick="mmpOpenPicker(true)" title="문서를 LLM에 보내 마인드맵 자동 생성(이 그래프에 추가)">🧠 문서로 자동 생성</button>' : '')
                 // [r217] 마인드맵 모드 — 소스 관리 버튼
                 + (p.mode === 'mindmap' ? '<button class="gph-legend-add" onclick="mmpSrcOpenManager()" title="이 마인드맵의 소스 문서 관리">📚 소스 ' + (((gphCurrent() && gphCurrent().meta && gphCurrent().meta.mindmap_sources) || []).length) + '</button>' : '')
-                + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : (p.mode === 'mindmap' ? '🧠 빈 곳 더블클릭 = 새 노드 · 노드 클릭 = AI 설명(소스 등록 시) · → 핸들 드래그 = 엣지' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴')) + '</div>';
+                + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : (p.mode === 'mindmap' ? '🧠 빈 곳 더블클릭 = 새 노드 · 노드 호버 → ✦ 클릭 = AI 설명 · → 핸들 드래그 = 엣지' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴')) + '</div>';
         }
         // 작성자 / 작성일 / 수정일 + 공개여부
         var meta = document.getElementById('gph-meta');
@@ -31170,6 +31175,14 @@ ${intrLog}
             if (node.status === 'done') parts.push('<circle cx="' + (node.w - 13) + '" cy="13" r="5" fill="' + gphCssVar('--st-success') + '"/>'); else if (node.status === 'progress') parts.push('<circle cx="' + (node.w - 13) + '" cy="13" r="5" fill="' + gphCssVar('--st-progress') + '"/>');
             if (node.body) { var lines = node.body.split('\n'); var lh = 14; for (var i = 0; i < lines.length; i++) { var maxChars = Math.floor((node.w - 28) / 6.5); var ln = lines[i].length > maxChars ? lines[i].slice(0, maxChars - 1) + '…' : lines[i]; if (yo + lh > node.h - 4) break; parts.push('<text x="14" y="' + yo + '" font-family="Pretendard,sans-serif" font-size="11.5" fill="' + textC + '" pointer-events="none">' + gphEscX(ln) + '</text>'); yo += lh; } }
             parts.push('<g class="node-connector" data-connector-source="' + node.id + '"><circle cx="' + node.w + '" cy="' + (node.h / 2) + '" r="9" fill="' + color + '" stroke="' + cardBg + '" stroke-width="2"/><text x="' + node.w + '" y="' + (node.h / 2 + 4) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" pointer-events="none" font-family="JetBrains Mono,monospace">→</text></g>');
+            // [r219] 마인드맵 모드 — 노드 호버 시 좌상단 외곽에 ✦ AI 설명 버튼
+            if (loop.mode === 'mindmap') {
+                parts.push('<g class="node-explain" data-explain-source="' + node.id + '">'
+                    + '<circle cx="0" cy="0" r="10" fill="var(--c-accent,#c25b4b)" stroke="' + cardBg + '" stroke-width="2"/>'
+                    + '<text x="0" y="3" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" pointer-events="none">✦</text>'
+                    + '<title>AI 설명 보기</title>'
+                    + '</g>');
+            }
             parts.push('</g>');
         });
         gphRenderMemos(loop, parts);
@@ -31183,6 +31196,23 @@ ${intrLog}
             gphTip(g, function () { var n = (gphPayload(gphCurrent()).nodes || []).find(function (x) { return x.id === nodeId; }); if (!n) return null; var mt = gphStatusInfo(n.status)[0] + (n.assigneeId ? (' · 담당 ' + gphMemberName(n.assigneeId)) : ' · 미배정') + ' · ' + gphPartName(n.part); var bd = (n.body || ''); if (n.linkedCardId) { var t = (currentData.tasks || []).find(function (x) { return x.id === n.linkedCardId; }); bd += (bd ? '\n' : '') + '🗂 카드: ' + (t ? (t.title || '') : '(삭제됨)'); } if (n.linkedDocId) { var dc = (currentData.docs || []).find(function (x) { return x.id === n.linkedDocId; }); bd += (bd ? '\n' : '') + '📄 문서: ' + (dc ? (dc.title || '') : '(삭제됨)'); } return { title: n.title, meta: mt, body: bd }; });
             var conn = g.querySelector('[data-connector-source]');
             if (conn) gphConnectorInteraction(conn, nodeId, svg, minX, minY, cw, ch);
+            // [r219] 마인드맵 ✦ AI 설명 버튼 — 노드 클릭 이벤트 전파 막고 explain 호출
+            var ex = g.querySelector('[data-explain-source]');
+            if (ex) {
+                ex.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    try {
+                        var doc = gphCurrent();
+                        var p = doc && gphPayload(doc);
+                        var node = p && (p.nodes || []).find(function (x) { return x.id === nodeId; });
+                        if (doc && node && typeof mmpExplainOpen === 'function') {
+                            mmpExplainOpen(doc.id, node.title || '');
+                        }
+                    } catch (err) { console.warn('[mmpExplain] open from button failed', err); }
+                });
+                // 마우스 다운으로 드래그 시작 방지
+                ex.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+            }
         });
         svg.querySelectorAll('.node-rect').forEach(function (rect) {
             rect.addEventListener('click', function (e) {
@@ -31191,21 +31221,9 @@ ${intrLog}
                 if (gphState.connecting && gphState.connecting.sourceNodeId !== nodeId) {
                     gphAddEdge(gphState.connecting.sourceNodeId, nodeId); gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas();
                 } else if (!gphState.connecting) {
+                    // [r219] 노드 클릭은 기본 동작(하단 설정창)만. AI 설명은 호버 보조 버튼으로.
                     gphState.selected = { type: 'node', id: nodeId };
                     gphRenderCanvas(); gphRenderPanel();
-                    // [r217/r218] 마인드맵 모드 — 클릭 시 AI 설명 패널.
-                    // 소스 메타가 없으면 mmpExplainOpen 내부에서 자동 백필 시도 →
-                    // 그래도 없으면 소스 관리 다이얼로그 자동 열림.
-                    try {
-                        var doc = gphCurrent();
-                        var p = doc && gphPayload(doc);
-                        if (p && p.mode === 'mindmap') {
-                            var node = (p.nodes || []).find(function (x) { return x.id === nodeId; });
-                            if (node && typeof mmpExplainOpen === 'function') {
-                                mmpExplainOpen(doc.id, node.title || '');
-                            }
-                        }
-                    } catch (err) { console.warn('[mmpExplain] open failed', err); }
                 }
             });
         });
