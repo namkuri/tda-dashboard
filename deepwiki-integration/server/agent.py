@@ -17,6 +17,7 @@ import json
 from typing import AsyncIterator, Dict, Any, List, Optional
 from ollama_client import get_ollama
 from tools import TOOL_DEFINITIONS, execute_tool
+from retriever import retrieve as vector_retrieve  # [r210] 폴백 RAG
 
 
 SYSTEM_PROMPT = """당신은 TDA Dashboard 프로젝트의 능동적 어시스턴트입니다.
@@ -33,6 +34,8 @@ SYSTEM_PROMPT = """당신은 TDA Dashboard 프로젝트의 능동적 어시스�
 - **list_issues(project_id, status?, priority?)**: 이슈 트래커 — "이슈", "버그"
 - **list_users(project_id?)**: 팀원 — "참여자", "팀원 누구"
 - **get_project_info(project_id)**: 프로젝트 종합 메타 — 이름·카테고리·Git URL·참여자·전체 통계(docs/tasks/sprints/issues/reviews 개수). 사용자가 "프로젝트 정보", "이 프로젝트 개요", "Git 연결" 등을 물을 때.
+- **list_projects()**: 전체 프로젝트 목록 — "프로젝트 리스트/목록", "어떤 프로젝트 있어", "내 프로젝트" 시 호출.
+- **list_wbs_nodes(project_id)**: 작업구조화(WBS) 트리 노드 — "작업구조화", "WBS", "타임라인", "마일스톤", "전체 일정" 시 호출. 세그먼트(다중 진행바) + 연결 정보 포함.
 
 Deep Wiki 자동 위키 (r113~r115 산출물):
 - **list_wiki_pages(project_id)**: Deep Wiki 1차 자동 위키 페이지 목록 — "Deep Wiki 페이지", "자동 위키"
@@ -161,6 +164,46 @@ search_vector는 **정적 코드/문서** 본문 검색용. 다음 키워드가 
 MAX_TOOL_ROUNDS = 5  # 무한 루프 방지
 
 
+# [r210] 한국어 쿼리 키워드 → 강제 도구 호출 매핑
+# qwen2.5-coder:14b 같은 중소형 모델은 짧은 한국어 쿼리에서 tool_calling 결정
+# 정확도가 낮아 "현재 이슈" 같은 명백한 라이브 데이터 질문에도 빈손 답변.
+# 첫 라운드 LLM 호출 전 사전 휴리스틱으로 도구를 강제 호출해 컨텍스트를 채워준다.
+# 매핑 키는 부분 단어 — 사용자 query 에 포함되면 매핑된 도구를 sequential 실행.
+_FORCE_TOOL_MAP = [
+    # (키워드 리스트, 도구 이름, args 추가)
+    (["프로젝트 리스트", "프로젝트 목록", "프로젝트들", "내 프로젝트"], "list_projects", {}),
+    (["이슈", "버그 리포트"], "list_issues", {}),
+    (["진행중 스프린트", "이번 스프린트", "현재 스프린트", "활성 스프린트"], "get_active_sprint", {}),
+    (["스프린트 목록", "스프린트 히스토리", "지난 스프린트"], "list_sprints", {}),
+    (["내 카드", "마감 임박", "내 태스크", "오늘 카드"], "list_tasks", {}),
+    (["결재", "리뷰 대기", "내 결재"], "list_reviews", {}),
+    (["일정", "스케줄", "캘린더", "미팅", "오늘", "이번 주"], "list_calendar_events", {}),
+    (["작업구조화", "타임라인", "마일스톤", "WBS", "wbs"], "list_wbs_nodes", {}),
+    (["문서 목록", "문서 리스트", "위키 목록", "어떤 문서"], "list_docs", {}),
+    (["팀원", "참여자", "멤버", "누구야"], "list_users", {}),
+    (["프로젝트 정보", "프로젝트 개요", "Git 연결", "git url"], "get_project_info", {}),
+]
+
+
+def _force_tool_picks(query: str) -> List[Dict[str, Any]]:
+    """[r210] 사용자 쿼리에 명백한 키워드 매칭 시 강제 호출할 도구 목록.
+
+    LLM tool calling 신뢰도 보강용. 호출 순서는 매핑 정의 순.
+    중복 제거 — 같은 도구는 한 번만.
+    """
+    q = (query or "").lower()
+    picks = []
+    seen = set()
+    for kws, tool, args in _FORCE_TOOL_MAP:
+        for kw in kws:
+            if kw.lower() in q:
+                if tool not in seen:
+                    seen.add(tool)
+                    picks.append({"tool": tool, "args": dict(args)})
+                break
+    return picks
+
+
 async def run(
     messages: List[Dict[str, str]],
     project_id: Optional[str] = None,
@@ -196,6 +239,30 @@ async def run(
     tool_log: List[Dict[str, Any]] = []  # 도구 호출 기록 (UI 표시용)
     sources_collected: List[Dict[str, Any]] = []  # 검색 칩 아래 참조
 
+    # ───── [r210] 사전 키워드 휴리스틱 — 명백한 도구는 강제 호출 ─────
+    forced = _force_tool_picks(user_query)
+    if forced:
+        for fp in forced:
+            args = dict(fp.get("args") or {})
+            if project_id:
+                args.setdefault("project_id", project_id)
+            try:
+                result = await execute_tool(fp["tool"], args)
+            except Exception as e:
+                result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+            tool_log.append({
+                "tool": fp["tool"],
+                "args": args,
+                "ok": result.get("ok", False),
+                "summary": _short_result_summary(fp["tool"], result),
+                "forced": True,
+            })
+            llm_messages.append({
+                "role": "tool",
+                "content": json.dumps(result, ensure_ascii=False)[:6000],
+            })
+            _collect_sources(fp["tool"], result, sources_collected)
+
     # ───── 도구 호출 루프 ─────
     for round_idx in range(MAX_TOOL_ROUNDS):
         try:
@@ -211,11 +278,47 @@ async def run(
 
         tool_calls = assistant_msg.get("tool_calls") or []
         if not tool_calls:
-            # LLM이 도구 더 안 부름 → 이게 최종 답변 시도
+            # [r210] 도구 호출이 0건이거나 모든 결과가 비어있으면 vector RAG 폴백
+            useful_count = sum(
+                1 for t in tool_log
+                if t.get("ok") and _tool_result_nonempty(t)
+            )
+            if useful_count == 0:
+                rag_chunks = await _try_vector_fallback(user_query, project_id)
+                if rag_chunks:
+                    rag_summary = _format_rag_for_llm(rag_chunks)
+                    llm_messages.append({"role": "tool", "content": rag_summary})
+                    tool_log.append({
+                        "tool": "search_vector",
+                        "args": {"query": user_query, "auto": True},
+                        "ok": True,
+                        "summary": f"폴백 RAG: {len(rag_chunks)}개 청크",
+                        "forced": True,
+                    })
+                    _collect_sources("search_vector", {"ok": True, "result": rag_chunks}, sources_collected)
+                    # 한 번 더 LLM 호출해 최종 답변
+                    try:
+                        assistant_msg2 = await ollama.chat_with_tools(
+                            messages=llm_messages + [{
+                                "role": "user",
+                                "content": "위 도구/RAG 결과를 종합해 한국어 마크다운으로 최종 답변. 추가 도구 호출 금지.",
+                            }],
+                            tools=[],
+                            model=model,
+                            temperature=0.2,
+                        )
+                        final_text = assistant_msg2.get("content") or assistant_msg.get("content") or ""
+                    except Exception:
+                        final_text = assistant_msg.get("content") or ""
+                    yield {"meta": _build_meta(tool_log, user_query, rag_chunks=rag_chunks)}
+                    for chunk_text in _stream_chunks(final_text):
+                        yield {"delta": chunk_text}
+                    if sources_collected:
+                        yield {"sources": sources_collected}
+                    return
+            # 그 외(이미 도구가 좋은 결과를 줬거나 RAG 도 없음) — LLM 답변 그대로
             final_text = assistant_msg.get("content") or ""
-            # 도구 호출 기록을 meta로 송신
             yield {"meta": _build_meta(tool_log, user_query)}
-            # 최종 답변을 스트리밍 형태로 잘라서 송신 (UX 일관성)
             for chunk_text in _stream_chunks(final_text):
                 yield {"delta": chunk_text}
             if sources_collected:
@@ -314,18 +417,87 @@ def _short_result_summary(name: str, result: Dict[str, Any]) -> str:
     return "OK"
 
 
-def _build_meta(tool_log: List[Dict[str, Any]], query: str) -> Dict[str, Any]:
-    """검색 칩용 메타 — 도구 호출 사용 시 호환 정보."""
-    # 기존 r94 메타 형식과 호환 + 도구 호출 정보 추가
+def _tool_result_nonempty(t: Dict[str, Any]) -> bool:
+    """[r210] tool_log 항목의 summary로 빈 결과 판정 — '0개', '없음', '실패' 패턴.
+
+    완벽하진 않지만 휴리스틱: '폴백 RAG' 포함 시 항상 True 처리.
+    """
+    s = (t.get("summary") or "").lower()
+    if not s:
+        return False
+    if "폴백" in s or "rag" in s:
+        return True
+    if "없음" in s or "실패" in s:
+        return False
+    # "카드 0개", "청크 0개" 등
+    import re
+    m = re.search(r"(\d+)", s)
+    if m and int(m.group(1)) == 0:
+        return False
+    return True
+
+
+async def _try_vector_fallback(query: str, project_id: Optional[str]) -> List[Dict[str, Any]]:
+    """[r210] RAG 폴백 — top_k 6, 모든 source_type."""
+    try:
+        chunks = await vector_retrieve(
+            query=query,
+            project_id=project_id,
+            source_types=None,  # 전체 (10종)
+            top_k=6,
+        )
+        return chunks or []
+    except Exception as e:
+        return []
+
+
+def _format_rag_for_llm(chunks: List[Dict[str, Any]]) -> str:
+    """RAG 청크를 도구 결과 메시지 형식으로 직렬화."""
+    out = {"ok": True, "tool": "search_vector(auto)", "count": len(chunks), "result": []}
+    for c in chunks[:6]:
+        out["result"].append({
+            "source_type": c.get("source_type"),
+            "title": c.get("source_title") or c.get("source_id"),
+            "similarity": round(c.get("similarity", 0), 3),
+            "content": (c.get("content") or "")[:1000],
+        })
+    return json.dumps(out, ensure_ascii=False)[:6000]
+
+
+def _build_meta(tool_log: List[Dict[str, Any]], query: str, rag_chunks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """검색 칩용 메타 — 도구 호출 + RAG 결과 모두 반영.
+
+    [r210] retrieved 는 단순 도구 호출 수가 아니라
+    '실제로 컨텍스트에 들어간 결과 개수' — 도구 row 합 + RAG 청크 수.
+    """
+    retrieved = 0
+    sims: List[float] = []
+    top: List[Dict[str, Any]] = []
+    for t in tool_log:
+        if not t.get("ok"):
+            continue
+        s = t.get("summary") or ""
+        import re
+        m = re.search(r"(\d+)", s)
+        n = int(m.group(1)) if m else 1
+        retrieved += n
+        top.append({"type": "tool", "title": f"{t['tool']} · {s}", "sim": 1.0})
+    if rag_chunks:
+        retrieved += len(rag_chunks)
+        for c in rag_chunks[:5]:
+            sim = c.get("similarity", 0) or 0
+            sims.append(sim)
+            top.append({
+                "type": c.get("source_type") or "?",
+                "title": c.get("source_title") or c.get("source_id") or "?",
+                "sim": sim,
+            })
     return {
-        "retrieved": sum(1 for t in tool_log if t.get("ok")),
-        "avg_sim": 0.0,
-        "max_sim": 0.0,
-        "min_sim": 0.0,
-        "top": [
-            {"type": "tool", "title": f"{t['tool']}({t['summary']})", "sim": 1.0}
-            for t in tool_log[:5]
-        ],
+        "retrieved": retrieved,
+        "avg_sim": (sum(sims) / len(sims)) if sims else 0.0,
+        "max_sim": max(sims) if sims else 0.0,
+        "min_sim": min(sims) if sims else 0.0,
+        "top": top[:5],
         "tool_calls": tool_log,
         "query": query,
     }

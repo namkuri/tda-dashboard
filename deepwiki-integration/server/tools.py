@@ -412,6 +412,25 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             },
         },
     },
+    # ─── [r210] 프로젝트 목록 ───
+    {
+        "type": "function",
+        "function": {
+            "name": "list_projects",
+            "description": (
+                "현재 사용자가 접근 가능한 프로젝트 목록. "
+                "사용자가 '프로젝트 리스트/목록', '내 프로젝트', '어떤 프로젝트 있어' 등을 물을 때 호출. "
+                "반환: [{id, name, category, participant_count, git_url, updated_at}]"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 30)."},
+                },
+                "required": [],
+            },
+        },
+    },
     # ─── [r208] WBS / 작업구조화 / 타임라인 세그먼트 도구 ───
     {
         "type": "function",
@@ -485,6 +504,9 @@ async def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         # [r208] WBS
         if name == "list_wbs_nodes":
             return await _tool_list_wbs_nodes(arguments)
+        # [r210] 프로젝트 목록
+        if name == "list_projects":
+            return await _tool_list_projects(arguments)
         return {"ok": False, "error": f"Unknown tool: {name}"}
     except Exception as e:
         import traceback
@@ -1142,6 +1164,35 @@ async def _tool_get_wiki_audit(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": True, "result": audit}
     except Exception as e:
         return {"ok": False, "error": f"조회 실패: {e}"}
+
+
+# ─────────────────────────────────────────────
+# [r210] 프로젝트 목록
+# ─────────────────────────────────────────────
+
+async def _tool_list_projects(args: Dict[str, Any]) -> Dict[str, Any]:
+    """projects 테이블 전체 목록 — 메타·통계 포함."""
+    store = get_store()
+    try:
+        q = store.client.table("projects").select(
+            "id,name,category,participants,git_url,created_at,updated_at"
+        ).order("updated_at", desc=True).limit(int(args.get("limit") or 30))
+        res = q.execute()
+        rows = res.data or []
+    except Exception as e:
+        return {"ok": False, "error": f"projects 조회 실패: {e}"}
+    out = []
+    for r in rows:
+        ps = r.get("participants") or []
+        out.append({
+            "id": r.get("id"),
+            "name": r.get("name") or "(이름 없음)",
+            "category": r.get("category") or "일반",
+            "participant_count": len(ps) if isinstance(ps, list) else 0,
+            "git_url": r.get("git_url"),
+            "updated_at": r.get("updated_at"),
+        })
+    return {"ok": True, "result": out, "count": len(out)}
 
 
 # ─────────────────────────────────────────────
