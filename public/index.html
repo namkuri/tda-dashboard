@@ -7027,6 +7027,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 function() { return typeof window.mammoth !== 'undefined'; }
             );
         }
+        // [r205] PDF.js — PDF 텍스트 추출용. worker는 자동 설정.
+        function loadPdfJs() {
+            return _loadScript(
+                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+                function() { return typeof window.pdfjsLib !== 'undefined'; }
+            ).then(function () {
+                try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
+            });
+        }
         function loadTurndown() {
             // Turndown 본체와 GFM 플러그인을 순차 로드
             return _loadScript(
@@ -26123,10 +26132,11 @@ ${intrLog}
         function processEditorFile(file) {
             const ext = (file.name.split('.').pop() || '').toLowerCase();
             const isHtml = (ext === 'html' || ext === 'htm');
-            const supported = (ext === 'docx' || ext === 'md' || ext === 'txt' || isHtml);
+            const isPdf = (ext === 'pdf'); // [r205]
+            const supported = (ext === 'docx' || ext === 'md' || ext === 'txt' || isHtml || isPdf);
 
             // 진행 모달 표시 — 즉시 (사용자가 드롭한 순간을 시각적으로 확인)
-            var skipSteps = (ext === 'docx' || isHtml) ? [] : ['parser','convert'];
+            var skipSteps = (ext === 'docx' || isHtml || isPdf) ? [] : ['parser','convert'];
             showFileProgress(file, { skipSteps: skipSteps });
 
             // ── 0) 사전 검증
@@ -26268,6 +26278,103 @@ ${intrLog}
                     });
                 };
                 reader.readAsText(file, 'UTF-8');
+            } else if (isPdf) {
+                // [r205] .pdf — PDF.js로 텍스트 추출. 선택: 임베드(iframe data:), MD화(헤더 자동 인식), 텍스트화.
+                reader.onload = function (ev) {
+                    updateFileProgress('read', 'done', _fpFormatBytes(file.size));
+                    var arrayBuffer = ev.target.result;
+                    function _saveDone(label) { updateFileProgress('save', 'active', '저장 중...'); clearTimeout(_docSaveTimer); flushDocSave(function (err) { if (err) { updateFileProgress('save', 'error', err.message || '저장 실패'); } else { updateFileProgress('save', 'done', supabaseClient ? 'DB 저장 완료' : '로컬 저장 완료'); completeFileProgress('"' + file.name + '" ' + label); } }); }
+                    _htmlInsertChooser('PDF 파일 가져오기 — "' + file.name + '"', [
+                        { key: 'embed', label: '① PDF 임베드 (원본 보기)', desc: '문서 안에서 PDF 뷰어로 표시(스크롤·확대 가능). 본문에 base64로 저장.' },
+                        { key: 'md', label: '② 마크다운으로 변환', desc: '텍스트 추출 + 폰트 크기로 헤더 자동 추정. 표·그림은 손실됨.' },
+                        { key: 'text', label: '③ 텍스트만', desc: '페이지 순서대로 텍스트만 추출. 가장 빠름.' }
+                    ]).then(function (choice) {
+                        if (!choice) { var mod = document.getElementById('file-progress-modal'); if (mod) mod.classList.add('hidden'); return; }
+                        if (choice === 'embed') {
+                            updateFileProgress('parser', 'done', 'PDF 임베드'); updateFileProgress('convert', 'done', '원본 보기');
+                            updateFileProgress('insert', 'active', 'data URL 변환 중...');
+                            try {
+                                var bytes = new Uint8Array(arrayBuffer);
+                                // 크기 가드 — 5MB 초과면 거부(저장 폭발 방지). drive 업로드 권장.
+                                if (bytes.length > 5 * 1024 * 1024) {
+                                    updateFileProgress('insert', 'error', '임베드는 5MB 이하만 지원 (드라이브에 업로드해 링크로 첨부 권장)');
+                                    showToast('PDF 임베드는 5MB 이하만 지원됩니다. 더 큰 파일은 드라이브에 업로드해 링크로 사용하세요.', 'alert');
+                                    return;
+                                }
+                                var b64 = '';
+                                // chunked btoa for large bytes
+                                var chunk = 8192;
+                                for (var i = 0; i < bytes.length; i += chunk) b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+                                var dataUrl = 'data:application/pdf;base64,' + btoa(b64);
+                                var safeName = (file.name || 'document.pdf').replace(/"/g, '&quot;');
+                                var embed = '\n\n<div class="md-pdf-embed" style="margin:12px 0;border:1px solid #e7e3d8;border-radius:8px;overflow:hidden;background:#f9f7f2;">\n'
+                                    + '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#efeae0;font-size:12px;font-weight:700;color:#5a5346;border-bottom:1px solid #e7e3d8;">📕 ' + safeName + ' <a href="' + dataUrl + '" download="' + safeName + '" style="margin-left:auto;color:#c96442;text-decoration:none;font-size:11px;">↓ 다운로드</a></div>\n'
+                                    + '<iframe src="' + dataUrl + '" style="width:100%;height:560px;border:0;background:#fff;" title="' + safeName + '"></iframe>\n'
+                                    + '</div>\n\n';
+                                insertAtCursor(embed);
+                                updateFileProgress('insert', 'done', 'PDF 임베드 삽입'); _saveDone('임베드 완료');
+                                showToast('"' + file.name + '" PDF 임베드 완료', 'success');
+                            } catch (e) {
+                                updateFileProgress('insert', 'error', e.message || '임베드 실패');
+                                showToast('PDF 임베드 실패: ' + (e.message || e), 'alert');
+                            }
+                            return;
+                        }
+                        // text/md — PDF.js로 텍스트 추출
+                        updateFileProgress('parser', 'active', 'pdf.js 로딩 중...');
+                        loadPdfJs().then(function () {
+                            updateFileProgress('parser', 'done', 'PDF.js 준비 완료');
+                            updateFileProgress('convert', 'active', 'PDF 텍스트 추출 중...');
+                            return window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                        }).then(async function (pdf) {
+                            var pages = [];
+                            var maxPage = Math.min(pdf.numPages, 200); // 폭주 가드
+                            for (var p = 1; p <= maxPage; p++) {
+                                updateFileProgress('convert', 'active', 'PDF 페이지 ' + p + '/' + maxPage + ' 추출 중...');
+                                var page = await pdf.getPage(p);
+                                var tc = await page.getTextContent();
+                                // 텍스트 + (md 모드면) 폰트 높이 기반 헤더 추정
+                                if (choice === 'md') {
+                                    // 각 item의 transform[3]=fontHeight. 평균보다 1.5배 크면 ##, 2배 크면 #
+                                    var heights = tc.items.map(function (it) { return (it.transform && it.transform[3]) || 0; });
+                                    var avg = heights.length ? heights.reduce(function (s, h) { return s + h; }, 0) / heights.length : 0;
+                                    var lines = [], cur = '', curY = null;
+                                    tc.items.forEach(function (it) {
+                                        var y = it.transform ? it.transform[5] : null;
+                                        var fh = it.transform ? it.transform[3] : 0;
+                                        if (curY !== null && Math.abs(y - curY) > 4 && cur) { lines.push({ text: cur.trim(), maxH: lineMaxH }); cur = ''; }
+                                        if (curY === null || Math.abs(y - curY) > 4) { var lineMaxH = fh; }
+                                        cur += (it.str || '') + ' ';
+                                        curY = y;
+                                    });
+                                    if (cur.trim()) lines.push({ text: cur.trim(), maxH: 0 });
+                                    var md = lines.map(function (ln) {
+                                        if (!ln.text) return '';
+                                        if (avg > 0 && ln.maxH > avg * 1.6) return '# ' + ln.text;
+                                        if (avg > 0 && ln.maxH > avg * 1.25) return '## ' + ln.text;
+                                        return ln.text;
+                                    }).filter(Boolean).join('\n\n');
+                                    pages.push(md);
+                                } else {
+                                    var raw = tc.items.map(function (it) { return it.str || ''; }).join(' ');
+                                    pages.push(raw.replace(/\s+/g, ' ').trim());
+                                }
+                            }
+                            updateFileProgress('convert', 'done', maxPage + '페이지 추출됨');
+                            updateFileProgress('insert', 'active', '커서 위치에 삽입 중...');
+                            var sep = choice === 'md' ? '\n\n---\n\n' : '\n\n';
+                            var header = '> 📕 ' + (file.name || 'PDF') + ' (' + maxPage + '페이지)\n\n';
+                            insertAtCursor(header + pages.join(sep));
+                            updateFileProgress('insert', 'done', '삽입 완료'); _saveDone('삽입 완료');
+                            showToast('"' + file.name + '" PDF ' + (choice === 'md' ? 'MD 변환' : '텍스트') + ' 완료', 'success');
+                        }).catch(function (err) {
+                            updateFileProgress('parser', 'error', 'PDF.js 처리 실패: ' + (err.message || err));
+                            showToast('PDF 처리 실패: ' + (err.message || err), 'alert');
+                            console.error('[processEditorFile pdf]', err);
+                        });
+                    });
+                };
+                reader.readAsArrayBuffer(file);
             } else {
                 // .md, .txt
                 reader.onload = function(ev) {
@@ -28620,7 +28727,8 @@ ${intrLog}
         var urls = [], seen = {};
         var keep = function (u) {
             if (!u || seen[u]) return; var low = u.toLowerCase().split('?')[0];
-            if (!/\.(html?|docx|txt|md|markdown)$/.test(low)) return;
+            // [r205] PDF 추가
+            if (!/\.(html?|docx|txt|md|markdown|pdf)$/.test(low)) return;
             seen[u] = true; urls.push(u);
         };
         try {
@@ -28633,7 +28741,7 @@ ${intrLog}
             var re = /\[[^\]]+\]\((https?:\/\/[^\s)]+)\)/g, m;
             while ((m = re.exec(md)) !== null) keep(m[1]);
             // bare URL도 시도
-            var re2 = /(https?:\/\/[^\s<>"']+\.(?:html?|docx|txt|md|markdown))/gi;
+            var re2 = /(https?:\/\/[^\s<>"']+\.(?:html?|docx|txt|md|markdown|pdf))/gi;
             while ((m = re2.exec(md)) !== null) keep(m[1]);
         } catch (e) {}
         return urls.slice(0, 6); // 문서당 최대 6개

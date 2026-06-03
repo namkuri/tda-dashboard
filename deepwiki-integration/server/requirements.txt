@@ -8,3 +8,4 @@ python-dotenv==1.0.1
 GitPython==3.1.43
 tiktoken==0.8.0
 python-docx==1.1.2  # [r202] 마인드맵 생성 시 DOCX 첨부 텍스트 추출
+pypdf==5.1.0  # [r205] 마인드맵 생성 시 PDF 첨부 텍스트 추출

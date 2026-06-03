@@ -36,6 +36,15 @@ try:
     _HAS_DOCX = True
 except Exception:
     _HAS_DOCX = False
+try:
+    from pypdf import PdfReader as _PdfReader  # [r205]
+    _HAS_PDF = True
+except Exception:
+    try:
+        from PyPDF2 import PdfReader as _PdfReader  # 폴백
+        _HAS_PDF = True
+    except Exception:
+        _HAS_PDF = False
 
 
 def _strip_html(text: str) -> str:
@@ -91,6 +100,24 @@ async def _fetch_attachment(url: str, max_chars: int = 24000) -> str:
                     return r.text[:max_chars]
                 except Exception:
                     return r.content.decode("utf-8", errors="ignore")[:max_chars]
+            # [r205] PDF
+            if "pdf" in ct or lower_url.endswith(".pdf"):
+                if not _HAS_PDF:
+                    return ""
+                try:
+                    reader = _PdfReader(BytesIO(r.content))
+                    n = min(len(reader.pages), 200)  # 폭주 가드
+                    parts = []
+                    for i in range(n):
+                        try:
+                            txt = reader.pages[i].extract_text() or ""
+                            if txt.strip():
+                                parts.append(txt.strip())
+                        except Exception:
+                            continue
+                    return "\n\n".join(parts)[:max_chars]
+                except Exception:
+                    return ""
             return ""
     except Exception:
         return ""
