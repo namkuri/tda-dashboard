@@ -205,6 +205,79 @@ _FORCE_TOOL_MAP = [
 ]
 
 
+# [r213] 모호한 질문 → 옵션 카드로 역질문(Claude 식 clarification).
+# 사용자가 "현재 문서 리스트" 처럼 카테고리 미지정 단어만 쓰면 LLM 이 추측해
+# 여러 도구를 동시 호출하거나 빈 결과만 보고 거절 답변하는 패턴 자주 발생.
+# 그래서 도구 호출 전에 "어떤 카테고리?" 를 옵션 칩으로 물어보고, 사용자가
+# 클릭하면 정확한 키워드가 새 쿼리로 들어가 휴리스틱이 정확한 도구 호출.
+
+def _q_has_any(q: str, words) -> bool:
+    return any(w in q for w in words)
+
+
+def _clarify_for_query(query: str) -> Optional[Dict[str, Any]]:
+    """모호한 쿼리를 감지하고 옵션 후보를 반환. 명확하면 None."""
+    if not query:
+        return None
+    q = query.strip().lower()
+    # 1) "문서" 만 명시 + 카테고리 한정어 없음
+    if ("문서" in q) and not _q_has_any(q, ["위키", "deep wiki", "딥위키", "자동", "코드", "결재", "리뷰", "이슈"]):
+        return {
+            "question": "어떤 종류의 문서를 보여드릴까요?",
+            "options": [
+                {"label": "📚 위키·일반 문서", "key": "위키 문서 리스트"},
+                {"label": "🤖 Deep Wiki 자동 위키", "key": "Deep Wiki 페이지 목록"},
+                {"label": "💻 코드 본문 검색", "key": "코드에서 키워드 검색"},
+                {"label": "🗳 결재 요청 문서", "key": "결재 요청 목록"},
+                {"label": "🐛 이슈/버그 리포트", "key": "이슈 목록"},
+            ],
+        }
+    # 2) "정보/현황" 단독 (짧고 카테고리 미지정)
+    if _q_has_any(q, ["정보", "현황", "상태"]) and len(q) < 14 and not _q_has_any(q, [
+        "프로젝트", "스프린트", "이슈", "카드", "wbs", "작업구조화", "일정", "git"
+    ]):
+        return {
+            "question": "어떤 정보를 알려드릴까요?",
+            "options": [
+                {"label": "📊 프로젝트 종합 메타", "key": "프로젝트 정보"},
+                {"label": "🏃 진행중 스프린트", "key": "이번 스프린트"},
+                {"label": "🧩 작업구조화 (WBS)", "key": "작업구조화 현황"},
+                {"label": "📋 내 카드 목록", "key": "내 카드"},
+                {"label": "📅 이번 주 일정", "key": "이번 주 일정"},
+            ],
+        }
+    # 3) "뭐 있어 / 어떤 거 있어 / 있는 거" — 카테고리 미지정
+    if _q_has_any(q, ["뭐 있", "뭐있", "어떤 거 있", "어떤거 있", "있는 거", "있는거"]) and not _q_has_any(q, [
+        "문서", "코드", "이슈", "프로젝트", "스프린트", "카드", "wbs", "결재", "일정"
+    ]):
+        return {
+            "question": "어느 카테고리의 데이터를 조회할까요?",
+            "options": [
+                {"label": "📊 프로젝트 목록", "key": "프로젝트 리스트"},
+                {"label": "📚 문서/위키", "key": "위키 문서 리스트"},
+                {"label": "📋 카드/태스크", "key": "내 카드 목록"},
+                {"label": "🏃 스프린트", "key": "스프린트 목록"},
+                {"label": "🧩 작업구조화 WBS", "key": "작업구조화 현황"},
+                {"label": "🐛 이슈", "key": "이슈 목록"},
+                {"label": "📅 일정", "key": "이번 주 일정"},
+                {"label": "🗳 결재", "key": "결재 요청 목록"},
+            ],
+        }
+    # 4) "검색" / "찾아" 단독 — 무엇을 검색할지 미지정
+    if (("검색" in q or "찾아" in q or "찾기" in q) and len(q) < 10
+            and not _q_has_any(q, ["코드", "문서", "이슈", "이름", "ㄱ", "ㄴ"])):
+        return {
+            "question": "무엇을 검색할까요?",
+            "options": [
+                {"label": "💻 코드 본문(함수·클래스)", "key": "코드 검색"},
+                {"label": "📚 위키 문서 본문", "key": "위키 문서 검색"},
+                {"label": "🐛 이슈 제목/설명", "key": "이슈 목록"},
+                {"label": "📋 카드 제목/설명", "key": "내 카드 목록"},
+            ],
+        }
+    return None
+
+
 # [r212] Deep Wiki 도구 — 사용자가 명시적으로 요청하지 않으면 LLM 에게 노출하지 않음.
 # qwen2.5-coder:14b 같은 모델은 "문서 리스트" 질문에서도 list_wiki_pages 를
 # 우선 호출하고 빈 결과만 답에 쓰는 버그가 일관됨. 도구 자체를 숨기면 LLM 이
@@ -273,6 +346,22 @@ async def run(
         yield {"delta": "❌ 질문이 없습니다."}
         return
     user_query = user_msgs[-1]["content"]
+
+    # [r213] 모호한 질문 — 도구 호출 전 옵션 카드로 역질문
+    clarify = _clarify_for_query(user_query)
+    if clarify:
+        intro = "🤔 " + clarify["question"] + "\n\n아래에서 원하시는 항목을 선택해 주세요:"
+        yield {
+            "meta": {
+                "retrieved": 0,
+                "avg_sim": 0.0, "max_sim": 0.0, "min_sim": 0.0,
+                "top": [], "tool_calls": [],
+                "query": user_query,
+                "clarify": clarify,
+            }
+        }
+        yield {"delta": intro}
+        return
 
     # [r108] 시스템 프롬프트 + 사용자 질문 (project_id 자동 주입 컨텍스트)
     project_hint = f"\n\n[컨텍스트] project_id = \"{project_id}\" (도구 호출 시 사용)" if project_id else ""

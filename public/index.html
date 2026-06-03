@@ -3262,6 +3262,49 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .dw-typing span:nth-child(2) { animation-delay: 0.2s; }
         .dw-typing span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes dw-typing-pulse { 0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); } 30% { opacity: 1; transform: scale(1.1); } }
+        /* [r213] 역질문(clarification) 옵션 카드 — Claude 스타일 */
+        .dw-clarify {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+            margin: 12px 0 6px;
+        }
+        .dw-clarify-opt {
+            padding: 10px 14px;
+            background: var(--c-paper);
+            border: 1px solid var(--c-border);
+            border-radius: 9px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--c-text);
+            text-align: left;
+            line-height: 1.4;
+            transition: border-color .12s, background .12s, transform .12s;
+            font-family: inherit;
+        }
+        .dw-clarify-opt:hover {
+            border-color: var(--c-accent);
+            background: var(--c-accent-soft);
+            transform: translateY(-1px);
+        }
+        .dw-clarify-opt.selected {
+            background: var(--c-accent);
+            color: #fff;
+            border-color: var(--c-accent);
+            cursor: default;
+        }
+        .dw-clarify-opt:disabled:not(.selected) {
+            opacity: .35;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .dw-clarify-foot {
+            font-size: 11px;
+            color: var(--c-text3);
+            margin-top: 4px;
+            font-style: italic;
+        }
         /* [r94] 검색 진단 칩 — 봇 메시지 상단에 매칭 청크 수/유사도 표시 */
         .dw-rchip { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 9999px; margin-bottom: 6px; display: inline-block; cursor: help; white-space: pre-wrap; }
         .dw-rchip-ok { background: rgba(59,122,87,0.18); color: #2c6849; }
@@ -9686,7 +9729,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     '</div>';
                 return;
             }
-            box.innerHTML = dwState.messages.map(function (m) {
+            box.innerHTML = dwState.messages.map(function (m, msgIdx) {
                 var isUser = m.role === 'user';
                 var avatar = isUser ? '👤' : '✦';
                 var bodyHtml;
@@ -9700,6 +9743,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
                 // [r94] 검색 진단 칩 — 봇 메시지 상단에 "📚 N청크 · 유사도 0.XX~0.YY" 표시
                 var metaHtml = isUser ? '' : _dwRetrievalChipHtml(m.meta);
+                // [r213] 역질문 옵션 카드 — 봇 본문 아래
+                var clarifyHtml = isUser ? '' : _dwClarifyHtml(m.meta, msgIdx);
                 var sourcesHtml = '';
                 if (m.sources && m.sources.length) {
                     sourcesHtml = '<div class="dw-msg-sources"><b>📚 참고 문서·카드:</b> ' +
@@ -9708,7 +9753,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
                 return '<div class="dw-msg ' + (isUser ? 'user' : 'bot') + '">' +
                     '<div class="dw-msg-avatar">' + avatar + '</div>' +
-                    '<div class="dw-msg-body">' + metaHtml + bodyHtml + sourcesHtml + '</div>' +
+                    '<div class="dw-msg-body">' + metaHtml + bodyHtml + clarifyHtml + sourcesHtml + '</div>' +
                     '</div>';
             }).join('');
             // 마지막 메시지로 스크롤
@@ -9876,6 +9921,41 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
             });
             return content;
+        }
+        // [r213] 역질문(clarify) 옵션 칩 HTML — 봇 메시지 본문 아래
+        function _dwClarifyHtml(meta, msgIdx) {
+            if (!meta || !meta.clarify || !meta.clarify.options) return '';
+            var selectedIdx = (typeof meta.clarify._selected === 'number') ? meta.clarify._selected : -1;
+            var html = '<div class="dw-clarify">';
+            meta.clarify.options.forEach(function (o, i) {
+                var sel = (i === selectedIdx) ? ' selected' : '';
+                var disabled = (selectedIdx >= 0) ? ' disabled' : '';
+                html += '<button class="dw-clarify-opt' + sel + '" ' + disabled +
+                    ' onclick="dwSendClarify(' + msgIdx + ',' + i + ')">' +
+                    _annEsc(o.label) + '</button>';
+            });
+            html += '</div>';
+            if (selectedIdx >= 0) {
+                html += '<div class="dw-clarify-foot">✓ 선택: ' + _annEsc(meta.clarify.options[selectedIdx].label) + '</div>';
+            } else {
+                html += '<div class="dw-clarify-foot">또는 직접 타이핑해도 됩니다.</div>';
+            }
+            return html;
+        }
+        function dwSendClarify(msgIdx, optIdx) {
+            var m = dwState.messages[msgIdx];
+            if (!m || !m.meta || !m.meta.clarify) return;
+            var opt = m.meta.clarify.options[optIdx];
+            if (!opt) return;
+            // 선택 표시 (다른 옵션 disabled)
+            m.meta.clarify._selected = optIdx;
+            dwRenderMessages();
+            // 사용자 메시지로 전송
+            var inp = document.getElementById('dw-input');
+            if (inp) {
+                inp.value = opt.key;
+                dwSend();
+            }
         }
         // [r94] 검색 진단 칩 HTML — 봇 메시지 상단에 항상 표시
         function _dwRetrievalChipHtml(meta) {
@@ -10183,7 +10263,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r212';
+        var _AHUB_FRONT_REV = 'r213';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
