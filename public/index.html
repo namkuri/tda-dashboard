@@ -4675,11 +4675,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .point-circle.selected, .node-rect.selected { stroke: var(--c-text) !important; stroke-width: 3 !important; }
         .node-connector { cursor: crosshair; opacity: 0; transition: opacity .15s; }
         .node-group:hover .node-connector { opacity: 1; }
-        /* [r219] 마인드맵 노드 호버 시 ✦ AI 설명 보조 버튼 — 좌상단 외곽 */
-        .node-explain { cursor: pointer; opacity: 0; transition: opacity .15s, transform .15s; }
+        /* [r219c] 마인드맵 노드 호버 시 ✦ AI 설명 보조 버튼.
+           ⚠ SVG <g> 에 이미 transform="translate(...)" attribute 가 있어서
+           CSS transform:scale 을 쓰면 SVG attribute 가 덮어씌워져 버튼이
+           (0,0) 으로 도망가며 떨림. filter 만으로 hover 강조. */
+        .node-explain { cursor: pointer; opacity: 0; transition: opacity .15s, filter .15s; }
         .node-group:hover .node-explain { opacity: 1; }
-        .node-group .node-explain:hover { transform: scale(1.15); transform-origin: center; }
-        .node-explain circle { filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+        .node-group .node-explain:hover { filter: brightness(1.15) drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
+        .node-group .node-explain:hover circle { stroke-width: 3; }
+        .node-explain circle { filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); transition: stroke-width .12s; }
         .node-rect.connecting-source { stroke-dasharray: 5,3; }
         .edge-path { fill: none; } .edge-path:hover { stroke-width: 4; }
         .edge-path.selected { stroke-width: 4 !important; }
@@ -10445,7 +10449,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r219b';
+        var _AHUB_FRONT_REV = 'r219c';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31391,6 +31395,9 @@ ${intrLog}
             var clsBg = 'mm-pill-bg' + (isCentral ? ' central' : '') + (sel ? ' sel' : '');
             var clsTxt = 'mm-pill-txt' + (isCentral ? ' central' : '');
             parts.push('<g class="node-group" data-node-id="' + node.id + '" transform="translate(' + node.x + ',' + node.y + ')">');
+            // [r219c] hover 인식 padding — ✦ 버튼 영역까지 포함해 마우스가 ✦로 이동해도
+            // hover 풀리지 않게 invisible hit rect 를 깐다.
+            parts.push('<rect class="node-hover-pad" x="-4" y="-14" width="' + (pw + 22) + '" height="' + (pH + 18) + '" fill="transparent" pointer-events="all"/>');
             if (!isCentral) parts.push('<circle cx="-6" cy="' + (pH / 2) + '" r="3" fill="' + col + '" opacity=".8"/>');
             parts.push('<rect class="mm-pill ' + clsBg + '" rx="18" ry="18" x="0" y="0" width="' + pw + '" height="' + pH + '"/>');
             parts.push('<text class="' + clsTxt + '" x="' + (pw / 2) + '" y="' + (pH / 2 + 5) + '" text-anchor="middle">' + gphEscX(node.title || '(무제)') + '</text>');
@@ -31404,10 +31411,11 @@ ${intrLog}
                     + '<text x="10" y="4" text-anchor="middle" font-size="10" font-weight="800" fill="' + (collapsed ? '#fff' : col) + '" font-family="monospace" pointer-events="none">' + hint + '</text>'
                     + '</g>');
             }
-            // [r219b] 호버 시 ✦ AI 설명 버튼 — 노드 우상단 외곽 (알약 모양 밖)
-            parts.push('<g class="node-explain" data-explain-source="' + node.id + '" transform="translate(' + (pw - 4) + ',-2)" style="cursor:pointer;">'
-                + '<circle cx="0" cy="0" r="11" fill="var(--c-accent,#c25b4b)" stroke="#fff" stroke-width="2"/>'
-                + '<text x="0" y="4" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" pointer-events="none" font-family="Pretendard,sans-serif">✦</text>'
+            // [r219c] 호버 시 ✦ AI 설명 버튼 — 노드 우상단 모서리에 살짝 겹치게 배치
+            // (node-hover-pad 가 ✦까지 hit area 보장 → opacity 토글 후에도 마우스가 떨어지지 않음)
+            parts.push('<g class="node-explain" data-explain-source="' + node.id + '" transform="translate(' + (pw - 6) + ',0)">'
+                + '<circle cx="0" cy="0" r="10" fill="var(--c-accent,#c25b4b)" stroke="#fff" stroke-width="2"/>'
+                + '<text x="0" y="4" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" pointer-events="none" font-family="Pretendard,sans-serif">✦</text>'
                 + '<title>AI 설명 보기</title>'
                 + '</g>');
             parts.push('</g>');
