@@ -10091,6 +10091,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
         // [r208] AI Hub — 실시간 인덱싱 (사이드바 ✦ AI Agent → 🗂 인덱싱 카드)
         var _ahubIdx = { running: false, kind: null, log: [] };
+        // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
+        // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
+        var _AHUB_FRONT_REV = 'r209';
+        var _ahubRevWarned = false;
+        function _ahubCheckRev(serverRev) {
+            if (!serverRev) return;
+            if (serverRev === _AHUB_FRONT_REV) return;
+            if (_ahubRevWarned) return;
+            _ahubRevWarned = true;
+            var msg = '⚠ 백엔드 리비전 ' + serverRev + ' / 프론트 ' + _AHUB_FRONT_REV + ' 불일치 — 백엔드 재시작 필요 (인덱싱 에러의 흔한 원인)';
+            try { showToast(msg, 'alert'); } catch (e) {}
+            _ahubIdxLog(msg, 'warn');
+            // 진행 카드에 노란 배너
+            var pg = document.getElementById('aihub-idx-progress');
+            if (pg && !pg.querySelector('._rev-warn')) {
+                var warn = document.createElement('div');
+                warn.className = '_rev-warn';
+                warn.style.cssText = 'margin-bottom:8px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,.18);border:1px solid #d97706;color:#92400e;font-size:11.5px;font-weight:700;';
+                warn.textContent = '⚠ 백엔드 ' + serverRev + ' / 프론트 ' + _AHUB_FRONT_REV + ' — uvicorn 재시작 후 재시도하세요.';
+                pg.insertBefore(warn, pg.firstChild);
+            }
+        }
 
         function _ahubIdxKindLabel(k) {
             return ({
@@ -10192,6 +10214,21 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     }
                 }
             } catch (e) {}
+            // [r209] 백엔드 리비전 사전 체크 — 인덱싱 누르기 전에 미일치 경고
+            try {
+                var sset = _dwGetSettings();
+                if (sset.backendUrl) {
+                    fetch(sset.backendUrl + '/health').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+                        if (!j) return;
+                        if (!j.server_revision) {
+                            // 옛 백엔드 — server_revision 키 자체가 없음
+                            _ahubCheckRev('older-than-r209');
+                        } else {
+                            _ahubCheckRev(j.server_revision);
+                        }
+                    }).catch(function () {});
+                }
+            } catch (e) {}
         }
         // [r209] 저장된 Git URL 후보를 순서대로 탐색 (먼저 발견된 것 사용)
         function _ahubResolveGitUrl() {
@@ -10238,7 +10275,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var ev = null;
                     try { ev = JSON.parse(data); } catch (e) { continue; }
                     _dwLogEvent(ev);
-                    if (ev.event === 'busy') {
+                    if (ev.event === 'server_info') {
+                        // [r209] 백엔드 리비전 확인 — 미일치 시 사용자에게 경고
+                        _ahubIdxLog('server_revision=' + (ev.server_revision || '?'));
+                        _ahubCheckRev(ev.server_revision);
+                    } else if (ev.event === 'busy') {
                         _ahubIdxSetStage('⏸ 다른 LLM 작업 진행 중 — 잠시 후 재시도');
                         _ahubIdxLog('서버 바쁨: ' + (ev.kind || ev.message || ''), 'warn');
                     } else if (ev.event === 'warn') {

@@ -28,6 +28,9 @@ from indexer_extras import (
 
 app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
+# [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
+# 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
+SERVER_REVISION = "r209"
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -185,6 +188,9 @@ async def health(verbose: bool = False):
         "supabase": "connected" if supabase_ok else "disconnected",
         "chunks": stats,
         "uptime_sec": int(time.time() - START_TIME),
+        # [r209] 백엔드 코드 리비전 마커 — 프론트가 자기 리비전과 대조해
+        # "코드 변경 후 백엔드 미재시작" 같은 상황을 자동 감지·경고.
+        "server_revision": SERVER_REVISION,
     }
     if verbose and supabase_ok:
         out["top_sources"] = store.top_sources(limit=15)
@@ -278,6 +284,8 @@ def _sse_indexer(gen, *, busy_kind: Optional[str] = None, busy_project: Optional
     do_capture = busy_kind in capture_kinds
 
     async def stream():
+        # [r209] 첫 이벤트로 서버 리비전 노출 — 프론트가 미일치 자동 감지
+        yield f"data: {json.dumps({'event': 'server_info', 'server_revision': SERVER_REVISION, 'kind': busy_kind}, ensure_ascii=False)}\n\n"
         if busy_kind:
             _busy_set(running=True, kind=busy_kind, project_id=busy_project, started_at=time.time(),
                       stage="시작", current=0, total=0, category=None,
@@ -494,6 +502,8 @@ async def index_sync(req: IndexSyncRequest):
             _busy_clear()
 
     async def stream():
+        # [r209] 첫 이벤트로 서버 리비전 노출 — 프론트가 미일치 자동 감지
+        yield f"data: {json.dumps({'event': 'server_info', 'server_revision': SERVER_REVISION, 'kind': 'index_sync'}, ensure_ascii=False)}\n\n"
         async for ev in combined():
             yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
