@@ -29,21 +29,21 @@ _SYSTEM_PROMPT = """당신은 NotebookLM 스타일의 학습 도우미입니다.
 2. 인용은 `[^1]`, `[^2]` 같은 각주 형식. 숫자는 [Source documents] 의 번호와 일치.
 3. 본문에 명시되지 않은 정보가 필요하면 "본문에서는 ~ 명시되지 않습니다" 라고 답하세요.
 4. 한국어로 응답. 마크다운 사용 (불릿/굵게/기울임).
-5. 응답 마지막에 반드시 후속 질문 3개를 다음 형식으로 정확히 출력:
+5. 응답 마지막에 반드시 후속 질문 3개를 다음 형식으로 **코드 펜스 없이** 정확히 출력:
 
-```
 ===FOLLOWUPS===
 {"followups": ["질문1", "질문2", "질문3"]}
-```
 
 후속 질문은 클릭한 노드를 더 깊이 파고들거나 인접 개념과 비교하는 자연스러운 다음
 단계여야 합니다. 한국어 한 문장씩, 의문문으로.
+
+⚠ ===FOLLOWUPS=== 줄 앞뒤에 ``` 같은 코드 펜스를 절대 넣지 마세요.
 
 [응답 형식]
 - 첫 줄: 노드 의미 한 줄 요약 (굵게)
 - 다음 단락: 본문 인용 + 각주 (3~6문장)
 - 필요시 불릿
-- 마지막: ===FOLLOWUPS=== 블록
+- 마지막: ===FOLLOWUPS=== 블록 (코드 펜스 없이)
 """
 
 
@@ -189,6 +189,20 @@ def _build_user_prompt(node: Dict[str, Any], sources: List[Dict[str, Any]], cent
 """
 
 
+# [r220] 본문 끝의 미완성 토큰 trim — 모듈 레벨(단위 테스트 가능)
+def _trim_tail(s: str) -> str:
+    """본문 끝의 미완성 토큰/코드펜스 trim — '[^', '```', '===' 등."""
+    if not s:
+        return s
+    t = s.rstrip()
+    for trail in ("[^", "[", "```json", "```", "===", "==", "="):
+        if t.endswith(trail):
+            t = t[: -len(trail)].rstrip()
+    while t.endswith("\n```") or t.endswith("```"):
+        t = t[: -3].rstrip()
+    return t
+
+
 async def explain_node(
     *,
     project_id: Optional[str],
@@ -197,6 +211,7 @@ async def explain_node(
     node_title: str,
     node_path: Optional[List[str]],
     source_doc_ids: List[str],
+    source_overrides: Optional[List[Dict[str, Any]]] = None,
     model: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     ollama = get_ollama()
@@ -207,9 +222,18 @@ async def explain_node(
     if not node:
         node = {"title": node_title, "path_titles": [central, node_title], "children_titles": [], "sibling_titles": [], "origin": [], "summary": ""}
 
-    # 2) 소스 본문
+    # 2) 소스 본문 — [r220] overrides 우선 (프론트 htmlEmbeds expand 본문), 없으면 supabase
     yield {"event": "stage", "stage": "fetch_sources", "message": f"소스 문서 {len(source_doc_ids)}개 본문 수집…"}
-    sources = await _fetch_source_docs(project_id, source_doc_ids)
+    if source_overrides:
+        sources = []
+        for o in source_overrides:
+            c = (o.get("content") or "")[:12000]
+            if c.strip():
+                sources.append({"id": o.get("id"), "title": o.get("title") or "(제목 없음)", "content": c})
+    else:
+        sources = []
+    if not sources:
+        sources = await _fetch_source_docs(project_id, source_doc_ids)
     # 프론트가 각주 점프에 쓰도록 정형 메타 yield
     src_meta = [
         {"idx": i + 1, "id": s["id"], "title": s["title"], "content_len": len(s["content"])}
@@ -234,9 +258,14 @@ async def explain_node(
     yield {"event": "stage", "stage": "llm", "message": "LLM 설명 생성 중…"}
     user_prompt = _build_user_prompt(node, sources, central)
 
+    # [r220] SSE 분리 — buf 는 "미emit 본문 누적"만 담음.
+    #   1) 매 delta 마다 buf 끝 16자만 보존하고 앞쪽은 즉시 emit (마커가 split 돼도 안전)
+    #   2) 마커 발견 시 head 를 emit 후 followups 로 전환
+    #   3) 끝났을 때 marker 못 만난 buf 가 있으면 trim 후 emit
     buf = ""
     in_followups = False
     followups_raw = ""
+    marker = "===FOLLOWUPS==="
     try:
         async for delta in ollama.chat_stream(
             messages=[
@@ -246,32 +275,33 @@ async def explain_node(
             model=model,
             temperature=0.3,
         ):
-            buf += delta
-            # FOLLOWUPS 토큰 감지 — 본문 vs followups 분리 스트리밍
-            if not in_followups:
-                marker = "===FOLLOWUPS==="
-                if marker in buf:
-                    head, _, tail = buf.partition(marker)
-                    # head 중 아직 emit 안 된 부분 (전체 - 이미 emit 한 분) 계산
-                    # 단순화: head 전체를 한 번 더 보내지 않으려 chunk-by-chunk 누적은 생략 후
-                    # 처음 발견 즉시 partition 만 함. 이 시점 이전 delta 는 이미 emit 됐다 가정.
-                    in_followups = True
-                    followups_raw = tail
-                    # 토큰 자체와 뒷부분이 본문에 섞여 나가는 걸 피하려고 buf 를 head 로 리셋
-                    continue
-                # 안전: 마커 일부가 split 될 가능성 — 마지막 16자 보존
-                safe_emit_until = max(0, len(buf) - 16)
-                if safe_emit_until > 0:
-                    chunk = buf[:safe_emit_until]
-                    buf = buf[safe_emit_until:]
-                    yield {"event": "delta", "text": chunk}
-            else:
+            if in_followups:
                 followups_raw += delta
+                continue
+            buf += delta
+            idx = buf.find(marker)
+            if idx >= 0:
+                head = buf[:idx]
+                # head 의 trailing 코드펜스/짤린 각주 제거
+                cleaned = _trim_tail(head)
+                if cleaned:
+                    yield {"event": "delta", "text": cleaned}
+                followups_raw = buf[idx + len(marker):]
+                in_followups = True
+                buf = ""
+                continue
+            # 마커 split 안전 — 마지막 (marker 길이 - 1) 자 보존
+            safe = max(0, len(buf) - (len(marker) - 1))
+            if safe > 0:
+                yield {"event": "delta", "text": buf[:safe]}
+                buf = buf[safe:]
     except Exception as e:
         yield {"event": "warn", "message": f"LLM 스트림 중단: {e}"}
-    # 4) 남은 본문 emit (FOLLOWUPS 못 만나고 끝난 경우)
+    # 4) 남은 본문 emit
     if not in_followups and buf:
-        yield {"event": "delta", "text": buf}
+        cleaned = _trim_tail(buf)
+        if cleaned:
+            yield {"event": "delta", "text": cleaned}
 
     # 5) followups 파싱
     followups: List[str] = []

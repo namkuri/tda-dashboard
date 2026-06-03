@@ -4635,6 +4635,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             word-break: break-word;
         }
         .mmp-ex-stage { font-size: 11.5px; color: var(--c-accent); font-weight: 700; margin-bottom: 6px; }
+        /* [r220] 누적 Q&A 카드 */
+        .mmp-ex-msg { margin-bottom: 14px; }
+        .mmp-ex-msg.q {
+            background: var(--c-accent-soft); border-left: 3px solid var(--c-accent);
+            padding: 8px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 700; color: var(--c-text);
+        }
+        .mmp-ex-msg.q::before { content: '🙋 '; opacity: .8; }
+        .mmp-ex-msg.a { padding: 0 2px; line-height: 1.65; }
+        .mmp-ex-msg.a::before { content: '✦  '; color: var(--c-accent); font-weight: 800; font-size: 13px; }
+        .mmp-ex-msg.a-body { display: inline; }
+        .mmp-ex-divider { border-top: 1px dashed var(--c-border); margin: 14px 0; }
         .mmp-ex-srcs {
             display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px;
             border-top: 1px solid var(--c-border); font-size: 11px; background: var(--c-paper);
@@ -10449,7 +10460,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r219c';
+        var _AHUB_FRONT_REV = 'r220';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -30147,15 +30158,17 @@ ${intrLog}
     function _mmpProgRestore() { var w = document.getElementById('mmp-prog-widget'); if (w) w.classList.remove('mini'); }
 
     // ============================================================
-    // [r217] 마인드맵 노드 클릭 → AI 설명 슬라이드 패널 (NotebookLM 스타일)
+    // [r217/r220] 마인드맵 노드 클릭 → AI 설명 슬라이드 패널 (NotebookLM 스타일)
+    // [r220] 후속 질문 누적 모드 — messages 배열에 Q&A 쌓이고 패널 본문은 전체 렌더
     // ============================================================
     var _mmpExState = {
         docId: null,
-        nodeTitle: '',
+        nodeTitle: '',           // 처음 클릭한 노드 (path/branches 컨텍스트 유지용)
         path: [],
-        body: '',
-        sources: [],
-        followups: [],
+        messages: [],            // [{kind:'q'|'a', text, sources?, followups?}]
+        currentAnswerIdx: -1,    // 스트리밍 중인 답변의 messages 인덱스
+        sources: [],             // 마지막 답변의 sources (호환)
+        followups: [],           // 마지막 답변의 followups (호환)
         running: false,
         abort: null,
     };
@@ -30191,6 +30204,9 @@ ${intrLog}
         var p = document.getElementById('mmp-explain-panel'); if (p) { p.classList.remove('on'); p.classList.remove('mini'); }
         if (_mmpExState.abort) { try { _mmpExState.abort.abort(); } catch (e) {} _mmpExState.abort = null; }
         _mmpExState.running = false;
+        // [r220] 닫으면 누적 메시지 초기화 — 다음 클릭은 새 대화로 시작
+        _mmpExState.messages = [];
+        _mmpExState.docId = null;
     }
     function mmpExplainMinimize() { var p = document.getElementById('mmp-explain-panel'); if (p) p.classList.add('mini'); }
     function mmpExplainRestore() { var p = document.getElementById('mmp-explain-panel'); if (p) p.classList.remove('mini'); }
@@ -30279,21 +30295,40 @@ ${intrLog}
             branches: rootKids.map(build).filter(Boolean),
         };
     }
+    // [r220] 소스 docs 의 expand 된 본문 수집 — htmlEmbeds 풀어서 백엔드에 전달
+    async function _mmpExBuildOverrides(srcMeta) {
+        var out = [];
+        for (var i = 0; i < (srcMeta || []).length; i++) {
+            var sr = srcMeta[i]; if (!sr || !sr.id) continue;
+            var d = (currentData.docs || []).find(function (x) { return x.id === sr.id; });
+            if (!d) continue;
+            // 본문 미로드면 fetch
+            if (d._contentLoaded === false && typeof _fetchDocContent === 'function') {
+                try { d.content = await _fetchDocContent(d.id); d._contentLoaded = true; } catch (e) {}
+            }
+            var content = d.content || '';
+            try {
+                if (typeof _mmpExpandHtmlEmbeds === 'function') {
+                    content = await _mmpExpandHtmlEmbeds(d);
+                }
+            } catch (e) {}
+            out.push({ id: sr.id, title: sr.title || d.title || '(제목 없음)', content: (content || '').slice(0, 16000) });
+        }
+        return out;
+    }
+
     async function mmpExplainOpen(docId, nodeTitle, opts) {
         opts = opts || {};
         var doc = (currentData.docs || []).find(function (d) { return d.id === docId; });
         if (!doc) { showToast('마인드맵을 찾지 못함', 'alert'); return; }
         if (!doc.meta) doc.meta = {};
-        // [r218] 백필 — 소스 메타 없으면 mindmap.sourceDocs 제목으로 자동 매칭
         var sources = Array.isArray(doc.meta.mindmap_sources) && doc.meta.mindmap_sources.length
             ? doc.meta.mindmap_sources : _mmpBackfillSources(doc);
         if (!sources.length) {
             showToast('이 마인드맵에 등록된 소스 문서가 없습니다. 소스를 추가해 주세요.', 'alert');
-            // 자동으로 소스 관리 다이얼로그 열기
             setTimeout(mmpSrcOpenManager, 100);
             return;
         }
-        // [r218] branches/central 누락 시 nodes/edges 에서 트리 복원
         var branches = Array.isArray(doc.meta.mindmap_branches) ? doc.meta.mindmap_branches : [];
         var central = doc.meta.mindmap_central || (doc.title || '마인드맵');
         if (!branches.length) {
@@ -30302,45 +30337,50 @@ ${intrLog}
                 var restored = _mmpRestoreBranches(p);
                 branches = restored.branches;
                 central = restored.central || central;
-                console.log('[mmp] branches 복원 — ', branches.length, '개 1레벨, central:', central);
-            } catch (e) { console.warn('[mmp] branches 복원 실패', e); }
+            } catch (e) {}
         }
         // 이전 요청 중단
         if (_mmpExState.abort) { try { _mmpExState.abort.abort(); } catch (e) {} _mmpExState.abort = null; }
 
-        // 노드 경로 찾기 (트리에서)
+        var question = opts.question || null;
         var path = _mmpExFindPath(branches, nodeTitle) || [central, nodeTitle];
 
-        // 상태 갱신
-        _mmpExState.docId = docId;
-        _mmpExState.nodeTitle = nodeTitle;
-        _mmpExState.path = path;
-        _mmpExState.body = '';
-        _mmpExState.sources = [];
-        _mmpExState.followups = [];
+        // [r220] 누적 모드 — 첫 클릭이면 메시지 리셋, follow-up이면 누적
+        var isFollowup = !!question && _mmpExState.docId === docId;
+        if (!isFollowup) {
+            _mmpExState.docId = docId;
+            _mmpExState.nodeTitle = nodeTitle;
+            _mmpExState.path = path;
+            _mmpExState.messages = [];
+        }
+        // Q + A(빈) 메시지 추가
+        var qLabel = question || nodeTitle;
+        _mmpExState.messages.push({ kind: 'q', text: qLabel });
+        _mmpExState.messages.push({ kind: 'a', text: '', sources: [], followups: [] });
+        _mmpExState.currentAnswerIdx = _mmpExState.messages.length - 1;
         _mmpExState.running = true;
 
-        // UI 열기
-        var p = _mmpExEnsurePanel();
+        // UI 열기 + 렌더
+        var panel = _mmpExEnsurePanel();
         document.getElementById('mmp-ex-title').textContent = nodeTitle || '(무제)';
         document.getElementById('mmp-ex-path').textContent = path.join(' > ');
-        document.getElementById('mmp-ex-body').innerHTML = '<div class="mmp-ex-stage">⏳ 분석 중…</div>';
-        document.getElementById('mmp-ex-srcs').style.display = 'none';
-        document.getElementById('mmp-ex-foot').style.display = 'none';
-        p.classList.add('on'); p.classList.remove('mini');
+        panel.classList.add('on'); panel.classList.remove('mini');
+        _mmpExRenderAll();
 
         // 백엔드 호출
         var s = _dwGetSettings();
         if (!s.backendUrl) { _mmpExRenderError('백엔드 URL 미설정'); return; }
+        // [r220] htmlEmbeds 풀어서 source overrides 수집
+        var overrides = await _mmpExBuildOverrides(sources);
         var ac = new AbortController(); _mmpExState.abort = ac;
-        var question = opts.question || null;  // 후속 질문 모드면 nodeTitle 대신 question 사용
         var body = {
             project_id: activeProjectId,
             central: central,
             diagram_branches: branches,
-            node_title: question || nodeTitle,
+            node_title: qLabel,
             node_path: question ? null : path,
             source_doc_ids: sources.map(function (sr) { return sr.id; }).filter(Boolean),
+            source_docs_overrides: overrides,
             model: (s.chatModel || s.model || null),
         };
         try {
@@ -30378,71 +30418,130 @@ ${intrLog}
 
     function _mmpExHandleEvent(ev) {
         if (ev.event === 'stage') {
-            var bodyEl = document.getElementById('mmp-ex-body');
-            if (bodyEl && !_mmpExState.body) bodyEl.innerHTML = '<div class="mmp-ex-stage">🔄 ' + _mmpExEsc(ev.message || ev.stage || '') + '</div>';
+            // 첫 단계 메시지를 현재 답변 자리에 표시
+            if (_mmpExState.currentAnswerIdx >= 0) {
+                var cur = _mmpExState.messages[_mmpExState.currentAnswerIdx];
+                if (cur && !cur.text) {
+                    cur._stageHint = '⏳ ' + (ev.message || ev.stage || '');
+                    _mmpExRenderAll();
+                }
+            }
         } else if (ev.event === 'sources') {
-            _mmpExState.sources = ev.sources || [];
-            _mmpExRenderSources();
+            if (_mmpExState.currentAnswerIdx >= 0) {
+                _mmpExState.messages[_mmpExState.currentAnswerIdx].sources = ev.sources || [];
+                _mmpExState.sources = ev.sources || [];
+                _mmpExRenderAll();
+            }
         } else if (ev.event === 'delta') {
-            _mmpExState.body += (ev.text || '');
-            _mmpExRenderBody();
+            if (_mmpExState.currentAnswerIdx >= 0) {
+                var m = _mmpExState.messages[_mmpExState.currentAnswerIdx];
+                m.text = (m.text || '') + (ev.text || '');
+                m._stageHint = null;
+                _mmpExRenderAll();
+            }
         } else if (ev.event === 'followups') {
-            _mmpExState.followups = ev.followups || [];
-            _mmpExRenderFollowups();
+            if (_mmpExState.currentAnswerIdx >= 0) {
+                _mmpExState.messages[_mmpExState.currentAnswerIdx].followups = ev.followups || [];
+                _mmpExState.followups = ev.followups || [];
+                _mmpExRenderAll();
+            }
         } else if (ev.event === 'warn') {
             console.warn('[mmpExplain]', ev.message);
         } else if (ev.event === 'error') {
             _mmpExRenderError(ev.message || '오류');
         } else if (ev.event === 'done') {
-            _mmpExRenderBody();  // 최종 본문 정착
+            _mmpExRenderAll();
         } else if (ev.event === 'server_info') {
             try { _ahubCheckRev(ev.server_revision); } catch (e) {}
         }
     }
 
-    function _mmpExRenderSources() {
-        var el = document.getElementById('mmp-ex-srcs'); if (!el) return;
-        if (!_mmpExState.sources.length) { el.style.display = 'none'; return; }
-        var chips = _mmpExState.sources.map(function (s) {
-            return '<span class="mmp-ex-src-chip" onclick="mmpExSrcJump(' + s.idx + ')" title="원본 문서로 이동">[' + s.idx + '] ' + _mmpExEsc((s.title || '').slice(0, 24)) + '</span>';
-        }).join('');
-        el.innerHTML = '<b>📚 소스</b>' + chips;
-        el.style.display = 'flex';
-    }
-
-    function _mmpExRenderBody() {
+    // [r220] 누적 메시지 전체 렌더 — 마지막 답변에만 sources/followups 표시
+    function _mmpExRenderAll() {
         var bodyEl = document.getElementById('mmp-ex-body'); if (!bodyEl) return;
-        // 각주 [^N] 또는 [N] 패턴 → 칩 변환
-        var text = _mmpExState.body || '';
-        // 마크다운 → HTML
-        var html;
-        try { html = DOMPurify.sanitize(parseMarkdownWithTables(text), domPurifyConfig); }
-        catch (e) { html = '<pre style="white-space:pre-wrap;">' + _mmpExEsc(text) + '</pre>'; }
-        // 각주 토큰 → 클릭 가능한 ref
-        html = html.replace(/\[\^?(\d+)\]/g, function (_m, n) {
-            return '<span class="mmp-ex-fn-ref" onclick="mmpExSrcJump(' + n + ')" title="소스 ' + n + ' 보기">' + n + '</span>';
-        });
+        var msgs = _mmpExState.messages || [];
+        if (!msgs.length) {
+            bodyEl.innerHTML = '<div class="mmp-ex-stage">⏳ 준비 중…</div>';
+            return;
+        }
+        // 마지막 답변 인덱스 (followups/sources 표시 대상)
+        var lastAnsIdx = -1;
+        for (var k = msgs.length - 1; k >= 0; k--) { if (msgs[k].kind === 'a') { lastAnsIdx = k; break; } }
+        var html = msgs.map(function (m, i) {
+            if (m.kind === 'q') {
+                return '<div class="mmp-ex-msg q">' + _mmpExEsc(m.text || '') + '</div>';
+            }
+            // a
+            var inner;
+            if (m._stageHint && !m.text) {
+                inner = '<div class="mmp-ex-stage">' + _mmpExEsc(m._stageHint) + '</div>';
+            } else {
+                try { inner = DOMPurify.sanitize(parseMarkdownWithTables(m.text || ''), domPurifyConfig); }
+                catch (e) { inner = '<pre style="white-space:pre-wrap;">' + _mmpExEsc(m.text || '') + '</pre>'; }
+                // 각주 [^N]/[N] → 클릭 ref (이 메시지의 sources 기준)
+                inner = inner.replace(/\[\^?(\d+)\]/g, function (_m, n) {
+                    return '<span class="mmp-ex-fn-ref" onclick="mmpExSrcJumpFor(' + i + ',' + n + ')" title="소스 ' + n + ' 보기">' + n + '</span>';
+                });
+            }
+            // 각 답변의 sources 칩 (간단히 텍스트 하단)
+            var srcLine = '';
+            if (Array.isArray(m.sources) && m.sources.length) {
+                srcLine = '<div style="margin-top:6px;font-size:11px;color:var(--c-text3);">📚 '
+                    + m.sources.map(function (s) {
+                        return '<span class="mmp-ex-src-chip" onclick="mmpExSrcJumpFor(' + i + ',' + s.idx + ')" style="margin-right:4px;">[' + s.idx + '] ' + _mmpExEsc((s.title || '').slice(0, 20)) + '</span>';
+                    }).join('') + '</div>';
+            }
+            var sep = (i < msgs.length - 1) ? '<div class="mmp-ex-divider"></div>' : '';
+            return '<div class="mmp-ex-msg a">' + inner + srcLine + '</div>' + sep;
+        }).join('');
         bodyEl.innerHTML = html;
         bodyEl.scrollTop = bodyEl.scrollHeight;
-    }
 
-    function _mmpExRenderFollowups() {
-        var f = document.getElementById('mmp-ex-foot'); if (!f) return;
-        var list = document.getElementById('mmp-ex-fu-list'); if (!list) return;
-        if (!_mmpExState.followups.length) { f.style.display = 'none'; return; }
-        list.innerHTML = _mmpExState.followups.map(function (q, i) {
-            return '<button class="mmp-ex-fu-btn" onclick="mmpExFollowup(' + i + ')">' + _mmpExEsc(q) + ' ↗</button>';
-        }).join('');
-        f.style.display = 'block';
+        // 푸터 — 마지막 답변의 followups 만
+        var f = document.getElementById('mmp-ex-foot');
+        var list = document.getElementById('mmp-ex-fu-list');
+        var srcsEl = document.getElementById('mmp-ex-srcs');
+        if (srcsEl) srcsEl.style.display = 'none';  // 각 메시지 안에 인라인으로 표시하므로 글로벌 패널 숨김
+        var lastA = lastAnsIdx >= 0 ? msgs[lastAnsIdx] : null;
+        var fups = (lastA && lastA.followups) || [];
+        if (f && list) {
+            if (!fups.length) { f.style.display = 'none'; }
+            else {
+                list.innerHTML = fups.map(function (q, j) {
+                    return '<button class="mmp-ex-fu-btn" onclick="mmpExFollowup(' + j + ')">' + _mmpExEsc(q) + ' ↗</button>';
+                }).join('');
+                f.style.display = 'block';
+            }
+        }
     }
 
     function _mmpExRenderError(msg) {
-        var bodyEl = document.getElementById('mmp-ex-body'); if (!bodyEl) return;
-        bodyEl.innerHTML = '<div style="color:#d2393d;font-weight:700;">❌ ' + _mmpExEsc(msg) + '</div>';
+        // 현재 답변 자리에 에러 추가
+        if (_mmpExState.currentAnswerIdx >= 0) {
+            var m = _mmpExState.messages[_mmpExState.currentAnswerIdx];
+            m.text = (m.text || '') + '\n\n❌ ' + msg;
+            m._stageHint = null;
+            _mmpExRenderAll();
+        }
     }
 
     function mmpExSrcJump(idx) {
-        var s = (_mmpExState.sources || []).find(function (x) { return x.idx === idx; });
+        // 마지막 답변의 sources 기준
+        var msgs = _mmpExState.messages || [];
+        var lastA = null;
+        for (var k = msgs.length - 1; k >= 0; k--) if (msgs[k].kind === 'a') { lastA = msgs[k]; break; }
+        var s = lastA && (lastA.sources || []).find(function (x) { return x.idx === idx; });
+        if (!s || !s.id) { showToast('소스 정보가 부족합니다', 'alert'); return; }
+        try {
+            switchView('docs');
+            setTimeout(function () { if (typeof openDoc === 'function') openDoc(s.id); }, 80);
+        } catch (e) { showToast('점프 실패: ' + (e.message || e), 'alert'); }
+    }
+    // [r220] 특정 메시지의 sources 기준 점프
+    function mmpExSrcJumpFor(msgIdx, srcIdx) {
+        var msgs = _mmpExState.messages || [];
+        var m = msgs[msgIdx]; if (!m) return;
+        var s = (m.sources || []).find(function (x) { return x.idx === srcIdx; });
         if (!s || !s.id) { showToast('소스 정보가 부족합니다', 'alert'); return; }
         try {
             switchView('docs');
@@ -30451,8 +30550,11 @@ ${intrLog}
     }
 
     async function mmpExFollowup(idx) {
-        var q = _mmpExState.followups[idx]; if (!q) return;
-        // 같은 docId, nodeTitle 유지 — question 만 다르게
+        // 마지막 답변의 followups 기준
+        var msgs = _mmpExState.messages || [];
+        var lastA = null;
+        for (var k = msgs.length - 1; k >= 0; k--) if (msgs[k].kind === 'a') { lastA = msgs[k]; break; }
+        var q = lastA && lastA.followups && lastA.followups[idx]; if (!q) return;
         await mmpExplainOpen(_mmpExState.docId, _mmpExState.nodeTitle, { question: q });
     }
 
