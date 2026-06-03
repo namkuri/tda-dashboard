@@ -30,7 +30,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r216b"
+SERVER_REVISION = "r217"
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -543,6 +543,7 @@ async def wiki_generate(req: WikiGenerateRequest):
 # ─────────────────────────────────────────────
 
 class MindmapDoc(BaseModel):
+    id: Optional[str] = None  # [r217] 노드 클릭 explain 시 wiki_docs 조회용
     title: str
     content: str
     attachment_urls: List[str] = []  # [r202] HTML/DOCX/TXT/MD 등 첨부 파일 URL
@@ -553,6 +554,17 @@ class MindmapGenerateRequest(BaseModel):
     mode: str = "auto"           # 'auto' | 'single' | 'multi'
     model: Optional[str] = None
     project_id: Optional[str] = None  # busy 추적용(선택)
+
+
+# [r217] 마인드맵 노드 클릭 → AI 설명 요청
+class MindmapExplainRequest(BaseModel):
+    project_id: Optional[str] = None
+    central: str = ""
+    diagram_branches: List[Dict[str, Any]] = []   # 원본 LLM branches 트리(파싱 결과)
+    node_title: str
+    node_path: Optional[List[str]] = None         # 부모 title 체인(있으면 정확 매칭)
+    source_doc_ids: List[str] = []                # doc.meta.mindmap_sources 의 id 목록
+    model: Optional[str] = None
 
 
 @app.post("/mindmap/generate")
@@ -566,12 +578,44 @@ async def mindmap_generate(req: MindmapGenerateRequest):
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         return StreamingResponse(busy_gen(), media_type="text/event-stream")
-    docs = [{"title": d.title, "content": d.content, "attachment_urls": (d.attachment_urls or [])} for d in (req.docs or [])]
+    docs = [{"id": d.id, "title": d.title, "content": d.content, "attachment_urls": (d.attachment_urls or [])} for d in (req.docs or [])]
     return _sse_indexer(generate_mindmap(
         docs=docs,
         model=req.model,
         mode=req.mode,
     ), busy_kind="mindmap_generate", busy_project=req.project_id)
+
+
+# [r217] 마인드맵 노드 클릭 → AI 설명 (NotebookLM 스타일)
+from mindmap_explain import explain_node as _mm_explain_node
+
+
+@app.post("/mindmap/explain")
+async def mindmap_explain(req: MindmapExplainRequest):
+    """마인드맵의 특정 노드를 클릭했을 때 LLM 이 본문 인용으로 설명 + 후속 질문 3개.
+
+    SSE 이벤트:
+      stage/sources/delta/followups/done
+    프론트:
+      - delta 텍스트를 누적해 마크다운 렌더
+      - 텍스트의 [^N] 각주 → 클릭 시 sources[N-1] popover
+      - followups 3개 → 클릭 시 그 query 로 재호출
+    """
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    gen = _mm_explain_node(
+        project_id=req.project_id,
+        diagram_branches=req.diagram_branches or [],
+        central=req.central or "마인드맵",
+        node_title=req.node_title,
+        node_path=req.node_path,
+        source_doc_ids=req.source_doc_ids or [],
+        model=req.model,
+    )
+    return _sse_indexer(gen, busy_kind="mindmap_explain", busy_project=req.project_id)
 
 
 @app.get("/wiki/pages")

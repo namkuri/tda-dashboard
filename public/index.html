@@ -4611,6 +4611,64 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .mmp-prog-detail { font-size: 11.5px; color: var(--c-text2); line-height: 1.45; }
         .mmp-prog-log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; max-height: 110px; overflow-y: auto; color: var(--c-text2); background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 6px; padding: 6px 8px; line-height: 1.55; white-space: pre-wrap; }
         .mmp-prog-x { margin-left: auto; background: none; border: none; color: var(--c-text3); font-size: 16px; cursor: pointer; padding: 0 4px; }
+        /* [r217] 마인드맵 노드 클릭 AI 설명 슬라이드 패널 — NotebookLM 스타일 */
+        #mmp-explain-panel {
+            position: fixed; top: 56px; right: -460px; width: 440px; max-width: 92vw;
+            height: calc(100vh - 72px); background: var(--c-card); border: 1px solid var(--c-border);
+            border-radius: 14px 0 0 14px; box-shadow: -12px 0 38px rgba(0,0,0,.28);
+            z-index: 9100; display: flex; flex-direction: column;
+            transition: right .25s cubic-bezier(.2,.7,.2,1);
+            font-size: 13.5px;
+        }
+        #mmp-explain-panel.on { right: 12px; }
+        #mmp-explain-panel.mini { right: -380px; width: 120px; }
+        .mmp-ex-head {
+            display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+            border-bottom: 1px solid var(--c-border);
+        }
+        .mmp-ex-head h4 { margin: 0; font-size: 14px; font-weight: 800; color: var(--c-text); flex: 1; line-height: 1.3; word-break: break-word; }
+        .mmp-ex-head .mmp-ex-path { font-size: 10.5px; color: var(--c-text3); margin-top: 2px; }
+        .mmp-ex-x { background: none; border: none; color: var(--c-text3); font-size: 16px; cursor: pointer; padding: 0 4px; }
+        .mmp-ex-x:hover { color: var(--c-accent); }
+        .mmp-ex-body {
+            flex: 1; overflow-y: auto; padding: 14px 16px; line-height: 1.65; color: var(--c-text);
+            word-break: break-word;
+        }
+        .mmp-ex-stage { font-size: 11.5px; color: var(--c-accent); font-weight: 700; margin-bottom: 6px; }
+        .mmp-ex-srcs {
+            display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px;
+            border-top: 1px solid var(--c-border); font-size: 11px; background: var(--c-paper);
+        }
+        .mmp-ex-srcs b { font-size: 10.5px; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.04em; margin-right: 4px; }
+        .mmp-ex-src-chip {
+            display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
+            border-radius: 9999px; background: var(--ios-fill); border: 1px solid var(--c-border);
+            cursor: pointer; font-size: 11px; color: var(--c-text2);
+        }
+        .mmp-ex-src-chip:hover { background: var(--c-accent-soft); color: var(--c-accent); border-color: var(--c-accent); }
+        .mmp-ex-foot {
+            padding: 10px 14px 14px; border-top: 1px solid var(--c-border); background: var(--c-paper);
+        }
+        .mmp-ex-fu-title { font-size: 11px; font-weight: 800; color: var(--c-text3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+        .mmp-ex-fu-btn {
+            display: block; width: 100%; text-align: left;
+            padding: 8px 12px; margin-bottom: 6px;
+            border: 1px solid var(--c-border); border-radius: 8px; background: var(--c-card);
+            color: var(--c-text); cursor: pointer; font-size: 12.5px; line-height: 1.45;
+            font-family: inherit; transition: border-color .12s, background .12s;
+        }
+        .mmp-ex-fu-btn:hover { border-color: var(--c-accent); background: var(--c-accent-soft); color: var(--c-accent); }
+        .mmp-ex-fu-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .mmp-ex-fn-ref {
+            display: inline-block; vertical-align: super; font-size: 9.5px; font-weight: 800;
+            padding: 0px 5px; border-radius: 9999px; background: var(--c-accent-soft);
+            color: var(--c-accent); cursor: pointer; margin: 0 1px; user-select: none;
+        }
+        .mmp-ex-fn-ref:hover { background: var(--c-accent); color: #fff; }
+        .mmp-ex-body table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--c-border); border-radius: 6px; overflow: hidden; margin: 8px 0; font-size: 12px; }
+        .mmp-ex-body th, .mmp-ex-body td { padding: 6px 10px; border-bottom: 1px solid var(--c-border); text-align: left; vertical-align: top; }
+        .mmp-ex-body tr:last-child td { border-bottom: none; }
+        .mmp-ex-body thead th { background: var(--c-accent-soft); color: var(--c-accent); font-weight: 800; }
         .gph-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--c-text3); font-size: 14px; gap: 10px; pointer-events: none; text-align: center; }
         .point-circle, .node-group, .node-rect { cursor: grab; }
         .point-circle:hover, .node-rect:hover { filter: brightness(1.06); }
@@ -10382,7 +10440,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r216b';
+        var _AHUB_FRONT_REV = 'r217';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -29874,7 +29932,7 @@ ${intrLog}
                     (embedCount > 0 ? (' · 임베디드 ' + embedCount + '개 풀어 → ' + expLen + '자') : '') +
                     (attUrls.length ? (' · 첨부 ' + attUrls.length + '개') : ''));
             }
-            docs.push({ title: d.title || '', content: (expandedContent || '').slice(0, 16000), attachment_urls: attUrls });
+            docs.push({ id: d.id, title: d.title || '', content: (expandedContent || '').slice(0, 16000), attachment_urls: attUrls });
         }
         // [r199] 진행 위젯 (Deep Wiki 스타일, 모달 대신 우하단 플로팅)
         _mmpState.running = true; _mmpState.log = [];
@@ -29920,7 +29978,15 @@ ${intrLog}
                         else if (ev.event === 'info') { _mmpProgUpdate(null, ev.message || ''); _log('ℹ ' + (ev.message || '')); }
                         else if (ev.event === 'warn') _log('⚠ ' + (ev.message || ''));
                         else if (ev.event === 'error') { _mmpProgUpdate('❌ 오류', ev.message || ''); _log('❌ ' + (ev.message || '오류')); throw new Error(ev.message || 'LLM 오류'); }
-                        else if (ev.event === 'done') { diagram = ev.diagram; done = true; _mmpProgUpdate('✅ 완료', '노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개'); _log('✅ 노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개 (' + ev.mode + ' 모드)'); }
+                        else if (ev.event === 'done') {
+                            diagram = ev.diagram; done = true;
+                            // [r217] 백엔드 sources 메타 + raw branches 보존 — 노드 클릭 explain 용
+                            if (Array.isArray(ev.sources)) diagram.__sources_meta = ev.sources;
+                            if (ev.branches_raw) diagram.__branches_raw = ev.branches_raw;
+                            if (ev.central) diagram.__central_title = ev.central;
+                            _mmpProgUpdate('✅ 완료', '노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개');
+                            _log('✅ 노드 ' + ev.node_count + '개 · 엣지 ' + ev.edge_count + '개 (' + ev.mode + ' 모드)');
+                        }
                     } catch (parseErr) { /* JSON 라인 외엔 무시 */ }
                 }
             }
@@ -30070,6 +30136,324 @@ ${intrLog}
     function _mmpProgHide() { var w = document.getElementById('mmp-prog-widget'); if (w) { w.classList.remove('on'); w.classList.remove('mini'); } }
     function _mmpProgMinimize() { var w = document.getElementById('mmp-prog-widget'); if (w) w.classList.add('mini'); }
     function _mmpProgRestore() { var w = document.getElementById('mmp-prog-widget'); if (w) w.classList.remove('mini'); }
+
+    // ============================================================
+    // [r217] 마인드맵 노드 클릭 → AI 설명 슬라이드 패널 (NotebookLM 스타일)
+    // ============================================================
+    var _mmpExState = {
+        docId: null,
+        nodeTitle: '',
+        path: [],
+        body: '',
+        sources: [],
+        followups: [],
+        running: false,
+        abort: null,
+    };
+    function _mmpExEsc(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function _mmpExEnsurePanel() {
+        var p = document.getElementById('mmp-explain-panel');
+        if (p) return p;
+        p = document.createElement('div');
+        p.id = 'mmp-explain-panel';
+        p.innerHTML =
+            '<div class="mmp-ex-head">' +
+                '<div style="flex:1;min-width:0;">' +
+                    '<h4 id="mmp-ex-title">노드</h4>' +
+                    '<div class="mmp-ex-path" id="mmp-ex-path"></div>' +
+                '</div>' +
+                '<button class="mmp-ex-x" title="최소화" onclick="mmpExplainMinimize()">−</button>' +
+                '<button class="mmp-ex-x" title="닫기" onclick="mmpExplainClose()">✕</button>' +
+            '</div>' +
+            '<div class="mmp-ex-body" id="mmp-ex-body"><div class="mmp-ex-stage">⏳ 준비 중…</div></div>' +
+            '<div class="mmp-ex-srcs" id="mmp-ex-srcs" style="display:none;"><b>📚 소스</b></div>' +
+            '<div class="mmp-ex-foot" id="mmp-ex-foot" style="display:none;">' +
+                '<div class="mmp-ex-fu-title">💡 후속 질문</div>' +
+                '<div id="mmp-ex-fu-list"></div>' +
+            '</div>';
+        document.body.appendChild(p);
+        // 패널 자체 클릭은 캔버스에 전파 안 되게
+        p.addEventListener('click', function (e) {
+            if (p.classList.contains('mini')) { mmpExplainRestore(); e.stopPropagation(); }
+        });
+        return p;
+    }
+    function mmpExplainClose() {
+        var p = document.getElementById('mmp-explain-panel'); if (p) { p.classList.remove('on'); p.classList.remove('mini'); }
+        if (_mmpExState.abort) { try { _mmpExState.abort.abort(); } catch (e) {} _mmpExState.abort = null; }
+        _mmpExState.running = false;
+    }
+    function mmpExplainMinimize() { var p = document.getElementById('mmp-explain-panel'); if (p) p.classList.add('mini'); }
+    function mmpExplainRestore() { var p = document.getElementById('mmp-explain-panel'); if (p) p.classList.remove('mini'); }
+
+    // 노드 트리에서 path_titles 추출
+    function _mmpExFindPath(branches, target, parentPath) {
+        parentPath = parentPath || [];
+        if (!Array.isArray(branches)) return null;
+        for (var i = 0; i < branches.length; i++) {
+            var br = branches[i]; if (!br) continue;
+            var titles = parentPath.concat([br.title || '']);
+            if ((br.title || '').trim() === (target || '').trim()) return titles;
+            if (Array.isArray(br.children)) {
+                var sub = _mmpExFindPath(br.children, target, titles);
+                if (sub) return sub;
+            }
+        }
+        return null;
+    }
+
+    async function mmpExplainOpen(docId, nodeTitle, opts) {
+        opts = opts || {};
+        var doc = (currentData.docs || []).find(function (d) { return d.id === docId; });
+        if (!doc) { showToast('마인드맵을 찾지 못함', 'alert'); return; }
+        var meta = doc.meta || {};
+        var sources = Array.isArray(meta.mindmap_sources) ? meta.mindmap_sources : [];
+        var branches = Array.isArray(meta.mindmap_branches) ? meta.mindmap_branches : [];
+        var central = meta.mindmap_central || (doc.title || '마인드맵');
+        if (!sources.length) {
+            showToast('이 마인드맵에 등록된 소스 문서가 없습니다. 새로 생성하거나 소스를 추가하세요.', 'alert');
+            return;
+        }
+        // 이전 요청 중단
+        if (_mmpExState.abort) { try { _mmpExState.abort.abort(); } catch (e) {} _mmpExState.abort = null; }
+
+        // 노드 경로 찾기 (트리에서)
+        var path = _mmpExFindPath(branches, nodeTitle) || [central, nodeTitle];
+
+        // 상태 갱신
+        _mmpExState.docId = docId;
+        _mmpExState.nodeTitle = nodeTitle;
+        _mmpExState.path = path;
+        _mmpExState.body = '';
+        _mmpExState.sources = [];
+        _mmpExState.followups = [];
+        _mmpExState.running = true;
+
+        // UI 열기
+        var p = _mmpExEnsurePanel();
+        document.getElementById('mmp-ex-title').textContent = nodeTitle || '(무제)';
+        document.getElementById('mmp-ex-path').textContent = path.join(' > ');
+        document.getElementById('mmp-ex-body').innerHTML = '<div class="mmp-ex-stage">⏳ 분석 중…</div>';
+        document.getElementById('mmp-ex-srcs').style.display = 'none';
+        document.getElementById('mmp-ex-foot').style.display = 'none';
+        p.classList.add('on'); p.classList.remove('mini');
+
+        // 백엔드 호출
+        var s = _dwGetSettings();
+        if (!s.backendUrl) { _mmpExRenderError('백엔드 URL 미설정'); return; }
+        var ac = new AbortController(); _mmpExState.abort = ac;
+        var question = opts.question || null;  // 후속 질문 모드면 nodeTitle 대신 question 사용
+        var body = {
+            project_id: activeProjectId,
+            central: central,
+            diagram_branches: branches,
+            node_title: question || nodeTitle,
+            node_path: question ? null : path,
+            source_doc_ids: sources.map(function (sr) { return sr.id; }).filter(Boolean),
+            model: (s.chatModel || s.model || null),
+        };
+        try {
+            var res = await fetch(s.backendUrl + '/mindmap/explain', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body), signal: ac.signal,
+            });
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader();
+            var dec = new TextDecoder();
+            var buf = '';
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, { stream: true });
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i];
+                    if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim();
+                    if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        _mmpExHandleEvent(ev);
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            _mmpExRenderError(e.message || String(e));
+        } finally {
+            _mmpExState.running = false;
+            _mmpExState.abort = null;
+        }
+    }
+
+    function _mmpExHandleEvent(ev) {
+        if (ev.event === 'stage') {
+            var bodyEl = document.getElementById('mmp-ex-body');
+            if (bodyEl && !_mmpExState.body) bodyEl.innerHTML = '<div class="mmp-ex-stage">🔄 ' + _mmpExEsc(ev.message || ev.stage || '') + '</div>';
+        } else if (ev.event === 'sources') {
+            _mmpExState.sources = ev.sources || [];
+            _mmpExRenderSources();
+        } else if (ev.event === 'delta') {
+            _mmpExState.body += (ev.text || '');
+            _mmpExRenderBody();
+        } else if (ev.event === 'followups') {
+            _mmpExState.followups = ev.followups || [];
+            _mmpExRenderFollowups();
+        } else if (ev.event === 'warn') {
+            console.warn('[mmpExplain]', ev.message);
+        } else if (ev.event === 'error') {
+            _mmpExRenderError(ev.message || '오류');
+        } else if (ev.event === 'done') {
+            _mmpExRenderBody();  // 최종 본문 정착
+        } else if (ev.event === 'server_info') {
+            try { _ahubCheckRev(ev.server_revision); } catch (e) {}
+        }
+    }
+
+    function _mmpExRenderSources() {
+        var el = document.getElementById('mmp-ex-srcs'); if (!el) return;
+        if (!_mmpExState.sources.length) { el.style.display = 'none'; return; }
+        var chips = _mmpExState.sources.map(function (s) {
+            return '<span class="mmp-ex-src-chip" onclick="mmpExSrcJump(' + s.idx + ')" title="원본 문서로 이동">[' + s.idx + '] ' + _mmpExEsc((s.title || '').slice(0, 24)) + '</span>';
+        }).join('');
+        el.innerHTML = '<b>📚 소스</b>' + chips;
+        el.style.display = 'flex';
+    }
+
+    function _mmpExRenderBody() {
+        var bodyEl = document.getElementById('mmp-ex-body'); if (!bodyEl) return;
+        // 각주 [^N] 또는 [N] 패턴 → 칩 변환
+        var text = _mmpExState.body || '';
+        // 마크다운 → HTML
+        var html;
+        try { html = DOMPurify.sanitize(parseMarkdownWithTables(text), domPurifyConfig); }
+        catch (e) { html = '<pre style="white-space:pre-wrap;">' + _mmpExEsc(text) + '</pre>'; }
+        // 각주 토큰 → 클릭 가능한 ref
+        html = html.replace(/\[\^?(\d+)\]/g, function (_m, n) {
+            return '<span class="mmp-ex-fn-ref" onclick="mmpExSrcJump(' + n + ')" title="소스 ' + n + ' 보기">' + n + '</span>';
+        });
+        bodyEl.innerHTML = html;
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+    }
+
+    function _mmpExRenderFollowups() {
+        var f = document.getElementById('mmp-ex-foot'); if (!f) return;
+        var list = document.getElementById('mmp-ex-fu-list'); if (!list) return;
+        if (!_mmpExState.followups.length) { f.style.display = 'none'; return; }
+        list.innerHTML = _mmpExState.followups.map(function (q, i) {
+            return '<button class="mmp-ex-fu-btn" onclick="mmpExFollowup(' + i + ')">' + _mmpExEsc(q) + ' ↗</button>';
+        }).join('');
+        f.style.display = 'block';
+    }
+
+    function _mmpExRenderError(msg) {
+        var bodyEl = document.getElementById('mmp-ex-body'); if (!bodyEl) return;
+        bodyEl.innerHTML = '<div style="color:#d2393d;font-weight:700;">❌ ' + _mmpExEsc(msg) + '</div>';
+    }
+
+    function mmpExSrcJump(idx) {
+        var s = (_mmpExState.sources || []).find(function (x) { return x.idx === idx; });
+        if (!s || !s.id) { showToast('소스 정보가 부족합니다', 'alert'); return; }
+        try {
+            switchView('docs');
+            setTimeout(function () { if (typeof openDoc === 'function') openDoc(s.id); }, 80);
+        } catch (e) { showToast('점프 실패: ' + (e.message || e), 'alert'); }
+    }
+
+    async function mmpExFollowup(idx) {
+        var q = _mmpExState.followups[idx]; if (!q) return;
+        // 같은 docId, nodeTitle 유지 — question 만 다르게
+        await mmpExplainOpen(_mmpExState.docId, _mmpExState.nodeTitle, { question: q });
+    }
+
+    // ============================================================
+    // [r217] 마인드맵 소스 관리 다이얼로그
+    // ============================================================
+    function mmpSrcOpenManager() {
+        var doc = gphCurrent();
+        if (!doc) { showToast('마인드맵 선택 안 됨', 'alert'); return; }
+        if (!doc.meta) doc.meta = {};
+        if (!Array.isArray(doc.meta.mindmap_sources)) doc.meta.mindmap_sources = [];
+        var srcs = doc.meta.mindmap_sources;
+        // 추가 가능한 후보 — 현재 프로젝트의 wiki/canon/personal 문서 (다이어그램 제외)
+        var candidates = (currentData.docs || []).filter(function (d) {
+            return d && d.id !== doc.id && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder);
+        });
+        var srcIdSet = {}; srcs.forEach(function (s) { if (s && s.id) srcIdSet[s.id] = true; });
+        var addable = candidates.filter(function (d) { return !srcIdSet[d.id]; });
+        var html = '<div style="font-size:11.5px;color:var(--c-text3);margin-bottom:8px;">이 마인드맵의 소스 문서 목록입니다. 노드 클릭 시 AI 가 이 문서들의 본문을 인용해 설명합니다.</div>';
+        // 현재 소스
+        html += '<div style="font-size:12.5px;font-weight:800;margin-bottom:6px;">📚 등록된 소스 (' + srcs.length + ')</div>';
+        if (srcs.length === 0) {
+            html += '<div style="padding:14px;color:var(--c-text3);text-align:center;border:1px dashed var(--c-border);border-radius:8px;margin-bottom:14px;">등록된 소스가 없습니다. 아래에서 추가하세요.</div>';
+        } else {
+            html += '<div style="max-height:30vh;overflow-y:auto;border:1px solid var(--c-border);border-radius:8px;margin-bottom:14px;">';
+            srcs.forEach(function (s, i) {
+                var title = (s && s.title) || '(제목 없음)';
+                html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--c-border);font-size:13px;">'
+                    + '<span style="color:var(--c-accent);font-weight:700;font-family:ui-monospace,monospace;font-size:11px;">[' + (i + 1) + ']</span>'
+                    + '<a href="#" onclick="event.preventDefault();_mmpSrcJump(\'' + (s.id || '') + '\')" style="flex:1;color:var(--c-text);text-decoration:none;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _mmpExEsc(title) + '</a>'
+                    + '<button onclick="_mmpSrcRemove(' + i + ')" style="background:none;border:1px solid var(--c-border);border-radius:6px;padding:3px 9px;cursor:pointer;font-size:11px;color:#b53236;">제거</button>'
+                    + '</div>';
+            });
+            html += '</div>';
+        }
+        // 추가 가능 목록
+        html += '<div style="font-size:12.5px;font-weight:800;margin-bottom:6px;">➕ 추가 가능한 문서 (' + addable.length + ')</div>';
+        html += '<input id="mmp-src-q" type="text" placeholder="🔍 제목 검색" oninput="_mmpSrcFilterAddable(this.value)" style="width:100%;font-size:12px;padding:5px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);margin-bottom:6px;">';
+        if (addable.length === 0) {
+            html += '<div style="padding:14px;color:var(--c-text3);text-align:center;border:1px dashed var(--c-border);border-radius:8px;">추가 가능한 문서가 없습니다.</div>';
+        } else {
+            html += '<div id="mmp-src-add-list" style="max-height:30vh;overflow-y:auto;border:1px solid var(--c-border);border-radius:8px;">';
+            addable.forEach(function (d) {
+                var icon = d.kind === 'personal' ? '🔒' : (d.kind === 'canon' ? '📖' : '📚');
+                html += '<div class="mmp-src-row" data-q="' + _mmpExEsc((d.title || '').toLowerCase()) + '" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--c-border);font-size:13px;cursor:pointer;" onclick="_mmpSrcAdd(\'' + d.id + '\',\'' + _mmpExEsc((d.title || '').replace(/\'/g, "\\'")) + '\')">'
+                    + '<span>' + icon + '</span>'
+                    + '<span style="flex:1;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _mmpExEsc(d.title || '(제목 없음)') + '</span>'
+                    + '<span style="font-size:11px;color:var(--c-accent);">+ 추가</span>'
+                    + '</div>';
+            });
+            html += '</div>';
+        }
+        html += '<div style="margin-top:12px;text-align:right;"><button onclick="_closeSimpleModal()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;">닫기</button></div>';
+        _openSimpleModal('📚 마인드맵 소스 관리', html);
+    }
+    function _mmpSrcFilterAddable(q) {
+        var ql = (q || '').toLowerCase();
+        document.querySelectorAll('#mmp-src-add-list .mmp-src-row').forEach(function (row) {
+            var dq = row.dataset.q || '';
+            row.style.display = (!ql || dq.indexOf(ql) >= 0) ? '' : 'none';
+        });
+    }
+    function _mmpSrcAdd(id, title) {
+        var doc = gphCurrent(); if (!doc) return;
+        if (!doc.meta) doc.meta = {};
+        if (!Array.isArray(doc.meta.mindmap_sources)) doc.meta.mindmap_sources = [];
+        if (doc.meta.mindmap_sources.find(function (s) { return s && s.id === id; })) return;
+        doc.meta.mindmap_sources.push({ id: id, title: title });
+        doc.updatedAt = Date.now();
+        if (typeof gphSave === 'function') gphSave(doc);
+        showToast('소스 추가됨 — ' + title, 'success');
+        mmpSrcOpenManager();  // 재렌더
+        if (typeof gphRender === 'function') gphRender();
+    }
+    function _mmpSrcRemove(idx) {
+        var doc = gphCurrent(); if (!doc || !doc.meta || !Array.isArray(doc.meta.mindmap_sources)) return;
+        doc.meta.mindmap_sources.splice(idx, 1);
+        doc.updatedAt = Date.now();
+        if (typeof gphSave === 'function') gphSave(doc);
+        showToast('소스 제거됨', 'info');
+        mmpSrcOpenManager();
+        if (typeof gphRender === 'function') gphRender();
+    }
+    function _mmpSrcJump(id) {
+        if (!id) return;
+        try {
+            _closeSimpleModal();
+            switchView('docs');
+            setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80);
+        } catch (e) { showToast('점프 실패: ' + (e.message || e), 'alert'); }
+    }
+
     async function _mmpApplyDiagram(diagram, docs) {
         // target == 'new' → 새 diagram doc 생성. 'existing' → 기존 diagram에 노드 머지(좌표 오프셋)
         if (_mmpState.target === 'existing' && _mmpState.existingId) {
@@ -30095,7 +30479,13 @@ ${intrLog}
                 title: title, emoji: '🧠', kind: 'diagram', content: '',
                 meta: { scope: 'project', isFolder: false, diagram: diagram,
                     history: [{ action: 'create', by: currentUser ? currentUser.id : null, byName: myNickname, at: new Date().toISOString() }],
-                    mindmap: { sourceDocs: docs.map(function (d) { return d.title; }), generatedAt: new Date().toISOString() } },
+                    mindmap: { sourceDocs: docs.map(function (d) { return d.title; }), generatedAt: new Date().toISOString() },
+                    // [r217] 노드 클릭 explain 용 — id 가 있는 실제 소스 문서 매핑
+                    mindmap_sources: (diagram && diagram.__sources_meta) ? diagram.__sources_meta
+                        : docs.filter(function (d) { return d.id; }).map(function (d) { return { id: d.id, title: d.title || '(제목 없음)' }; }),
+                    // [r217] LLM raw branches 트리 — 노드 부모/형제/자식 컨텍스트 추출용
+                    mindmap_branches: (diagram && diagram.__branches_raw) || [],
+                    mindmap_central: (diagram && diagram.__central_title) || (docs[0] && docs[0].title) || '마인드맵' },
                 createdAt: Date.now(), updatedAt: Date.now(), sortOrder: gphNextOrder(null),
                 createdBy: (currentUser && currentUser.id) || null
             };
@@ -30548,6 +30938,8 @@ ${intrLog}
                 + '<button class="gph-legend-add" onclick="gphAddCustomPartCurrent()" title="사용자 정의 파트(이름·색상) 추가">➕ 파트</button>'
                 // [r197] 마인드맵 모드에선 LLM 자동 생성 버튼 노출(현재 그래프에 머지). 다른 모드는 기존 힌트.
                 + (p.mode === 'mindmap' ? '<button class="gph-legend-add" style="background:var(--c-accent);color:#fff;border-color:var(--c-accent);" onclick="mmpOpenPicker(true)" title="문서를 LLM에 보내 마인드맵 자동 생성(이 그래프에 추가)">🧠 문서로 자동 생성</button>' : '')
+                // [r217] 마인드맵 모드 — 소스 관리 버튼
+                + (p.mode === 'mindmap' ? '<button class="gph-legend-add" onclick="mmpSrcOpenManager()" title="이 마인드맵의 소스 문서 관리">📚 소스 ' + (((gphCurrent() && gphCurrent().meta && gphCurrent().meta.mindmap_sources) || []).length) + '</button>' : '')
                 + '<div class="gph-legend-hint">' + (p.mode === 'linear' ? '★ 라인 빈 곳 더블클릭 = 새 포인트 · 우클릭 = 메뉴' : (p.mode === 'mindmap' ? '🧠 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · LLM 자동 생성 가능' : '★ 빈 곳 더블클릭 = 새 노드 · → 핸들 드래그 = 엣지 · 우클릭 = 메뉴')) + '</div>';
         }
         // 작성자 / 작성일 / 수정일 + 공개여부
@@ -30711,7 +31103,27 @@ ${intrLog}
             if (conn) gphConnectorInteraction(conn, nodeId, svg, minX, minY, cw, ch);
         });
         svg.querySelectorAll('.node-rect').forEach(function (rect) {
-            rect.addEventListener('click', function (e) { e.stopPropagation(); var nodeId = rect.closest('.node-group').dataset.nodeId; if (gphState.connecting && gphState.connecting.sourceNodeId !== nodeId) { gphAddEdge(gphState.connecting.sourceNodeId, nodeId); gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas(); } else if (!gphState.connecting) { gphState.selected = { type: 'node', id: nodeId }; gphRenderCanvas(); gphRenderPanel(); } });
+            rect.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var nodeId = rect.closest('.node-group').dataset.nodeId;
+                if (gphState.connecting && gphState.connecting.sourceNodeId !== nodeId) {
+                    gphAddEdge(gphState.connecting.sourceNodeId, nodeId); gphState.connecting = null; gphUpdateConnecting(); gphRenderCanvas();
+                } else if (!gphState.connecting) {
+                    gphState.selected = { type: 'node', id: nodeId };
+                    gphRenderCanvas(); gphRenderPanel();
+                    // [r217] 마인드맵 모드 + sources/branches 메타가 있으면 클릭 시 AI 설명 패널
+                    try {
+                        var doc = gphCurrent();
+                        var p = doc && gphPayload(doc);
+                        if (p && p.mode === 'mindmap' && doc.meta && Array.isArray(doc.meta.mindmap_sources) && doc.meta.mindmap_sources.length) {
+                            var node = (p.nodes || []).find(function (x) { return x.id === nodeId; });
+                            if (node && typeof mmpExplainOpen === 'function') {
+                                mmpExplainOpen(doc.id, node.title || '');
+                            }
+                        }
+                    } catch (err) { console.warn('[mmpExplain] open failed', err); }
+                }
+            });
         });
         svg.querySelectorAll('[data-edge-id]').forEach(function (g) {
             var edgeId = g.dataset.edgeId;

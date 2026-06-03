@@ -551,6 +551,15 @@ async def generate_mindmap(
         if isinstance(cross, list):
             _add_cross_links(payload, cross)
 
+    # [r217] 소스 문서 메타 — 프론트가 doc.meta.mindmap_sources 에 저장.
+    # 이후 노드 클릭 시 /mindmap/explain 이 이 소스들에서 본문 발췌해 LLM 호출.
+    source_meta = []
+    for d in docs[:8]:
+        sid = d.get("id") or d.get("source_id")
+        title = (d.get("title") or "").strip() or "(제목 없음)"
+        if sid or title:
+            source_meta.append({"id": sid, "title": title})
+
     yield {
         "event": "done",
         "diagram": payload,
@@ -558,4 +567,6 @@ async def generate_mindmap(
         "node_count": len(payload["nodes"]),
         "edge_count": len(payload["edges"]),
         "mode": "multi" if is_multi else "single",
+        "sources": source_meta,  # [r217] 노드 클릭 explain 용
+        "branches_raw": branches,  # [r217] LLM raw 트리 — explain 에서 node_path/형제 추출용
     }
