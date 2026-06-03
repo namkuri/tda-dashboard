@@ -215,21 +215,183 @@ def _q_has_any(q: str, words) -> bool:
     return any(w in q for w in words)
 
 
+# [r214] direct_render — 옵션 키워드 매칭 시 도구 직접 호출 → 정형 데이터를
+# meta.direct_render 로 즉시 응답. LLM 안 거쳐 환각 0%, 표·링크·더보기 일관.
+# 프론트는 jumpKind 로 dwJumpSource() 호출.
+# 도우미 — bool 매칭 결과를 도구 args dict 으로 변환
+def _dr_when(cond: bool, args=None):
+    return (args if args is not None else {}) if cond else None
+
+
+_DIRECT_RENDER_SPECS = [
+    # match: query+ctx → tool_args dict (매칭) 또는 None (스킵).
+    # 좁은 매칭부터 위에. ("위키 문서 리스트" > "문서 리스트" 보장 위해 명시적 키워드 사용)
+    {
+        "match": lambda q, ctx: _dr_when(
+            (("위키 문서" in q) or ("일반 문서" in q) or ("팀 문서" in q))
+            and (("리스트" in q) or ("목록" in q)),
+            {"kind": "wiki"},
+        ),
+        "tool": "list_docs", "label": "위키 문서", "jump_type": "doc",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            (("프로젝트 위키" in q) or ("canon" in q))
+            and (("리스트" in q) or ("목록" in q)),
+            {"kind": "canon"},
+        ),
+        "tool": "list_docs", "label": "프로젝트 위키 (승인)", "jump_type": "doc",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            (("개인 문서" in q) or ("내 문서" in q))
+            and (("리스트" in q) or ("목록" in q)),
+            {"kind": "personal", "user_id": ctx.get("user_id")},
+        ),
+        "tool": "list_docs", "label": "내 개인 문서", "jump_type": "doc",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            (("다이어그램" in q) or ("마인드맵" in q))
+            and (("리스트" in q) or ("목록" in q)),
+            {"kind": "diagram"},
+        ),
+        "tool": "list_docs", "label": "다이어그램 / 마인드맵", "jump_type": "doc",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(("이슈 목록" in q) or ("이슈 리스트" in q)),
+        "tool": "list_issues", "label": "이슈", "jump_type": "issue",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            ("결재 요청 목록" in q) or ("결재 목록" in q) or ("리뷰 목록" in q)
+        ),
+        "tool": "list_reviews", "label": "결재 요청", "jump_type": "review",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            ("내 카드" in q) or ("카드 목록" in q) or ("태스크 목록" in q)
+        ),
+        "tool": "list_tasks", "label": "내 카드", "jump_type": "task",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            ("스프린트 목록" in q) or ("스프린트 리스트" in q)
+        ),
+        "tool": "list_sprints", "label": "스프린트", "jump_type": "sprint",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            ("작업구조화" in q) and (("현황" in q) or ("목록" in q) or ("리스트" in q))
+        ),
+        "tool": "list_wbs_nodes", "label": "작업구조화 WBS", "jump_type": "wbs",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            ("프로젝트 리스트" in q) or ("프로젝트 목록" in q)
+        ),
+        "tool": "list_projects", "label": "프로젝트", "jump_type": "project",
+    },
+    {
+        "match": lambda q, ctx: _dr_when(
+            ("일정" in q) and (("목록" in q) or ("리스트" in q) or ("이번 주" in q) or ("이번주" in q))
+        ),
+        "tool": "list_calendar_events", "label": "일정", "jump_type": "event",
+    },
+]
+
+
+async def _resolve_direct_render(query: str, project_id: Optional[str], user_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """쿼리가 direct_render 키워드와 매칭되면 도구 직접 호출 → 정형 데이터 반환."""
+    if not query:
+        return None
+    q = query.strip()
+    ctx = {"user_id": user_id}
+    from tools import execute_tool
+    for spec in _DIRECT_RENDER_SPECS:
+        extra_args = spec["match"](q, ctx)
+        if not extra_args and extra_args != {}:
+            continue
+        args = {"project_id": project_id, "limit": 50}
+        if isinstance(extra_args, dict):
+            args.update(extra_args)
+        try:
+            result = await execute_tool(spec["tool"], args)
+        except Exception as e:
+            return {
+                "label": spec["label"],
+                "error": f"도구 호출 실패: {e}",
+                "items": [], "total": 0,
+                "jump_type": spec["jump_type"],
+            }
+        items_raw = result.get("result") or []
+        if not isinstance(items_raw, list):
+            items_raw = []
+        # 항목 정규화 — 프론트가 단일 스키마로 그릴 수 있게
+        norm = []
+        for it in items_raw:
+            if not isinstance(it, dict):
+                continue
+            title = (
+                it.get("title") or it.get("name") or it.get("weekLabel")
+                or it.get("slug") or "(제목 없음)"
+            )
+            sub_parts = []
+            # 종류·상태 표시
+            if it.get("kind"):
+                sub_parts.append(it["kind"])
+            if it.get("status"):
+                sub_parts.append(str(it["status"]))
+            if it.get("priority"):
+                sub_parts.append(str(it["priority"]))
+            if it.get("severity"):
+                sub_parts.append(str(it["severity"]))
+            owner = it.get("owner") or it.get("creator") or it.get("assignee") or {}
+            if isinstance(owner, dict) and owner.get("name"):
+                sub_parts.append("· " + owner["name"])
+            updated = it.get("updated_at") or it.get("start_at") or it.get("startDate") or ""
+            norm.append({
+                "id": it.get("id"),
+                "title": title,
+                "kind": it.get("kind") or spec["jump_type"],
+                "sub": " · ".join(sub_parts),
+                "updated_at": updated,
+                "is_folder": bool(it.get("is_folder")),
+                "is_deprecated": bool(it.get("is_deprecated")),
+            })
+        return {
+            "label": spec["label"],
+            "tool": spec["tool"],
+            "jump_type": spec["jump_type"],
+            "items": norm,
+            "total": result.get("count", len(norm)) or len(norm),
+            "ok": result.get("ok", True),
+            "error": result.get("error"),
+            "args": args,
+        }
+    return None
+
+
 def _clarify_for_query(query: str) -> Optional[Dict[str, Any]]:
     """모호한 쿼리를 감지하고 옵션 후보를 반환. 명확하면 None."""
     if not query:
         return None
     q = query.strip().lower()
     # 1) "문서" 만 명시 + 카테고리 한정어 없음
-    if ("문서" in q) and not _q_has_any(q, ["위키", "deep wiki", "딥위키", "자동", "코드", "결재", "리뷰", "이슈"]):
+    if ("문서" in q) and not _q_has_any(q, [
+        "위키", "deep wiki", "딥위키", "자동", "코드", "결재", "리뷰", "이슈",
+        "개인", "다이어그램", "마인드맵", "프로젝트 위키", "canon",
+    ]):
         return {
             "question": "어떤 종류의 문서를 보여드릴까요?",
             "options": [
-                {"label": "📚 위키·일반 문서", "key": "위키 문서 리스트"},
+                # [r214] 위키/프로젝트위키(canon)/개인 분리, 다이어그램 별도, Deep Wiki 별도
+                {"label": "📚 위키 문서 (팀)", "key": "위키 문서 리스트"},
+                {"label": "📖 프로젝트 위키 (승인)", "key": "프로젝트 위키 리스트"},
+                {"label": "👤 내 개인 문서", "key": "내 개인 문서 리스트"},
+                {"label": "🗺 다이어그램·마인드맵", "key": "다이어그램 리스트"},
                 {"label": "🤖 Deep Wiki 자동 위키", "key": "Deep Wiki 페이지 목록"},
                 {"label": "💻 코드 본문 검색", "key": "코드에서 키워드 검색"},
-                {"label": "🗳 결재 요청 문서", "key": "결재 요청 목록"},
-                {"label": "🐛 이슈/버그 리포트", "key": "이슈 목록"},
             ],
         }
     # 2) "정보/현황" 단독 (짧고 카테고리 미지정)
@@ -248,13 +410,15 @@ def _clarify_for_query(query: str) -> Optional[Dict[str, Any]]:
         }
     # 3) "뭐 있어 / 어떤 거 있어 / 있는 거" — 카테고리 미지정
     if _q_has_any(q, ["뭐 있", "뭐있", "어떤 거 있", "어떤거 있", "있는 거", "있는거"]) and not _q_has_any(q, [
-        "문서", "코드", "이슈", "프로젝트", "스프린트", "카드", "wbs", "결재", "일정"
+        "문서", "코드", "이슈", "프로젝트", "스프린트", "카드", "wbs", "결재", "일정", "다이어그램"
     ]):
         return {
             "question": "어느 카테고리의 데이터를 조회할까요?",
             "options": [
                 {"label": "📊 프로젝트 목록", "key": "프로젝트 리스트"},
-                {"label": "📚 문서/위키", "key": "위키 문서 리스트"},
+                {"label": "📚 위키 문서", "key": "위키 문서 리스트"},
+                {"label": "👤 내 개인 문서", "key": "내 개인 문서 리스트"},
+                {"label": "🗺 다이어그램·마인드맵", "key": "다이어그램 리스트"},
                 {"label": "📋 카드/태스크", "key": "내 카드 목록"},
                 {"label": "🏃 스프린트", "key": "스프린트 목록"},
                 {"label": "🧩 작업구조화 WBS", "key": "작업구조화 현황"},
@@ -330,6 +494,7 @@ async def run(
     project_id: Optional[str] = None,
     model: Optional[str] = None,
     include_tasks: bool = True,  # 호환 — 안 씀
+    user_id: Optional[str] = None,  # [r214] 개인 문서 비공개 가드 + "내 카드" 필터
 ) -> AsyncIterator[Dict[str, Any]]:
     """기존 rag.chat_stream 시그니처와 호환. yield event 형식 동일.
 
@@ -346,6 +511,30 @@ async def run(
         yield {"delta": "❌ 질문이 없습니다."}
         return
     user_query = user_msgs[-1]["content"]
+
+    # [r214] 명확한 옵션 키워드 — 도구 직접 호출 → 표·링크·더보기 직접 응답
+    direct = await _resolve_direct_render(user_query, project_id, user_id)
+    if direct is not None:
+        if direct.get("error"):
+            intro = "❌ " + direct["label"] + " 조회 실패: " + str(direct["error"])
+        elif not direct["items"]:
+            intro = "📭 " + direct["label"] + " 항목이 없습니다."
+        else:
+            intro = "📋 " + direct["label"] + " — 총 " + str(direct["total"]) + "건입니다."
+        yield {
+            "meta": {
+                "retrieved": direct.get("total", 0),
+                "avg_sim": 0.0, "max_sim": 0.0, "min_sim": 0.0,
+                "top": [], "tool_calls": [{
+                    "tool": direct.get("tool"), "args": direct.get("args"),
+                    "ok": direct.get("ok", True), "summary": direct["label"] + " " + str(direct["total"]) + "건",
+                }],
+                "query": user_query,
+                "direct_render": direct,
+            }
+        }
+        yield {"delta": intro}
+        return
 
     # [r213] 모호한 질문 — 도구 호출 전 옵션 카드로 역질문
     clarify = _clarify_for_query(user_query)

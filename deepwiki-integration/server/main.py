@@ -30,7 +30,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r213"
+SERVER_REVISION = "r214"
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -133,6 +133,8 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     include_tasks: bool = True
     stream: bool = True
+    # [r214] 현재 사용자 — 개인 문서 비공개 가드(meta.owner==user_id) + "내 카드" 필터
+    user_id: Optional[str] = None
 
 
 class IndexCodeRequest(BaseModel):
@@ -243,6 +245,7 @@ async def chat(req: ChatRequest):
                     project_id=req.project_id,
                     model=req.model if not use_agent or req.model != "legacy" else None,
                     include_tasks=req.include_tasks,
+                    user_id=req.user_id,  # [r214]
                 ):
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             except Exception as e:

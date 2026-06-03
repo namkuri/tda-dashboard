@@ -175,8 +175,16 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     "project_id": {"type": "string", "description": "프로젝트 ID."},
                     "kind": {
                         "type": "string",
-                        "enum": ["wiki", "canon", "diagram"],
-                        "description": "문서 종류 (선택, 미지정 시 전체).",
+                        "enum": ["wiki", "canon", "diagram", "personal"],
+                        "description": (
+                            "문서 종류 (선택, 미지정 시 전체). "
+                            "wiki=일반 문서, canon=프로젝트 위키(승인된 표준), "
+                            "diagram=다이어그램/마인드맵, personal=개인 문서(본인만 보이게 자동 필터)."
+                        ),
+                    },
+                    "user_id": {
+                        "type": "string",
+                        "description": "현재 사용자 ID (선택). kind='personal' 일 때 meta.owner==user_id + visibility=public 만 노출.",
                     },
                     "recent_first": {"type": "boolean", "description": "최근 작성 순 정렬 (기본 true)."},
                     "limit": {"type": "integer", "description": "최대 결과 수 (기본 30)."},
@@ -661,7 +669,12 @@ async def _tool_search_vector(args: Dict[str, Any]) -> Dict[str, Any]:
 # ─────────────────────────────────────────────
 
 async def _tool_list_docs(args: Dict[str, Any]) -> Dict[str, Any]:
-    """위키 문서·프로젝트 위키·다이어그램 목록 조회."""
+    """위키 문서·프로젝트 위키·다이어그램·개인 문서 목록 조회.
+
+    [r214] kind='personal' 시 visibility 가드:
+      - 본인(meta.owner == user_id) 문서는 항상 노출
+      - 타인의 문서는 meta.visibility=='public' 만 노출
+    """
     project_id = args.get("project_id")
     if not project_id:
         return {"ok": False, "error": "project_id required"}
@@ -669,26 +682,43 @@ async def _tool_list_docs(args: Dict[str, Any]) -> Dict[str, Any]:
     q = store.client.table("wiki_docs").select("*").eq("project_id", project_id)
     if args.get("kind"):
         q = q.eq("kind", args["kind"])
-    # sort
     recent_first = args.get("recent_first", True)
     if recent_first:
         q = q.order("updated_at", desc=True)
     else:
         q = q.order("sort_order")
+    # [r214] personal 은 가드 후 슬라이스 — limit 를 넉넉히 가져온 뒤 필터.
     limit = int(args.get("limit") or 30)
-    q = q.limit(limit)
+    fetch_limit = max(limit * 3, 60) if args.get("kind") == "personal" else limit
+    q = q.limit(fetch_limit)
     res = q.execute()
     rows = res.data or []
+    # [r214] personal 가시성 필터 — 본인 또는 visibility=public 만
+    if args.get("kind") == "personal":
+        me = args.get("user_id")
+        kept = []
+        for r in rows:
+            meta = r.get("meta") or {}
+            owner = meta.get("owner")
+            vis = meta.get("visibility") or "private"
+            if me and owner == me:
+                kept.append(r)
+            elif vis == "public":
+                kept.append(r)
+            # 그 외 — 타인의 비공개 문서는 제외
+        rows = kept[:limit]
     # 컨텐츠 미리보기만 (전체는 너무 김), 작성자 이름 join
     creator_ids: List[str] = []
     for r in rows:
         if r.get("created_by"):
             creator_ids.append(r["created_by"])
+        meta = r.get("meta") or {}
+        if meta.get("owner"):
+            creator_ids.append(meta["owner"])
     user_map = await _resolve_users(creator_ids) if creator_ids else {}
     out = []
     for r in rows:
         meta = r.get("meta") or {}
-        # 폴더 여부, 승인(approved) 여부 같은 메타 추출
         item = {
             "id": r.get("id"),
             "title": r.get("title") or "(제목 없음)",
@@ -701,10 +731,15 @@ async def _tool_list_docs(args: Dict[str, Any]) -> Dict[str, Any]:
             "updated_at": r.get("updated_at"),
             "content_preview": (r.get("content") or "").strip()[:200],
             "content_length": len(r.get("content") or ""),
-            "meta": {k: v for k, v in meta.items() if k in ("isFolder", "version", "approved", "approvedBy", "approvedAt", "official")},
+            "meta": {k: v for k, v in meta.items() if k in (
+                "isFolder", "version", "approved", "approvedBy", "approvedAt", "official",
+                "owner", "visibility",
+            )},
         }
         if r.get("created_by"):
             item["creator"] = user_map.get(r["created_by"], {"id": r["created_by"], "name": r["created_by"][:8]})
+        if meta.get("owner") and meta["owner"] in user_map:
+            item["owner"] = user_map[meta["owner"]]
         out.append(item)
     return {"ok": True, "result": out, "count": len(out)}
 

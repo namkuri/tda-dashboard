@@ -3262,6 +3262,35 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .dw-typing span:nth-child(2) { animation-delay: 0.2s; }
         .dw-typing span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes dw-typing-pulse { 0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); } 30% { opacity: 1; transform: scale(1.1); } }
+        /* [r214] direct_render 결과 — 표·링크·더보기 카드 */
+        .dw-dr-wrap { margin: 10px 0 4px; }
+        .dw-dr-table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--c-border); border-radius: 8px; overflow: hidden; }
+        .dw-dr-table th, .dw-dr-table td { padding: 8px 12px; border-bottom: 1px solid var(--c-border); vertical-align: top; font-size: 13px; text-align: left; word-break: break-word; overflow-wrap: anywhere; }
+        .dw-dr-table tr:last-child td { border-bottom: none; }
+        .dw-dr-table thead th { background: var(--c-accent-soft); color: var(--c-accent); font-weight: 800; font-size: 12.5px; border-bottom: 2px solid var(--c-accent); }
+        .dw-dr-table tbody tr:nth-child(even) td { background: var(--ios-fill); }
+        body.dark .dw-dr-table tbody tr:nth-child(even) td { background: rgba(255,250,240,0.03); }
+        .dw-dr-table tbody tr:hover td { background: var(--c-accent-soft); transition: background .15s; }
+        .dw-dr-title-link {
+            color: var(--c-accent); text-decoration: none; font-weight: 700; cursor: pointer;
+            border-bottom: 1px dashed transparent; transition: border-color .12s;
+        }
+        .dw-dr-title-link:hover { border-bottom-color: var(--c-accent); }
+        .dw-dr-sub { color: var(--c-text3); font-size: 11px; margin-top: 2px; }
+        .dw-dr-foot { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--c-text3); }
+        .dw-dr-more {
+            padding: 6px 14px; background: var(--c-paper); border: 1px solid var(--c-border);
+            border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--c-accent);
+            transition: border-color .12s, background .12s;
+        }
+        .dw-dr-more:hover { border-color: var(--c-accent); background: var(--c-accent-soft); }
+        .dw-dr-empty { padding: 12px; color: var(--c-text3); text-align: center; font-style: italic; }
+        .dw-dr-badge {
+            display: inline-block; padding: 1px 7px; border-radius: 9999px; font-size: 10.5px;
+            font-weight: 700; background: var(--ios-fill); color: var(--c-text2); margin-left: 6px;
+        }
+        .dw-dr-badge.folder { background: rgba(180,140,40,0.18); color: #8a6a16; }
+        .dw-dr-badge.deprecated { background: rgba(210,57,61,0.16); color: #b53236; }
         /* [r213] 역질문(clarification) 옵션 카드 — Claude 스타일 */
         .dw-clarify {
             display: grid;
@@ -9745,6 +9774,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var metaHtml = isUser ? '' : _dwRetrievalChipHtml(m.meta);
                 // [r213] 역질문 옵션 카드 — 봇 본문 아래
                 var clarifyHtml = isUser ? '' : _dwClarifyHtml(m.meta, msgIdx);
+                // [r214] direct_render 표 + 링크 + 더보기 — clarifyHtml 아래
+                var directHtml = isUser ? '' : _dwDirectRenderHtml(m.meta, msgIdx);
                 var sourcesHtml = '';
                 if (m.sources && m.sources.length) {
                     sourcesHtml = '<div class="dw-msg-sources"><b>📚 참고 문서·카드:</b> ' +
@@ -9753,7 +9784,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
                 return '<div class="dw-msg ' + (isUser ? 'user' : 'bot') + '">' +
                     '<div class="dw-msg-avatar">' + avatar + '</div>' +
-                    '<div class="dw-msg-body">' + metaHtml + bodyHtml + clarifyHtml + sourcesHtml + '</div>' +
+                    '<div class="dw-msg-body">' + metaHtml + bodyHtml + directHtml + clarifyHtml + sourcesHtml + '</div>' +
                     '</div>';
             }).join('');
             // 마지막 메시지로 스크롤
@@ -9822,7 +9853,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     project_id: activeProjectId,
                     model: s.chatModel || s.model,  // [r129] chatModel 우선
                     include_tasks: s.includeTasks,
-                    stream: s.stream
+                    stream: s.stream,
+                    // [r214] 개인 문서 가시성·"내 카드" 필터링용
+                    user_id: (typeof currentUser !== 'undefined' && currentUser && currentUser.id) ? currentUser.id : null,
                 };
                 if (s.stream) {
                     await _dwStreamChat(s.backendUrl + '/chat', payload, botIdx);
@@ -9921,6 +9954,92 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
             });
             return content;
+        }
+        // [r214] direct_render HTML — 표·제목 링크·더보기 버튼
+        var DW_DR_PAGE_SIZE = 12;  // 한 페이지 항목 수
+        function _dwDirectRenderHtml(meta, msgIdx) {
+            if (!meta || !meta.direct_render) return '';
+            var d = meta.direct_render;
+            if (typeof d._shown !== 'number') d._shown = Math.min(DW_DR_PAGE_SIZE, d.items.length);
+            if (d.error) {
+                return '<div class="dw-dr-wrap"><div class="dw-dr-empty">❌ ' + _annEsc(d.error) + '</div></div>';
+            }
+            if (!d.items || !d.items.length) {
+                return '<div class="dw-dr-wrap"><div class="dw-dr-empty">📭 ' + _annEsc(d.label || '항목') + ' 이 없습니다.</div></div>';
+            }
+            var rows = d.items.slice(0, d._shown).map(function (it) {
+                var title = _annEsc(it.title || '(제목 없음)');
+                var emoji = it.is_folder ? '📁 ' : '';
+                var badges = '';
+                if (it.is_folder) badges += '<span class="dw-dr-badge folder">폴더</span>';
+                if (it.is_deprecated) badges += '<span class="dw-dr-badge deprecated">deprecated</span>';
+                var titleHtml;
+                if (it.is_folder) {
+                    titleHtml = '<span style="font-weight:700;">' + emoji + title + '</span>';
+                } else if (it.id) {
+                    titleHtml = '<a class="dw-dr-title-link" href="#" onclick="event.preventDefault();dwDrJump(' + msgIdx + ',\'' + _annEsc(String(it.id)) + '\')">' + emoji + title + '</a>';
+                } else {
+                    titleHtml = emoji + title;
+                }
+                titleHtml += badges;
+                if (it.sub) titleHtml += '<div class="dw-dr-sub">' + _annEsc(it.sub) + '</div>';
+                var dateCell = it.updated_at ? new Date(it.updated_at).toLocaleDateString() : '-';
+                return '<tr><td>' + titleHtml + '</td><td style="white-space:nowrap;">' + _annEsc(dateCell) + '</td></tr>';
+            }).join('');
+            var html = '<div class="dw-dr-wrap"><table class="dw-dr-table"><thead><tr><th>제목</th><th style="width:120px;">업데이트</th></tr></thead><tbody>' + rows + '</tbody></table>';
+            var hasMore = d._shown < d.items.length;
+            html += '<div class="dw-dr-foot">';
+            html += '<span>현재 ' + d._shown + ' / ' + d.items.length + '건 표시' + (d.total > d.items.length ? ' (전체 ' + d.total + ' 추정)' : '') + '</span>';
+            if (hasMore) {
+                html += '<button class="dw-dr-more" onclick="dwDrMore(' + msgIdx + ')">▼ 더보기 (+' + Math.min(DW_DR_PAGE_SIZE, d.items.length - d._shown) + ')</button>';
+            } else if (d.items.length === d.total) {
+                html += '<span style="font-size:11px;">✓ 모두 표시</span>';
+            }
+            html += '</div></div>';
+            return html;
+        }
+        function dwDrMore(msgIdx) {
+            var m = dwState.messages[msgIdx];
+            if (!m || !m.meta || !m.meta.direct_render) return;
+            var d = m.meta.direct_render;
+            d._shown = Math.min((d._shown || DW_DR_PAGE_SIZE) + DW_DR_PAGE_SIZE, d.items.length);
+            dwRenderMessages();
+        }
+        function dwDrJump(msgIdx, id) {
+            var m = dwState.messages[msgIdx];
+            if (!m || !m.meta || !m.meta.direct_render) return;
+            var d = m.meta.direct_render;
+            var jt = d.jump_type;
+            // 통합 점프 — type 별 view 전환
+            try {
+                if (jt === 'doc') {
+                    switchView('docs');
+                    setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80);
+                } else if (jt === 'task') {
+                    switchView('kanban');
+                    setTimeout(function () { if (typeof openCardModal === 'function') openCardModal(id); }, 80);
+                } else if (jt === 'issue') {
+                    switchView('issues');
+                    setTimeout(function () { if (typeof openIssueModal === 'function') openIssueModal(id); }, 80);
+                } else if (jt === 'sprint') {
+                    switchView('sprint');
+                    setTimeout(function () { if (typeof openSprint === 'function') openSprint(id); }, 80);
+                } else if (jt === 'wbs') {
+                    switchView('wbs');
+                    setTimeout(function () { if (typeof wbsFocusNode === 'function') wbsFocusNode(id); }, 80);
+                } else if (jt === 'review') {
+                    switchView('review');
+                    setTimeout(function () { if (typeof openReviewModal === 'function') openReviewModal(id); }, 80);
+                } else if (jt === 'event') {
+                    switchView('calendar');
+                } else if (jt === 'project') {
+                    if (typeof switchActiveProject === 'function') switchActiveProject(id);
+                } else {
+                    showToast('점프 대상 미정의: ' + jt, 'alert');
+                }
+            } catch (e) {
+                showToast('점프 실패: ' + (e.message || e), 'alert');
+            }
         }
         // [r213] 역질문(clarify) 옵션 칩 HTML — 봇 메시지 본문 아래
         function _dwClarifyHtml(meta, msgIdx) {
@@ -10263,7 +10382,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r213';
+        var _AHUB_FRONT_REV = 'r214';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
