@@ -10382,7 +10382,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r215';
+        var _AHUB_FRONT_REV = 'r216b';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -29861,7 +29861,20 @@ ${intrLog}
             }
             // [r202] 첨부 파일(HTML/DOCX/TXT/MD) URL 수집 — 백엔드가 받아 텍스트로 변환해 본문에 합침
             var attUrls = _mmpCollectAttachments(d);
-            docs.push({ title: d.title || '', content: (d.content || '').slice(0, 16000), attachment_urls: attUrls });
+            // [r216] doc.meta.htmlEmbeds 의 <!--TDAHTML:he_xxx--> 토큰을 텍스트로 풀어 본문에 합침
+            var origLen = (d.content || '').length;
+            var embedCount = (d.meta && d.meta.htmlEmbeds) ? Object.keys(d.meta.htmlEmbeds).length : 0;
+            var expandedContent;
+            try { expandedContent = await _mmpExpandHtmlEmbeds(d); }
+            catch (e) { expandedContent = d.content || ''; }
+            var expLen = (expandedContent || '').length;
+            // 진단 — 사용자가 expand 가 실제로 작동했는지 즉시 확인
+            if (typeof _log === 'function') {
+                _log('📄 "' + (d.title || d.id) + '" 본문 ' + origLen + '자' +
+                    (embedCount > 0 ? (' · 임베디드 ' + embedCount + '개 풀어 → ' + expLen + '자') : '') +
+                    (attUrls.length ? (' · 첨부 ' + attUrls.length + '개') : ''));
+            }
+            docs.push({ title: d.title || '', content: (expandedContent || '').slice(0, 16000), attachment_urls: attUrls });
         }
         // [r199] 진행 위젯 (Deep Wiki 스타일, 모달 대신 우하단 플로팅)
         _mmpState.running = true; _mmpState.log = [];
@@ -29931,6 +29944,67 @@ ${intrLog}
         }
     }
     // [r202] 첨부 파일 URL 수집 — driveState.linkedDocIds + 본문 마크다운 링크에서 .html/.docx/.txt/.md만
+    // [r216] HTML 임베디드(doc.meta.htmlEmbeds)를 본문 텍스트로 풀어 합치기.
+    // <!--TDAHTML:he_xxx--> 토큰을 해당 임베드의 HTML 텍스트로 치환.
+    // _tdaResolveEmbedHtml 이 인라인/Storage 자동 처리. 캐시도 활용.
+    async function _mmpExpandHtmlEmbeds(doc) {
+        var content = doc.content || '';
+        var embeds = (doc && doc.meta && doc.meta.htmlEmbeds) || {};
+        var ids = Object.keys(embeds);
+        if (!ids.length) return content;
+        // content 안에 토큰 없는 임베디드도 있을 수 있으니, 토큰 매칭 + 미참조 임베디드 모두 합쳐 처리.
+        var seen = {};
+        var matches = [];
+        var re = /<!--TDAHTML:([a-zA-Z0-9_]+)-->/g, m;
+        while ((m = re.exec(content)) !== null) {
+            matches.push({ token: m[0], id: m[1] });
+            seen[m[1]] = true;
+        }
+        // 토큰별 HTML 해석 (병렬)
+        var tokenTextMap = {};
+        await Promise.all(matches.map(async function (mm) {
+            var em = embeds[mm.id]; if (!em) { tokenTextMap[mm.id] = ''; return; }
+            try {
+                var html = await _tdaResolveEmbedHtml(em, mm.id);
+                tokenTextMap[mm.id] = _mmpStripHtml(html) || '';
+            } catch (e) { tokenTextMap[mm.id] = ''; }
+        }));
+        // 본문 치환
+        var expanded = content.replace(/<!--TDAHTML:([a-zA-Z0-9_]+)-->/g, function (_full, id) {
+            var t = tokenTextMap[id] || '';
+            return t ? '\n\n[임베디드 HTML: ' + (embeds[id] && embeds[id].title ? embeds[id].title : id) + ']\n' + t + '\n' : '';
+        });
+        // 본문에 토큰이 없지만 임베디드만 등록된 케이스 — 끝에 추가
+        var orphaned = ids.filter(function (id) { return !seen[id]; });
+        if (orphaned.length) {
+            var extra = await Promise.all(orphaned.map(async function (id) {
+                var em = embeds[id]; if (!em) return '';
+                try {
+                    var html = await _tdaResolveEmbedHtml(em, id);
+                    var t = _mmpStripHtml(html);
+                    return t ? ('\n\n[임베디드 HTML: ' + (em.title || id) + ']\n' + t) : '';
+                } catch (e) { return ''; }
+            }));
+            expanded += extra.filter(Boolean).join('');
+        }
+        return expanded;
+    }
+    // [r216] 간단 HTML → 텍스트. script/style 제거 + 태그 제거 + 엔티티 디코드.
+    function _mmpStripHtml(html) {
+        if (!html) return '';
+        try {
+            var s = String(html);
+            s = s.replace(/<script[\s\S]*?<\/script>/gi, ' ');
+            s = s.replace(/<style[\s\S]*?<\/style>/gi, ' ');
+            s = s.replace(/<!--[\s\S]*?-->/g, ' ');
+            // 줄바꿈 단서 보존 — <br> <p> <li> <h1-6> 앞뒤에 개행
+            s = s.replace(/<(br|\/(p|li|h[1-6]|div|tr))[^>]*>/gi, '\n');
+            s = s.replace(/<[^>]+>/g, ' ');
+            s = s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+            s = s.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+            return s;
+        } catch (e) { return ''; }
+    }
     function _mmpCollectAttachments(doc) {
         var urls = [], seen = {};
         var keep = function (u) {
@@ -29951,6 +30025,22 @@ ${intrLog}
             // bare URL도 시도
             var re2 = /(https?:\/\/[^\s<>"']+\.(?:html?|docx|txt|md|markdown|pdf))/gi;
             while ((m = re2.exec(md)) !== null) keep(m[1]);
+        } catch (e) {}
+        // [r216] doc.meta.htmlEmbeds[id].storagePath 의 Supabase public URL 도 첨부에 추가 —
+        // 프론트의 _mmpExpandHtmlEmbeds 가 다운로드 실패 시 백엔드가 다시 시도하도록 폴백.
+        try {
+            var embeds = (doc && doc.meta && doc.meta.htmlEmbeds) || {};
+            Object.keys(embeds).forEach(function (id) {
+                var em = embeds[id]; if (!em) return;
+                var sp = em.storagePath;
+                if (sp && supabaseClient && typeof supabaseClient.storage !== 'undefined') {
+                    try {
+                        var pub = supabaseClient.storage.from(DRIVE_BUCKET).getPublicUrl(sp);
+                        var u = pub && pub.data && pub.data.publicUrl;
+                        if (u) keep(u);
+                    } catch (e) {}
+                }
+            });
         } catch (e) {}
         return urls.slice(0, 6); // 문서당 최대 6개
     }

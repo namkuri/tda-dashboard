@@ -385,34 +385,76 @@ async def generate_mindmap(
         yield {"event": "error", "message": "Ollama 연결 실패. GPU 호스트가 가동 중인지 확인하세요."}
         return
 
-    yield {"event": "stage", "stage": "collect", "message": f"{len(docs)}개 문서 수집됨"}
+    # [r216] 수신 본문 진단 — 사용자가 어디서 누락됐는지 즉시 확인
+    incoming_lens = [len(d.get("content") or "") for d in docs]
+    incoming_atts = [len(d.get("attachment_urls") or []) for d in docs]
+    yield {
+        "event": "stage", "stage": "collect",
+        "message": (
+            f"{len(docs)}개 문서 수집됨 · 본문 글자수=[{', '.join(str(x) for x in incoming_lens)}] · "
+            f"첨부 URL=[{', '.join(str(x) for x in incoming_atts)}]"
+        ),
+    }
 
     # [r202] 첨부 파일(HTML/DOCX/TXT/MD) 다운로드 후 본문에 합치기 — 문서의 첨부도 함께 분석
     att_total = 0
+    att_tried = 0
+    att_failed_urls = []
     for d in docs:
         urls = d.get("attachment_urls") or []
         if not urls:
             continue
         chunks_att = []
-        for url in urls[:6]:  # 문서당 최대 6개
+        for url in urls[:6]:
+            att_tried += 1
             yield {"event": "progress", "current": 0, "total": 0, "message": f"📎 첨부 읽는 중: {url[:90]}"}
             txt = await _fetch_attachment(url, max_chars=18000)
             if txt:
                 chunks_att.append(f"\n\n--- 첨부 파일 ({url}) ---\n{txt}")
                 att_total += 1
+            else:
+                att_failed_urls.append(url)
         if chunks_att:
             d["content"] = (d.get("content") or "") + "".join(chunks_att)
-    if att_total:
-        yield {"event": "info", "message": f"📎 첨부 파일 {att_total}개 본문 합쳐짐(HTML/DOCX/TXT/MD)"}
+    if att_tried:
+        if att_total:
+            yield {"event": "info", "message": (
+                f"📎 첨부 파일 시도 {att_tried}개 · 성공 {att_total}개 본문 합쳐짐(HTML/DOCX/TXT/MD)"
+            )}
+        if att_failed_urls:
+            yield {"event": "warn", "message": (
+                f"⚠ 첨부 {len(att_failed_urls)}개 다운로드 실패(접근 권한 또는 형식 미지원): "
+                + ", ".join(u[:70] for u in att_failed_urls[:3])
+                + (" ..." if len(att_failed_urls) > 3 else "")
+            )}
 
     # 본문 컷(단일 모드는 넉넉히, 다중은 빠르게)
     is_multi = (mode == "multi") or (mode == "auto" and len(docs) > 1)
 
-    # [r215] 콘텐츠 길이 가드 — 너무 짧으면 LLM 이 시스템 프롬프트 규칙을 콘텐츠로
-    # 착각하고 메타 어구('MECE', '노드 텍스트', '1~5단어')를 그대로 마인드맵 노드로
-    # 출력하는 사고 방지. 정제 후 글자수 기준 150자 미만이면 거부.
+    # [r215/r216] 콘텐츠 길이 가드 — 너무 짧으면 LLM 이 시스템 프롬프트 규칙을
+    # 콘텐츠로 착각하고 메타 어구('MECE', '노드 텍스트', '1~5단어')를 그대로
+    # 마인드맵 노드로 출력하는 사고 방지. HTML 태그·마크다운 토큰·주석은 카운트
+    # 에서 제외해 "임베디드만 있는 빈 본문" 케이스를 정확히 0자로 측정.
     def _content_chars(s: str) -> int:
-        return len(re.sub(r"\s+", "", s or ""))
+        if not s:
+            return 0
+        t = re.sub(r"<!--[\s\S]*?-->", " ", s)        # HTML 주석 제거 (TDAHTML 토큰 포함)
+        t = re.sub(r"<[^>]+>", " ", t)                 # HTML 태그 제거
+        t = re.sub(r"```[\s\S]*?```", " ", t)          # 코드 펜스 제거
+        t = re.sub(r"`[^`]*`", " ", t)                 # 인라인 코드 제거
+        t = re.sub(r"[#*_>\[\]\(\)\-=|]+", " ", t)     # 마크다운 기호 제거
+        t = re.sub(r"https?://\S+", " ", t)            # URL 제거
+        return len(re.sub(r"\s+", "", t))
+
+    def _hint_too_short() -> str:
+        return (
+            "\n\n💡 가능한 원인:\n"
+            "  ① HTML 임베디드만 있고 본문 텍스트가 없는 경우 — 본문에 설명을 직접 적거나, "
+            "임베디드의 텍스트가 풀려 있는지 확인하세요.\n"
+            "  ② 첨부(PDF/DOCX/HTML) 파일이 백엔드에서 다운로드 실패 — 첨부 URL이 외부에서 "
+            "접근 가능한지(공개 URL) 확인하세요.\n"
+            "  ③ 문서가 비어있음 — 본문에 최소 150자 이상의 텍스트가 필요합니다."
+        )
 
     if is_multi:
         # 다중 — 문서별 요약 블록
@@ -425,9 +467,9 @@ async def generate_mindmap(
             blocks.append(f"### 📄 {title}\n\n{content}")
         if total_chars < 200:
             yield {"event": "error", "message": (
-                f"문서 본문이 너무 짧습니다(총 {total_chars}자). "
-                "마인드맵 생성을 위해 각 문서에 최소 200자 이상의 본문이 필요합니다. "
-                "본문을 더 작성하거나 다른 문서를 선택해 다시 시도하세요."
+                f"문서 본문이 너무 짧습니다(텍스트 {total_chars}자 · 첨부 {att_total}개 합쳐진 후 측정). "
+                "마인드맵 생성을 위해 문서들 합쳐 최소 200자 이상의 본문이 필요합니다."
+                + _hint_too_short()
             )}
             return
         doc_summaries = "\n\n---\n\n".join(blocks)
@@ -437,11 +479,12 @@ async def generate_mindmap(
         d = docs[0]
         title = (d.get("title") or "").strip() or "(제목 없음)"
         content = (d.get("content") or "")[:9000]
-        if _content_chars(content) < 150:
+        chars = _content_chars(content)
+        if chars < 150:
             yield {"event": "error", "message": (
-                f"문서 본문이 너무 짧습니다({_content_chars(content)}자). "
-                "마인드맵 생성을 위해 최소 150자 이상의 본문이 필요합니다. "
-                "문서에 내용을 더 작성한 뒤 다시 시도하세요."
+                f"문서 본문이 너무 짧습니다(텍스트 {chars}자 · 첨부 {att_total}개 합쳐진 후 측정). "
+                "마인드맵 생성을 위해 최소 150자 이상의 본문이 필요합니다."
+                + _hint_too_short()
             )}
             return
         prompt = _safe_format(_SINGLE_PROMPT, title=title, content=content)
