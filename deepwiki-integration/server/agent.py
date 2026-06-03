@@ -124,6 +124,26 @@ Deep Wiki 자동 위키 (r113~r115 산출물):
 
 **도구가 반환한 JSON 필드 값만 답변에 적을 수 있습니다.** 그 외 모든 데이터(이름·날짜·ID·제목·내용)는 **거짓이며 적으면 위반**입니다.
 
+### 🟥 가장 중요한 규칙 — 도구 결과 무시 금지 (r210+ 추가)
+
+**도구가 `count > 0` 또는 빈 배열이 아닌 결과를 반환했다면 그 데이터를 반드시 답변에 표시하세요.**
+"데이터 없습니다" 같은 거절을 쓰면 위반입니다.
+
+확인 절차:
+1. tool 메시지의 JSON에 `"count": N` (N>=1) 이 있나? → 반드시 `result` 배열을 표로 출력
+2. 또는 `"result": [...]` 가 빈 배열이 아닌가? → 반드시 표로 출력
+3. 두 도구가 동시에 호출됐을 때(예: list_docs + list_wiki_pages) **둘 다 답변에 포함**.
+   한쪽이 비어있다고 다른 쪽의 데이터를 숨기지 마세요.
+
+### 🟦 도구 우선순위 — 비슷한 도구 혼동 방지 (r210+ 추가)
+
+사용자 질문에 명백한 "Deep Wiki" / "자동 생성 위키" 키워드가 **없으면**:
+- "문서 리스트/목록/뭐 있어" → **list_docs** (일반 문서·위키 문서·다이어그램 — 사용자가 직접 작성한 것)
+- list_wiki_pages 는 코드 자동 분석 산출물. 사용자가 "Deep Wiki" 라고 명시한 경우만 우선시.
+
+list_wiki_pages 결과가 0건이라도 list_docs 가 41건이면 **list_docs 데이터를 답변 본문에 표시**.
+"Deep Wiki 페이지가 없습니다" 같은 거절로 답을 끝내지 마세요.
+
 다음은 모두 금지된 거짓 데이터 예시:
 - 가짜 회의 이름: "프로젝트 회의 2023-10-05", "코드 리뷰 미팅" — 도구가 안 줬으면 금지 ❌
 - 가짜 사람: "Dev A", "Data Team" — assignees/participants에 없으면 금지 ❌
@@ -402,19 +422,59 @@ def _stream_chunks(text: str, chunk_size: int = 40):
 
 
 def _short_result_summary(name: str, result: Dict[str, Any]) -> str:
-    """검색 칩 hover 등에 쓸 짧은 요약."""
+    """검색 칩 hover + LLM 비-환각 가드용 짧은 요약.
+
+    [r210+] 모든 list_* 도구에 대해 명시적 count 반환 — '결과 N개' 패턴.
+    _tool_result_nonempty 와 LLM 둘 다 풍부함 판단 정확도 향상.
+    """
     if not result.get("ok"):
         return f"실패: {result.get('error', '?')[:60]}"
     r = result.get("result")
+    n = result.get("count")
+    # 단건 도구
     if name == "get_active_sprint":
         if not r:
             return "활성 스프린트 없음"
         return f"{r.get('weekLabel', '?')} · 카드 {r.get('cardCount', 0)}개"
-    if name == "list_tasks":
-        return f"카드 {result.get('count', 0)}개"
-    if name == "search_vector":
-        return f"청크 {result.get('count', 0)}개"
-    return "OK"
+    if name == "get_project_info":
+        if not r:
+            return "프로젝트 없음"
+        st = (r.get("stats") or {})
+        return f"프로젝트 '{r.get('name', '?')}' · docs {st.get('docs', 0)}/tasks {st.get('tasks', 0)}/sprints {st.get('sprints', 0)}"
+    if name in ("get_wiki_page", "get_wiki_audit"):
+        return "본문 1건" if r else "없음"
+    # list_* 도구 — 명시적 count
+    list_label = {
+        "list_projects": "프로젝트",
+        "list_tasks": "카드",
+        "list_sprints": "스프린트",
+        "list_docs": "문서",
+        "list_reviews": "결재",
+        "list_calendar_events": "일정",
+        "list_issues": "이슈",
+        "list_users": "사용자",
+        "list_wbs_nodes": "WBS노드",
+        "list_wiki_pages": "Deep Wiki 페이지",
+        "list_wiki_audits": "기획대조 보고서",
+        "search_wiki_pages": "위키페이지 매칭",
+        "search_vector": "청크",
+    }.get(name)
+    if list_label:
+        c = n if isinstance(n, int) else (len(r) if isinstance(r, list) else 0)
+        if c == 0:
+            return f"{list_label} 0건 (비어있음)"
+        # 첫 항목 제목 일부 — LLM이 결과 풍부함을 확신할 수 있게
+        try:
+            titles = []
+            if isinstance(r, list):
+                for item in r[:2]:
+                    t = item.get("title") or item.get("name") or item.get("weekLabel") or item.get("slug")
+                    if t: titles.append(str(t)[:25])
+            tail = (' · 첫 항목: ' + ', '.join(titles)) if titles else ''
+            return f"{list_label} {c}건{tail}"
+        except Exception:
+            return f"{list_label} {c}건"
+    return f"OK ({n if n is not None else '?'}건)"
 
 
 def _tool_result_nonempty(t: Dict[str, Any]) -> bool:

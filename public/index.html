@@ -3155,6 +3155,77 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         body.dark .dw-msg.user .dw-msg-body { background: rgba(201,100,66,0.18); }
         .dw-msg-body pre { background: var(--ios-fill); border: 1px solid var(--c-border); border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-size: 12.5px; margin: 6px 0; }
         .dw-msg-body code { background: var(--ios-fill2); color: var(--c-accent); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+        /* [r210+] 마크다운 표 강화 — 테두리·헤더 배경·zebra·hover */
+        .dw-msg-body table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            margin: 10px 0 12px;
+            font-size: 13px;
+            border: 1px solid var(--c-border);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .dw-msg-body table th, .dw-msg-body table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--c-border);
+            border-right: 1px solid var(--c-border);
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.5;
+        }
+        .dw-msg-body table th:last-child,
+        .dw-msg-body table td:last-child { border-right: none; }
+        .dw-msg-body table tr:last-child td { border-bottom: none; }
+        .dw-msg-body table thead th,
+        .dw-msg-body table tr:first-child th {
+            background: var(--c-accent-soft);
+            color: var(--c-accent);
+            font-weight: 800;
+            font-size: 12.5px;
+            letter-spacing: 0.02em;
+            border-bottom: 2px solid var(--c-accent);
+        }
+        .dw-msg-body table tbody tr:nth-child(even) td,
+        .dw-msg-body table tr:nth-child(even):not(:first-child) td {
+            background: var(--ios-fill);
+        }
+        body.dark .dw-msg-body table tbody tr:nth-child(even) td,
+        body.dark .dw-msg-body table tr:nth-child(even):not(:first-child) td {
+            background: rgba(255,250,240,0.03);
+        }
+        .dw-msg-body table tbody tr:hover td,
+        .dw-msg-body table tr:hover:not(:first-child) td {
+            background: var(--c-accent-soft);
+            transition: background .15s;
+        }
+        .dw-msg-body table code {
+            font-size: 11.5px;
+            white-space: nowrap;
+        }
+        /* 짧은 셀 (이모지 1~2글자) 가운데 정렬 — 상태·우선순위 칸 자동 정렬 느낌 */
+        .dw-msg-body table td:not(:first-child) { white-space: nowrap; }
+        .dw-msg-body table td:first-child { white-space: normal; }
+        /* 표 안 헤더(##/###) 스타일 약간 양보 */
+        .dw-msg-body h2 { font-size: 16px; margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--c-border); color: var(--c-text); }
+        .dw-msg-body h3 { font-size: 14px; margin: 10px 0 6px; color: var(--c-text); }
+        .dw-msg-body ul, .dw-msg-body ol { padding-left: 22px; margin: 6px 0; }
+        .dw-msg-body li { margin: 3px 0; }
+        .dw-msg-body blockquote {
+            margin: 8px 0;
+            padding: 6px 12px;
+            border-left: 3px solid var(--c-accent);
+            background: var(--ios-fill);
+            color: var(--c-text2);
+            border-radius: 0 6px 6px 0;
+            font-size: 13px;
+        }
+        .dw-msg-body hr {
+            border: none;
+            border-top: 1px dashed var(--c-border);
+            margin: 10px 0;
+        }
         .dw-msg-sources { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--c-border); font-size: 11px; color: var(--c-text3); }
         .dw-msg-sources b { color: var(--c-text2); }
         .dw-empty { text-align: center; padding: 60px 20px; color: var(--c-text3); font-size: 14px; line-height: 1.7; }
@@ -10093,7 +10164,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r210';
+        var _AHUB_FRONT_REV = 'r211';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
