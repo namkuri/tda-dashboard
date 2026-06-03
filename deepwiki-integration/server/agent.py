@@ -205,6 +205,34 @@ _FORCE_TOOL_MAP = [
 ]
 
 
+# [r212] Deep Wiki 도구 — 사용자가 명시적으로 요청하지 않으면 LLM 에게 노출하지 않음.
+# qwen2.5-coder:14b 같은 모델은 "문서 리스트" 질문에서도 list_wiki_pages 를
+# 우선 호출하고 빈 결과만 답에 쓰는 버그가 일관됨. 도구 자체를 숨기면 LLM 이
+# 호출할 수 없으니 list_docs 같은 정상 도구만 쓰게 된다.
+_DEEP_WIKI_TOOL_NAMES = {
+    "list_wiki_pages", "get_wiki_page", "search_wiki_pages",
+    "list_wiki_audits", "get_wiki_audit",
+}
+_DEEP_WIKI_KEYWORDS = [
+    "deep wiki", "deepwiki", "딥 위키", "딥위키",
+    "자동 위키", "자동위키", "코드 위키", "wiki 자동",
+    "1차 위키", "감사 보고서", "기획 대조", "기획대조",
+]
+
+
+def _filter_tools_for_query(query: str, all_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """[r212] 사용자 쿼리에 Deep Wiki 명시가 없으면 위키 자동생성 도구 5종 제거.
+
+    그러면 LLM 은 list_docs / list_wbs_nodes / 기타 라이브 도구만 선택지로 보게 됨.
+    "Deep Wiki 페이지 없음" 거절 답변 패턴 차단.
+    """
+    q = (query or "").lower()
+    has_deep_wiki = any(kw in q for kw in _DEEP_WIKI_KEYWORDS)
+    if has_deep_wiki:
+        return all_tools
+    return [t for t in all_tools if t.get("function", {}).get("name") not in _DEEP_WIKI_TOOL_NAMES]
+
+
 def _force_tool_picks(query: str) -> List[Dict[str, Any]]:
     """[r210] 사용자 쿼리에 명백한 키워드 매칭 시 강제 호출할 도구 목록.
 
@@ -258,6 +286,8 @@ async def run(
     ollama = get_ollama()
     tool_log: List[Dict[str, Any]] = []  # 도구 호출 기록 (UI 표시용)
     sources_collected: List[Dict[str, Any]] = []  # 검색 칩 아래 참조
+    # [r212] LLM 에게 노출할 도구 — Deep Wiki 명시 없으면 위키 자동생성 도구 5종 숨김
+    visible_tools = _filter_tools_for_query(user_query, TOOL_DEFINITIONS)
 
     # ───── [r210] 사전 키워드 휴리스틱 — 명백한 도구는 강제 호출 ─────
     forced = _force_tool_picks(user_query)
@@ -288,7 +318,7 @@ async def run(
         try:
             assistant_msg = await ollama.chat_with_tools(
                 messages=llm_messages,
-                tools=TOOL_DEFINITIONS,
+                tools=visible_tools,  # [r212] Deep Wiki 도구 필터링된 목록
                 model=model,
                 temperature=0.2,
             )
@@ -372,7 +402,14 @@ async def run(
             if name in ("get_active_sprint", "list_tasks") and project_id:
                 args.setdefault("project_id", project_id)
 
-            result = await execute_tool(name, args)
+            # [r212] 필터링된 도구를 LLM 이 우회 호출하면 거절 — 환각 가드
+            if name in _DEEP_WIKI_TOOL_NAMES and name not in {t.get("function", {}).get("name") for t in visible_tools}:
+                result = {
+                    "ok": False,
+                    "error": f"{name} 은 사용자가 'Deep Wiki' 를 명시한 경우만 호출 가능. 일반 문서 조회는 list_docs 사용.",
+                }
+            else:
+                result = await execute_tool(name, args)
             tool_log.append({
                 "tool": name,
                 "args": args,
@@ -395,7 +432,7 @@ async def run(
     try:
         assistant_msg = await ollama.chat_with_tools(
             messages=llm_messages,
-            tools=[],  # 도구 없이 답변만
+            tools=[],  # [r212] 라운드 한계 — 강제 답변
             model=model,
             temperature=0.2,
         )
