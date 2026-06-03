@@ -3053,7 +3053,49 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .aihub-idx-btn span:first-child { font-size: 19px; }
         .aihub-idx-btn:hover { border-color: var(--c-accent); transform: translateY(-1px); }
         .aihub-idx-btn:disabled { opacity: .5; cursor: not-allowed; }
-        .aihub-idx-btn.running { background: var(--c-accent-soft); border-color: var(--c-accent); }
+        /* [r209] 진행/실패 하이라이트 — 펄스/쉐이크 + 컬러 띠 */
+        .aihub-idx-btn.running {
+            background: linear-gradient(120deg, var(--c-accent-soft) 30%, rgba(236,72,153,.18) 70%);
+            border-color: var(--c-accent);
+            box-shadow: 0 0 0 0 rgba(180,83,9,.55);
+            animation: ahubIdxBtnPulse 1.3s ease-in-out infinite;
+        }
+        .aihub-idx-btn.running::before {
+            content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--c-accent), #ec4899, transparent);
+            background-size: 200% 100%; border-radius: 0 0 8px 8px;
+            animation: ahubIdxBtnSweep 1.6s linear infinite;
+        }
+        .aihub-idx-btn { position: relative; overflow: hidden; }
+        .aihub-idx-btn.failed {
+            background: rgba(210,57,61,.14) !important;
+            border-color: #d2393d !important;
+            color: #b1262a;
+            animation: ahubIdxBtnShake .55s cubic-bezier(.36,.07,.19,.97) both, ahubIdxBtnFailGlow 1.4s ease-out 1;
+        }
+        .aihub-idx-btn.ok-recent {
+            border-color: #2e9e5b;
+            box-shadow: 0 0 0 3px rgba(46,158,91,.18);
+            transition: box-shadow .4s ease;
+        }
+        @keyframes ahubIdxBtnPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(180,83,9,.55); }
+            50%      { box-shadow: 0 0 0 6px rgba(180,83,9,0); }
+        }
+        @keyframes ahubIdxBtnSweep {
+            0%   { background-position: -100% 0; }
+            100% { background-position: 200% 0; }
+        }
+        @keyframes ahubIdxBtnShake {
+            10%, 90% { transform: translateX(-1px); }
+            20%, 80% { transform: translateX(2px); }
+            30%, 50%, 70% { transform: translateX(-3px); }
+            40%, 60% { transform: translateX(3px); }
+        }
+        @keyframes ahubIdxBtnFailGlow {
+            0%   { box-shadow: 0 0 0 0 rgba(210,57,61,.6); }
+            100% { box-shadow: 0 0 0 10px rgba(210,57,61,0); }
+        }
         .aihub-idx-progress { margin-top: 14px; padding: 10px 12px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; }
         .aihub-idx-bar { height: 6px; background: var(--ios-fill); border-radius: 3px; overflow: hidden; margin-bottom: 8px; position: relative; }
         .aihub-idx-bar > div { height: 100%; background: linear-gradient(90deg, var(--c-accent), #ec4899); transition: width .25s; width: 0%; }
@@ -10095,12 +10137,84 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 });
             } catch (e) {}
         }
+        // [r209] 단계별 kind → 버튼 매핑 + 진행/실패/성공 하이라이트
+        function _ahubIdxFindButtons(kind) {
+            if (!kind) return [];
+            var sel = '#aihub-view button[onclick*="ahubTriggerIndex(\'' + kind + '\')"]';
+            var arr = Array.prototype.slice.call(document.querySelectorAll(sel));
+            // sync/cleanup 도 매핑
+            if (kind === 'sync') {
+                arr = arr.concat(Array.prototype.slice.call(document.querySelectorAll('#aihub-view button[onclick^="ahubSyncAll"]')));
+            }
+            if (kind === 'cleanup') {
+                arr = arr.concat(Array.prototype.slice.call(document.querySelectorAll('#aihub-view button[onclick^="ahubCleanupEmpty"]')));
+            }
+            return arr;
+        }
+        function _ahubIdxBtnState(kind, state) {
+            var btns = _ahubIdxFindButtons(kind);
+            btns.forEach(function (b) {
+                b.classList.remove('running', 'failed', 'ok-recent');
+                if (state === 'running') b.classList.add('running');
+                else if (state === 'failed') {
+                    b.classList.add('failed');
+                    setTimeout(function () { b.classList.remove('failed'); }, 2800);
+                } else if (state === 'ok') {
+                    b.classList.add('ok-recent');
+                    setTimeout(function () { b.classList.remove('ok-recent'); }, 2200);
+                }
+            });
+        }
+        function _ahubIdxBtnClearAll() {
+            document.querySelectorAll('#aihub-view .aihub-idx-btn.running, #aihub-view .aihub-idx-btn.failed, #aihub-view .aihub-gpu-btn.running, #aihub-view .aihub-gpu-btn.failed').forEach(function (b) {
+                b.classList.remove('running', 'failed');
+            });
+        }
         function ahubRefreshIdxBadge() {
-            var el = document.getElementById('aihub-idx-last'); if (!el) return;
-            var ts = localStorage.getItem('tda_dw_last_sync_at') || '';
-            if (!ts) { el.textContent = '아직 동기화 안 됨'; return; }
-            try { el.textContent = '마지막 동기화: ' + new Date(ts).toLocaleString(); }
-            catch (e) { el.textContent = '마지막 동기화: ' + ts; }
+            var el = document.getElementById('aihub-idx-last');
+            if (el) {
+                var ts = localStorage.getItem('tda_dw_last_sync_at') || '';
+                if (!ts) { el.textContent = '아직 동기화 안 됨'; }
+                else {
+                    try { el.textContent = '마지막 동기화: ' + new Date(ts).toLocaleString(); }
+                    catch (e) { el.textContent = '마지막 동기화: ' + ts; }
+                }
+            }
+            // [r209] Git URL 자동 채우기 — Deep Wiki 설정 / Git 페이지에 등록된 URL 재사용
+            try {
+                var gitInp = document.getElementById('aihub-git-url');
+                if (gitInp && !gitInp.value) {
+                    var url = _ahubResolveGitUrl();
+                    if (url) {
+                        gitInp.value = url;
+                        gitInp.placeholder = '자동 로드됨';
+                        gitInp.title = '저장된 Git URL — 필요 시 다른 URL로 수정 가능';
+                    }
+                }
+            } catch (e) {}
+        }
+        // [r209] 저장된 Git URL 후보를 순서대로 탐색 (먼저 발견된 것 사용)
+        function _ahubResolveGitUrl() {
+            // 1) Deep Wiki 페이지에서 수동 입력 후 저장된 값
+            try {
+                var v = localStorage.getItem('tda_dw_git_url');
+                if (v && v.trim()) return v.trim();
+            } catch (e) {}
+            // 2) 프로젝트 메타 — _dwpState.repos 안 latest
+            try {
+                if (window._dwpState && _dwpState.repos && _dwpState.repos.length) {
+                    var r = _dwpState.repos.find(function (x) { return x.git_url; }) || _dwpState.repos[0];
+                    if (r && r.git_url) return r.git_url;
+                }
+            } catch (e) {}
+            // 3) 현재 활성 프로젝트의 git_url 컬럼 (있다면)
+            try {
+                if (window.projects && Array.isArray(projects) && activeProjectId) {
+                    var p = projects.find(function (x) { return x && x.id === activeProjectId; });
+                    if (p && p.git_url && String(p.git_url).trim()) return String(p.git_url).trim();
+                }
+            } catch (e) {}
+            return '';
         }
 
         // SSE 한 스트림을 소비하면서 progress UI 업데이트. completed 이벤트(done) 받으면 true.
@@ -10147,6 +10261,25 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     } else if (ev.event === 'phase_start') {
                         _ahubIdxSetStage('🔄 ' + (ev.kind || '?') + ' (' + (ev.current || 0) + '/' + (ev.total || 0) + ')');
                         _ahubIdxLog('phase: ' + (ev.kind || ''));
+                        // [r209] 현재 진행 중인 sub-phase 버튼 하이라이트
+                        if (opts._sync) {
+                            opts._currentPhaseKind = ev.kind || null;
+                            _ahubIdxBtnState(opts._currentPhaseKind, 'running');
+                        }
+                    } else if (ev.event === 'phase_done') {
+                        // [r209] 정상 종료 — 잠깐 초록 테두리
+                        if (opts._sync) {
+                            _ahubIdxBtnState(ev.kind, 'ok');
+                            opts._currentPhaseKind = null;
+                        }
+                        _ahubIdxLog('phase_done: ' + (ev.kind || '') + ' inserted=' + (ev.chunks_inserted || 0), 'done');
+                    } else if (ev.event === 'phase_failed') {
+                        // [r209] 한 phase 실패 — 빨간 쉐이크, 전체는 계속 진행
+                        if (opts._sync) {
+                            _ahubIdxBtnState(ev.kind, 'failed');
+                            opts._currentPhaseKind = null;
+                        }
+                        _ahubIdxLog('phase_failed: ' + (ev.kind || '') + ' — ' + (ev.reason || '?'), 'err');
                     } else if (ev.event === 'done') {
                         doneSeen = true;
                         var inserted = ev.chunks_inserted || (ev.summary ? Object.values(ev.summary.phases || {}).reduce(function (a, p) { return a + (p.chunks_inserted || 0); }, 0) : 0);
@@ -10171,7 +10304,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!s.backendUrl) { showToast('⚙️ 설정에서 백엔드 URL 먼저 입력', 'alert'); return; }
             if (!activeProjectId) { showToast('프로젝트를 먼저 선택', 'alert'); return; }
             _ahubIdx.running = true; _ahubIdx.kind = kind; _ahubIdx.log = [];
+            _ahubIdxBtnClearAll();
             _ahubIdxLockButtons(true);
+            _ahubIdxBtnState(kind, 'running');  // [r209] 현재 버튼만 펄스
             _ahubIdxShow(true);
             var lbl = _ahubIdxKindLabel(kind);
             _ahubIdxSetStage('🚀 ' + lbl + ' 인덱싱 요청…');
@@ -10187,6 +10322,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (kind === 'code') {
                     if (!gitUrl) throw new Error('코드 인덱싱은 Git URL 입력 필요');
                     body.git_url = gitUrl;
+                    // [r209] 다음 자동로드용 저장
+                    try { localStorage.setItem('tda_dw_git_url', gitUrl); } catch (e) {}
                 }
                 var res = await fetch(s.backendUrl + '/index/' + kind, {
                     method: 'POST',
@@ -10195,10 +10332,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status + ' — 백엔드 라우트가 활성화됐는지 확인 (r208 재시작 필요)');
                 await _ahubConsumeSSE(res, { kind: lbl });
+                _ahubIdxBtnState(kind, 'ok');
                 showToast('✅ ' + lbl + ' 인덱싱 완료', 'success');
             } catch (e) {
                 _ahubIdxSetStage('❌ 실패 — ' + (e.message || e));
                 _ahubIdxLog('error: ' + (e.message || e), 'err');
+                _ahubIdxBtnState(kind, 'failed');  // [r209] 실패 쉐이크
                 showToast('❌ 인덱싱 실패: ' + (e.message || e), 'alert');
             } finally {
                 _ahubIdx.running = false; _ahubIdx.kind = null;
@@ -10212,7 +10351,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!s.backendUrl) { showToast('⚙️ 설정에서 백엔드 URL 먼저 입력', 'alert'); return; }
             if (!activeProjectId) { showToast('프로젝트를 먼저 선택', 'alert'); return; }
             _ahubIdx.running = true; _ahubIdx.kind = 'sync'; _ahubIdx.log = [];
+            _ahubIdxBtnClearAll();
             _ahubIdxLockButtons(true);
+            _ahubIdxBtnState('sync', 'running');  // [r209] sync 버튼 자체에 펄스
             _ahubIdxShow(true);
             _ahubIdxSetStage('🔁 전체 증분 동기화 — 변경된 데이터만 재임베딩');
             _ahubIdxSetBar(0, true);
@@ -10228,11 +10369,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     }),
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
-                await _ahubConsumeSSE(res, { kind: '전체 동기화' });
+                await _ahubConsumeSSE(res, { kind: '전체 동기화', _sync: true });
+                _ahubIdxBtnState('sync', 'ok');
                 showToast('✅ 전체 증분 동기화 완료', 'success');
             } catch (e) {
                 _ahubIdxSetStage('❌ 실패 — ' + (e.message || e));
                 _ahubIdxLog('error: ' + (e.message || e), 'err');
+                _ahubIdxBtnState('sync', 'failed');  // [r209]
                 showToast('❌ 동기화 실패: ' + (e.message || e), 'alert');
             } finally {
                 _ahubIdx.running = false; _ahubIdx.kind = null;
@@ -10251,7 +10394,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             });
             if (!ok) return;
             _ahubIdx.running = true; _ahubIdx.kind = 'cleanup'; _ahubIdx.log = [];
+            _ahubIdxBtnClearAll();
             _ahubIdxLockButtons(true);
+            _ahubIdxBtnState('cleanup', 'running');  // [r209]
             _ahubIdxShow(true);
             _ahubIdxSetStage('🧹 빈 청크 스캔 중…');
             _ahubIdxSetBar(0, true);
@@ -10269,10 +10414,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (data.samples && data.samples.length) {
                     _ahubIdxLog('예시 삭제: ' + data.samples.map(function (sm) { return (sm.source_title || '?').slice(0, 32); }).join(' · '));
                 }
+                _ahubIdxBtnState('cleanup', 'ok');
                 showToast('✅ 빈 템플릿 ' + (data.deleted || 0) + '개 삭제됨', 'success');
             } catch (e) {
                 _ahubIdxSetStage('❌ 실패 — ' + (e.message || e));
                 _ahubIdxLog('error: ' + (e.message || e), 'err');
+                _ahubIdxBtnState('cleanup', 'failed');  // [r209]
                 showToast('❌ 청소 실패: ' + (e.message || e), 'alert');
             } finally {
                 _ahubIdx.running = false; _ahubIdx.kind = null;

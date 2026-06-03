@@ -433,40 +433,56 @@ async def index_sync(req: IndexSyncRequest):
                 phase_idx += 1
                 _busy_set(stage=kind, current=phase_idx, total=len(req.include), category=kind)
                 yield {"event": "phase_start", "kind": kind, "current": phase_idx, "total": len(req.include)}
-                if kind == "wiki":
-                    gen = index_wiki_docs(project_id=req.project_id, since=req.since)
-                elif kind == "task":
-                    gen = index_tasks(project_id=req.project_id, since=req.since)
-                elif kind == "sprint":
-                    gen = index_sprints(project_id=req.project_id, since=req.since)
-                # [r208] 신규 엔티티
-                elif kind == "issue":
-                    gen = index_issues(project_id=req.project_id, since=req.since)
-                elif kind == "event":
-                    gen = index_calendar_events(project_id=req.project_id, since=req.since)
-                elif kind == "asset":
-                    gen = index_assets(project_id=req.project_id, since=req.since)
-                elif kind == "review":
-                    gen = index_reviews(project_id=req.project_id, since=req.since)
-                elif kind == "bug":
-                    gen = index_bug_reports(project_id=req.project_id, since=req.since)
-                elif kind == "wbs":
-                    gen = index_wbs_nodes(project_id=req.project_id, since=req.since)
-                else:
-                    yield {"event": "warn", "message": f"알 수 없는 kind: {kind}"}
+                # [r209] 한 phase 실패가 전체 sync 를 망치지 않도록 격리
+                gen = None
+                try:
+                    if kind == "wiki":
+                        gen = index_wiki_docs(project_id=req.project_id, since=req.since)
+                    elif kind == "task":
+                        gen = index_tasks(project_id=req.project_id, since=req.since)
+                    elif kind == "sprint":
+                        gen = index_sprints(project_id=req.project_id, since=req.since)
+                    # [r208] 신규 엔티티
+                    elif kind == "issue":
+                        gen = index_issues(project_id=req.project_id, since=req.since)
+                    elif kind == "event":
+                        gen = index_calendar_events(project_id=req.project_id, since=req.since)
+                    elif kind == "asset":
+                        gen = index_assets(project_id=req.project_id, since=req.since)
+                    elif kind == "review":
+                        gen = index_reviews(project_id=req.project_id, since=req.since)
+                    elif kind == "bug":
+                        gen = index_bug_reports(project_id=req.project_id, since=req.since)
+                    elif kind == "wbs":
+                        gen = index_wbs_nodes(project_id=req.project_id, since=req.since)
+                    else:
+                        yield {"event": "warn", "message": f"알 수 없는 kind: {kind}"}
+                        yield {"event": "phase_failed", "kind": kind, "reason": "unknown_kind"}
+                        continue
+                except Exception as e:
+                    yield {"event": "phase_failed", "kind": kind, "reason": str(e)}
+                    summary["phases"][kind] = {"chunks_inserted": 0, "skipped_empty": 0, "total_rows": 0, "error": str(e)}
                     continue
                 phase_result = {"chunks_inserted": 0, "skipped_empty": 0, "total_rows": 0}
-                async for ev in gen:
-                    # 하위 이벤트 그대로 흘리되, prefix 로 kind 표시
-                    ev2 = {**ev, "_kind": kind}
-                    yield ev2
-                    if ev.get("event") == "start":
-                        phase_result["total_rows"] = ev.get("total_docs") or ev.get("total_tasks") or ev.get("total_sprints") or 0
-                    elif ev.get("event") == "done":
-                        phase_result["chunks_inserted"] = ev.get("chunks_inserted", 0)
-                        phase_result["skipped_empty"] = ev.get("skipped_empty", 0)
-                summary["phases"][kind] = phase_result
-                yield {"event": "phase_done", "kind": kind, **phase_result}
+                phase_error: Optional[str] = None
+                try:
+                    async for ev in gen:
+                        ev2 = {**ev, "_kind": kind}
+                        yield ev2
+                        if ev.get("event") == "start":
+                            phase_result["total_rows"] = ev.get("total_docs") or ev.get("total_tasks") or ev.get("total_sprints") or 0
+                        elif ev.get("event") == "done":
+                            phase_result["chunks_inserted"] = ev.get("chunks_inserted", 0)
+                            phase_result["skipped_empty"] = ev.get("skipped_empty", 0)
+                except Exception as e:
+                    phase_error = str(e)
+                    yield {"event": "warn", "message": f"{kind} 단계 예외 — 다음 단계로 진행: {e}", "_kind": kind}
+                if phase_error:
+                    summary["phases"][kind] = {**phase_result, "error": phase_error}
+                    yield {"event": "phase_failed", "kind": kind, "reason": phase_error}
+                else:
+                    summary["phases"][kind] = phase_result
+                    yield {"event": "phase_done", "kind": kind, **phase_result}
             # 마지막 종합
             now_iso = datetime.now().isoformat()
             summary["completed_at"] = now_iso

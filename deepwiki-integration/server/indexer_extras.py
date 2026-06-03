@@ -10,6 +10,7 @@ from typing import AsyncIterator, Dict, Any, Optional
 from ollama_client import get_ollama
 from supabase_store import get_store
 from chunker import chunk_text, count_tokens
+from _since_utils import fetch_with_since_fallback  # [r209]
 
 
 async def _index_entity(
@@ -24,17 +25,14 @@ async def _index_entity(
 ) -> AsyncIterator[Dict[str, Any]]:
     ollama = get_ollama()
     store = get_store()
-    try:
-        q = store.client.table(table).select("*")
+    # [r209] updated_at 컬럼 타입(timestamptz vs bigint ms) 자동 fallback
+    def _build():
+        qb = store.client.table(table).select("*")
         if use_project_filter and project_id:
-            q = q.eq("project_id", project_id)
-        if since:
-            try:
-                q = q.gte("updated_at", since)
-            except Exception:
-                pass
-        res = q.execute()
-        rows = res.data or []
+            qb = qb.eq("project_id", project_id)
+        return qb
+    try:
+        rows = fetch_with_since_fallback(_build, since)
     except Exception as e:
         yield {"event": "warn", "message": f"{table} 테이블 조회 실패(미생성 가능): {e}"}
         yield {"event": "done", "chunks_inserted": 0, "skipped_empty": 0}

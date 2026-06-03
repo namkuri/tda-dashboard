@@ -11,6 +11,7 @@ from config import settings
 from chunker import chunk_text, chunk_code, count_tokens
 from ollama_client import OllamaClient, get_ollama
 from supabase_store import SupabaseStore, get_store
+from _since_utils import fetch_with_since_fallback  # [r209]
 
 
 def _rm_readonly(func, path, exc_info):
@@ -374,17 +375,13 @@ async def index_wiki_docs(project_id: Optional[str] = None, since: Optional[str]
     store = get_store()
 
     # [r103] select("*")로 안전 — 스키마에 없는 컬럼은 무시
-    q = store.client.table("wiki_docs").select("*")
-    if project_id:
-        q = q.eq("project_id", project_id)
-    # [r130] 증분: updated_at >= since 필터 (컬럼 없으면 전체)
-    if since:
-        try:
-            q = q.gte("updated_at", since)
-        except Exception:
-            pass
-    res = q.execute()
-    docs = res.data or []
+    # [r209] updated_at 가 bigint(ms) 라 ISO 문자열을 그대로 .gte 하면 22P02. 자동 fallback.
+    def _build_wiki():
+        qb = store.client.table("wiki_docs").select("*")
+        if project_id:
+            qb = qb.eq("project_id", project_id)
+        return qb
+    docs = fetch_with_since_fallback(_build_wiki, since)
 
     # 폴더 제외
     docs = [d for d in docs if not (d.get("meta") or {}).get("isFolder")]
@@ -471,16 +468,13 @@ async def index_tasks(project_id: Optional[str] = None, since: Optional[str] = N
     store = get_store()
 
     # [r103] select("*")로 안전하게 — 어떤 컬럼이 있든 에러 안 남
-    q = store.client.table("tasks").select("*")
-    if project_id:
-        q = q.eq("project_id", project_id)
-    if since:
-        try:
-            q = q.gte("updated_at", since)
-        except Exception:
-            pass
-    res = q.execute()
-    tasks = res.data or []
+    # [r209] updated_at 가 bigint(ms) 인 경우 ISO since 자동 fallback
+    def _build_tasks():
+        qb = store.client.table("tasks").select("*")
+        if project_id:
+            qb = qb.eq("project_id", project_id)
+        return qb
+    tasks = fetch_with_since_fallback(_build_tasks, since)
 
     yield {"event": "start", "total_tasks": len(tasks), "mode": "incremental" if since else "full", "since": since or None}
 
@@ -592,16 +586,13 @@ async def index_sprints(project_id: Optional[str] = None, since: Optional[str] =
     store = get_store()
 
     # [r103] select("*")로 안전 — 스키마에 없는 컬럼은 자동 무시
-    q = store.client.table("sprints").select("*")
-    if project_id:
-        q = q.eq("project_id", project_id)
-    if since:
-        try:
-            q = q.gte("updated_at", since)
-        except Exception:
-            pass
-    res = q.execute()
-    sprints = res.data or []
+    # [r209] updated_at 가 bigint(ms) 인 경우 ISO since 자동 fallback
+    def _build_sprints():
+        qb = store.client.table("sprints").select("*")
+        if project_id:
+            qb = qb.eq("project_id", project_id)
+        return qb
+    sprints = fetch_with_since_fallback(_build_sprints, since)
 
     yield {"event": "start", "total_sprints": len(sprints), "mode": "incremental" if since else "full", "since": since or None}
 
