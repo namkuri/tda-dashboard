@@ -73,11 +73,26 @@ _KOREAN_KEYWORD_MAP = {
     "묻힘": ["Buried", "zone"],
     # 캘린더 / 일정
     "캘린더": ["calendar", "calendar_events", "dbUpsertEvent"],
-    "일정": ["event", "calendar_events"],
+    "일정": ["event", "calendar_events", "start_at", "end_at"],
+    "마감": ["due_date", "due", "end_at"],
     # 자료
     "에셋": ["asset", "assets", "asset_folders"],
-    "이슈": ["issue", "issues"],
-    "버그": ["bug", "bug_reports"],
+    "이슈": ["issue", "issues", "priority", "assignee"],
+    "버그": ["bug", "bug_reports", "severity", "env"],
+    # [r208] WBS / 작업구조화 / 타임라인 세그먼트
+    "작업구조화": ["wbs", "wbs_nodes", "segments", "parent_id"],
+    "구조화": ["wbs", "wbs_nodes", "segments"],
+    "WBS": ["wbs", "wbs_nodes"],
+    "타임라인": ["timeline", "segments", "_segments", "_start", "_due"],
+    "진행률": ["progress", "wbs", "status"],
+    "세그먼트": ["segments", "_segments"],
+    "마일스톤": ["milestone", "wbs"],
+    "노드": ["wbs_nodes", "parent_id"],
+    # 우선순위 / 상태
+    "우선순위": ["priority", "high", "urgent"],
+    "상태": ["status", "open", "closed"],
+    "담당": ["assignee_id", "owner_user_id", "assignees"],
+    "심각도": ["severity"],
     # Deep Wiki
     "임베딩": ["embedding", "embed", "ollama"],
     "청크": ["chunk", "doc_chunks", "chunk_text", "chunk_code"],
@@ -144,9 +159,17 @@ async def retrieve(
 
     # 1. 벡터 임베딩 검색 — [r107] source_type별로 분리 호출
     embedding = await ollama.embed(query)
-    requested = set(source_types) if source_types else {"code", "wiki", "sprint", "task"}
-    # type별 fetch 수 — 작은 type(sprint/task)도 top 풀에 충분히 들어가게
-    per_type_fetch = {"sprint": 8, "task": 10, "wiki": 8, "code": 30}
+    # [r208] 신규 엔티티 6종(issue/event/asset/review/bug/wbs) 기본 검색 대상에 포함
+    requested = set(source_types) if source_types else {
+        "code", "wiki", "sprint", "task",
+        "issue", "event", "asset", "review", "bug", "wbs",
+    }
+    # type별 fetch 수 — 작은 type(sprint/task/이슈 등)도 top 풀에 충분히 들어가게
+    per_type_fetch = {
+        "sprint": 8, "task": 10, "wiki": 8, "code": 30,
+        # [r208] 신규 엔티티
+        "issue": 8, "event": 6, "asset": 6, "review": 5, "bug": 6, "wbs": 10,
+    }
     vec_results: List[Dict[str, Any]] = []
     seen_ids = set()
     for stype, take in per_type_fetch.items():
@@ -193,7 +216,11 @@ async def retrieve(
     filtered = [
         r for r in merged
         if r.get("similarity", 0) >= SIMILARITY_THRESHOLD
-        or r.get("source_type") in ("sprint", "task", "wiki")
+        # [r208] 신규 엔티티(라이브 데이터)도 임계치 미달이라도 후보로 유지
+        or r.get("source_type") in (
+            "sprint", "task", "wiki",
+            "issue", "event", "asset", "review", "bug", "wbs",
+        )
     ]
     if len(filtered) < 3:
         filtered = merged
@@ -213,7 +240,14 @@ _TYPE_QUOTAS = {
     "sprint": 2,  # 사용자의 실제 스프린트 정보 — 가장 적게 인덱싱돼서 강제 포함
     "task": 3,    # 칸반 카드 — 사용자가 만든 핵심 데이터
     "wiki": 2,    # 사용자가 쓴 위키 문서
-    "code": 5,    # 코드/문서 파일 — 양이 많으니 쿼터 큼
+    # [r208] 신규 엔티티 — 라이브 데이터이므로 코드보다 우선
+    "wbs": 3,     # 작업구조화(타임라인 세그먼트 포함) — 프로젝트 진행 핵심
+    "issue": 2,   # 이슈
+    "event": 1,   # 일정
+    "asset": 1,   # 에셋
+    "review": 1,  # 리뷰/결재
+    "bug": 1,     # 버그 리포트
+    "code": 4,    # 코드/문서 파일 — 양이 많으나 쿼터 적정 유지
 }
 
 

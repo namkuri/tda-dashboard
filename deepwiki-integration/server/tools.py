@@ -140,8 +140,17 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     "project_id": {"type": "string", "description": "프로젝트 ID (선택)."},
                     "source_types": {
                         "type": "array",
-                        "items": {"type": "string", "enum": ["code", "wiki"]},
-                        "description": "검색 대상 유형 (기본: code+wiki).",
+                        "items": {"type": "string", "enum": [
+                            "code", "wiki", "sprint", "task",
+                            # [r208] 신규 엔티티
+                            "issue", "event", "asset", "review", "bug", "wbs",
+                        ]},
+                        "description": (
+                            "검색 대상 유형 (기본: 전부). "
+                            "code/wiki=정적 문서, sprint/task=칸반, "
+                            "issue/bug/review=이슈·버그·결재, event=일정, asset=에셋, "
+                            "wbs=작업구조화·타임라인 세그먼트."
+                        ),
                     },
                     "top_k": {"type": "integer", "description": "결과 수 (기본 6)."},
                 },
@@ -403,6 +412,31 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             },
         },
     },
+    # ─── [r208] WBS / 작업구조화 / 타임라인 세그먼트 도구 ───
+    {
+        "type": "function",
+        "function": {
+            "name": "list_wbs_nodes",
+            "description": (
+                "작업 구조화(WBS) 트리 노드 목록. 각 노드는 다중 타임라인 세그먼트(다중 진행바)와 "
+                "스프린트·태스크·이슈·에셋 연결 정보를 포함. "
+                "사용자가 '작업구조화', '타임라인', '마일스톤', 'WBS', '진행 상황', '전체 일정' 등을 "
+                "물을 때 호출. 반환: { title, status, progress, segments[], links{} } 배열."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "프로젝트 ID."},
+                    "status": {
+                        "type": "string",
+                        "description": "상태 필터 (선택, 예: planning/in_progress/done).",
+                    },
+                    "limit": {"type": "integer", "description": "최대 결과 수 (기본 50)."},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
 ]
 
 
@@ -448,6 +482,9 @@ async def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             return await _tool_list_wiki_audits(arguments)
         if name == "get_wiki_audit":
             return await _tool_get_wiki_audit(arguments)
+        # [r208] WBS
+        if name == "list_wbs_nodes":
+            return await _tool_list_wbs_nodes(arguments)
         return {"ok": False, "error": f"Unknown tool: {name}"}
     except Exception as e:
         import traceback
@@ -572,7 +609,11 @@ async def _tool_search_vector(args: Dict[str, Any]) -> Dict[str, Any]:
     if not query.strip():
         return {"ok": False, "error": "query required"}
     project_id = args.get("project_id")
-    source_types = args.get("source_types") or ["code", "wiki"]
+    # [r208] 기본을 전체 source_type 으로 — issue/wbs/event/asset/review/bug 도 포함
+    source_types = args.get("source_types") or [
+        "code", "wiki", "sprint", "task",
+        "issue", "event", "asset", "review", "bug", "wbs",
+    ]
     top_k = args.get("top_k") or 6
     chunks = await vector_retrieve(
         query=query,
@@ -1101,3 +1142,78 @@ async def _tool_get_wiki_audit(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": True, "result": audit}
     except Exception as e:
         return {"ok": False, "error": f"조회 실패: {e}"}
+
+
+# ─────────────────────────────────────────────
+# [r208] WBS / 작업구조화 노드 + 타임라인 세그먼트
+# ─────────────────────────────────────────────
+
+async def _tool_list_wbs_nodes(args: Dict[str, Any]) -> Dict[str, Any]:
+    """작업구조화 노드 목록 — segments(다중 진행바) + links(연결) 포함."""
+    project_id = args.get("project_id")
+    if not project_id:
+        return {"ok": False, "error": "project_id required"}
+    store = get_store()
+    try:
+        q = (
+            store.client.table("wbs_nodes")
+            .select("id,title,description,status,progress,parent_id,assignees,links,sort_order,updated_at")
+            .eq("project_id", project_id)
+        )
+        if args.get("status"):
+            q = q.eq("status", args["status"])
+        q = q.order("sort_order").limit(int(args.get("limit") or 50))
+        res = q.execute()
+        rows = res.data or []
+    except Exception as e:
+        return {"ok": False, "error": f"wbs_nodes 조회 실패: {e}"}
+
+    # 담당자 이름 join
+    uids: List[str] = []
+    for r in rows:
+        for u in (r.get("assignees") or []):
+            if isinstance(u, str):
+                uids.append(u)
+    user_map = await _resolve_users(uids) if uids else {}
+
+    out = []
+    for r in rows:
+        links = r.get("links") or {}
+        segments_raw = links.get("_segments") if isinstance(links, dict) else None
+        segments = []
+        if isinstance(segments_raw, list):
+            for s in segments_raw:
+                if not isinstance(s, dict):
+                    continue
+                segments.append({
+                    "id": s.get("id"),
+                    "start": s.get("start"),
+                    "due": s.get("due"),
+                    "color": s.get("color"),
+                    "sprintIds": s.get("sprintIds") or [],
+                    "taskIds": s.get("taskIds") or [],
+                    "issueIds": s.get("issueIds") or [],
+                    "deps": s.get("deps") or [],
+                })
+        assignees_obj = []
+        for uid in (r.get("assignees") or []):
+            if isinstance(uid, str):
+                assignees_obj.append(user_map.get(uid, {"id": uid, "name": uid[:8]}))
+        out.append({
+            "id": r.get("id"),
+            "title": r.get("title") or "(제목 없음)",
+            "description": (r.get("description") or "")[:300],
+            "status": r.get("status"),
+            "progress": r.get("progress") or 0,
+            "parent_id": r.get("parent_id"),
+            "start": (links.get("_start") if isinstance(links, dict) else None),
+            "due": (links.get("_due") if isinstance(links, dict) else None),
+            "segments": segments,
+            "segment_count": len(segments),
+            "assignees": assignees_obj,
+            "linked_sprints": (links.get("sprintIds") if isinstance(links, dict) else []) or [],
+            "linked_tasks": (links.get("taskIds") if isinstance(links, dict) else []) or [],
+            "linked_assets": (links.get("assetIds") if isinstance(links, dict) else []) or [],
+            "updated_at": r.get("updated_at"),
+        })
+    return {"ok": True, "result": out, "count": len(out)}

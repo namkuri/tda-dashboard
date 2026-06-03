@@ -3047,6 +3047,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .aihub-24tip.on { display: block; }
         /* 헬스 응답 모달 */
         .aihub-health-pre { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px 12px; max-height: 50vh; overflow: auto; white-space: pre-wrap; word-break: break-word; color: var(--c-text); }
+        /* [r208] 인덱싱 카드 */
+        .aihub-idx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+        .aihub-idx-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; cursor: pointer; color: var(--c-text); font-size: 11.5px; font-weight: 700; transition: border-color .12s, transform .12s; }
+        .aihub-idx-btn span:first-child { font-size: 19px; }
+        .aihub-idx-btn:hover { border-color: var(--c-accent); transform: translateY(-1px); }
+        .aihub-idx-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .aihub-idx-btn.running { background: var(--c-accent-soft); border-color: var(--c-accent); }
+        .aihub-idx-progress { margin-top: 14px; padding: 10px 12px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; }
+        .aihub-idx-bar { height: 6px; background: var(--ios-fill); border-radius: 3px; overflow: hidden; margin-bottom: 8px; position: relative; }
+        .aihub-idx-bar > div { height: 100%; background: linear-gradient(90deg, var(--c-accent), #ec4899); transition: width .25s; width: 0%; }
+        .aihub-idx-bar.indeterminate > div { width: 30% !important; animation: ahubIdxLoop 1.3s linear infinite; }
+        @keyframes ahubIdxLoop { 0% { transform: translateX(-100%); } 100% { transform: translateX(360%); } }
+        .aihub-idx-stage { font-size: 12.5px; font-weight: 700; color: var(--c-accent); margin-bottom: 6px; }
+        .aihub-idx-log { max-height: 200px; overflow-y: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; color: var(--c-text2); line-height: 1.6; white-space: pre-wrap; word-break: break-word; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 6px; padding: 8px 10px; }
         .aihub-gpu-list { display: flex; flex-direction: column; gap: 8px; }
         .aihub-gpu-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--c-border); border-radius: 9px; background: var(--c-paper); flex-wrap: wrap; }
         .aihub-gpu-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
@@ -5181,6 +5195,52 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <div class="aihub-hint">활성 GPU 호스트가 노출하는 LLM 목록입니다. 클릭하면 해당 모델을 기본값으로 설정합니다(대화형 AI/Deep Wiki/마인드맵 공통 적용).</div>
                 </section>
 
+                <!-- [r208] 인덱싱(RAG) -->
+                <section class="aihub-card">
+                    <div class="aihub-card-head"><h3>🗂 인덱싱 — RAG 컨텍스트 구축</h3>
+                        <span class="aihub-card-sub" id="aihub-idx-last">마지막 동기화 확인 중…</span>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                        <input id="aihub-git-url" type="text" placeholder="Git 레포 URL (코드 인덱싱용)" style="flex:1;min-width:240px;font-size:12.5px;padding:6px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);">
+                        <button class="aihub-gpu-btn primary" onclick="ahubTriggerIndex('code')" style="font-size:12px;">🗂 코드 인덱싱</button>
+                    </div>
+                    <div class="aihub-idx-grid">
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('wiki')"><span>📚</span><span>문서</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('task')"><span>📋</span><span>태스크</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('sprint')"><span>🏃</span><span>스프린트</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('wbs')"><span>🧩</span><span>작업구조화</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('issue')"><span>🐛</span><span>이슈</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('event')"><span>📅</span><span>일정</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('asset')"><span>🎮</span><span>에셋</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('review')"><span>🗳</span><span>리뷰</span></button>
+                        <button class="aihub-idx-btn" onclick="ahubTriggerIndex('bug')"><span>🐞</span><span>버그</span></button>
+                    </div>
+                    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+                        <button class="aihub-gpu-btn primary" onclick="ahubSyncAll()" title="모든 비코드 엔티티 증분 동기화(변경분만)" style="flex:1;min-width:160px;">🔁 전체 증분 동기화</button>
+                        <button class="aihub-gpu-btn" onclick="ahubCleanupEmpty()" title="빈 템플릿 청크 청소(재인덱싱 없이 즉시)">🧹 빈 청크 청소</button>
+                    </div>
+                    <div id="aihub-idx-progress" class="aihub-idx-progress" style="display:none;">
+                        <div class="aihub-idx-bar"><div id="aihub-idx-bar-fill"></div></div>
+                        <div class="aihub-idx-stage" id="aihub-idx-stage">⏳ 준비 중…</div>
+                        <div id="aihub-idx-log" class="aihub-idx-log"></div>
+                    </div>
+                </section>
+
+                <!-- [r208] 진단 -->
+                <section class="aihub-card">
+                    <div class="aihub-card-head"><h3>📊 진단 (Diagnostics)</h3></div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">
+                        <button class="aihub-gpu-btn" onclick="dwShowHealth()" style="font-size:12px;">🩺 서버 상태</button>
+                        <button class="aihub-gpu-btn" onclick="dwShowSources()" style="font-size:12px;">📁 인덱스 파일 목록</button>
+                        <button class="aihub-gpu-btn" onclick="dwShowIndexLog()" style="font-size:12px;">📜 마지막 인덱싱 로그</button>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-bottom:8px;">
+                        <input id="dw-diag-q" type="text" placeholder="검색어 입력 (예: dbUpsertCategory, 이슈, 콤보 시스템)" style="flex:1;background:var(--c-paper);color:var(--c-text);border:1px solid var(--c-border);border-radius:7px;padding:6px 10px;font-size:12px;" onkeydown="if(event.key==='Enter')dwTestSearch()">
+                        <button onclick="dwTestSearch()" class="aihub-gpu-btn primary" style="font-size:12px;">🔍 검색 테스트</button>
+                    </div>
+                    <div id="dw-diag-output" style="max-height:280px;overflow:auto;padding:10px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:8px;font-size:11.5px;color:var(--c-text2);font-family:'JetBrains Mono',ui-monospace,monospace;display:none;white-space:pre-wrap;line-height:1.55;"></div>
+                </section>
+
                 <!-- 사용 히스토리 -->
                 <section class="aihub-card">
                     <div class="aihub-card-head"><h3>📊 사용 히스토리</h3>
@@ -5300,38 +5360,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             ON 하면 위의 백엔드 URL이 <code>gpu_hosts</code> 에 등록되어 팀원이 자동으로 발견·연결할 수 있습니다. 30초마다 헬스체크로 상태(온라인/사용 중/오프라인) + 부하 정보를 갱신합니다. 탭 닫으면 자동 오프라인.
                         </div>
                     </div>
-                    <!-- [r90] 인덱싱 섹션 -->
-                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--c-border);">
-                        <div style="font-size:13px;font-weight:700;color:var(--c-text);margin-bottom:8px;">🗂 인덱싱 (RAG 컨텍스트 구축)</div>
-                        <label class="cal-fld"><span>Git 레포 URL (코드 인덱싱용)</span>
-                            <input id="dw-git-url" type="text" placeholder="https://github.com/namkuri/tda-dashboard">
-                        </label>
-                        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px;">
-                            <button onclick="dwTriggerIndex('code')" class="util-btn" style="background:var(--c-accent);color:#fff;">🗂 코드 인덱싱</button>
-                            <button onclick="dwTriggerIndex('wiki')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">📚 문서 인덱싱</button>
-                            <button onclick="dwTriggerIndex('task')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">📋 태스크 인덱싱</button>
-                            <button onclick="dwTriggerIndex('sprint')" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);">🏃 스프린트 인덱싱</button>
-                        </div>
-                        <!-- [r95] 빈 템플릿 청크 청소 — 재인덱싱 없이 즉시 노이즈 제거 -->
-                        <div style="margin-top:8px;">
-                            <button onclick="dwCleanupEmpty()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text2);border:1px dashed var(--c-border);width:100%;font-size:12px;" title="기본 템플릿(여기에 내용을 작성하세요, 새로운 태스크 등)만 들어간 청크를 일괄 삭제합니다. 재인덱싱 없이 즉시 적용.">🧹 빈 템플릿 청크 청소</button>
-                        </div>
-                        <div id="dw-index-progress" style="margin-top:10px;font-size:12px;color:var(--c-text2);min-height:18px;"></div>
-                    </div>
-                    <!-- [r99] 진단 패널 — 서버 상태/인덱스 통계/검색 테스트/로그를 앱 내에서 직접 확인 -->
-                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--c-border);">
-                        <div style="font-weight:700;font-size:13px;color:var(--c-text);margin-bottom:8px;">📊 진단 (Diagnostics)</div>
-                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">
-                            <button onclick="dwShowHealth()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;">🩺 서버 상태</button>
-                            <button onclick="dwShowSources()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;">📁 인덱스 파일 목록</button>
-                            <button onclick="dwShowIndexLog()" class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);font-size:12px;">📜 마지막 인덱싱 로그</button>
-                        </div>
-                        <!-- 검색 테스트 -->
-                        <div style="display:flex;gap:6px;margin-bottom:8px;">
-                            <input id="dw-diag-q" type="text" placeholder="검색어 입력 (예: dbUpsertCategory)" style="flex:1;background:var(--c-paper);color:var(--c-text);border:1px solid var(--c-border);border-radius:7px;padding:6px 10px;font-size:12px;" onkeydown="if(event.key==='Enter')dwTestSearch()">
-                            <button onclick="dwTestSearch()" class="util-btn" style="background:var(--c-accent);color:#fff;font-size:12px;padding:6px 12px;">🔍 검색 테스트</button>
-                        </div>
-                        <div id="dw-diag-output" style="max-height:280px;overflow:auto;padding:10px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:8px;font-size:11.5px;color:var(--c-text2);font-family:'JetBrains Mono',ui-monospace,monospace;display:none;white-space:pre-wrap;line-height:1.55;"></div>
+                    <!-- [r208] 인덱싱·진단 섹션은 AI Hub로 이동됨 (사이드바 '✦ AI Agent') -->
+                    <div style="margin-top:14px;padding:10px 12px;border-radius:9px;background:var(--c-accent-soft);font-size:11.5px;color:var(--c-text2);line-height:1.5;">
+                        💡 인덱싱·진단 기능은 사이드바 <b>✦ AI Agent</b>(허브) 페이지의 <b>🗂 인덱싱</b> 카드로 이동했습니다.
                     </div>
                 </div>
                 <div class="cal-modal-foot">
@@ -10013,6 +10044,239 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             } catch (e) {
                 pgEl.innerHTML = '❌ 청소 실패: ' + _annEsc(e.message || e);
                 showToast('❌ 청소 요청 실패: ' + (e.message || e), 'alert');
+            }
+        }
+
+        // [r208] AI Hub — 실시간 인덱싱 (사이드바 ✦ AI Agent → 🗂 인덱싱 카드)
+        var _ahubIdx = { running: false, kind: null, log: [] };
+
+        function _ahubIdxKindLabel(k) {
+            return ({
+                code: '🗂 코드', wiki: '📚 문서', task: '📋 태스크', sprint: '🏃 스프린트',
+                wbs: '🧩 작업구조화', issue: '🐛 이슈', event: '📅 일정',
+                asset: '🎮 에셋', review: '🗳 리뷰', bug: '🐞 버그',
+                sync: '🔁 전체 증분 동기화', cleanup: '🧹 빈 청크 청소',
+            })[k] || k;
+        }
+        function _ahubIdxLog(msg, kind) {
+            try {
+                var box = document.getElementById('aihub-idx-log'); if (!box) return;
+                var ts = new Date().toLocaleTimeString();
+                var icon = kind === 'err' ? '❌' : kind === 'warn' ? '⚠' : kind === 'done' ? '✅' : '·';
+                var line = '[' + ts + '] ' + icon + ' ' + msg;
+                _ahubIdx.log.push(line);
+                if (_ahubIdx.log.length > 400) _ahubIdx.log = _ahubIdx.log.slice(-400);
+                box.textContent = _ahubIdx.log.join('\n');
+                box.scrollTop = box.scrollHeight;
+            } catch (e) {}
+        }
+        function _ahubIdxSetStage(text) {
+            var el = document.getElementById('aihub-idx-stage'); if (el) el.textContent = text || '';
+        }
+        function _ahubIdxSetBar(pct, indeterminate) {
+            var bar = document.querySelector('#aihub-idx-progress .aihub-idx-bar');
+            var fill = document.getElementById('aihub-idx-bar-fill');
+            if (!bar || !fill) return;
+            if (indeterminate) {
+                bar.classList.add('indeterminate');
+                fill.style.width = '30%';
+            } else {
+                bar.classList.remove('indeterminate');
+                fill.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+            }
+        }
+        function _ahubIdxShow(show) {
+            var pg = document.getElementById('aihub-idx-progress'); if (pg) pg.style.display = show ? 'block' : 'none';
+        }
+        function _ahubIdxLockButtons(lock) {
+            try {
+                document.querySelectorAll('#aihub-view .aihub-idx-btn, #aihub-view button[onclick^="ahubTriggerIndex"], #aihub-view button[onclick^="ahubSyncAll"], #aihub-view button[onclick^="ahubCleanupEmpty"]').forEach(function (b) {
+                    b.disabled = !!lock;
+                });
+            } catch (e) {}
+        }
+        function ahubRefreshIdxBadge() {
+            var el = document.getElementById('aihub-idx-last'); if (!el) return;
+            var ts = localStorage.getItem('tda_dw_last_sync_at') || '';
+            if (!ts) { el.textContent = '아직 동기화 안 됨'; return; }
+            try { el.textContent = '마지막 동기화: ' + new Date(ts).toLocaleString(); }
+            catch (e) { el.textContent = '마지막 동기화: ' + ts; }
+        }
+
+        // SSE 한 스트림을 소비하면서 progress UI 업데이트. completed 이벤트(done) 받으면 true.
+        async function _ahubConsumeSSE(res, opts) {
+            opts = opts || {};
+            if (!res || !res.body) throw new Error('SSE body 없음');
+            var reader = res.body.getReader();
+            var dec = new TextDecoder();
+            var buf = '';
+            var doneSeen = false;
+            var lastPct = 0;
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, { stream: true });
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i];
+                    if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim();
+                    if (!data || data === '[DONE]') continue;
+                    var ev = null;
+                    try { ev = JSON.parse(data); } catch (e) { continue; }
+                    _dwLogEvent(ev);
+                    if (ev.event === 'busy') {
+                        _ahubIdxSetStage('⏸ 다른 LLM 작업 진행 중 — 잠시 후 재시도');
+                        _ahubIdxLog('서버 바쁨: ' + (ev.kind || ev.message || ''), 'warn');
+                    } else if (ev.event === 'warn') {
+                        _ahubIdxLog(ev.message || JSON.stringify(ev), 'warn');
+                    } else if (ev.event === 'error') {
+                        _ahubIdxLog(ev.message || JSON.stringify(ev), 'err');
+                    } else if (ev.event === 'start') {
+                        var total = ev.total_docs || ev.total || 0;
+                        _ahubIdxSetStage('📥 시작 — ' + (ev.source_type || opts.kind || '?') + ' · 총 ' + total + '건');
+                        _ahubIdxSetBar(0, total === 0);
+                        _ahubIdxLog('start: ' + (ev.source_type || '') + ' total=' + total + ' mode=' + (ev.mode || '?'));
+                    } else if (ev.event === 'cleaned') {
+                        _ahubIdxLog('cleaned: ' + (ev.mode || '?') + ' deleted=' + (ev.deleted || 0));
+                    } else if (ev.event === 'progress') {
+                        var cur = ev.current || 0, tot = ev.total || 0;
+                        var pct = tot ? Math.round(cur / tot * 100) : 0;
+                        lastPct = pct;
+                        _ahubIdxSetBar(pct, false);
+                        _ahubIdxSetStage('🔄 ' + (opts.kind || '') + ' ' + cur + '/' + tot + (ev.file ? ' · ' + ev.file : ''));
+                    } else if (ev.event === 'phase_start') {
+                        _ahubIdxSetStage('🔄 ' + (ev.kind || '?') + ' (' + (ev.current || 0) + '/' + (ev.total || 0) + ')');
+                        _ahubIdxLog('phase: ' + (ev.kind || ''));
+                    } else if (ev.event === 'done') {
+                        doneSeen = true;
+                        var inserted = ev.chunks_inserted || (ev.summary ? Object.values(ev.summary.phases || {}).reduce(function (a, p) { return a + (p.chunks_inserted || 0); }, 0) : 0);
+                        var skipped = ev.skipped_empty || 0;
+                        _ahubIdxSetBar(100, false);
+                        _ahubIdxSetStage('✅ 완료 — 청크 ' + inserted + '개 저장' + (skipped ? ' · 빈 본문 ' + skipped + '개 스킵' : ''));
+                        _ahubIdxLog('done: inserted=' + inserted + ' skipped=' + skipped, 'done');
+                        if (ev.next_since) {
+                            localStorage.setItem('tda_dw_last_sync_at', ev.next_since);
+                            localStorage.setItem('tda_dw_last_sync_ts', String(Date.now()));
+                            ahubRefreshIdxBadge();
+                        }
+                    }
+                }
+            }
+            return doneSeen;
+        }
+
+        async function ahubTriggerIndex(kind) {
+            if (_ahubIdx.running) { showToast('⏳ 다른 인덱싱 작업 진행 중', 'alert'); return; }
+            var s = _dwGetSettings();
+            if (!s.backendUrl) { showToast('⚙️ 설정에서 백엔드 URL 먼저 입력', 'alert'); return; }
+            if (!activeProjectId) { showToast('프로젝트를 먼저 선택', 'alert'); return; }
+            _ahubIdx.running = true; _ahubIdx.kind = kind; _ahubIdx.log = [];
+            _ahubIdxLockButtons(true);
+            _ahubIdxShow(true);
+            var lbl = _ahubIdxKindLabel(kind);
+            _ahubIdxSetStage('🚀 ' + lbl + ' 인덱싱 요청…');
+            _ahubIdxSetBar(0, true);
+            _ahubIdxLog('POST ' + s.backendUrl + '/index/' + kind);
+            // Git URL은 코드 인덱싱에서만 필요 — 입력값 또는 프로젝트 메타 우선
+            var gitUrl = null;
+            try {
+                var inp = document.getElementById('aihub-git-url'); if (inp && inp.value.trim()) gitUrl = inp.value.trim();
+            } catch (e) {}
+            try {
+                var body = { project_id: activeProjectId };
+                if (kind === 'code') {
+                    if (!gitUrl) throw new Error('코드 인덱싱은 Git URL 입력 필요');
+                    body.git_url = gitUrl;
+                }
+                var res = await fetch(s.backendUrl + '/index/' + kind, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status + ' — 백엔드 라우트가 활성화됐는지 확인 (r208 재시작 필요)');
+                await _ahubConsumeSSE(res, { kind: lbl });
+                showToast('✅ ' + lbl + ' 인덱싱 완료', 'success');
+            } catch (e) {
+                _ahubIdxSetStage('❌ 실패 — ' + (e.message || e));
+                _ahubIdxLog('error: ' + (e.message || e), 'err');
+                showToast('❌ 인덱싱 실패: ' + (e.message || e), 'alert');
+            } finally {
+                _ahubIdx.running = false; _ahubIdx.kind = null;
+                _ahubIdxLockButtons(false);
+            }
+        }
+
+        async function ahubSyncAll() {
+            if (_ahubIdx.running) { showToast('⏳ 다른 인덱싱 작업 진행 중', 'alert'); return; }
+            var s = _dwGetSettings();
+            if (!s.backendUrl) { showToast('⚙️ 설정에서 백엔드 URL 먼저 입력', 'alert'); return; }
+            if (!activeProjectId) { showToast('프로젝트를 먼저 선택', 'alert'); return; }
+            _ahubIdx.running = true; _ahubIdx.kind = 'sync'; _ahubIdx.log = [];
+            _ahubIdxLockButtons(true);
+            _ahubIdxShow(true);
+            _ahubIdxSetStage('🔁 전체 증분 동기화 — 변경된 데이터만 재임베딩');
+            _ahubIdxSetBar(0, true);
+            var since = localStorage.getItem('tda_dw_last_sync_at') || null;
+            _ahubIdxLog('POST /index/sync since=' + (since || '(처음)'));
+            try {
+                var res = await fetch(s.backendUrl + '/index/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: activeProjectId, since: since,
+                        include: ['wiki', 'task', 'sprint', 'wbs', 'issue', 'event', 'asset', 'review'],
+                    }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await _ahubConsumeSSE(res, { kind: '전체 동기화' });
+                showToast('✅ 전체 증분 동기화 완료', 'success');
+            } catch (e) {
+                _ahubIdxSetStage('❌ 실패 — ' + (e.message || e));
+                _ahubIdxLog('error: ' + (e.message || e), 'err');
+                showToast('❌ 동기화 실패: ' + (e.message || e), 'alert');
+            } finally {
+                _ahubIdx.running = false; _ahubIdx.kind = null;
+                _ahubIdxLockButtons(false);
+            }
+        }
+
+        async function ahubCleanupEmpty() {
+            if (_ahubIdx.running) { showToast('⏳ 다른 인덱싱 작업 진행 중', 'alert'); return; }
+            var s = _dwGetSettings();
+            if (!s.backendUrl) { showToast('⚙️ 설정에서 백엔드 URL 먼저 입력', 'alert'); return; }
+            var ok = await uiConfirm({
+                title: '빈 템플릿 청크 청소',
+                message: '"여기에 내용을 작성하세요" 같은 기본 템플릿만 들어간 청크를 일괄 삭제합니다. 재임베딩은 하지 않으므로 매우 빠릅니다.',
+                confirmText: '청소'
+            });
+            if (!ok) return;
+            _ahubIdx.running = true; _ahubIdx.kind = 'cleanup'; _ahubIdx.log = [];
+            _ahubIdxLockButtons(true);
+            _ahubIdxShow(true);
+            _ahubIdxSetStage('🧹 빈 청크 스캔 중…');
+            _ahubIdxSetBar(0, true);
+            try {
+                var res = await fetch(s.backendUrl + '/index/cleanup_empty', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                _ahubIdxSetBar(100, false);
+                _ahubIdxSetStage('✅ 청소 완료 — 스캔 ' + (data.scanned || 0) + '개 · 삭제 ' + (data.deleted || 0) + '개 · 남은 ' + (data.remaining || 0) + '개');
+                _ahubIdxLog('cleanup: scanned=' + (data.scanned || 0) + ' deleted=' + (data.deleted || 0) + ' remaining=' + (data.remaining || 0), 'done');
+                if (data.samples && data.samples.length) {
+                    _ahubIdxLog('예시 삭제: ' + data.samples.map(function (sm) { return (sm.source_title || '?').slice(0, 32); }).join(' · '));
+                }
+                showToast('✅ 빈 템플릿 ' + (data.deleted || 0) + '개 삭제됨', 'success');
+            } catch (e) {
+                _ahubIdxSetStage('❌ 실패 — ' + (e.message || e));
+                _ahubIdxLog('error: ' + (e.message || e), 'err');
+                showToast('❌ 청소 실패: ' + (e.message || e), 'alert');
+            } finally {
+                _ahubIdx.running = false; _ahubIdx.kind = null;
+                _ahubIdxLockButtons(false);
             }
         }
 
@@ -14859,6 +15123,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var _csAh = document.getElementById('cs-nav-aihub'); if (_csAh) _csAh.classList.toggle('active', viewName === 'aiHub');
             var _ahvw = document.getElementById('aihub-view'); if (_ahvw) { _ahvw.classList.toggle('hidden', viewName !== 'aiHub'); _ahvw.classList.toggle('block', viewName === 'aiHub'); }
             if (viewName === 'aiHub' && typeof aihubRender === 'function') aihubRender();
+            // [r208] AI Hub 진입 시 마지막 동기화 시각 갱신
+            if (viewName === 'aiHub' && typeof ahubRefreshIdxBadge === 'function') setTimeout(ahubRefreshIdxBadge, 30);
             // [r112] 진짜 Deep Wiki — 자료 그룹 (별도 페이지)
             var _csDwp = document.getElementById('cs-nav-deepwiki-pages'); if (_csDwp) _csDwp.classList.toggle('active', viewName === 'deepwikiPages');
             var _dwpvw = document.getElementById('deepwikiPages-view'); if (_dwpvw) { _dwpvw.classList.toggle('hidden', viewName !== 'deepwikiPages'); _dwpvw.classList.toggle('block', viewName === 'deepwikiPages'); }

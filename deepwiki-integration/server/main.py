@@ -19,6 +19,11 @@ from indexer import index_git_repo, index_wiki_docs, index_tasks, index_sprints,
 from wiki_generator import generate_wiki, extend_wiki_page  # [r113] 자동 위키 + [r132] 페이지 확장
 from wiki_auditor import audit_wiki  # [r115] 기획 대조 2차 MD
 from mindmap_generator import generate_mindmap  # [r196] 문서→마인드맵
+# [r208] 신규 엔티티 인덱서 — issue/event/asset/review/bug/wbs
+from indexer_extras import (
+    index_issues, index_calendar_events, index_assets,
+    index_reviews, index_bug_reports, index_wbs_nodes,
+)
 
 
 app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
@@ -78,6 +83,14 @@ def _busy_human() -> str:
         "index_wiki": "위키 인덱싱",
         "index_task": "태스크 인덱싱",
         "index_sprint": "스프린트 인덱싱",
+        # [r208] 신규
+        "index_issue": "이슈 인덱싱",
+        "index_event": "일정 인덱싱",
+        "index_asset": "에셋 인덱싱",
+        "index_review": "리뷰 인덱싱",
+        "index_bug": "버그 리포트 인덱싱",
+        "index_wbs": "작업구조화 인덱싱",
+        "index_sync": "전체 증분 동기화",
     }.get(kind, kind)
     stage = LLM_BUSY_STATE.get("stage") or "?"
     cur = LLM_BUSY_STATE.get("current") or 0
@@ -351,11 +364,48 @@ async def index_sprint(req: IndexWikiRequest):
                         busy_kind="index_sprint", busy_project=req.project_id)
 
 
+# [r208] 신규 엔티티 인덱싱 — issue/event/asset/review/bug/wbs
+@app.post("/index/issue")
+async def index_issue_ep(req: IndexWikiRequest):
+    return _sse_indexer(index_issues(project_id=req.project_id),
+                        busy_kind="index_issue", busy_project=req.project_id)
+
+
+@app.post("/index/event")
+async def index_event_ep(req: IndexWikiRequest):
+    return _sse_indexer(index_calendar_events(project_id=req.project_id),
+                        busy_kind="index_event", busy_project=req.project_id)
+
+
+@app.post("/index/asset")
+async def index_asset_ep(req: IndexWikiRequest):
+    return _sse_indexer(index_assets(project_id=req.project_id),
+                        busy_kind="index_asset", busy_project=req.project_id)
+
+
+@app.post("/index/review")
+async def index_review_ep(req: IndexWikiRequest):
+    return _sse_indexer(index_reviews(project_id=req.project_id),
+                        busy_kind="index_review", busy_project=req.project_id)
+
+
+@app.post("/index/bug")
+async def index_bug_ep(req: IndexWikiRequest):
+    return _sse_indexer(index_bug_reports(project_id=req.project_id),
+                        busy_kind="index_bug", busy_project=req.project_id)
+
+
+@app.post("/index/wbs")
+async def index_wbs_ep(req: IndexWikiRequest):
+    return _sse_indexer(index_wbs_nodes(project_id=req.project_id),
+                        busy_kind="index_wbs", busy_project=req.project_id)
+
+
 # [r130] 증분 자동 동기화 — wiki+task+sprint 를 since 이후로만 재 인덱싱
 class IndexSyncRequest(BaseModel):
     project_id: Optional[str] = None
     since: Optional[str] = None  # ISO datetime (예: "2026-05-29T11:30:00Z")
-    include: List[str] = ["wiki", "task", "sprint"]
+    include: List[str] = ["wiki", "task", "sprint", "wbs", "issue", "event", "asset", "review"]  # [r208] 신규 4 추가
 
 
 @app.post("/index/sync")
@@ -389,6 +439,19 @@ async def index_sync(req: IndexSyncRequest):
                     gen = index_tasks(project_id=req.project_id, since=req.since)
                 elif kind == "sprint":
                     gen = index_sprints(project_id=req.project_id, since=req.since)
+                # [r208] 신규 엔티티
+                elif kind == "issue":
+                    gen = index_issues(project_id=req.project_id, since=req.since)
+                elif kind == "event":
+                    gen = index_calendar_events(project_id=req.project_id, since=req.since)
+                elif kind == "asset":
+                    gen = index_assets(project_id=req.project_id, since=req.since)
+                elif kind == "review":
+                    gen = index_reviews(project_id=req.project_id, since=req.since)
+                elif kind == "bug":
+                    gen = index_bug_reports(project_id=req.project_id, since=req.since)
+                elif kind == "wbs":
+                    gen = index_wbs_nodes(project_id=req.project_id, since=req.since)
                 else:
                     yield {"event": "warn", "message": f"알 수 없는 kind: {kind}"}
                     continue
