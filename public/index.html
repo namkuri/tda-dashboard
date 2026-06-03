@@ -3026,6 +3026,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .aihub-tile-ico { font-size: 24px; flex-shrink: 0; }
         .aihub-tile-t { font-size: 13.5px; font-weight: 800; color: var(--c-text); }
         .aihub-tile-d { font-size: 11px; color: var(--c-text3); margin-top: 1px; }
+        /* [r207] 빠른 작업 타일 우측 톱니 + AI 옵션 모달 */
+        .aihub-tile-gear { background: var(--ios-fill); border: 1px solid var(--c-border); color: var(--c-text2); border-radius: 7px; padding: 6px 9px; font-size: 14px; cursor: pointer; flex-shrink: 0; transition: background .12s; }
+        .aihub-tile-gear:hover { background: var(--c-accent-soft); color: var(--c-accent); border-color: var(--c-accent); }
+        .aihub-opt-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+        .aihub-opt-row label { font-size: 11.5px; font-weight: 700; color: var(--c-text2); }
+        .aihub-opt-row input, .aihub-opt-row select, .aihub-opt-row textarea { font-size: 12.5px; padding: 6px 9px; border: 1px solid var(--c-border); border-radius: 7px; background: var(--c-paper); color: var(--c-text); font-family: inherit; }
+        .aihub-opt-row textarea { min-height: 80px; resize: vertical; }
+        .aihub-opt-hint { font-size: 10.5px; color: var(--c-text3); margin-top: 2px; }
+        /* [r207] GPU 24시간 상태 바 */
+        .aihub-gpu-24 { display: flex; height: 12px; border-radius: 4px; overflow: hidden; margin-top: 4px; background: rgba(120,120,120,.18); position: relative; cursor: default; }
+        .aihub-gpu-24 .seg { height: 100%; transition: filter .12s; }
+        .aihub-gpu-24 .seg:hover { filter: brightness(1.3); }
+        .aihub-gpu-24 .seg.online { background: #2e9e5b; }
+        .aihub-gpu-24 .seg.busy { background: #d49a1c; }
+        .aihub-gpu-24 .seg.offline { background: #c0392b; opacity: .55; }
+        .aihub-gpu-24 .seg.unknown { background: transparent; }
+        .aihub-gpu-24-ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--c-text3); font-family: ui-monospace, monospace; margin-top: 2px; }
+        .aihub-24tip { position: fixed; pointer-events: none; background: var(--c-text); color: var(--c-paper); padding: 6px 10px; border-radius: 7px; font-size: 11px; z-index: 99999; box-shadow: 0 4px 16px rgba(0,0,0,.4); max-width: 320px; line-height: 1.5; display: none; }
+        .aihub-24tip.on { display: block; }
+        /* 헬스 응답 모달 */
+        .aihub-health-pre { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px 12px; max-height: 50vh; overflow: auto; white-space: pre-wrap; word-break: break-word; color: var(--c-text); }
         .aihub-gpu-list { display: flex; flex-direction: column; gap: 8px; }
         .aihub-gpu-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--c-border); border-radius: 9px; background: var(--c-paper); flex-wrap: wrap; }
         .aihub-gpu-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
@@ -5140,9 +5161,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <section class="aihub-card">
                     <div class="aihub-card-head"><h3>⚡ 빠른 작업 — AI 기능 바로가기</h3></div>
                     <div class="aihub-quick">
-                        <button class="aihub-tile" onclick="switchView('deepwiki')"><span class="aihub-tile-ico">💬</span><div><div class="aihub-tile-t">대화형 AI</div><div class="aihub-tile-d">Tool Use 기반 라이브 데이터 조회</div></div></button>
-                        <button class="aihub-tile" onclick="switchView('deepwiki');setTimeout(function(){ if(typeof openDwpPagesView==='function') openDwpPagesView(); },80)"><span class="aihub-tile-ico">✦</span><div><div class="aihub-tile-t">Deep Wiki</div><div class="aihub-tile-d">Git 레포 → 자동 위키 생성·감사</div></div></button>
-                        <button class="aihub-tile" onclick="switchView('graph');setTimeout(function(){ if(typeof mmpOpenPicker==='function') mmpOpenPicker(false); },120)"><span class="aihub-tile-ico">🧠</span><div><div class="aihub-tile-t">마인드맵 만들기</div><div class="aihub-tile-d">문서를 LLM으로 마인드맵화</div></div></button>
+                        <div class="aihub-tile" onclick="switchView('deepwiki')"><span class="aihub-tile-ico">💬</span><div style="flex:1;"><div class="aihub-tile-t">대화형 AI</div><div class="aihub-tile-d">Tool Use 기반 라이브 데이터 조회</div></div><button class="aihub-tile-gear" onclick="event.stopPropagation();aihubOpenOptions('chat')" title="AI 옵션 설정">⚙️</button></div>
+                        <!-- [r207] Deep Wiki 라우팅 수정: deepwiki → deepwikiPages -->
+                        <div class="aihub-tile" onclick="switchView('deepwikiPages')"><span class="aihub-tile-ico">✦</span><div style="flex:1;"><div class="aihub-tile-t">Deep Wiki</div><div class="aihub-tile-d">Git 레포 → 자동 위키 생성·감사</div></div><button class="aihub-tile-gear" onclick="event.stopPropagation();aihubOpenOptions('wiki')" title="AI 옵션 설정">⚙️</button></div>
+                        <div class="aihub-tile" onclick="switchView('graph');setTimeout(function(){ if(typeof mmpOpenPicker==='function') mmpOpenPicker(false); },120)"><span class="aihub-tile-ico">🧠</span><div style="flex:1;"><div class="aihub-tile-t">마인드맵 만들기</div><div class="aihub-tile-d">문서를 LLM으로 마인드맵화</div></div><button class="aihub-tile-gear" onclick="event.stopPropagation();aihubOpenOptions('mindmap')" title="AI 옵션 설정">⚙️</button></div>
                     </div>
                 </section>
 
@@ -5222,6 +5244,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <select id="dw-chat-model">
                                 <optgroup label="✦ 추천 (Agent · Tool Use)">
                                     <option value="qwen3:30b">✦ Qwen3 30B — 추론 + Tool Use 최고 균형 (권장)</option>
+                                    <option value="qwen3.5:27b-q4_K_M">Qwen 3.5 27B Q4_K_M — 최신, VRAM 효율 (24GB 적합)</option>
                                     <option value="qwen2.5-coder:32b">Qwen 2.5-Coder 32B — 코드 질문 강함</option>
                                     <option value="llama3.3:70b">Llama 3.3 70B — 최고 품질, 매우 느림</option>
                                     <option value="command-r7b">Cohere Command R 7B — RAG 특화</option>
@@ -5239,6 +5262,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <select id="dw-wikigen-model">
                                 <optgroup label="✦ 추천 (코드 위키)">
                                     <option value="qwen2.5-coder:32b" selected>✦ Qwen 2.5-Coder 32B — 코드 위키 최고 (권장)</option>
+                                    <option value="qwen3.5:27b-q4_K_M">Qwen 3.5 27B Q4_K_M — 최신, VRAM 효율</option>
                                     <option value="deepseek-coder-v2:16b">DeepSeek-Coder-V2 16B</option>
                                     <option value="codestral:22b">Codestral 22B (Mistral)</option>
                                 </optgroup>
@@ -5252,6 +5276,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             <select id="dw-audit-model">
                                 <optgroup label="✦ 추천 (분석 · 추론)">
                                     <option value="deepseek-r1:32b" selected>✦ DeepSeek R1 32B — 깊은 추론, 분석 최고 (권장)</option>
+                                    <option value="qwen3.5:27b-q4_K_M">Qwen 3.5 27B Q4_K_M — 최신, VRAM 효율</option>
                                     <option value="qwen3:32b">Qwen3 32B — 장문 비교 좋음</option>
                                     <option value="qwen2.5-coder:32b">Qwen 2.5-Coder 32B (코드 위주면)</option>
                                     <option value="llama3.3:70b">Llama 3.3 70B (최고 품질, 매우 느림)</option>
@@ -6307,6 +6332,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function aihubRenderGpus() {
             var box = document.getElementById('aihub-gpu-list'); var cnt = document.getElementById('aihub-gpu-count');
             if (!box) return;
+            // [r207] 매 렌더마다 현재 상태 트래커에 기록(24시간 바용)
+            (window._gpuHosts || []).forEach(function (h) { _aihubTrackHostStatus(h); });
             var hosts = (window._gpuHosts || []).slice().sort(function (a, b) { var ord = { online: 0, busy: 1, degraded: 2, offline: 3 }; return (ord[a.status] || 9) - (ord[b.status] || 9); });
             if (cnt) cnt.textContent = '총 ' + hosts.length + '개';
             if (!hosts.length) { box.innerHTML = '<div class="aihub-hist-empty">등록된 GPU 호스트가 없습니다. 팀원이 자신의 PC에서 Ollama + Cloudflare Tunnel을 띄우고 \'🚀 공유\' 토글을 ON 하면 여기에 등록됩니다.</div>'; return; }
@@ -6319,18 +6346,195 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     + '<div class="aihub-gpu-info">'
                     + '<div class="aihub-gpu-name">' + _sprintEsc(h.owner_nickname || '?') + (isMe ? ' (나)' : '') + ' · ' + _sprintEsc(h.model_name || '모델 미지정') + '</div>'
                     + '<div class="aihub-gpu-meta">🌐 ' + _sprintEsc(h.tunnel_url || '-') + ' · ' + st.icon + ' ' + st.label + ' · 마지막 응답 ' + _aihubAgo(h.last_seen_at) + (h.note ? (' · 💬 ' + _sprintEsc(h.note)) : '') + '</div>'
+                    // [r207] 24시간 상태 바
+                    + _aihub24Bar(h.id)
                     + '</div>'
                     + '<div class="aihub-gpu-actions">'
                     + (stable ? '<button class="aihub-gpu-btn primary" onclick="aihubUseHost(\'' + h.id + '\')">▶ 사용</button>' : '')
-                    + (h.tunnel_url ? '<button class="aihub-gpu-btn" onclick="window.open(\'' + h.tunnel_url + '/health\',\'_blank\')">🔗 헬스</button>' : '')
+                    + (h.tunnel_url ? '<button class="aihub-gpu-btn" onclick="aihubHealthCheck(\'' + h.id + '\')">🔗 헬스</button>' : '')
                     + '</div></div>';
             }).join('');
         }
         function aihubUseHost(hostId) {
             var h = (window._gpuHosts || []).find(function (x) { return x.id === hostId; }); if (!h) return;
             // 백엔드 URL을 이 호스트의 tunnel_url로 설정 (Deep Wiki·마인드맵 공통)
-            if (typeof _dwSetSettings === 'function') { var s = (typeof _dwGetSettings === 'function' ? _dwGetSettings() : {}) || {}; s.backendUrl = h.tunnel_url || ''; if (h.model_name) s.model = h.model_name; _dwSetSettings(s); }
+            if (typeof _dwSaveSettings === 'function') { var s = (typeof _dwGetSettings === 'function' ? _dwGetSettings() : {}) || {}; s.backendUrl = h.tunnel_url || ''; if (h.model_name) s.chatModel = h.model_name; _dwSaveSettings(s); }
             showToast('▶ ' + (h.owner_nickname || '?') + '의 GPU 호스트를 사용합니다.', 'success');
+            aihubRender();
+        }
+        // [r207] GPU 헬스 체크 — 새 탭 대신 모달로 응답 표시
+        async function aihubHealthCheck(hostId) {
+            var h = (window._gpuHosts || []).find(function (x) { return x.id === hostId; }); if (!h || !h.tunnel_url) return;
+            _openSimpleModal('🔗 헬스 체크 — ' + _sprintEsc(h.owner_nickname || '?'), '<div class="aihub-health-pre" id="aihub-health-out">⏳ ' + _sprintEsc(h.tunnel_url) + '/health 호출 중…</div>');
+            try {
+                var t0 = Date.now();
+                var res = await fetch(h.tunnel_url.replace(/\/+$/, '') + '/health', { method: 'GET', headers: { 'Accept': 'application/json' } });
+                var ms = Date.now() - t0;
+                var body = '';
+                try { body = await res.text(); } catch (e) { body = '(본문 읽기 실패)'; }
+                var pretty = body;
+                try { var j = JSON.parse(body); pretty = JSON.stringify(j, null, 2); } catch (e) {}
+                var out = document.getElementById('aihub-health-out');
+                if (out) out.textContent = 'HTTP ' + res.status + ' ' + res.statusText + ' · ' + ms + 'ms\n\n' + pretty;
+            } catch (e) {
+                var out2 = document.getElementById('aihub-health-out');
+                if (out2) out2.textContent = '❌ 호출 실패: ' + (e.message || e) + '\n\n' + h.tunnel_url + '/health 에 도달할 수 없습니다.\n원인: CORS, 터널 다운, 또는 네트워크 차단.';
+            }
+        }
+        // [r207] GPU 24시간 상태 트래커 — localStorage에 호스트별 (ts, status) 기록. 24시간 경과분 자동 정리.
+        var AIHUB_TRACK_KEY = 'pb3_ai_gpu_status_v1';
+        var AIHUB_TRACK_MAX_AGE = 24 * 60 * 60 * 1000;
+        function _aihubLoadTrack() { try { return JSON.parse(localStorage.getItem(AIHUB_TRACK_KEY) || '{}'); } catch (e) { return {}; } }
+        function _aihubSaveTrack(obj) { try { localStorage.setItem(AIHUB_TRACK_KEY, JSON.stringify(obj)); } catch (e) {} }
+        function _aihubTrackHostStatus(h) {
+            if (!h || !h.id) return;
+            var all = _aihubLoadTrack();
+            var arr = all[h.id] = (all[h.id] || []);
+            var now = Date.now();
+            while (arr.length && arr[0].ts < now - AIHUB_TRACK_MAX_AGE - 60 * 60 * 1000) arr.shift();
+            var last = arr[arr.length - 1];
+            if (!last || last.status !== h.status) {
+                var newSt = h.status || 'offline';
+                arr.push({ ts: now, status: newSt });
+                _aihubSaveTrack(all);
+                // [r207] DB에도 기록 — 24시간 바를 다른 사용자와 공유 가능. 테이블 없으면 무시.
+                if (supabaseClient) {
+                    try {
+                        supabaseClient.from('gpu_status_log').insert({
+                            id: 'gst-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+                            gpu_host_id: h.id, status: newSt,
+                            owner_nickname: h.owner_nickname || null, model_name: h.model_name || null
+                        }).then(function (r) { if (r && r.error) console.warn('[gpu_status_log] save failed', r.error.message); });
+                    } catch (e) {}
+                }
+            }
+        }
+        function _aihub24Bar(hostId) {
+            // 24시간 = 1440분 → 144개 10분 슬롯
+            var SLOTS = 144;
+            var slotMs = AIHUB_TRACK_MAX_AGE / SLOTS;
+            var now = Date.now(), start = now - AIHUB_TRACK_MAX_AGE;
+            var all = _aihubLoadTrack();
+            var hist = (all[hostId] || []).slice().sort(function (a, b) { return a.ts - b.ts; });
+            // 슬롯별 상태 결정 — 가장 최근 그 슬롯 이전의 상태값 사용
+            var slots = new Array(SLOTS).fill('unknown');
+            var pointer = 0, curStatus = 'unknown';
+            // 시작 시점 이전의 마지막 알려진 상태
+            for (var k = 0; k < hist.length; k++) { if (hist[k].ts <= start) curStatus = hist[k].status; else { pointer = k; break; } if (k === hist.length - 1) pointer = hist.length; }
+            for (var i = 0; i < SLOTS; i++) {
+                var slotEnd = start + (i + 1) * slotMs;
+                while (pointer < hist.length && hist[pointer].ts < slotEnd) { curStatus = hist[pointer].status; pointer++; }
+                slots[i] = curStatus;
+            }
+            // 슬롯 압축 — 같은 연속 상태를 하나의 div로
+            var segs = [], i = 0;
+            while (i < SLOTS) {
+                var s = slots[i], j = i;
+                while (j < SLOTS && slots[j] === s) j++;
+                segs.push({ s: s, from: i, to: j });
+                i = j;
+            }
+            var html = '<div class="aihub-gpu-24" onmousemove="_aihub24Hover(event,this,\'' + hostId + '\')" onmouseleave="_aihub24Leave()">';
+            segs.forEach(function (seg) {
+                var pct = ((seg.to - seg.from) / SLOTS) * 100;
+                html += '<div class="seg ' + seg.s + '" data-from="' + seg.from + '" data-to="' + seg.to + '" style="flex:0 0 ' + pct.toFixed(2) + '%;"></div>';
+            });
+            html += '</div>';
+            // 시간 눈금
+            html += '<div class="aihub-gpu-24-ticks"><span>-24h</span><span>-18h</span><span>-12h</span><span>-6h</span><span>지금</span></div>';
+            return html;
+        }
+        var _aihub24Tip = null;
+        function _aihub24Hover(e, bar, hostId) {
+            var rect = bar.getBoundingClientRect();
+            var ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            var SLOTS = 144;
+            var idx = Math.min(SLOTS - 1, Math.floor(ratio * SLOTS));
+            var slotMs = AIHUB_TRACK_MAX_AGE / SLOTS;
+            var start = Date.now() - AIHUB_TRACK_MAX_AGE;
+            var t = start + idx * slotMs;
+            var seg = e.target.closest('.seg');
+            var status = seg ? (seg.classList.contains('online') ? 'online' : seg.classList.contains('busy') ? 'busy' : seg.classList.contains('offline') ? 'offline' : 'unknown') : 'unknown';
+            // 이 시점 ±5분 안의 사용 히스토리(이 호스트 사용 기록)
+            var usage = _aihubHist().filter(function (x) {
+                if (!x.host) return false;
+                var h = (window._gpuHosts || []).find(function (g) { return g.id === hostId; });
+                if (!h || x.host !== h.tunnel_url) return false;
+                return Math.abs(x.t - t) <= slotMs / 2;
+            });
+            var fmt = function (ms) { return new Date(ms).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+            var stLabel = ({ online: '🟢 온라인', busy: '🟡 사용 중', offline: '🔴 오프라인', unknown: '⚪ 기록 없음' })[status];
+            var html = '<b>' + fmt(t) + '</b><br>' + stLabel;
+            if (usage.length) {
+                html += '<br><br><b>이 시간대 사용:</b><br>' + usage.slice(0, 5).map(function (u) {
+                    var k = AIHUB_KIND_LABEL[u.kind] || u.kind;
+                    return '• ' + k + ' · ' + _sprintEsc(u.whoName || '?') + (u.detail ? (' · ' + _sprintEsc(u.detail.slice(0, 40))) : '');
+                }).join('<br>');
+                if (usage.length > 5) html += '<br>… 외 ' + (usage.length - 5) + '건';
+            }
+            if (!_aihub24Tip) { _aihub24Tip = document.createElement('div'); _aihub24Tip.className = 'aihub-24tip'; document.body.appendChild(_aihub24Tip); }
+            _aihub24Tip.innerHTML = html;
+            _aihub24Tip.classList.add('on');
+            var tw = _aihub24Tip.offsetWidth, th = _aihub24Tip.offsetHeight;
+            var tx = e.clientX + 14; if (tx + tw > window.innerWidth - 10) tx = e.clientX - tw - 14;
+            var ty = e.clientY - th - 14; if (ty < 10) ty = e.clientY + 14;
+            _aihub24Tip.style.left = tx + 'px'; _aihub24Tip.style.top = ty + 'px';
+        }
+        function _aihub24Leave() { if (_aihub24Tip) _aihub24Tip.classList.remove('on'); }
+        // [r207] AI 옵션 설정 모달 — kind: 'chat' | 'wiki' | 'mindmap'
+        var AIHUB_OPT_META = {
+            chat: { title: '💬 대화형 AI · AI 옵션', settingKey: 'chatModel', desc: 'Tool Use 기반 대화형 응답에 사용할 모델/옵션. 어떤 자료를 대상으로 질문할지는 채팅창에서 정합니다.' },
+            wiki: { title: '✦ Deep Wiki · AI 옵션', settingKey: 'wikiGenModel', desc: '코드 위키 자동 생성·감사에 사용할 모델/옵션. 대상 Git 레포는 Deep Wiki 페이지에서 설정합니다.', extraKey: 'auditModel', extraLabel: '🧪 기획 대조 감사 모델' },
+            mindmap: { title: '🧠 마인드맵 · AI 옵션', settingKey: 'mindmapModel', desc: '문서를 마인드맵으로 변환할 모델/옵션. 어떤 문서를 마인드맵화할지는 그래프 메뉴에서 선택합니다.', tempKey: 'mindmapTemperature' }
+        };
+        function aihubOpenOptions(kind) {
+            var meta = AIHUB_OPT_META[kind]; if (!meta) return;
+            var s = (typeof _dwGetSettings === 'function' ? _dwGetSettings() : {}) || {};
+            var modelOptions = _aihubModelOptions(s[meta.settingKey] || s.chatModel || '');
+            var html = '<div style="font-size:11.5px;color:var(--c-text3);margin-bottom:12px;line-height:1.5;">' + _sprintEsc(meta.desc) + '</div>'
+                + '<div class="aihub-opt-row"><label>🤖 모델</label><select id="aihub-opt-model">' + modelOptions + '</select><div class="aihub-opt-hint">활성 GPU의 모델 목록 + 추천 모델 통합. Ollama 미설치 모델은 호출 시 실패합니다.</div></div>';
+            if (meta.extraKey) {
+                html += '<div class="aihub-opt-row"><label>' + meta.extraLabel + '</label><select id="aihub-opt-extra">' + _aihubModelOptions(s[meta.extraKey] || '') + '</select></div>';
+            }
+            if (meta.tempKey) {
+                var t = s[meta.tempKey] != null ? s[meta.tempKey] : 0.4;
+                html += '<div class="aihub-opt-row"><label>🌡 Temperature (다양성, ' + t + ')</label><input type="range" min="0" max="1" step="0.05" value="' + t + '" oninput="document.getElementById(\'aihub-opt-temp-v\').textContent=this.value" id="aihub-opt-temp"><span id="aihub-opt-temp-v" style="font-size:11px;color:var(--c-text3);">' + t + '</span><div class="aihub-opt-hint">낮을수록 일관성↑, 높을수록 다양성↑. 마인드맵 권장 0.3~0.55.</div></div>';
+            }
+            // 공통: 시스템 프롬프트 (선택)
+            var sysKey = kind + 'SystemPrompt';
+            var curSys = (s[sysKey] || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            html += '<div class="aihub-opt-row"><label>📝 시스템 프롬프트 (선택)</label><textarea id="aihub-opt-sys" placeholder="이 도구만의 추가 지시사항 (비우면 기본 사용)">' + curSys + '</textarea><div class="aihub-opt-hint">예: "출력은 항상 한국어로", "코드 인용 시 라인 번호 포함".</div></div>';
+            // 백엔드 URL (공유)
+            html += '<div class="aihub-opt-row"><label>🌐 백엔드 URL (모든 AI 도구 공통)</label><input type="text" id="aihub-opt-backend" value="' + _sprintEsc(s.backendUrl || '') + '" placeholder="https://your-tunnel.example.com"><div class="aihub-opt-hint">상단 GPU 호스트 목록에서 "▶ 사용"을 누르면 자동 설정됩니다.</div></div>';
+            html += '<div style="margin-top:14px;text-align:right;display:flex;gap:6px;justify-content:flex-end;"><button onclick="_closeSimpleModal()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--c-border);background:var(--ios-fill);color:var(--c-text);cursor:pointer;">취소</button><button onclick="aihubSaveOptions(\'' + kind + '\')" style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:7px;border:none;background:var(--c-accent);color:#fff;cursor:pointer;">저장</button></div>';
+            _openSimpleModal(meta.title, html);
+        }
+        function _aihubModelOptions(current) {
+            var arr = [];
+            // 활성 GPU 호스트의 모델
+            (window._gpuHosts || []).forEach(function (h) {
+                if (h.status !== 'online' && h.status !== 'busy') return;
+                if (h.model_name && arr.indexOf(h.model_name) < 0) arr.push(h.model_name);
+                (h.health_data && Array.isArray(h.health_data.models) ? h.health_data.models : []).forEach(function (m) { if (arr.indexOf(m) < 0) arr.push(m); });
+            });
+            // 추천 목록
+            ['qwen3:30b', 'qwen3.5:27b-q4_K_M', 'qwen2.5-coder:32b', 'qwen2.5-coder:14b', 'deepseek-r1:32b', 'llama3.3:70b'].forEach(function (m) { if (arr.indexOf(m) < 0) arr.push(m); });
+            return arr.map(function (m) { return '<option value="' + _sprintEsc(m) + '"' + (m === current ? ' selected' : '') + '>' + _sprintEsc(m) + '</option>'; }).join('');
+        }
+        function aihubSaveOptions(kind) {
+            var meta = AIHUB_OPT_META[kind]; if (!meta) return;
+            var s = (typeof _dwGetSettings === 'function' ? _dwGetSettings() : {}) || {};
+            var m = (document.getElementById('aihub-opt-model') || {}).value;
+            if (m) s[meta.settingKey] = m;
+            if (meta.extraKey) { var e = (document.getElementById('aihub-opt-extra') || {}).value; if (e) s[meta.extraKey] = e; }
+            if (meta.tempKey) { var tv = (document.getElementById('aihub-opt-temp') || {}).value; if (tv != null && tv !== '') s[meta.tempKey] = parseFloat(tv); }
+            var sys = (document.getElementById('aihub-opt-sys') || {}).value;
+            s[kind + 'SystemPrompt'] = sys || '';
+            var bu = (document.getElementById('aihub-opt-backend') || {}).value;
+            s.backendUrl = (bu || '').trim();
+            if (typeof _dwSaveSettings === 'function') _dwSaveSettings(s);
+            _closeSimpleModal();
+            showToast('⚙ ' + meta.title.split('·')[0].trim() + ' 옵션 저장됨', 'success');
             aihubRender();
         }
         function aihubRenderModels() {
@@ -6359,24 +6563,40 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var AIHUB_HIST_KEY = 'pb3_ai_usage_v1';
         var AIHUB_HIST_MAX = 500;
         function aihubLogUsage(kind, info) {
+            var s = (typeof _dwGetSettings === 'function') ? (_dwGetSettings() || {}) : {};
+            var rec = {
+                t: Date.now(), kind: kind, who: (currentUser && currentUser.id) || null,
+                whoName: (currentUser && currentUser.displayName) || myNickname || '?',
+                model: (info && info.model) || s.chatModel || s.model || null,
+                host: (info && info.host) || s.backendUrl || null,
+                detail: (info && info.detail) || '',
+                inTokens: info && info.inTokens || 0,
+                outTokens: info && info.outTokens || 0,
+                durMs: info && info.durMs || 0,
+                project: activeProjectId || null,
+                output: (info && info.output) || ''
+            };
+            // 로컬 캐시(즉시 표시용)
             try {
                 var arr = JSON.parse(localStorage.getItem(AIHUB_HIST_KEY) || '[]');
-                var s = (typeof _dwGetSettings === 'function') ? (_dwGetSettings() || {}) : {};
-                arr.push({
-                    t: Date.now(), kind: kind, who: (currentUser && currentUser.id) || null,
-                    whoName: (currentUser && currentUser.displayName) || myNickname || '?',
-                    model: (info && info.model) || s.model || null,
-                    host: (info && info.host) || s.backendUrl || null,
-                    detail: (info && info.detail) || '',
-                    inTokens: info && info.inTokens || 0,
-                    outTokens: info && info.outTokens || 0,
-                    durMs: info && info.durMs || 0,
-                    project: activeProjectId || null,
-                    output: (info && info.output) || ''  // 산출물 요약(짧게)
-                });
+                arr.push(rec);
                 if (arr.length > AIHUB_HIST_MAX) arr = arr.slice(-AIHUB_HIST_MAX);
                 localStorage.setItem(AIHUB_HIST_KEY, JSON.stringify(arr));
-            } catch (e) { /* localStorage full 등은 무시 */ }
+            } catch (e) {}
+            // [r207] DB 저장 — 팀 공유 히스토리 (선택 테이블, 없으면 무시)
+            if (supabaseClient) {
+                try {
+                    var gpuHost = (window._gpuHosts || []).find(function (h) { return h.tunnel_url === rec.host; });
+                    supabaseClient.from('ai_usage_logs').insert({
+                        id: 'aiu-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                        project_id: rec.project, user_id: rec.who, user_name: rec.whoName,
+                        kind: rec.kind, model: rec.model, host: rec.host,
+                        gpu_host_id: gpuHost ? gpuHost.id : null,
+                        in_tokens: rec.inTokens, out_tokens: rec.outTokens, dur_ms: rec.durMs,
+                        detail: rec.detail, out_summary: rec.output
+                    }).then(function (r) { if (r && r.error) console.warn('[ai_usage_logs] save failed (table missing?)', r.error.message); });
+                } catch (e) {}
+            }
         }
         function _aihubHist() { try { return JSON.parse(localStorage.getItem(AIHUB_HIST_KEY) || '[]'); } catch (e) { return []; } }
         function aihubRenderHistory() {
@@ -15801,7 +16021,11 @@ return data;
             // [r150] 범용 코멘트 — 이슈/일정/에셋(+대댓글). target_type: issue|event|asset|task, parent_id: 대댓글이면 부모 코멘트 키
             ['entity_comments', "id text primary key, project_id text, target_type text, target_id text, parent_id text, author text, author_name text, content text, ts bigint, deleted boolean default false"],
             // [r155] WBS(작업 구조화) 노드 — parent_id null=프로젝트 루트 직속. links=연결(스프린트/카테고리/태스크), attachments=첨부
-            ['wbs_nodes', "id text primary key, project_id text, parent_id text, title text, description text, status text default 'todo', progress int default 0, links jsonb default '{}'::jsonb, attachments jsonb default '[]'::jsonb, assignees jsonb default '[]'::jsonb, owner_user_id text, created_by text, sort_order bigint, created_at timestamptz, updated_at timestamptz"]
+            ['wbs_nodes', "id text primary key, project_id text, parent_id text, title text, description text, status text default 'todo', progress int default 0, links jsonb default '{}'::jsonb, attachments jsonb default '[]'::jsonb, assignees jsonb default '[]'::jsonb, owner_user_id text, created_by text, sort_order bigint, created_at timestamptz, updated_at timestamptz"],
+            // [r207] AI 사용 히스토리 — 팀 공유. kind: chat|wiki|audit|mindmap. host: tunnel_url. out_summary: 산출물 요약.
+            //   gpu_status_log: 호스트 상태 변화(24시간 바·집계용). status: online|busy|offline|degraded
+            ['ai_usage_logs', "id text primary key, project_id text, user_id text, user_name text, kind text, model text, host text, gpu_host_id text, in_tokens int default 0, out_tokens int default 0, dur_ms bigint default 0, detail text, out_summary text, created_at timestamptz default now()"],
+            ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"]
         ];
         function dbMigrationSql() {
             var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존', ''];
