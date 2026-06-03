@@ -10445,7 +10445,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r219';
+        var _AHUB_FRONT_REV = 'r219b';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31404,6 +31404,12 @@ ${intrLog}
                     + '<text x="10" y="4" text-anchor="middle" font-size="10" font-weight="800" fill="' + (collapsed ? '#fff' : col) + '" font-family="monospace" pointer-events="none">' + hint + '</text>'
                     + '</g>');
             }
+            // [r219b] 호버 시 ✦ AI 설명 버튼 — 노드 우상단 외곽 (알약 모양 밖)
+            parts.push('<g class="node-explain" data-explain-source="' + node.id + '" transform="translate(' + (pw - 4) + ',-2)" style="cursor:pointer;">'
+                + '<circle cx="0" cy="0" r="11" fill="var(--c-accent,#c25b4b)" stroke="#fff" stroke-width="2"/>'
+                + '<text x="0" y="4" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" pointer-events="none" font-family="Pretendard,sans-serif">✦</text>'
+                + '<title>AI 설명 보기</title>'
+                + '</g>');
             parts.push('</g>');
         });
         svg.innerHTML = parts.join('');
@@ -31420,6 +31426,22 @@ ${intrLog}
         // [r200] 접기/펼치기 토글 — 노드 클릭 핸들러보다 먼저 (stopPropagation)
         svg.querySelectorAll('.mm-toggle').forEach(function (t) {
             t.addEventListener('click', function (e) { e.stopPropagation(); _mmToggleCollapse(t.dataset.toggleFor); });
+        });
+        // [r219b] AI 설명 ✦ 버튼 — 노드 클릭보다 먼저, stopPropagation
+        svg.querySelectorAll('.node-explain').forEach(function (ex) {
+            var nodeId = ex.dataset.explainSource;
+            ex.addEventListener('click', function (e) {
+                e.stopPropagation();
+                try {
+                    var doc = gphCurrent();
+                    var p = doc && gphPayload(doc);
+                    var node = p && (p.nodes || []).find(function (x) { return x.id === nodeId; });
+                    if (doc && node && typeof mmpExplainOpen === 'function') {
+                        mmpExplainOpen(doc.id, node.title || '');
+                    }
+                } catch (err) { console.warn('[mmpExplain] open from button failed', err); }
+            });
+            ex.addEventListener('mousedown', function (e) { e.stopPropagation(); });
         });
         // 노드 클릭=선택. 마인드맵은 트리 자동 레이아웃이라 드래그 비활성(노드 위치 직접 편집 X).
         svg.querySelectorAll('.node-group').forEach(function (g) {
