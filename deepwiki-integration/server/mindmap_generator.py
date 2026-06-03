@@ -123,143 +123,139 @@ async def _fetch_attachment(url: str, max_chars: int = 24000) -> str:
         return ""
 
 
-_SINGLE_PROMPT = """[역할]
-당신은 복잡한 문서를 분석하여 구조화된 마인드맵 노드를 설계하는 **10년 차 정보 시각화 전문가**입니다.
-당신의 강점은 (1) 문서의 숨은 계층 구조를 한 번에 파악하고, (2) MECE 원칙으로 군더더기 없이 분류하며,
-(3) 긴 서술을 짧은 핵심 키워드로 압축하는 것입니다.
+# [r215] 마인드맵 시스템 메시지 — 메타 지시는 모두 system 으로 격리.
+# user 메시지에는 콘텐츠만. LLM 이 메타를 콘텐츠로 착각해 마인드맵 노드로
+# 만드는 사고(예: 'MECE 원칙', '노드 텍스트', '키워드 1~5단어' 같은 프롬프트
+# 어구가 그대로 노드로 출력되는 현상) 차단.
+_MINDMAP_SYSTEM = """당신은 문서를 마인드맵 JSON 으로 변환하는 도구입니다.
 
-[임무]
-아래 문서를 분석해 **[중심 주제 → 주가지(1레벨) → 서브가지(2레벨) → 세부 노드(3레벨)]** 형태의
-계층 구조 마인드맵을 만드세요. 마지막에 JSON으로 출력합니다.
+[엄격 규칙 — 이 문장들은 마인드맵 콘텐츠가 아닙니다]
+1. 출력은 ```json ... ``` 코드 펜스 안의 JSON 한 개만. 그 외 텍스트 금지.
+2. 노드 텍스트(title)는 **반드시 사용자가 보낸 문서 본문에서 발견되는 개념**만
+   사용. 본 시스템 메시지(역할/규칙/MECE/계층/노드 텍스트 같은 어구)는
+   절대 마인드맵 노드가 되어서는 안 됩니다. 위반 시 즉시 다시 생성하세요.
+3. 노드 텍스트는 1~5단어 이내의 키워드·단문(서술형 금지).
+4. 중심 → 1레벨 4~7개 → 2레벨 3~7개 → 3레벨 2~6개. 의미 있으면 4~5레벨 확장.
+   1레벨은 서로 의미가 겹치지 않게, 합치면 문서를 빠짐없이 포괄.
+5. 한국어. 고유명사·기술용어(영문)는 그대로 유지.
+6. 사용자 문서 본문이 너무 짧거나 비어있으면 central 만 두고
+   branches: [] 로 응답하세요. 절대 시스템 메시지 어구를 노드로 만들지 마세요.
 
-[입력 문서]
-제목: {title}
-
-```
-{content}
-```
-
-[사고 절차 — 마음속으로 따라가세요. 출력하지는 마세요.]
-1단계 (구조 잡기): 문서 전체를 훑어 **가장 중요한 대주제 4~7개**를 뽑습니다. 이 대주제들은
-  **MECE 원칙**(Mutually Exclusive, Collectively Exhaustive)을 따라야 합니다 —
-  서로 의미가 겹치지 않으면서, 합치면 문서 전체를 빠짐없이 포괄해야 합니다.
-2단계 (살 붙이기): 각 대주제 아래 **서브가지(2레벨) 3~7개**를 키워드로 추출합니다.
-  서브가지도 같은 대주제 안에서 MECE를 지향합니다.
-3단계 (근거 추가): 의미상 더 풀 가치가 있는 곳에 **세부 노드(3레벨) 2~6개**를
-  핵심 데이터·예시·근거·인용·정의·반례·표 항목 등으로 추가합니다.
-  (모든 서브가지에 3레벨을 넣을 필요 없음. 짧게 다룬 부분은 2레벨에서 끝.)
-4단계+ (깊이 확장 — 선택): 3레벨 중 **맥락상 더 깊이 풀 가치가 있는 노드**는
-  주저 말고 **4레벨, 5레벨까지** 확장하세요. 예: '핵심 알고리즘 A' → 단계1·단계2·단계3 →
-  각 단계의 입력/출력/제약조건. '용어 정의' → 하위 용어 → 그 용어의 예시.
-  단, 깊이를 위한 깊이는 금지 — 의미가 빈약하면 멈추세요.
-
-[작성 규칙]
-1. **계층**: 기본 3단계, **의미상 더 깊이 풀 가치가 있는 가지는 4~5단계까지 자유롭게 확장**.
-   균일하게 만들지 마세요 — 어떤 가지는 2단계에서 끝, 어떤 가지는 5단계까지 깊이.
-   문서의 진짜 구조를 따라가세요. 마지막 계층을 기계적으로 2개로 끊지 마세요.
-2. **노드 텍스트**: 문장이 아니라 **핵심 키워드 또는 1~5단어 이내의 단문**.
-   - 좋은 예: "Procedural Generation", "타격 시스템", "P0 우선순위", "한·중·일 비교"
-   - 나쁜 예(절대 금지): "이 시스템은 절차적 생성을 활용하여...", "여기서는 다음과 같은 점이 중요한데..."
-   - summary는 1문장 이내(필요할 때만, 없어도 됨)
-3. **MECE 원칙**: 1레벨은 반드시 MECE — 중복 없이, 전체 문서를 빠짐없이 포괄.
-4. **풍부성**: 문서의 표·리스트·소제목·예시·반대 의견·각주·정의·인용·근거를 적극 노드로 변환.
-5. **언어**: 한국어로 작성. 원문 고유명사·기술용어는 그대로 유지(예: "Procedural", "PMF", "ARPU").
-6. **금지**: 출력에 설명문·도입어("이 마인드맵은...")·결론어·코드 펜스 밖 텍스트 금지.
-
-[출력 형식 — 오직 JSON만, 다른 텍스트 금지]
-children 안에 children을 계속 중첩해서 **4단계, 5단계까지 자유롭게 확장**할 수 있습니다.
-의미상 더 풀 가치가 있는 가지만 깊이 들어가고, 단순한 가지는 얕게 두세요.
-
+[출력 형식 — JSON 스키마]
 ```json
 {
-  "central": "중심 주제 (1~6단어)",
+  "central": "중심 주제 (문서 제목 기반)",
   "branches": [
-    {
-      "title": "1레벨 키워드",
-      "summary": "선택, 1문장 이내",
-      "children": [
-        {
-          "title": "2레벨 키워드",
-          "children": [
-            {
-              "title": "3레벨 키워드",
-              "children": [
-                {
-                  "title": "4레벨 키워드",
-                  "children": [
-                    { "title": "5레벨 키워드" }
-                  ]
-                },
-                { "title": "4레벨 키워드" }
-              ]
-            },
-            { "title": "3레벨 키워드 (얕게 끝)" }
-          ]
-        },
-        { "title": "2레벨 키워드 (얕게 끝)" }
-      ]
-    }
+    { "title": "1레벨 키워드", "children": [
+      { "title": "2레벨 키워드", "children": [
+        { "title": "3레벨 키워드" }
+      ]}
+    ]}
   ]
 }
 ```
 """
 
 
-_MULTI_PROMPT = """[역할]
-당신은 여러 문서를 동시에 분석해 통합 마인드맵을 설계하는 **10년 차 정보 시각화 전문가**입니다.
-당신의 강점은 (1) 서로 다른 문서들 사이의 공통 구조를 발견하고, (2) MECE 원칙으로 통합 분류하며,
-(3) 문서 간 관계(인과·대비·보완)를 명시적으로 드러내는 것입니다.
+_SINGLE_PROMPT = """다음은 마인드맵으로 변환할 문서입니다. **이 문서 본문 안에 등장하는 개념만**
+노드로 추출하세요. 본문 밖의 일반 지식이나 시스템 지시 어구는 노드가 될 수 없습니다.
 
-[임무]
-아래 {doc_count}개 문서를 모두 분석해 **공통 주제·핵심 개념·문서 간 관계**를 통합한
-계층 구조 마인드맵을 만드세요. 출력은 JSON.
+<<<DOCUMENT_TITLE>>>
+{title}
+<<<END_DOCUMENT_TITLE>>>
 
-[입력 문서들]
+<<<DOCUMENT_BODY>>>
+{content}
+<<<END_DOCUMENT_BODY>>>
+
+위 <<<DOCUMENT_BODY>>> 안의 텍스트만 마인드맵 소스입니다. 시스템 메시지의 규칙
+어구(예: 'MECE', '1레벨', '노드 텍스트', '키워드 1~5단어')는 절대 노드 title 이
+되어서는 안 됩니다.
+
+JSON 한 개만 출력:
+"""
+
+
+_MULTI_PROMPT = """다음은 마인드맵으로 통합 변환할 {doc_count}개 문서입니다. **이 문서들 본문 안에
+등장하는 개념만** 노드로 추출하세요. 본문 밖의 일반 지식이나 시스템 지시 어구는
+노드가 될 수 없습니다. cross_links 도 본문 안 개념끼리만.
+
+<<<DOCUMENTS_BODY>>>
 {doc_summaries}
+<<<END_DOCUMENTS_BODY>>>
 
-[사고 절차 — 마음속으로만, 출력 금지]
-1단계 (공통 구조 찾기): 모든 문서를 훑어 **공통 대주제 5~8개**를 추출. 반드시 MECE.
-  각 대주제가 어느 문서에서 비중 있게 다뤄졌는지 origin 배열로 기록.
-2단계 (살 붙이기): 대주제별 서브가지 3~7개. 한 문서에만 있는 고유 개념도 누락하지 말고
-  해당 대주제 아래 children으로 포함.
-3단계 (세부): 의미 있는 곳에 3레벨 2~6개로 데이터·예시·근거 추가.
-4단계+ (깊이 확장): 맥락상 더 깊이 풀 가치가 있는 노드는 **4~5단계까지** 자유롭게 확장.
-  예: 두 문서가 공통으로 다룬 개념의 차이점을 4레벨로, 그 차이의 사례를 5레벨로.
-5단계 (관계 명시): 서로 다른 문서/가지 사이의 의미 있는 연결을 cross_links에 기록.
+위 <<<DOCUMENTS_BODY>>> 안의 텍스트만 마인드맵 소스입니다. 시스템 메시지의 규칙
+어구(예: 'MECE', '1레벨', '노드 텍스트', '키워드 1~5단어')는 절대 노드 title 이
+되어서는 안 됩니다.
 
-[작성 규칙]
-1. **계층**: 기본 3단계, **의미상 더 깊이 풀 가치 있는 가지는 4~5단계까지** 자유롭게 확장.
-   균일성 강요 금지 — 풍부한 가지 많이, 단순한 가지 적게. 문서의 진짜 구조를 따라가세요.
-2. **노드 텍스트**: 핵심 키워드 또는 1~5단어 단문. 서술형 금지.
-3. **MECE**: 1레벨은 반드시 MECE.
-4. **origin**: 각 노드에 어느 문서들에서 나왔는지 origin 배열로 표기.
-5. **cross_links**: 문서 간 의미 있는 연결(인과·대비·보완·재사용) 명시.
-6. **언어**: 한국어. 고유명사·기술용어는 원문 유지.
-
-### 출력 형식 — JSON만(설명 금지)
-
-```json
-{
-  "central": "통합 주제 한 줄",
-  "branches": [
-    {
-      "title": "공통 카테고리",
-      "summary": "이 카테고리 요약",
-      "origin": ["문서A 제목", "문서B 제목"],
-      "children": [
-        { "title": "세부 개념", "summary": "...", "origin": ["문서A 제목"] }
-      ]
-    }
-  ],
-  "cross_links": [
-    { "from": "노드 제목 1", "to": "노드 제목 2", "label": "관계 설명" }
-  ]
-}
-```
+JSON 한 개만 출력. branches[] 각 노드에 origin([문서 제목 일부]) 를 채워주세요.
+cross_links[] 는 본문 안 개념끼리만 (다른 문서에 등장한 같은 개념의 인과·대비·보완).
 """
 
 
 _PARTS = ['ai', 'planning', 'shared', 'scenario', 'terrain', 'extra1', 'extra2']
+
+
+# [r215] 메타 키워드 — 시스템 프롬프트에서 유래한 어구가 노드 title 로 출력되는
+# 누출 현상 감지·필터. 일치하거나 부분 포함되면 노드 제거.
+_META_LEAK_KEYWORDS = [
+    "mece", "mutually exclusive", "collectively exhaustive",
+    "프레임워크 개요",  # "MECE 원칙·키워드 압축" 컨텍스트의 표제 어구
+    "1레벨", "2레벨", "3레벨", "4레벨", "5레벨",
+    "주가지", "서브가지", "세부 노드",
+    "노드 텍스트", "단문 길이", "단문 길이 제한",
+    "키워드 1~5단어", "1~5단어", "1-5 단어",
+    "중심 주제", "중심 노드",
+    "사고 절차", "출력 형식", "작성 규칙",
+    "json 한 개", "코드 펜스",
+    "독립성", "포괄성", "전체 포괄", "모든 내용 포함", "중복 없음", "서로 겹치지 않음",
+    "구성 요소",  # "구성 요소" 같은 메타 분류
+    "procedural generation",  # 시스템 프롬프트의 예시 어구 — 사용자 문서엔 안 나옴 가정
+]
+
+
+def _is_meta_leak(text: str) -> bool:
+    """노드 title 이 시스템 프롬프트 누출인지 판정."""
+    if not text:
+        return False
+    t = text.strip().lower()
+    for kw in _META_LEAK_KEYWORDS:
+        if kw in t:
+            return True
+    return False
+
+
+def _scrub_meta_branches(branches: List[Dict[str, Any]]) -> tuple:
+    """branches 트리에서 메타 누출 노드 제거 (재귀).
+
+    제거 정책:
+      1) title 이 명시적 메타 키워드 매칭 → 즉시 제거
+      2) 자식이 있었는데 1)/2) 로 모두 제거돼 비게 되면 부모도 제거
+         (예: '키워드' 노드 자체는 통과, 자식이 '1~5단어'/'단문 길이'만 있어
+          전부 제거되면 부모 '키워드' 도 누출 추정해 함께 제거)
+    """
+    if not isinstance(branches, list):
+        return [], 0
+    cleaned = []
+    removed = 0
+    for br in branches:
+        if not isinstance(br, dict):
+            continue
+        title = br.get("title") or ""
+        if _is_meta_leak(title):
+            removed += 1
+            continue
+        kids = br.get("children")
+        had_kids = isinstance(kids, list) and len(kids) > 0
+        if had_kids:
+            br["children"], r2 = _scrub_meta_branches(kids)
+            removed += r2
+            # 모든 자식이 메타로 제거되어 비었으면 부모도 누출 추정
+            if not br["children"]:
+                removed += 1
+                continue
+        cleaned.append(br)
+    return cleaned, removed
 
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
@@ -412,13 +408,28 @@ async def generate_mindmap(
     # 본문 컷(단일 모드는 넉넉히, 다중은 빠르게)
     is_multi = (mode == "multi") or (mode == "auto" and len(docs) > 1)
 
+    # [r215] 콘텐츠 길이 가드 — 너무 짧으면 LLM 이 시스템 프롬프트 규칙을 콘텐츠로
+    # 착각하고 메타 어구('MECE', '노드 텍스트', '1~5단어')를 그대로 마인드맵 노드로
+    # 출력하는 사고 방지. 정제 후 글자수 기준 150자 미만이면 거부.
+    def _content_chars(s: str) -> int:
+        return len(re.sub(r"\s+", "", s or ""))
+
     if is_multi:
         # 다중 — 문서별 요약 블록
         blocks = []
-        for d in docs[:8]:  # 최대 8개
+        total_chars = 0
+        for d in docs[:8]:
             title = (d.get("title") or "").strip() or "(제목 없음)"
             content = (d.get("content") or "")[:3000]
+            total_chars += _content_chars(content)
             blocks.append(f"### 📄 {title}\n\n{content}")
+        if total_chars < 200:
+            yield {"event": "error", "message": (
+                f"문서 본문이 너무 짧습니다(총 {total_chars}자). "
+                "마인드맵 생성을 위해 각 문서에 최소 200자 이상의 본문이 필요합니다. "
+                "본문을 더 작성하거나 다른 문서를 선택해 다시 시도하세요."
+            )}
+            return
         doc_summaries = "\n\n---\n\n".join(blocks)
         prompt = _safe_format(_MULTI_PROMPT, doc_count=len(docs), doc_summaries=doc_summaries)
         yield {"event": "stage", "stage": "llm", "message": "LLM에 통합 마인드맵 요청 중..."}
@@ -426,19 +437,26 @@ async def generate_mindmap(
         d = docs[0]
         title = (d.get("title") or "").strip() or "(제목 없음)"
         content = (d.get("content") or "")[:9000]
+        if _content_chars(content) < 150:
+            yield {"event": "error", "message": (
+                f"문서 본문이 너무 짧습니다({_content_chars(content)}자). "
+                "마인드맵 생성을 위해 최소 150자 이상의 본문이 필요합니다. "
+                "문서에 내용을 더 작성한 뒤 다시 시도하세요."
+            )}
+            return
         prompt = _safe_format(_SINGLE_PROMPT, title=title, content=content)
         yield {"event": "stage", "stage": "llm", "message": f"LLM에 단일 마인드맵 요청 중... ({title})"}
 
-    # LLM 호출
+    # LLM 호출 — [r215] 시스템 메시지에 메타 규칙 격리, user 에는 콘텐츠만.
     chunks: List[str] = []
     try:
         async for delta in ollama.chat_stream(
             messages=[
-                {"role": "system", "content": "당신은 정보 시각화 전문가입니다. 사고는 단계적으로 하되 출력은 오직 유효한 JSON 하나만 합니다. MECE 원칙을 엄격히 지키고, 노드 텍스트는 항상 키워드·단문(1~5단어)으로 압축합니다. 서술형 문장은 금지입니다."},
+                {"role": "system", "content": _MINDMAP_SYSTEM},
                 {"role": "user", "content": prompt},
             ],
             model=model,
-            temperature=0.4,  # [r203] MECE 원칙·키워드 압축 안정성 위해 0.55→0.4. 단계 사고는 프롬프트로 유도.
+            temperature=0.4,
         ):
             chunks.append(delta)
             # 100자마다 진행 알림
@@ -460,6 +478,26 @@ async def generate_mindmap(
     branches = parsed.get("branches") or []
     if not isinstance(branches, list) or not branches:
         yield {"event": "error", "message": "분기(branches)가 비어 있습니다.", "raw_head": raw[:300]}
+        return
+
+    # [r215] 시스템 프롬프트 누출 노드 필터링
+    if _is_meta_leak(central):
+        # central 자체가 누출이면 문서 제목으로 폴백
+        if not is_multi:
+            central = (docs[0].get("title") or "마인드맵").strip()[:60]
+        else:
+            central = "통합 마인드맵"
+    branches, removed = _scrub_meta_branches(branches)
+    if removed:
+        yield {"event": "warn", "message": (
+            f"⚠ 시스템 프롬프트 누출 노드 {removed}개 자동 제거됨 "
+            "(LLM 이 메타 규칙을 콘텐츠로 출력한 경우)."
+        )}
+    if not branches:
+        yield {"event": "error", "message": (
+            "마인드맵 생성 결과가 모두 시스템 프롬프트 누출이라 폐기됐습니다. "
+            "문서 본문이 충분한지 확인 후 다시 시도해 주세요."
+        )}
         return
 
     payload = _layout_radial(central, branches)
