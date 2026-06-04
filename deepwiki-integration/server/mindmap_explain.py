@@ -160,7 +160,7 @@ def _select_relevant_excerpt(content: str, node_title: str, sibling_titles: List
     return text[:max_chars]
 
 
-def _build_user_prompt(node: Dict[str, Any], sources: List[Dict[str, Any]], central_title: str) -> str:
+def _build_user_prompt(node: Dict[str, Any], sources: List[Dict[str, Any]], central_title: str, user_question: Optional[str] = None) -> str:
     path = " > ".join(node.get("path_titles") or [node.get("title") or "?"])
     children = ", ".join((node.get("children_titles") or [])[:8]) or "(없음)"
     siblings = ", ".join((node.get("sibling_titles") or [])[:6]) or "(없음)"
@@ -169,6 +169,18 @@ def _build_user_prompt(node: Dict[str, Any], sources: List[Dict[str, Any]], cent
         excerpt = _select_relevant_excerpt(s["content"], node.get("title") or "", node.get("sibling_titles") or [])
         src_blocks.append(f"[{i}] **{s['title']}**\n\n{excerpt}")
     sources_md = "\n\n---\n\n".join(src_blocks) if src_blocks else "(등록된 소스 없음)"
+    # [r222] 자유 질문 모드 — 노드 컨텍스트 유지하고 사용자 질문에 답
+    if user_question:
+        task = (
+            f"사용자의 후속 질문:\n  \"{user_question}\"\n\n"
+            "위 질문에 본문 발췌만 근거로 답하세요. "
+            "노드 컨텍스트(경로/형제/자식)는 참고 정보. "
+            "본문에 없는 내용이면 \"본문에 명시되지 않음\" 명시."
+        )
+    else:
+        task = (
+            "위 [클릭한 노드] 의 의미를 본문 발췌 기반으로 한국어 마크다운으로 설명하세요."
+        )
     return f"""[중심 주제]
 {central_title}
 
@@ -182,10 +194,9 @@ def _build_user_prompt(node: Dict[str, Any], sources: List[Dict[str, Any]], cent
 {sources_md}
 
 [Task]
-위 [클릭한 노드] 의 의미를 본문 발췌 기반으로 한국어 마크다운으로 설명하세요.
+{task}
 - 각주 형식: [^1], [^2] 등
-- 본문에 없는 내용은 "본문에 명시되지 않음" 표시
-- 마지막에 ===FOLLOWUPS=== JSON 블록으로 후속 질문 3개
+- 마지막에 ===FOLLOWUPS=== JSON 블록으로 후속 질문 3개 (코드펜스 없이)
 """
 
 
@@ -212,6 +223,7 @@ async def explain_node(
     node_path: Optional[List[str]],
     source_doc_ids: List[str],
     source_overrides: Optional[List[Dict[str, Any]]] = None,
+    user_question: Optional[str] = None,
     model: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     ollama = get_ollama()
@@ -256,7 +268,7 @@ async def explain_node(
 
     # 3) LLM 호출
     yield {"event": "stage", "stage": "llm", "message": "LLM 설명 생성 중…"}
-    user_prompt = _build_user_prompt(node, sources, central)
+    user_prompt = _build_user_prompt(node, sources, central, user_question=user_question)
 
     # [r220] SSE 분리 — buf 는 "미emit 본문 누적"만 담음.
     #   1) 매 delta 마다 buf 끝 16자만 보존하고 앞쪽은 즉시 emit (마커가 split 돼도 안전)

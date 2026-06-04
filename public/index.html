@@ -4635,17 +4635,50 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             word-break: break-word;
         }
         .mmp-ex-stage { font-size: 11.5px; color: var(--c-accent); font-weight: 700; margin-bottom: 6px; }
-        /* [r220] 누적 Q&A 카드 */
+        /* [r220/r222] 누적 Q&A 카드 + 노드 배지 + 커스텀 입력 */
         .mmp-ex-msg { margin-bottom: 14px; }
         .mmp-ex-msg.q {
             background: var(--c-accent-soft); border-left: 3px solid var(--c-accent);
             padding: 8px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 700; color: var(--c-text);
         }
-        .mmp-ex-msg.q::before { content: '🙋 '; opacity: .8; }
+        /* [r222] q::before 제거 — HTML 안에서 🙋 + 배지로 표시 */
+        .mmp-ex-q-badge {
+            display: inline-block; font-size: 9.5px; font-weight: 800;
+            padding: 1px 7px; border-radius: 9999px;
+            background: var(--c-card); border: 1px solid var(--c-border); color: var(--c-text3);
+            margin-right: 6px; vertical-align: middle;
+        }
         .mmp-ex-msg.a { padding: 0 2px; line-height: 1.65; }
         .mmp-ex-msg.a::before { content: '✦  '; color: var(--c-accent); font-weight: 800; font-size: 13px; }
         .mmp-ex-msg.a-body { display: inline; }
         .mmp-ex-divider { border-top: 1px dashed var(--c-border); margin: 14px 0; }
+        /* [r222] 패널 하단 커스텀 질문 입력 — NotebookLM 스타일 */
+        .mmp-ex-input-wrap {
+            border-top: 1px solid var(--c-border); padding: 10px 12px; background: var(--c-paper);
+            display: flex; align-items: flex-end; gap: 8px;
+        }
+        .mmp-ex-input {
+            flex: 1; min-height: 36px; max-height: 120px; resize: none;
+            padding: 8px 10px; border: 1px solid var(--c-border); border-radius: 8px;
+            background: var(--c-card); color: var(--c-text); font: inherit; font-size: 13px;
+            line-height: 1.45; outline: none;
+        }
+        .mmp-ex-input:focus { border-color: var(--c-accent); }
+        .mmp-ex-send {
+            background: var(--c-accent); color: #fff; border: none; border-radius: 8px;
+            padding: 0 14px; height: 36px; font-size: 13px; font-weight: 800; cursor: pointer;
+            white-space: nowrap; transition: filter .12s;
+        }
+        .mmp-ex-send:hover { filter: brightness(1.08); }
+        .mmp-ex-send:disabled { opacity: .45; cursor: not-allowed; }
+        .mmp-ex-fu-custom {
+            display: block; width: 100%; text-align: left;
+            padding: 7px 12px; margin-bottom: 4px;
+            border: 1px dashed var(--c-border); border-radius: 8px;
+            background: transparent; color: var(--c-text3); cursor: pointer;
+            font-size: 12px; font-family: inherit; font-weight: 700;
+        }
+        .mmp-ex-fu-custom:hover { border-color: var(--c-accent); color: var(--c-accent); }
         .mmp-ex-srcs {
             display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px;
             border-top: 1px solid var(--c-border); font-size: 11px; background: var(--c-paper);
@@ -10460,7 +10493,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r221';
+        var _AHUB_FRONT_REV = 'r222';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -30194,13 +30227,40 @@ ${intrLog}
             '<div class="mmp-ex-foot" id="mmp-ex-foot" style="display:none;">' +
                 '<div class="mmp-ex-fu-title">💡 후속 질문</div>' +
                 '<div id="mmp-ex-fu-list"></div>' +
+            '</div>' +
+            // [r222] 커스텀 질문 입력 — 항상 표시
+            '<div class="mmp-ex-input-wrap">' +
+                '<textarea id="mmp-ex-input" class="mmp-ex-input" placeholder="직접 질문을 입력하세요… (Enter 전송, Shift+Enter 줄바꿈)" rows="1"></textarea>' +
+                '<button id="mmp-ex-send" class="mmp-ex-send" onclick="mmpExSendCustom()">↵ 보내기</button>' +
             '</div>';
         document.body.appendChild(p);
         // 패널 자체 클릭은 캔버스에 전파 안 되게
         p.addEventListener('click', function (e) {
             if (p.classList.contains('mini')) { mmpExplainRestore(); e.stopPropagation(); }
         });
+        // [r222] 입력 — Enter 전송 + Shift+Enter 줄바꿈 + auto-grow
+        var inp = p.querySelector('#mmp-ex-input');
+        if (inp) {
+            inp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); mmpExSendCustom(); }
+            });
+            inp.addEventListener('input', function () {
+                inp.style.height = 'auto';
+                inp.style.height = Math.min(120, inp.scrollHeight) + 'px';
+            });
+        }
         return p;
+    }
+    // [r222] 커스텀 질문 — 입력값을 현재 노드 컨텍스트로 mmpExplainOpen 호출
+    function mmpExSendCustom() {
+        if (_mmpExState.running) { showToast('답변 생성 중 — 끝난 뒤 다시 시도', 'alert'); return; }
+        var inp = document.getElementById('mmp-ex-input'); if (!inp) return;
+        var q = (inp.value || '').trim();
+        if (!q) return;
+        if (!_mmpExState.docId) { showToast('먼저 노드를 클릭해 대화를 시작하세요', 'alert'); return; }
+        inp.value = ''; inp.style.height = 'auto';
+        // 현재(마지막) 노드 컨텍스트 유지 — 사용자가 다른 노드 클릭한 적 있으면 그 노드 기준
+        mmpExplainOpen(_mmpExState.docId, _mmpExState.nodeTitle, { question: q });
     }
     function mmpExplainClose() {
         var p = document.getElementById('mmp-explain-panel'); if (p) { p.classList.remove('on'); p.classList.remove('mini'); }
@@ -30347,18 +30407,20 @@ ${intrLog}
         var question = opts.question || null;
         var path = _mmpExFindPath(branches, nodeTitle) || [central, nodeTitle];
 
-        // [r220] 누적 모드 — 첫 클릭이면 메시지 리셋, follow-up이면 누적
-        var isFollowup = !!question && _mmpExState.docId === docId;
-        if (!isFollowup) {
+        // [r222] 누적 모드 확장 — 같은 마인드맵(docId)이면 노드가 달라도 누적.
+        // 다른 마인드맵 클릭 시에만 messages 리셋.
+        var sameMindmap = _mmpExState.docId === docId && Array.isArray(_mmpExState.messages) && _mmpExState.messages.length > 0;
+        if (!sameMindmap) {
             _mmpExState.docId = docId;
-            _mmpExState.nodeTitle = nodeTitle;
-            _mmpExState.path = path;
             _mmpExState.messages = [];
         }
-        // Q + A(빈) 메시지 추가
+        // 현재 노드 컨텍스트 갱신 (헤더 + 입력 시 nodeTitle 기본값)
+        _mmpExState.nodeTitle = nodeTitle;
+        _mmpExState.path = path;
+        // Q + A(빈) 메시지 추가 — 각 메시지에 nodeTitle/path 보존
         var qLabel = question || nodeTitle;
-        _mmpExState.messages.push({ kind: 'q', text: qLabel });
-        _mmpExState.messages.push({ kind: 'a', text: '', sources: [], followups: [] });
+        _mmpExState.messages.push({ kind: 'q', text: qLabel, nodeTitle: nodeTitle, path: path });
+        _mmpExState.messages.push({ kind: 'a', text: '', sources: [], followups: [], nodeTitle: nodeTitle, path: path });
         _mmpExState.currentAnswerIdx = _mmpExState.messages.length - 1;
         _mmpExState.running = true;
 
@@ -30379,8 +30441,11 @@ ${intrLog}
             project_id: activeProjectId,
             central: central,
             diagram_branches: branches,
-            node_title: qLabel,
-            node_path: question ? null : path,
+            // [r222] question 이 있어도 노드 컨텍스트(nodeTitle/path)는 항상 전송 —
+            // 사용자 질문이 노드와 관련된 후속이므로 백엔드가 형제·자식 컨텍스트 활용 가능.
+            node_title: question ? nodeTitle : qLabel,  // 트리 매칭은 항상 nodeTitle 기준
+            node_path: path,
+            user_question: question || null,             // 자유 질문 텍스트
             source_doc_ids: sources.map(function (sr) { return sr.id; }).filter(Boolean),
             source_docs_overrides: overrides,
             model: (s.chatModel || s.model || null),
@@ -30471,7 +30536,11 @@ ${intrLog}
         for (var k = msgs.length - 1; k >= 0; k--) { if (msgs[k].kind === 'a') { lastAnsIdx = k; break; } }
         var html = msgs.map(function (m, i) {
             if (m.kind === 'q') {
-                return '<div class="mmp-ex-msg q">' + _mmpExEsc(m.text || '') + '</div>';
+                // [r222] 노드 배지 — 어느 노드에 대한 질문인지 명시
+                var badge = (m.nodeTitle && m.nodeTitle !== m.text)
+                    ? '<span class="mmp-ex-q-badge" title="노드">' + _mmpExEsc(m.nodeTitle) + '</span>'
+                    : '';
+                return '<div class="mmp-ex-msg q">🙋 ' + badge + _mmpExEsc(m.text || '') + '</div>';
             }
             // a
             var inner;
@@ -30509,12 +30578,20 @@ ${intrLog}
         if (f && list) {
             if (!fups.length) { f.style.display = 'none'; }
             else {
-                list.innerHTML = fups.map(function (q, j) {
+                var html = fups.map(function (q, j) {
                     return '<button class="mmp-ex-fu-btn" onclick="mmpExFollowup(' + j + ')">' + _mmpExEsc(q) + ' ↗</button>';
                 }).join('');
+                // [r222] 후속 질문 끝에 ✏️ 직접 입력 — 하단 입력칸으로 포커스
+                html += '<button class="mmp-ex-fu-custom" onclick="mmpExFocusInput()">✏️ 기타 — 직접 질문 입력하기</button>';
+                list.innerHTML = html;
                 f.style.display = 'block';
             }
         }
+    }
+    // [r222] 입력칸에 포커스
+    function mmpExFocusInput() {
+        var inp = document.getElementById('mmp-ex-input');
+        if (inp) { inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'end' }); }
     }
 
     function _mmpExRenderError(msg) {

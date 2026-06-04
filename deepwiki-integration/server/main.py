@@ -30,7 +30,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r221"
+SERVER_REVISION = "r222"
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -572,6 +572,8 @@ class MindmapExplainRequest(BaseModel):
     source_doc_ids: List[str] = []                # doc.meta.mindmap_sources 의 id 목록
     # [r220] 프론트가 미리 expand 한 본문 — wiki_docs.content 가 토큰만 있을 때 우선 사용
     source_docs_overrides: List[MindmapSourceOverride] = []
+    # [r222] 자유 질문 — 노드 컨텍스트는 유지하고 사용자가 직접 던지는 질문
+    user_question: Optional[str] = None
     model: Optional[str] = None
 
 
@@ -622,6 +624,7 @@ async def mindmap_explain(req: MindmapExplainRequest):
         node_path=req.node_path,
         source_doc_ids=req.source_doc_ids or [],
         source_overrides=[s.model_dump() for s in (req.source_docs_overrides or [])],
+        user_question=req.user_question,
         model=req.model,
     )
     return _sse_indexer(gen, busy_kind="mindmap_explain", busy_project=req.project_id)
