@@ -74,6 +74,19 @@ def create_session(*, project_id: Optional[str], title: str, user_id: str) -> Di
     return row
 
 
+# [r230] refinery_sessions 실제 컬럼 화이트리스트 — 미정의 키(last_decompose 등)가
+# patch 에 섞이면 PostgREST 가 update 전체를 거부(컬럼 없음) → nodes 까지 저장 실패.
+# 그래서 update 페이로드는 실제 컬럼만 통과시킨다.
+_ALLOWED_COLS = {
+    "project_id", "title", "status", "vault_doc_ids", "nodes", "classifications",
+    "participants", "review_request_id", "generated_tree", "generated_doc_ids",
+    "generated_wbs_ids", "generated_task_ids", "generated_issue_ids",
+    "parent_session_id", "version_label",
+    # 메타 (stamp_metadata 가 채움)
+    "updated_by", "updated_at", "history",
+}
+
+
 def update_session(sid: str, patch: Dict[str, Any], *, user_id: str, action: str, detail: str = "") -> Dict[str, Any]:
     require_author(user_id, "세션 수정")
     cur = get_session(sid)
@@ -84,13 +97,21 @@ def update_session(sid: str, patch: Dict[str, Any], *, user_id: str, action: str
     if user_id not in parts:
         parts.append(user_id)
         patch.setdefault("participants", parts)
-    merged = {**cur, **patch}
+    # [r230] 미정의 키 제거 — last_decompose 등은 메모리(프론트)에만 보관, DB update 제외
+    dropped = [k for k in (patch or {}) if k not in _ALLOWED_COLS]
+    safe_patch = {k: v for k, v in (patch or {}).items() if k in _ALLOWED_COLS}
+    merged = {**cur, **safe_patch}
     merged = stamp_metadata(merged, user_id=user_id, action=action, detail=detail)
+    # update 페이로드도 컬럼만 (cur 에 혹시 미정의 키가 있어도 안전)
+    update_payload = {k: v for k, v in merged.items() if k in _ALLOWED_COLS or k == "id"}
     store = get_store()
     try:
-        store.client.table(TABLE).update(merged).eq("id", sid).execute()
+        store.client.table(TABLE).update(update_payload).eq("id", sid).execute()
     except Exception as e:
         raise RuntimeError(f"세션 업데이트 실패: {e}")
+    # 반환은 merged (id 포함). dropped 키는 프론트 메모리에서 별도 보관.
+    if dropped:
+        merged["_dropped_keys"] = dropped
     return merged
 
 

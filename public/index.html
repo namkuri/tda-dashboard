@@ -10689,7 +10689,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r229';
+        var _AHUB_FRONT_REV = 'r230';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31047,7 +31047,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r229';
+    var _RFS_FRONT_REV = 'r230';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31376,21 +31376,26 @@ ${intrLog}
         rfsRenderVaultStep();
     }
 
+    // [r230] 성공 시 true 반환. 실패해도 throw 안 함 (호출자가 메모리 폴백).
     async function rfsPatchSession(patch, action, detail) {
-        if (!_rfsState.current) return;
+        if (!_rfsState.current) return false;
         var url = rfsBackEnd();
         try {
             var res = await fetch(url + '/refinery/sessions/' + _rfsState.current.id, {
                 method: 'PATCH', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({user_id: rfsCurrentUser(), patch: patch, action: action || 'session_updated', detail: detail || ''})
             });
-            if (!res.ok) { var err = await res.text(); showToast('세션 업데이트 실패: ' + err.slice(0, 200), 'alert'); return; }
+            if (!res.ok) {
+                var err = await res.text();
+                console.warn('[rfs] PATCH 실패 HTTP ' + res.status, err.slice(0, 300));
+                return false;
+            }
             var updated = await res.json();
             _rfsState.current = updated;
-            // 세션 목록도 갱신
             var idx = _rfsState.sessions.findIndex(function (x) { return x.id === updated.id; });
             if (idx >= 0) _rfsState.sessions[idx] = updated;
-        } catch (e) { showToast('세션 업데이트 실패: ' + e.message, 'alert'); }
+            return true;
+        } catch (e) { console.warn('[rfs] PATCH 예외', e); return false; }
     }
 
     // ── 분해 단계
@@ -31516,7 +31521,11 @@ ${intrLog}
                     if (!data || data === '[DONE]') continue;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.event === 'stage') { dc.stage = '🔄 ' + (ev.message || ev.stage); dc.stageStartedAt = Date.now(); _rfsDcUpdateStage(); _log('STAGE ' + (ev.message || '')); }
+                        if (ev.event === 'stage') {
+                            // [r230] 단계 전환 시 이전 단계 소요 로그 (부분별 소요시간)
+                            if (dc.stageStartedAt) { var _prevS = Math.round((Date.now() - dc.stageStartedAt) / 1000); if (_prevS > 0) _log('  ⏱ 직전 단계 ' + _prevS + 's'); }
+                            dc.stage = '🔄 ' + (ev.message || ev.stage); dc.stageStartedAt = Date.now(); _rfsDcUpdateStage(); _log('STAGE ' + (ev.message || ''));
+                        }
                         else if (ev.event === 'tree_progress') { dc.stage = '🔄 카테고리 트리 합성 — LLM 응답 ' + (ev.received_chars||0) + '자 수신 (' + (ev.waited_sec||0) + 's)'; _rfsDcUpdateStage(); }
                         else if (ev.event === 'tree_composed') { _log('🌲 트리 합성 완료 (' + (ev.method||'?') + ' · 카테고리 ' + (ev.categories||0) + '개)'); }
                         else if (ev.event === 'chunk_start') { _log('▶ 청크 ' + ev.current + '/' + ev.total + ' (' + (ev.vault_title||'') + ')'); }
@@ -31528,23 +31537,34 @@ ${intrLog}
                         else if (ev.event === 'done') {
                             var leaf = ev.leaf_count != null ? ev.leaf_count : ev.node_count;
                             dc.percent = 100;
+                            if (dc.stageStartedAt) { var _ds = Math.round((Date.now() - dc.stageStartedAt) / 1000); if (_ds > 0) _log('  ⏱ 직전 단계 ' + _ds + 's'); }
                             _log('완료 — 총 노드 ' + ev.node_count + ' (잎 ' + leaf + ', 카테고리 ' + (ev.category_count||0) + ', skip ' + (ev.skipped_meta||0) + ' meta, 파싱실패 ' + (ev.parse_fail_chunks||0) + '/' + (ev.total_chunks||0) + ')');
-                            // [r228] 분해 로그·진단을 세션에 영구 보존 (재진입·재시도 시 확인)
-                            try {
-                                await rfsPatchSession({
-                                    nodes: ev.nodes, status: leaf > 0 ? 'classifying' : 'decomposing',
-                                    last_decompose: {
-                                        node_count: ev.node_count, leaf_count: leaf,
-                                        skipped_meta: ev.skipped_meta || 0,
-                                        parse_fail: ev.parse_fail_chunks || 0, total_chunks: ev.total_chunks || 0,
-                                        diag_hint: ev.diag_hint || null,
-                                        log: (dc.log || []).slice(-60),
-                                        at: new Date().toISOString(),
-                                    },
-                                }, 'decomposed', '노드 ' + ev.node_count);
-                            } catch (e) {}
+                            var _ld = {
+                                node_count: ev.node_count, leaf_count: leaf,
+                                skipped_meta: ev.skipped_meta || 0,
+                                parse_fail: ev.parse_fail_chunks || 0, total_chunks: ev.total_chunks || 0,
+                                diag_hint: ev.diag_hint || null,
+                                log: (dc.log || []).slice(-60), at: new Date().toISOString(),
+                            };
+                            // [r230] 메모리 우선 — PATCH 성공/실패 무관하게 분류 진행 보장
+                            _rfsState.current.nodes = ev.nodes;
+                            _rfsState.current.last_decompose = _ld;
                             _rfsState.nodes = ev.nodes;
                             dc.running = false; dc.abort = null; _rfsDcStopTicker();
+                            // [r230] DB 저장 best-effort. 실패 시 history 제거 경량 재시도 → 그래도 실패면 메모리 진행.
+                            var _newStatus = leaf > 0 ? 'classifying' : 'decomposing';
+                            var _saved = await rfsPatchSession({nodes: ev.nodes, status: _newStatus, last_decompose: _ld}, 'decomposed', '노드 ' + ev.node_count);
+                            if (!_saved) {
+                                var _light = (ev.nodes || []).map(function (n) { var c = Object.assign({}, n); delete c.history; if (c.summary) c.summary = c.summary.slice(0, 120); return c; });
+                                var _saved2 = await rfsPatchSession({nodes: _light, status: _newStatus, last_decompose: _ld}, 'decomposed_light', '경량 저장 ' + _light.length);
+                                _rfsState.current.nodes = ev.nodes;  // 메모리는 full 유지
+                                _rfsState.current.last_decompose = _ld;
+                                if (_saved2) { _log('💾 경량 저장 성공 (history 생략 — 메모리는 full 유지)'); }
+                                else { _log('⚠ DB 저장 실패 — 메모리로 진행. 새로고침 전 분류·결재까지 완료 권장.'); showToast('⚠ 노드 DB 저장 실패 — 메모리로 진행. 새로고침 전 작업 완료하세요.', 'alert'); }
+                            }
+                            // [r230] PATCH 성공 시 current=updated(서버응답, last_decompose 컬럼 없음) 라 메모리 재보장
+                            _rfsState.current.nodes = ev.nodes;
+                            _rfsState.current.last_decompose = _ld;
                             if (leaf > 0) {
                                 dc.stage = '✅ 완료 — 노드 ' + ev.node_count + '개 (' + ev.elapsed_sec + 's)';
                                 _rfsDcUpdateStage(); _rfsDcUpdateBar();
