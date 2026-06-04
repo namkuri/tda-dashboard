@@ -14,7 +14,7 @@ import json
 import time
 from typing import List, Dict, Any, Optional
 from supabase_store import get_store
-from ._author_guard import require_author, history_entry, stamp_metadata
+from ._author_guard import require_author, history_entry
 from .linker import extract_user_sections, reinject_user_sections
 
 
@@ -54,6 +54,14 @@ def apply_tree(
     session_id = session.get("id")
     root = (session.get("generated_tree") or {}).get("root") or f"🔬 {session.get('title')} 시스템 정의서"
 
+    # [r232] wiki_docs 실제 스키마: sort_order=int4(오버플로우 주의), updated_at=bigint(epoch ms),
+    #   update_history(=history 아님) jsonb, created_at 컬럼 없음. stamp_metadata 금지.
+    _seq = {"n": int(time.time()) % 100000}  # 작은 int4 시드 — 오버플로우 회피
+
+    def next_sort() -> int:
+        _seq["n"] += 1
+        return _seq["n"]
+
     # 폴더 경로 자동 생성 — wiki_docs.kind='wiki' + meta.isFolder=true
     folder_cache: Dict[str, str] = {}  # 'root/0.정체성' → doc_id
 
@@ -87,28 +95,29 @@ def apply_tree(
                     continue
             except Exception:
                 pass
-            # 신규 폴더 생성
+            # 신규 폴더 생성 — wiki_docs 실제 컬럼만 (stamp_metadata 금지)
             new_folder_id = _doc_id()
-            folder_row = stamp_metadata(
-                {
-                    "id": new_folder_id,
-                    "project_id": project_id_local,
-                    "title": part,
-                    "kind": target_kind,
-                    "parent_id": parent_id,
-                    "emoji": "📁",
-                    "content": "",
-                    "meta": {
-                        "isFolder": True,
-                        "refinerySessionId": session_id,
-                    },
-                    "sort_order": 0,
-                },
-                user_id=user_id,
-                action="folder_created",
-                is_new=True,
-                detail=f"정련소 세션 #{session_id}",
-            )
+            folder_row = {
+                "id": new_folder_id,
+                "project_id": project_id_local,
+                "parent_id": parent_id,
+                "title": part,
+                "kind": target_kind,
+                "emoji": "📁",
+                "content": "",
+                "meta": {"isFolder": True, "refinerySessionId": session_id},
+                "sort_order": next_sort(),
+                "is_collapsed": False,
+                "is_deprecated": False,
+                "doc_type": "plan",
+                "linked_task_ids": [],
+                "linked_doc_ids": [],
+                "is_locked": False,
+                "created_by": user_id,
+                "updated_by": user_id,
+                "update_history": [history_entry("folder_created", user_id, f"정련소 세션 #{session_id}")],
+                "updated_at": _now_ms(),
+            }
             try:
                 store.client.table("wiki_docs").insert(folder_row).execute()
                 folder_cache[sub_key] = new_folder_id
@@ -177,12 +186,20 @@ def apply_tree(
             old_user_sections, _ = extract_user_sections(ex.get("content") or "")
             merged_body = reinject_user_sections(body, old_user_sections) if old_user_sections else body
             new_meta = {**ex_meta, **meta_base}
-            updated_row = stamp_metadata(
-                {**ex, "content": merged_body, "meta": new_meta},
-                user_id=user_id,
-                action="wiki_committed",
-                detail=f"정련소 #{session_id} → 덮어쓰기 (archived v{len(new_meta.get('archived_versions') or [])})",
-            )
+            # [r232] 변경 필드만 update — wiki_docs 실제 컬럼/타입 준수 (updated_at=bigint, update_history)
+            uh = ex.get("update_history") or []
+            if not isinstance(uh, list):
+                uh = []
+            uh.append(history_entry("wiki_committed", user_id, f"정련소 #{session_id} → 덮어쓰기 (archived v{len(new_meta.get('archived_versions') or [])})"))
+            if len(uh) > 200:
+                uh = uh[-200:]
+            updated_row = {
+                "content": merged_body,
+                "meta": new_meta,
+                "updated_by": user_id,
+                "updated_at": _now_ms(),
+                "update_history": uh,
+            }
             try:
                 store.client.table("wiki_docs").update(updated_row).eq("id", ex["id"]).execute()
                 updated.append({"id": ex["id"], "path": path, "target": target_kind, "archived_count": len(new_meta.get("archived_versions") or [])})
@@ -190,23 +207,27 @@ def apply_tree(
                 warnings.append(f"덮어쓰기 실패 {path}: {e}")
         else:
             new_id = _doc_id()
-            new_row = stamp_metadata(
-                {
-                    "id": new_id,
-                    "project_id": project_id if target_kind != "personal" else project_id,
-                    "title": title,
-                    "kind": target_kind,
-                    "parent_id": parent_id,
-                    "emoji": _emoji_for(f.get("category")),
-                    "content": body,
-                    "meta": meta_base,
-                    "sort_order": _now_ms(),
-                },
-                user_id=user_id,
-                action="wiki_committed",
-                is_new=True,
-                detail=f"정련소 #{session_id} → 신규",
-            )
+            new_row = {  # wiki_docs 실제 컬럼만 (stamp_metadata 금지 — created_at/history 없음, updated_at=bigint)
+                "id": new_id,
+                "project_id": project_id,
+                "parent_id": parent_id,
+                "title": title,
+                "kind": target_kind,
+                "emoji": _emoji_for(f.get("category")),
+                "content": body,
+                "meta": meta_base,
+                "sort_order": next_sort(),
+                "is_collapsed": False,
+                "is_deprecated": False,
+                "doc_type": "plan",
+                "linked_task_ids": [],
+                "linked_doc_ids": f.get("linked_doc_ids") or [],
+                "is_locked": False,
+                "created_by": user_id,
+                "updated_by": user_id,
+                "update_history": [history_entry("wiki_committed", user_id, f"정련소 #{session_id} → 신규")],
+                "updated_at": _now_ms(),
+            }
             try:
                 store.client.table("wiki_docs").insert(new_row).execute()
                 created.append({"id": new_id, "path": path, "target": target_kind})
@@ -224,101 +245,107 @@ def apply_work(
     user_id: str,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """제안된 WBS/태스크/이슈 일괄 insert."""
+    """제안된 WBS/태스크/이슈 일괄 insert.
+
+    [r232] 핵심 수정: 각 테이블 스키마에 **없는 컬럼(history/updated_by)** 을 넣으면
+    PostgREST 가 insert 전체를 거부 → "모두 생성" 했는데 아무것도 안 생기던 버그.
+    stamp_metadata 대신 테이블별 실제 컬럼만 명시.
+    [r232] parent_id(WBS 삽입 위치)·sprint_id(태스크 스프린트) 항목별 지정 지원.
+    """
     require_author(user_id, "작업 일괄 생성")
     store = get_store()
     session_id = session.get("id")
+    now = _iso()
     created_wbs = []
     created_tasks = []
     created_issues = []
     warnings = []
 
-    # WBS — proposed.id 를 real id 로 매핑
+    # WBS — proposed.id 를 real id 로 매핑 (parent 가 같은 배치 내 WBS 일 수 있음)
     wbs_id_map = {}
     for wb in wbs_nodes:
         new_id = _wbs_id()
         wbs_id_map[wb.get("id")] = new_id
-        row = stamp_metadata(
-            {
-                "id": new_id,
-                "project_id": project_id,
-                "parent_id": None,
-                "title": wb.get("title"),
-                "description": wb.get("description"),
-                "status": "todo",
-                "progress": 0,
-                "links": {
-                    "_source_session": session_id,
-                    "_estimated_days": wb.get("estimated_days"),
-                    "_node_ids": wb.get("node_ids") or [],
-                    "_depends_on": [wbs_id_map.get(d, d) for d in (wb.get("depends_on") or [])],
-                },
-                "attachments": [],
-                "assignees": [],
-                "sort_order": _now_ms(),
+    for wb in wbs_nodes:
+        new_id = wbs_id_map[wb.get("id")]
+        # [r232] 삽입 위치 — parent_id (기존 WBS 또는 같은 배치 WBS). 매핑 우선.
+        parent = wb.get("parent_id")
+        parent = wbs_id_map.get(parent, parent)
+        row = {  # wbs_nodes 실제 컬럼만
+            "id": new_id,
+            "project_id": project_id,
+            "parent_id": parent,
+            "title": wb.get("title") or "WBS",
+            "description": wb.get("description") or "",
+            "status": "todo",
+            "progress": 0,
+            "links": {
+                "_source_session": session_id,
+                "_estimated_days": wb.get("estimated_days"),
+                "_node_ids": wb.get("node_ids") or [],
+                "_depends_on": [wbs_id_map.get(d, d) for d in (wb.get("depends_on") or [])],
+                "_doc_ids": wb.get("linked_doc_ids") or [],  # [r232 #4] 정의서 연관 문서 자동 링크
             },
-            user_id=user_id,
-            action="wbs_created",
-            is_new=True,
-            detail=f"정련소 #{session_id}",
-        )
+            "attachments": [],
+            "assignees": [],
+            "owner_user_id": user_id,
+            "created_by": user_id,
+            "sort_order": _now_ms(),
+            "created_at": now,
+            "updated_at": now,
+        }
         try:
             store.client.table("wbs_nodes").insert(row).execute()
             created_wbs.append({"id": new_id, "title": wb.get("title")})
         except Exception as e:
-            warnings.append(f"WBS 생성 실패: {e}")
+            warnings.append(f"WBS 생성 실패({wb.get('title')}): {e}")
 
     for t in tasks:
         new_id = _task_id()
-        row = stamp_metadata(
-            {
-                "id": new_id,
-                "project_id": project_id,
-                "title": t.get("title"),
-                "description": t.get("description"),
-                "status": "pending",
-                "zone": "shelf",
-                "priority": t.get("priority", "p2"),
-                "sprint_id": None,
-                "due_date": None,
-                "assignees": [],
-                "cat_id": None,
-            },
-            user_id=user_id,
-            action="task_created",
-            is_new=True,
-            detail=f"정련소 #{session_id} · WBS {wbs_id_map.get(t.get('wbs_id'), t.get('wbs_id'))}",
-        )
+        row = {  # tasks 실제 컬럼만 (created_at/updated_by/history 컬럼 없음! updated_at=timestamptz)
+            "id": new_id,
+            "project_id": project_id,
+            "title": t.get("title") or "태스크",
+            "description": t.get("description") or "",
+            "details": t.get("details") or "",
+            "status": "pending",
+            "zone": "shelf",
+            "priority": t.get("priority", "p2"),
+            "sprint_id": t.get("sprint_id"),   # [r232] 항목별 스프린트 지정
+            "cat_id": t.get("cat_id"),         # [r232] 칸반 카테고리 (없으면 null)
+            "due_date": None,
+            "assignees": [],
+            "linked_doc_ids": t.get("linked_doc_ids") or [],  # [r232] 정의서 연관 문서 자동 링크
+            "created_by": user_id,
+            "updated_at": now,
+        }
         try:
             store.client.table("tasks").insert(row).execute()
             created_tasks.append({"id": new_id, "title": t.get("title")})
         except Exception as e:
-            warnings.append(f"태스크 생성 실패: {e}")
+            warnings.append(f"태스크 생성 실패({t.get('title')}): {e}")
 
     for iss in issues:
         new_id = _issue_id()
-        row = stamp_metadata(
-            {
-                "id": new_id,
-                "project_id": project_id,
-                "title": iss.get("title"),
-                "description": iss.get("description"),
-                "status": iss.get("status", "open"),
-                "priority": iss.get("priority", "p2"),
-                "target": iss.get("target"),
-                "due_date": None,
-                "assignee_id": None,
-            },
-            user_id=user_id,
-            action="issue_created",
-            is_new=True,
-            detail=f"정련소 #{session_id}",
-        )
+        row = {  # issues 실제 컬럼만
+            "id": new_id,
+            "project_id": project_id,
+            "title": iss.get("title") or "이슈",
+            "description": iss.get("description") or "",
+            "status": iss.get("status", "open"),
+            "priority": iss.get("priority", "p2"),
+            "target": iss.get("target"),
+            "due_date": None,
+            "assignee_id": None,
+            "created_by": user_id,
+            "created_at": now,
+            "updated_at": now,
+        }
         try:
             store.client.table("issues").insert(row).execute()
             created_issues.append({"id": new_id, "title": iss.get("title")})
         except Exception as e:
-            warnings.append(f"이슈 생성 실패: {e}")
+            warnings.append(f"이슈 생성 실패({iss.get('title')}): {e}")
 
     return {
         "wbs_created": created_wbs,

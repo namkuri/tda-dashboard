@@ -10689,7 +10689,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r231';
+        var _AHUB_FRONT_REV = 'r232';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31052,7 +31052,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r231';
+    var _RFS_FRONT_REV = 'r232';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31224,25 +31224,34 @@ ${intrLog}
     function rfsOpenSession(sid) {
         var s = _rfsState.sessions.find(function (x) { return x.id === sid; });
         if (!s) { showToast('세션을 찾지 못함', 'alert'); return; }
-        // [r225] 다른 세션 열 때 진행 중 분해가 있으면 경고 + 중단
-        if (_rfsState.decompose.running && _rfsState.current && _rfsState.current.id !== sid) {
-            if (_rfsState.decompose.abort) { try { _rfsState.decompose.abort.abort(); } catch (e) {} }
-            _rfsState.decompose.running = false;
-        }
-        // 다른 세션이면 분해/compose 상태 리셋 (같은 세션 재진입은 보존)
-        if (!_rfsState.current || _rfsState.current.id !== sid) {
+        // [r232] 진짜 세션 전환 판정 — _activeSessionId 기준 (목록 갔다 같은 세션 재오픈은 보존).
+        var isSameSession = (_rfsState._activeSessionId === sid);
+        if (!isSameSession) {
+            // 다른 세션 — 진행 중이면 중단 + 상태 전부 리셋
+            if (_rfsState.decompose.running && _rfsState.decompose.abort) { try { _rfsState.decompose.abort.abort(); } catch (e) {} }
+            if (_rfsState.compose.running && _rfsState.compose.abort) { try { _rfsState.compose.abort.abort(); } catch (e) {} }
             _rfsDcStopTicker(); _rfsCpStopTicker();
             _rfsState.decompose = { running: false, abort: null, stage: '', percent: 0, log: [], liveNodes: [], startedAt: 0, stageStartedAt: 0, stageTimer: null };
             _rfsState.compose = { running: false, abort: null, stage: '', percent: 0, log: [], startedAt: 0, stageTimer: null };
             _rfsState.composedFiles = [];
+            _rfsState.suggestions = {};
+            _rfsState.proposedWork = null;
+            _rfsState.selectedFiles = {};
         }
+        _rfsState._activeSessionId = sid;
         _rfsState.current = s;
         _rfsState.nodes = s.nodes || [];
         _rfsState.classifications = s.classifications || {};
+        // [r232] composedFiles 복원 — 메모리 우선, 없으면 세션 DB(generated_tree.files)
+        if (!_rfsState.composedFiles || !_rfsState.composedFiles.length) {
+            _rfsState.composedFiles = (s.generated_tree && s.generated_tree.files) || [];
+        }
         _rfsState.vaultDocs = [];  // import 후 채워짐
-        _rfsState.step = (s.vault_doc_ids||[]).length ? 3 : 2;
+        // [r232] 진행 중이면 그 단계 유지, 아니면 데이터 기준 단계
+        if (_rfsState.decompose.running) _rfsState.step = 3;
+        else if (_rfsState.compose.running) _rfsState.step = 6;
+        else _rfsState.step = (s.vault_doc_ids||[]).length ? 3 : 2;
         document.getElementById('rfs-session-title').textContent = '— ' + s.title + ' (' + (s.version_label||'v1') + ')';
-        // vault 내용 로드
         rfsLoadVaultDocs().then(function () {
             rfsRenderStepper();
             rfsRenderCurrentStep();
@@ -32105,6 +32114,14 @@ ${intrLog}
         if (!files.length) { showToast('선택된 파일이 없습니다', 'alert'); return; }
         var ok = await uiConfirm({title: '위키 적용', message: files.length + '개 파일을 적용합니다. 기존 동일 경로는 archived 보존 후 덮어쓰기.', confirmText: '적용'});
         if (!ok) return;
+        if (_rfsState._applyingTree) return;  // 중복 방지
+        _rfsState._applyingTree = true;
+        // [r232] 버튼 disable + 진행 표시 (1~2초 무반응 해결)
+        var btns = document.querySelectorAll('#rfs-main button');
+        btns.forEach(function (b) { b.disabled = true; });
+        var applyBtn = Array.prototype.find.call(btns, function (b) { return /위키에 적용/.test(b.textContent); });
+        var prevTxt = applyBtn ? applyBtn.textContent : '';
+        if (applyBtn) applyBtn.innerHTML = '<span class="rfs-dc-spinner"></span> 적용 중…';
         try {
             var res = await fetch(url + '/refinery/apply-tree', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -32116,59 +32133,162 @@ ${intrLog}
             if (!res.ok) { var err = await res.text(); throw new Error(err.slice(0, 200)); }
             var data = await res.json();
             showToast('✓ 위키 적용 완료 — 신규 ' + data.created.length + ', 갱신 ' + data.updated.length + (data.warnings.length ? ', 경고 ' + data.warnings.length : ''), 'success');
+            if (data.warnings && data.warnings.length) console.warn('[rfs] apply-tree 경고', data.warnings);
+            // [r232 #4] 정의서 노드→문서 매핑 — 작업 제안의 "연관 문서 자동 링크" 용
+            var docByPath = {};
+            (data.created || []).concat(data.updated || []).forEach(function (d) { if (d && d.path) docByPath[d.path] = d.id; });
+            var docMap = {};
+            (_rfsState.composedFiles || []).forEach(function (f) {
+                var did = docByPath[f.path]; if (!did) return;
+                (f.node_ids || []).forEach(function (nid) { (docMap[nid] = docMap[nid] || []).push(did); });
+            });
+            _rfsState.appliedDocMap = docMap;
+            _rfsState._applyingTree = false;
             rfsGoStep(8);
-        } catch (e) { showToast('적용 실패: ' + e.message, 'alert'); }
+        } catch (e) {
+            showToast('적용 실패: ' + e.message, 'alert');
+            _rfsState._applyingTree = false;
+            btns.forEach(function (b) { b.disabled = false; });
+            if (applyBtn) applyBtn.textContent = prevTxt;
+        }
     }
 
-    // ── 작업 제안
+    // ── 작업 제안 [r232 #4] 삽입 위치/스프린트/카테고리 선택 + 항목 체크박스 + 설명 + 정의서 자동 링크
+    function rfsProposeIncluded(id) { return _rfsState.proposeSel ? (_rfsState.proposeSel[id] !== false) : true; }
+    function rfsToggleProposeItem(id, on) { _rfsState.proposeSel = _rfsState.proposeSel || {}; _rfsState.proposeSel[id] = !!on; }
+    function rfsSetWbsParent(wid, v) { _rfsState.proposeWbsParent = _rfsState.proposeWbsParent || {}; _rfsState.proposeWbsParent[wid] = v; }
+    function rfsSetWbsCat(wid, v) { _rfsState.proposeWbsCat = _rfsState.proposeWbsCat || {}; _rfsState.proposeWbsCat[wid] = v; }
+    function rfsSetWbsSprint(wid, v) { _rfsState.proposeWbsSprint = _rfsState.proposeWbsSprint || {}; _rfsState.proposeWbsSprint[wid] = v; }
+    function rfsToggleAutoLink(on) { _rfsState.proposeAutoLink = !!on; }
+    function _rfsProjList(key) { return (currentData[key] || []).filter(function (n) { return (n.projectId || 'default') === activeProjectId; }); }
+    function rfsWbsParentOptions(sel) {
+        var o = '<option value="">— 최상위(프로젝트 루트)</option>';
+        _rfsProjList('wbsNodes').forEach(function (n) { o += '<option value="' + n.id + '"' + (sel === n.id ? ' selected' : '') + '>' + _annEsc(n.title || '(제목없음)') + '</option>'; });
+        return o;
+    }
+    function rfsCatOptions(sel) {
+        var list = _rfsProjList('categories');
+        var o = '<option value="">— 카테고리 없음(칸반 미표시)</option>';
+        list.forEach(function (c) { o += '<option value="' + c.id + '"' + (sel === c.id ? ' selected' : '') + '>' + _annEsc(c.title || '카테고리') + '</option>'; });
+        return o;
+    }
+    function rfsSprintOptions(sel) {
+        var o = '<option value="">— 스프린트 없음</option>';
+        _rfsProjList('sprints').forEach(function (s) { var b = s.status === 'active' ? '🏃 ' : (s.status === 'closed' ? '🏁 ' : '📋 '); o += '<option value="' + s.id + '"' + (sel === s.id ? ' selected' : '') + '>' + b + _annEsc(s.weekLabel || s.id) + '</option>'; });
+        return o;
+    }
+    function _rfsDefaultCat() { var c = _rfsProjList('categories'); return c.length ? c[0].id : ''; }
+    function _rfsDefaultSprint() { var s = _rfsProjList('sprints').filter(function (x) { return x.status === 'active'; }); return s.length ? s[0].id : ''; }
+
     function rfsRenderProposeWorkStep() {
         var main = document.getElementById('rfs-main'); if (!main) return;
         var proposed = _rfsState.proposedWork;
+        var pw = _rfsState._proposing;
+        // 기본값 1회 세팅 (재진입/재제안에도 보존)
+        _rfsState.proposeWbsParent = _rfsState.proposeWbsParent || {};
+        _rfsState.proposeWbsCat = _rfsState.proposeWbsCat || {};
+        _rfsState.proposeWbsSprint = _rfsState.proposeWbsSprint || {};
+        if (typeof _rfsState.proposeAutoLink === 'undefined') _rfsState.proposeAutoLink = true;
         var html = '<div style="max-width:1000px;margin:0 auto;">';
-        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑥ WBS / 태스크 / 이슈 자동 제안</h2>';
-        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">확정 노드 → WBS 그룹핑 → 4~8시간 태스크 분할. 가설/리스크 → 이슈.</div>';
-        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunProposeWork()">' + (proposed ? '🔄 재제안' : '✨ 제안 받기') + '</button>';
-        html += '<div id="rfs-propose-progress" style="display:none;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin:14px 0;"><div id="rfs-propose-stage">⏳</div><div id="rfs-propose-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px;border-radius:6px;"></div></div>';
-        if (proposed) {
-            html += '<div style="margin-top:14px;display:flex;gap:8px;">';
-            html += '<button class="aihub-gpu-btn primary" onclick="rfsApplyWork(\'all\')">⊕ 모두 생성</button>';
-            html += '<button class="aihub-gpu-btn" onclick="rfsApplyWork(\'p0\')">⊕ P0/P1 만</button>';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑧ WBS / 태스크 / 이슈 자동 제안</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">확정 노드 → WBS 그룹핑 → 4~8시간 태스크 분할. 가설/리스크 → 이슈. <b>체크된 항목만</b> 생성되며, WBS 삽입 위치·태스크 카테고리/스프린트를 지정할 수 있습니다.</div>';
+        if (pw) {
+            html += '<button class="aihub-gpu-btn" disabled style="opacity:.6;"><span class="rfs-dc-spinner"></span> LLM 제안 생성 중…</button>';
+        } else {
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsRunProposeWork()">' + (proposed ? '🔄 재제안' : '✨ 제안 받기') + '</button>';
+        }
+        html += '<div id="rfs-propose-progress" style="' + (pw ? '' : 'display:none;') + 'padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin:14px 0;"><div id="rfs-propose-stage" style="font-weight:700;color:var(--c-accent);">' + (pw ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '⏳') + '</div><div id="rfs-propose-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((_rfsState._proposeLog || []).join('\n')) + '</div></div>';
+        if (proposed && !pw) {
+            var wbsList = proposed.wbs_nodes || [], taskList = proposed.tasks || [], issueList = proposed.issues || [];
+            var noCat = !_rfsProjList('categories').length;
+            // 상단 액션 + 자동 링크 토글
+            html += '<div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsApplyWork()">⊕ 선택 항목 생성</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsProposeSelectAll(true)">전체 선택</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsProposeSelectAll(false)">전체 해제</button>';
+            html += '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--c-text2);margin-left:auto;cursor:pointer;"><input type="checkbox" ' + (_rfsState.proposeAutoLink ? 'checked' : '') + ' onchange="rfsToggleAutoLink(this.checked)"> 🔗 정의서 연관 문서 자동 링크</label>';
             html += '</div>';
-            html += '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
-            // WBS
-            html += '<div><h3 style="font-size:13px;margin:0 0 8px;">WBS (' + (proposed.wbs_nodes||[]).length + ')</h3>';
-            (proposed.wbs_nodes||[]).forEach(function (w) {
-                html += '<div style="padding:8px;border:1px solid var(--c-border);border-radius:6px;margin-bottom:6px;background:var(--c-card);font-size:12px;"><b>' + _annEsc(w.title) + '</b> · ' + w.estimated_days + 'd<div style="font-size:11px;color:var(--c-text3);">' + _annEsc(w.description||'') + '</div></div>';
+            if (noCat) html += '<div style="margin-top:8px;font-size:11.5px;color:#92400e;background:rgba(245,158,11,.14);padding:8px 10px;border-radius:6px;">⚠ 이 프로젝트에 칸반 카테고리가 없습니다 — 카테고리를 지정하지 않으면 태스크가 보드에 표시되지 않습니다(스프린트 뷰에는 표시됨).</div>';
+            // WBS 그룹별 카드
+            html += '<div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">';
+            wbsList.forEach(function (w) {
+                var wid = w.id;
+                if (typeof _rfsState.proposeWbsCat[wid] === 'undefined') _rfsState.proposeWbsCat[wid] = _rfsDefaultCat();
+                if (typeof _rfsState.proposeWbsSprint[wid] === 'undefined') _rfsState.proposeWbsSprint[wid] = _rfsDefaultSprint();
+                var myTasks = taskList.filter(function (t) { return t.wbs_id === wid; });
+                html += '<div style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:12px;">';
+                // WBS 헤더
+                html += '<div style="display:flex;align-items:flex-start;gap:8px;">';
+                html += '<input type="checkbox" ' + (rfsProposeIncluded(wid) ? 'checked' : '') + ' onchange="rfsToggleProposeItem(\'' + wid + '\',this.checked)" style="margin-top:3px;">';
+                html += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">🏗 ' + _annEsc(w.title) + ' <span style="color:var(--c-text3);font-weight:400;">· ' + w.estimated_days + 'd · 태스크 ' + myTasks.length + '</span></div>';
+                if (w.description) html += '<div style="font-size:11.5px;color:var(--c-text2);margin-top:3px;">' + _annEsc(w.description) + '</div>';
+                html += '</div></div>';
+                // WBS 옵션 (삽입 위치 / 카테고리 / 스프린트)
+                html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0 26px;font-size:11px;color:var(--c-text3);">';
+                html += '<label style="display:flex;flex-direction:column;gap:2px;">삽입 위치(부모 WBS)<select onchange="rfsSetWbsParent(\'' + wid + '\',this.value)" style="font-size:11px;padding:3px 5px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);color:var(--c-text);">' + rfsWbsParentOptions(_rfsState.proposeWbsParent[wid] || '') + '</select></label>';
+                html += '<label style="display:flex;flex-direction:column;gap:2px;">태스크 카테고리(칸반)<select onchange="rfsSetWbsCat(\'' + wid + '\',this.value)" style="font-size:11px;padding:3px 5px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);color:var(--c-text);">' + rfsCatOptions(_rfsState.proposeWbsCat[wid]) + '</select></label>';
+                html += '<label style="display:flex;flex-direction:column;gap:2px;">태스크 스프린트<select onchange="rfsSetWbsSprint(\'' + wid + '\',this.value)" style="font-size:11px;padding:3px 5px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);color:var(--c-text);">' + rfsSprintOptions(_rfsState.proposeWbsSprint[wid]) + '</select></label>';
+                html += '</div>';
+                // 태스크 목록
+                if (myTasks.length) {
+                    html += '<div style="margin:8px 0 0 26px;display:flex;flex-direction:column;gap:4px;">';
+                    myTasks.forEach(function (t) {
+                        html += '<label style="display:flex;align-items:flex-start;gap:6px;font-size:11.5px;cursor:pointer;">';
+                        html += '<input type="checkbox" ' + (rfsProposeIncluded(t.id) ? 'checked' : '') + ' onchange="rfsToggleProposeItem(\'' + t.id + '\',this.checked)" style="margin-top:2px;">';
+                        html += '<span style="flex:1;"><b>' + _annEsc(t.title) + '</b> <span style="color:var(--c-text3);">· ' + (t.priority || 'p2').toUpperCase() + ' · ' + (t.hours || 4) + 'h</span>';
+                        if (t.description) html += '<br><span style="color:var(--c-text3);">' + _annEsc(t.description) + '</span>';
+                        html += '</span></label>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
             });
-            html += '</div>';
-            // 태스크/이슈
-            html += '<div><h3 style="font-size:13px;margin:0 0 8px;">태스크 ' + (proposed.tasks||[]).length + ' · 이슈 ' + (proposed.issues||[]).length + '</h3>';
-            (proposed.tasks||[]).slice(0, 20).forEach(function (t) {
-                html += '<div style="padding:6px 8px;border:1px solid var(--c-border);border-radius:6px;margin-bottom:4px;background:var(--c-card);font-size:11.5px;">' + _annEsc(t.title) + ' <span style="color:var(--c-text3);">· ' + t.priority + ' · ' + t.hours + 'h</span></div>';
-            });
-            (proposed.issues||[]).forEach(function (iss) {
-                html += '<div style="padding:6px 8px;border:1px solid var(--c-border);border-radius:6px;margin-bottom:4px;background:var(--c-card);font-size:11.5px;color:#b53236;">⚠ ' + _annEsc(iss.title) + '</div>';
-            });
-            html += '</div>';
+            // 이슈
+            if (issueList.length) {
+                html += '<div style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:12px;">';
+                html += '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">⚠ 이슈 (' + issueList.length + ') — 가설/리스크</div>';
+                html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+                issueList.forEach(function (iss) {
+                    html += '<label style="display:flex;align-items:flex-start;gap:6px;font-size:11.5px;cursor:pointer;">';
+                    html += '<input type="checkbox" ' + (rfsProposeIncluded(iss.id) ? 'checked' : '') + ' onchange="rfsToggleProposeItem(\'' + iss.id + '\',this.checked)" style="margin-top:2px;">';
+                    html += '<span style="flex:1;color:#b53236;"><b>' + _annEsc(iss.title) + '</b> <span style="color:var(--c-text3);">· ' + (iss.priority || 'p2').toUpperCase() + '</span>';
+                    if (iss.description) html += '<br><span style="color:var(--c-text3);">' + _annEsc(iss.description) + '</span>';
+                    html += '</span></label>';
+                });
+                html += '</div></div>';
+            }
             html += '</div>';
         }
         html += '</div>';
         main.innerHTML = html;
     }
+    function rfsProposeSelectAll(on) {
+        var p = _rfsState.proposedWork; if (!p) return;
+        _rfsState.proposeSel = _rfsState.proposeSel || {};
+        (p.wbs_nodes || []).forEach(function (w) { _rfsState.proposeSel[w.id] = on; });
+        (p.tasks || []).forEach(function (t) { _rfsState.proposeSel[t.id] = on; });
+        (p.issues || []).forEach(function (i) { _rfsState.proposeSel[i.id] = on; });
+        rfsRenderProposeWorkStep();
+    }
 
     async function rfsRunProposeWork() {
         var url = rfsBackEnd(); if (!url) return;
-        var pEl = document.getElementById('rfs-propose-progress'); pEl.style.display = 'block';
-        var sEl = document.getElementById('rfs-propose-stage');
-        var lEl = document.getElementById('rfs-propose-log');
-        function _log(m) { lEl.textContent += '\n' + m; lEl.scrollTop = lEl.scrollHeight; }
+        if (_rfsState._proposing) { showToast('이미 제안 생성 중', 'alert'); return; }
+        _rfsState._proposing = true; _rfsState._proposeLog = [];
         _rfsState.proposedWork = {wbs_nodes: [], tasks: [], issues: []};
+        rfsRenderProposeWorkStep();  // 버튼 disable + 진행 위젯 표시
+        function _log(m) {
+            _rfsState._proposeLog.push(m); if (_rfsState._proposeLog.length > 200) _rfsState._proposeLog = _rfsState._proposeLog.slice(-200);
+            var lEl = document.getElementById('rfs-propose-log'); if (lEl) { lEl.textContent = _rfsState._proposeLog.join('\n'); lEl.scrollTop = lEl.scrollHeight; }
+        }
+        function _stage(m) { var sEl = document.getElementById('rfs-propose-stage'); if (sEl) sEl.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
         try {
             var s = _rfsState.current;
             var res = await fetch(url + '/refinery/propose-work', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({session_id: s.id, user_id: rfsCurrentUser(), nodes: s.nodes||[], classifications: s.classifications||{}}),
             });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0,120)); }
             if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
             var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
             while (true) {
@@ -32180,42 +32300,90 @@ ${intrLog}
                     var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.event === 'stage') sEl.textContent = '🔄 ' + ev.message;
-                        else if (ev.event === 'wbs_proposed') { _rfsState.proposedWork.wbs_nodes.push(ev.wbs); _log('+ WBS: ' + ev.wbs.title); }
-                        else if (ev.event === 'tasks_proposed') _log('+ ' + ev.tasks_count + ' tasks for ' + ev.wbs_id);
+                        if (ev.event === 'stage') { _stage(ev.message); _log('STAGE: ' + ev.message); }
+                        else if (ev.event === 'wbs_proposed') { _rfsState.proposedWork.wbs_nodes.push(ev.wbs); _stage('WBS 그룹핑 중…'); _log('+ WBS: ' + ev.wbs.title); }
+                        else if (ev.event === 'tasks_proposed') { _stage('태스크 분할 중…'); _log('+ ' + ev.tasks_count + ' tasks'); }
                         else if (ev.event === 'issue_proposed') { _rfsState.proposedWork.issues.push(ev.issue); _log('+ Issue: ' + ev.issue.title); }
+                        else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'done') {
                             _rfsState.proposedWork.tasks = ev.tasks || [];
-                            sEl.textContent = '✅ ' + (ev.summary || '완료');
                             _log('✅ ' + (ev.summary || ''));
+                            _rfsState._proposing = false;
                             rfsRenderProposeWorkStep();
                         }
                     } catch (e) {}
                 }
             }
-        } catch (e) { sEl.textContent = '❌ ' + e.message; }
+            _rfsState._proposing = false;
+            if (_rfsState.step === 8) rfsRenderProposeWorkStep();
+        } catch (e) {
+            _rfsState._proposing = false;
+            _log('❌ ' + (e.message||e));
+            showToast('제안 실패: ' + (e.message||e), 'alert');
+            if (_rfsState.step === 8) rfsRenderProposeWorkStep();
+        }
     }
 
-    async function rfsApplyWork(filter) {
+    // [r232 #4] 선택 항목만 + 삽입 위치(parent)·카테고리·스프린트·정의서 자동 링크 반영
+    function _rfsDocsForNodes(nodeIds) {
+        var m = _rfsState.appliedDocMap || {};
+        var out = [];
+        (nodeIds || []).forEach(function (nid) { (m[nid] || []).forEach(function (did) { if (out.indexOf(did) < 0) out.push(did); }); });
+        return out;
+    }
+    async function rfsApplyWork() {
         var url = rfsBackEnd(); if (!url) return;
-        var p = _rfsState.proposedWork; if (!p) return;
-        var tasks = p.tasks||[];
-        if (filter === 'p0') tasks = tasks.filter(function (t) { return ['p0','p1'].indexOf(t.priority) >= 0; });
-        var ok = await uiConfirm({title: '작업 생성', message: 'WBS ' + (p.wbs_nodes||[]).length + ' · 태스크 ' + tasks.length + ' · 이슈 ' + (p.issues||[]).length + ' 생성', confirmText: '생성'});
+        if (_rfsState._applyingWork) { showToast('이미 생성 중', 'alert'); return; }
+        var p = _rfsState.proposedWork; if (!p) { showToast('먼저 제안을 받으세요', 'alert'); return; }
+        var autoLink = _rfsState.proposeAutoLink !== false;
+        var pCat = _rfsState.proposeWbsCat || {}, pSpr = _rfsState.proposeWbsSprint || {}, pPar = _rfsState.proposeWbsParent || {};
+        // 선택된 WBS
+        var wbsSel = (p.wbs_nodes || []).filter(function (w) { return rfsProposeIncluded(w.id); }).map(function (w) {
+            var docs = autoLink ? _rfsDocsForNodes(w.node_ids) : [];
+            return { id: w.id, title: w.title, description: w.description, node_ids: w.node_ids, estimated_days: w.estimated_days, depends_on: w.depends_on, parent_id: pPar[w.id] || null, linked_doc_ids: docs };
+        });
+        // 선택된 태스크 — 소속 WBS 의 카테고리/스프린트/문서 상속
+        var tasksSel = (p.tasks || []).filter(function (t) { return rfsProposeIncluded(t.id); }).map(function (t) {
+            var w = (p.wbs_nodes || []).find(function (x) { return x.id === t.wbs_id; });
+            var docs = (autoLink && w) ? _rfsDocsForNodes(w.node_ids) : [];
+            return { title: t.title, description: t.description, priority: t.priority, cat_id: pCat[t.wbs_id] || null, sprint_id: pSpr[t.wbs_id] || null, linked_doc_ids: docs };
+        });
+        // 선택된 이슈
+        var issuesSel = (p.issues || []).filter(function (i) { return rfsProposeIncluded(i.id); }).map(function (i) {
+            return { title: i.title, description: i.description, priority: i.priority, status: i.status, target: i.target };
+        });
+        if (!wbsSel.length && !tasksSel.length && !issuesSel.length) { showToast('선택된 항목이 없습니다', 'alert'); return; }
+        var ok = await uiConfirm({ title: '작업 생성', message: 'WBS ' + wbsSel.length + ' · 태스크 ' + tasksSel.length + ' · 이슈 ' + issuesSel.length + ' 생성' + (autoLink ? '\n🔗 정의서 연관 문서 자동 링크 ON' : ''), confirmText: '생성' });
         if (!ok) return;
+        _rfsState._applyingWork = true;
+        var btns = document.querySelectorAll('#rfs-main button'); btns.forEach(function (b) { b.disabled = true; });
+        var genBtn = Array.prototype.find.call(btns, function (b) { return /선택 항목 생성/.test(b.textContent); });
+        var prev = genBtn ? genBtn.innerHTML : '';
+        if (genBtn) genBtn.innerHTML = '<span class="rfs-dc-spinner"></span> 생성 중…';
         try {
             var res = await fetch(url + '/refinery/apply-work', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId,
-                    wbs_nodes: p.wbs_nodes||[], tasks: tasks, issues: p.issues||[],
+                    wbs_nodes: wbsSel, tasks: tasksSel, issues: issuesSel,
                 }),
             });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 200)); }
             var data = await res.json();
-            showToast('✓ 생성 완료 — WBS ' + data.wbs_created.length + ', 태스크 ' + data.tasks_created.length + ', 이슈 ' + data.issues_created.length, 'success');
+            var warn = (data.warnings && data.warnings.length) ? (' · ⚠ ' + data.warnings.length) : '';
+            if (data.warnings && data.warnings.length) console.warn('[rfs] apply-work 경고', data.warnings);
+            showToast('✓ 생성 완료 — WBS ' + data.wbs_created.length + ', 태스크 ' + data.tasks_created.length + ', 이슈 ' + data.issues_created.length + warn, 'success');
+            _rfsState._applyingWork = false;
+            // 데이터 새로고침 — realtime 미설정 DB 에서도 WBS/태스크/이슈 트래커 즉시 반영
+            // (initSupabase 는 removeAllChannels 가드가 있어 재호출 안전)
+            if (typeof initSupabase === 'function') { try { await initSupabase(); } catch (e) { console.warn('[rfs] 재로드 실패', e); } }
             rfsGoStep(9);
-        } catch (e) { showToast('생성 실패: ' + e.message, 'alert'); }
+        } catch (e) {
+            _rfsState._applyingWork = false;
+            btns.forEach(function (b) { b.disabled = false; });
+            if (genBtn) genBtn.innerHTML = prev;
+            showToast('생성 실패: ' + (e.message || e), 'alert');
+        }
     }
 
     function rfsRenderDoneStep() {
