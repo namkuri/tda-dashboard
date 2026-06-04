@@ -27,18 +27,24 @@ from ._author_guard import history_entry, llm_author
 
 # 메타 누출 키워드 (r215 패턴 재사용 + 정련소 컨텍스트 확장)
 _META_LEAK = [
-    "mece", "mutually exclusive", "collectively exhaustive",
-    "노드 텍스트", "노드 추출", "vault", "청크", "단락 추출",
-    "json only", "출력 형식", "작성 규칙", "사고 절차",
-    "1레벨", "2레벨", "3레벨", "키워드 1~5", "1~5단어",
-    "===followups===", "ai_confidence",
+    # [r228] 연구 본문에 흔한 단어(vault/청크/단락/노드 추출 등)는 제거 — 과필터로
+    # 정상 노드까지 걸러지던 문제. 진짜 프롬프트 고유 어구만 유지.
+    "mutually exclusive", "collectively exhaustive",
+    "json only", "===followups===",
+    "auto_category_hint", "supportedgenerationmethods",
 ]
 
 
 def _is_meta_leak(text: str) -> bool:
+    """[r228] title 전용 — summary 는 검사 안 함(일반 설명 정상).
+    완전 일치 또는 명백한 프롬프트 어구만 차단. 부분 포함 과필터 방지.
+    """
     if not text:
         return False
     t = text.strip().lower()
+    # 완전 일치
+    if t in ("mece", "node", "title", "summary"):
+        return True
     return any(kw in t for kw in _META_LEAK)
 
 
@@ -153,6 +159,7 @@ async def decompose(
 
     all_nodes: List[Dict[str, Any]] = []
     skipped_meta = 0
+    _parse_fail = 0  # [r228] JSON 파싱 실패 청크 수
 
     for idx, ch in enumerate(chunks):
         yield {
@@ -185,17 +192,21 @@ JSON 한 개만 출력. nodes 배열에 최소 1개, 최대 12개 노드.
 
         parsed = _extract_json(buf)
         if not parsed or not isinstance(parsed.get("nodes"), list):
-            yield {"event": "warn", "message": f"청크 {idx + 1} JSON 파싱 실패"}
+            # [r228] 파싱 실패 진단 — raw 앞부분 샘플로 원인 추적 (LLM이 JSON 안 만듦 등)
+            _parse_fail += 1
+            raw_head = (buf or "").strip()[:160].replace("\n", " ")
+            yield {"event": "warn", "message": f"청크 {idx + 1} JSON 파싱 실패 · raw: {raw_head or '(빈 응답)'}"}
             continue
 
+        chunk_node_n = 0
         for n in parsed["nodes"]:
             if not isinstance(n, dict):
                 continue
             title = (n.get("title") or "").strip()
             if not title:
                 continue
-            # 메타 누출 가드
-            if _is_meta_leak(title) or _is_meta_leak(n.get("summary") or ""):
+            # [r228] 메타 누출 가드 — title 만 검사 (summary 는 일반 설명이라 제외)
+            if _is_meta_leak(title):
                 skipped_meta += 1
                 continue
             # vault cross-check — span_text 가 실제 청크에 있는지
@@ -222,10 +233,11 @@ JSON 한 개만 출력. nodes 배열에 최소 1개, 최대 12개 노드.
                 "history": [history_entry("extracted", author, f"chunk {idx + 1}/{total_chunks}")],
             }
             all_nodes.append(node)
+            chunk_node_n += 1
             yield {"event": "node_added", "node": node}
         yield {
             "event": "chunk_done", "current": idx + 1, "total": total_chunks,
-            "nodes_so_far": len(all_nodes),
+            "nodes_so_far": len(all_nodes), "chunk_nodes": chunk_node_n,
             "percent": round((idx + 1) / total_chunks * 100, 1),
         }
 
@@ -303,6 +315,19 @@ JSON 한 개. categories 배열, 각 category 는 1~5 단어 title + 노드 ID �
 
     all_final = categories + deduped_nodes
     elapsed = time.time() - started
+    # [r228] 노드 0개 진단 — 원인 힌트
+    diag_hint = None
+    if not deduped_nodes:
+        if _parse_fail >= total_chunks:
+            diag_hint = (
+                f"⚠ 모든 청크({total_chunks}개)에서 LLM 이 유효한 JSON 을 만들지 못했습니다. "
+                "모델이 분해에 부적합할 수 있습니다 — 🌟 Gemini Flash 또는 더 큰 모델로 재시도하세요. "
+                "(qwen2.5-coder 는 코드용이라 한국어 연구 문서 JSON 추출이 약할 수 있음)"
+            )
+        elif skipped_meta > 0:
+            diag_hint = f"⚠ 추출된 노드가 모두 메타 누출로 걸러졌습니다(skip {skipped_meta}). 모델 변경 권장."
+        else:
+            diag_hint = "⚠ 노드 0개 — vault 본문이 너무 짧거나 모델이 빈 응답. 본문 확인 또는 모델 변경."
     yield {
         "event": "done",
         "nodes": all_final,
@@ -310,6 +335,9 @@ JSON 한 개. categories 배열, 각 category 는 1~5 단어 title + 노드 ID �
         "category_count": len(categories),
         "leaf_count": len(deduped_nodes),
         "skipped_meta": skipped_meta,
+        "parse_fail_chunks": _parse_fail,
+        "total_chunks": total_chunks,
+        "diag_hint": diag_hint,
         "elapsed_sec": round(elapsed, 1),
         "vault_doc_ids": [vd.get("id") for vd in vault_docs],
     }

@@ -10689,7 +10689,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r227';
+        var _AHUB_FRONT_REV = 'r228';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31045,7 +31045,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r227';
+    var _RFS_FRONT_REV = 'r228';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31430,6 +31430,15 @@ ${intrLog}
             html += '<div style="padding:12px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
             html += '✓ 노드 ' + nodeCount + '개 추출됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">분류로 →</button>';
             html += '</div>';
+        } else if (!dc.running && (_rfsState.current && _rfsState.current.last_decompose) && (_rfsState.current.last_decompose.leaf_count === 0)) {
+            // [r228] 직전 분해가 0개였음 — 진단 표시
+            var ld = _rfsState.current.last_decompose;
+            html += '<div style="padding:12px;border:1px solid #d2393d;border-radius:8px;background:rgba(210,57,61,.1);">';
+            html += '<div style="font-weight:800;color:#d2393d;margin-bottom:6px;">⚠ 직전 분해: 노드 0개</div>';
+            html += '<div style="font-size:12px;color:var(--c-text2);">JSON 파싱 실패 ' + (ld.parse_fail||0) + '/' + (ld.total_chunks||0) + ' 청크 · 메타 스킵 ' + (ld.skipped_meta||0) + '</div>';
+            if (ld.diag_hint) html += '<div style="margin-top:6px;font-size:12px;color:#92400e;">' + _annEsc(ld.diag_hint) + '</div>';
+            html += '<div style="margin-top:8px;font-size:11.5px;color:var(--c-text3);">💡 위 <b>모델</b>을 🌟 Gemini Flash 로 바꿔 다시 시도해보세요.</div>';
+            html += '</div>';
         }
         html += '</div>';
         main.innerHTML = html;
@@ -31512,13 +31521,37 @@ ${intrLog}
                         else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'error') { _log('❌ ' + ev.message); }
                         else if (ev.event === 'done') {
-                            dc.stage = '✅ 완료 — 노드 ' + ev.node_count + '개 (' + ev.elapsed_sec + 's)';
-                            dc.percent = 100; _rfsDcUpdateStage(); _rfsDcUpdateBar();
-                            _log('✅ 완료 — 노드 ' + ev.node_count + ' (skip ' + ev.skipped_meta + ' meta)');
-                            await rfsPatchSession({nodes: ev.nodes, status: 'classifying'}, 'decomposed', '노드 ' + ev.node_count);
+                            var leaf = ev.leaf_count != null ? ev.leaf_count : ev.node_count;
+                            dc.percent = 100;
+                            _log('완료 — 총 노드 ' + ev.node_count + ' (잎 ' + leaf + ', 카테고리 ' + (ev.category_count||0) + ', skip ' + (ev.skipped_meta||0) + ' meta, 파싱실패 ' + (ev.parse_fail_chunks||0) + '/' + (ev.total_chunks||0) + ')');
+                            // [r228] 분해 로그·진단을 세션에 영구 보존 (재진입·재시도 시 확인)
+                            try {
+                                await rfsPatchSession({
+                                    nodes: ev.nodes, status: leaf > 0 ? 'classifying' : 'decomposing',
+                                    last_decompose: {
+                                        node_count: ev.node_count, leaf_count: leaf,
+                                        skipped_meta: ev.skipped_meta || 0,
+                                        parse_fail: ev.parse_fail_chunks || 0, total_chunks: ev.total_chunks || 0,
+                                        diag_hint: ev.diag_hint || null,
+                                        log: (dc.log || []).slice(-60),
+                                        at: new Date().toISOString(),
+                                    },
+                                }, 'decomposed', '노드 ' + ev.node_count);
+                            } catch (e) {}
                             _rfsState.nodes = ev.nodes;
                             dc.running = false; dc.abort = null;
-                            setTimeout(function () { if (_rfsState.step === 3) rfsRenderDecomposeStep(); }, 600);
+                            if (leaf > 0) {
+                                dc.stage = '✅ 완료 — 노드 ' + ev.node_count + '개 (' + ev.elapsed_sec + 's)';
+                                _rfsDcUpdateStage(); _rfsDcUpdateBar();
+                                setTimeout(function () { if (_rfsState.step === 3) rfsRenderDecomposeStep(); }, 600);
+                            } else {
+                                // [r228] 0개 — step 안 넘기고 명확한 경고
+                                dc.stage = '⚠ 노드 0개 추출됨';
+                                _rfsDcUpdateStage(); _rfsDcUpdateBar();
+                                if (ev.diag_hint) _log(ev.diag_hint);
+                                showToast('⚠ 분해 결과 0개 — ' + (ev.diag_hint || '모델 변경 또는 본문 확인 필요'), 'alert');
+                                setTimeout(function () { if (_rfsState.step === 3) rfsRenderDecomposeStep(); }, 600);
+                            }
                         }
                     } catch (e) {}
                 }
@@ -31569,6 +31602,34 @@ ${intrLog}
         var cls = _rfsState.current.classifications || {};
         var leafs = nodes.filter(function (n) { return n.kind !== 'category'; });
         var classifiedCount = leafs.filter(function (n) { return cls[n.id]; }).length;
+        // [r228] 노드 0개 — 분해 실패 진단 + 다시 분해 안내
+        if (!leafs.length) {
+            var ld = (_rfsState.current && _rfsState.current.last_decompose) || null;
+            var h = '<div style="max-width:900px;margin:0 auto;">';
+            h += '<h2 style="margin:0 0 8px;font-size:18px;">② 분류 — Classify</h2>';
+            h += '<div style="padding:16px;border:1px solid #d2393d;border-radius:10px;background:rgba(210,57,61,.1);">';
+            h += '<div style="font-weight:800;color:#d2393d;font-size:14px;margin-bottom:8px;">⚠ 분해된 노드가 없습니다</div>';
+            if (ld) {
+                h += '<div style="font-size:12.5px;color:var(--c-text2);line-height:1.6;">';
+                h += '마지막 분해: 총 ' + (ld.node_count||0) + ' · 잎 ' + (ld.leaf_count||0) + ' · 메타 스킵 ' + (ld.skipped_meta||0) + ' · JSON 파싱 실패 ' + (ld.parse_fail||0) + '/' + (ld.total_chunks||0) + ' 청크';
+                h += '</div>';
+                if (ld.diag_hint) h += '<div style="margin-top:8px;padding:8px 10px;background:var(--c-paper);border-radius:6px;font-size:12px;color:#92400e;">' + _annEsc(ld.diag_hint) + '</div>';
+                if (ld.log && ld.log.length) {
+                    h += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--c-accent);">분해 로그 보기 (' + ld.log.length + '줄)</summary>';
+                    h += '<div style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:200px;overflow-y:auto;background:var(--c-paper);padding:8px;border-radius:6px;margin-top:6px;white-space:pre-wrap;">' + _annEsc(ld.log.join('\n')) + '</div></details>';
+                }
+            } else {
+                h += '<div style="font-size:12.5px;color:var(--c-text2);">분해를 먼저 실행하세요.</div>';
+            }
+            h += '<div style="margin-top:14px;display:flex;gap:8px;">';
+            h += '<button class="aihub-gpu-btn primary" onclick="rfsGoStep(3)">← 다시 분해</button>';
+            h += '<button class="aihub-gpu-btn" onclick="switchView(\'aiHub\')">🌟 Gemini 등록하러 가기</button>';
+            h += '</div>';
+            h += '<div style="margin-top:10px;font-size:11.5px;color:var(--c-text3);">💡 qwen2.5-coder 는 코드용이라 한국어 연구 문서 분해가 약할 수 있습니다. <b>Gemini Flash(무료)</b> 또는 더 큰 모델로 재시도를 권장합니다.</div>';
+            h += '</div></div>';
+            main.innerHTML = h;
+            return;
+        }
         var html = '<div style="max-width:1200px;margin:0 auto;">';
         html += '<h2 style="margin:0 0 8px;font-size:18px;">② 분류 — Classify (' + classifiedCount + '/' + leafs.length + ')</h2>';
         html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">노드별 4분면 결정. AI 추천(점선)으로 일괄 시작 추천.</div>';
