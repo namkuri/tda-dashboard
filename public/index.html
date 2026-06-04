@@ -4123,6 +4123,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="gview" id="cs-nav-gview" onclick="switchView('gview')" title="그래프 뷰 (전역 지식 그래프)"><span class="cs-ico">🕸️</span><span class="cs-label">그래프 뷰</span></button>
                     <!-- [r206] AI Agent를 허브로 재편: '대화형 AI'를 분리. AI Agent 라벨 옆에 Online 배지(활성 GPU 1개 이상). -->
                     <button class="cs-nav" data-nav="aiHub" id="cs-nav-aihub" onclick="switchView('aiHub')" title="AI 허브 — GPU 상태·모델 관리·사용 히스토리·AI 기능 바로가기"><span class="cs-ico">✦</span><span class="cs-label">AI Agent</span><span id="cs-aihub-online" style="display:none;margin-left:auto;font-size:9px;font-weight:800;color:#fff;background:#2e9e5b;border-radius:9px;padding:1px 7px;">Online</span></button>
+                    <!-- [r223] 연구 정련소 -->
+                    <button class="cs-nav" data-nav="refinery" id="cs-nav-refinery" onclick="switchView('refinery')" title="연구 정련소 — raw 연구 문서를 분해·분류·결재·정의서·WBS 까지 한 페이지에서"><span class="cs-ico">🔬</span><span class="cs-label">연구 정련소</span></button>
                     <button class="cs-nav" data-nav="deepwiki" id="cs-nav-deepwiki" onclick="switchView('deepwiki')" title="대화형 AI — Tool Use 기반 라이브 데이터 능동 조회 (모델 선택 가능)"><span class="cs-ico">💬</span><span class="cs-label">대화형 AI</span></button>
                     <!-- [r161] 라이브 협업 — 화면 공유·커서·핑/박스 -->
                     <button class="cs-nav cs-live" data-nav="live" id="cs-nav-live" onclick="liveSidebarClick()" title="라이브 협업 (화면 공유·커서·핑)"><span class="cs-ico cs-live-led">🟢</span><span class="cs-label">라이브 협업</span><span id="cs-live-actions" class="cs-live-actions"></span></button>
@@ -4601,6 +4603,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         #mmp-prog-widget.mini .mmp-prog-head { font-size: 18px; }
         #mmp-prog-widget.mini .mmp-prog-head > :not(.mmp-prog-mini-ico) { display: none; }
         .mmp-prog-mini-ico { display: none; font-size: 22px; }
+        /* [r223] 연구 정련소 Stepper */
+        .rfs-step { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--c-text2); font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .rfs-step:hover { background: var(--ios-fill); color: var(--c-text); }
+        .rfs-step.active { background: var(--c-accent); color: #fff; }
+        .rfs-step.done { color: #2a4a30; }
+        .rfs-step-num { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 50%; background: var(--ios-fill); font-size: 11px; }
+        .rfs-step.active .rfs-step-num { background: rgba(255,255,255,.25); color: #fff; }
+        .rfs-step.done .rfs-step-num { background: #2a4a30; color: #fff; }
+        .rfs-step-label { font-size: 11.5px; }
+        .rfs-step-arrow { color: var(--c-text3); font-size: 16px; margin: 0 2px; }
         #mmp-prog-widget.mini .mmp-prog-mini-ico { display: inline-block; animation: mmpSpin 1.4s linear infinite; }
         @keyframes mmpSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .mmp-prog-head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13.5px; color: var(--c-text); }
@@ -5477,6 +5489,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         </div>
 
         <!-- [r206] AI Hub — GPU 상태/모델/사용 히스토리/AI 기능 바로가기 -->
+        <!-- [r223] 연구 정련소 — Stepper 6단계 + 메인 패널 -->
+        <div id="refinery-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:hidden;background:var(--c-paper);display:flex;flex-direction:column;">
+            <!-- 상단 헤더 -->
+            <div style="padding:14px 22px;border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:12px;background:var(--c-card);">
+                <div style="font-size:20px;">🔬</div>
+                <div style="flex:1;">
+                    <div style="font-size:15px;font-weight:800;color:var(--c-text);">연구 정련소 <span id="rfs-session-title" style="color:var(--c-text2);font-weight:600;font-size:13px;margin-left:8px;"></span></div>
+                    <div style="font-size:11px;color:var(--c-text3);margin-top:2px;">raw 연구 문서 → 분해 → 분류 → 결재 → 정의서 → 위키/WBS</div>
+                </div>
+                <button id="rfs-new-session-btn" class="aihub-gpu-btn primary" style="font-size:12px;" onclick="rfsNewSession()">+ 새 세션</button>
+                <button class="aihub-gpu-btn" style="font-size:12px;" onclick="rfsBackToList()">← 세션 목록</button>
+            </div>
+            <!-- Stepper -->
+            <div id="rfs-stepper" style="display:flex;align-items:center;gap:0;padding:10px 22px;border-bottom:1px solid var(--c-border);background:var(--c-paper);overflow-x:auto;"></div>
+            <!-- 본문 영역 -->
+            <div id="rfs-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
+        </div>
+
         <div id="aihub-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:auto;padding:18px 22px;background:var(--c-paper);">
             <div style="max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
                 <header style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -10493,7 +10523,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r222';
+        var _AHUB_FRONT_REV = 'r223';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -15710,6 +15740,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r206] AI Hub
             var _csAh = document.getElementById('cs-nav-aihub'); if (_csAh) _csAh.classList.toggle('active', viewName === 'aiHub');
             var _ahvw = document.getElementById('aihub-view'); if (_ahvw) { _ahvw.classList.toggle('hidden', viewName !== 'aiHub'); _ahvw.classList.toggle('block', viewName === 'aiHub'); }
+            // [r223] 연구 정련소
+            var _csRfs = document.getElementById('cs-nav-refinery'); if (_csRfs) _csRfs.classList.toggle('active', viewName === 'refinery');
+            var _rfsVw = document.getElementById('refinery-view'); if (_rfsVw) { _rfsVw.classList.toggle('hidden', viewName !== 'refinery'); _rfsVw.style.display = (viewName === 'refinery') ? 'flex' : 'none'; }
+            if (viewName === 'refinery' && typeof rfsEnter === 'function') setTimeout(rfsEnter, 30);
             if (viewName === 'aiHub' && typeof aihubRender === 'function') aihubRender();
             // [r208] AI Hub 진입 시 마지막 동기화 시각 갱신
             if (viewName === 'aiHub' && typeof ahubRefreshIdxBadge === 'function') setTimeout(ahubRefreshIdxBadge, 30);
@@ -30787,6 +30821,899 @@ ${intrLog}
             switchView('docs');
             setTimeout(function () { if (typeof openDoc === 'function') openDoc(id); }, 80);
         } catch (e) { showToast('점프 실패: ' + (e.message || e), 'alert'); }
+    }
+
+    // ============================================================
+    // [r223] 연구 정련소 (Research Refinery)
+    // ============================================================
+    var _rfsState = {
+        sessions: [],         // 세션 목록
+        current: null,        // 현재 세션 row
+        step: 0,              // 현재 단계 1~16
+        vaultDocs: [],        // [{id, title, content}]
+        nodes: [],            // 분해 결과
+        classifications: {},  // {node_id: 'canon'|'hyp'|'later'|'cut'}
+        suggestions: {},      // {node_id: {category, confidence, reason}} (AI 추천)
+        memos: {},            // {node_id: 'memo'}
+        similarGroups: [],    // [[node_ids]]
+        composedFiles: [],    // 트리 합성 결과
+        selectedFiles: {},    // {path: true}
+        proposedWork: null,   // {wbs_nodes, tasks, issues}
+        selectedWork: {wbs: {}, tasks: {}, issues: {}},
+        running: false,
+        log: [],
+    };
+
+    var RFS_STEPS = [
+        { num: 1, label: '세션 생성', section: 'list' },
+        { num: 2, label: 'Vault 추가', section: 'vault' },
+        { num: 3, label: '분해', section: 'decompose' },
+        { num: 4, label: '분류', section: 'classify' },
+        { num: 5, label: '결재', section: 'review' },
+        { num: 6, label: '정의서', section: 'compose' },
+        { num: 7, label: '위키 적용', section: 'apply_tree' },
+        { num: 8, label: '작업 제안', section: 'propose_work' },
+        { num: 9, label: '완료', section: 'done' },
+    ];
+
+    function rfsEnter() {
+        // 진입 시 세션 목록 로드
+        rfsLoadSessions();
+        rfsRenderStepper();
+        if (!_rfsState.current) rfsRenderSessionList();
+        else rfsRenderCurrentStep();
+    }
+
+    function rfsBackEnd() { return (_dwGetSettings() || {}).backendUrl || ''; }
+    function rfsCurrentUser() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.id) || null; }
+    function rfsCurrentUserName() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || rfsCurrentUser() || ''; }
+
+    function _rfsLog(msg) {
+        _rfsState.log.push({at: new Date().toISOString(), msg: msg});
+        if (_rfsState.log.length > 500) _rfsState.log = _rfsState.log.slice(-500);
+    }
+
+    async function rfsLoadSessions() {
+        var url = rfsBackEnd(); if (!url) return;
+        try {
+            var pid = activeProjectId || '';
+            var res = await fetch(url + '/refinery/sessions' + (pid ? ('?project_id=' + encodeURIComponent(pid)) : ''));
+            if (!res.ok) return;
+            var data = await res.json();
+            _rfsState.sessions = data.sessions || [];
+        } catch (e) { console.warn('[rfs] sessions load fail', e); }
+    }
+
+    function rfsRenderStepper() {
+        var el = document.getElementById('rfs-stepper'); if (!el) return;
+        var cur = _rfsState.step || 0;
+        el.innerHTML = RFS_STEPS.map(function (s) {
+            var active = (s.num === cur);
+            var done = (s.num < cur);
+            var cls = 'rfs-step' + (active ? ' active' : '') + (done ? ' done' : '');
+            return '<div class="' + cls + '" onclick="rfsGoStep(' + s.num + ')">'
+                + '<span class="rfs-step-num">' + (done ? '✓' : s.num) + '</span>'
+                + '<span class="rfs-step-label">' + s.label + '</span>'
+                + '</div>'
+                + (s.num < RFS_STEPS.length ? '<div class="rfs-step-arrow">›</div>' : '');
+        }).join('');
+    }
+
+    function rfsGoStep(n) {
+        if (!_rfsState.current && n !== 1) { showToast('먼저 세션을 만들어야 합니다', 'alert'); return; }
+        _rfsState.step = n;
+        rfsRenderStepper();
+        rfsRenderCurrentStep();
+    }
+
+    function rfsBackToList() {
+        _rfsState.current = null;
+        _rfsState.step = 0;
+        document.getElementById('rfs-session-title').textContent = '';
+        rfsRenderStepper();
+        rfsRenderSessionList();
+    }
+
+    function rfsRenderCurrentStep() {
+        var section = (RFS_STEPS[_rfsState.step - 1] || {section: 'list'}).section;
+        switch (section) {
+            case 'list': rfsRenderSessionList(); break;
+            case 'vault': rfsRenderVaultStep(); break;
+            case 'decompose': rfsRenderDecomposeStep(); break;
+            case 'classify': rfsRenderClassifyStep(); break;
+            case 'review': rfsRenderReviewStep(); break;
+            case 'compose': rfsRenderComposeStep(); break;
+            case 'apply_tree': rfsRenderApplyTreeStep(); break;
+            case 'propose_work': rfsRenderProposeWorkStep(); break;
+            case 'done': rfsRenderDoneStep(); break;
+            default: rfsRenderSessionList();
+        }
+    }
+
+    function rfsRenderSessionList() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var html = '<div style="max-width:900px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 14px;font-size:20px;">정련 세션 목록</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:18px;">한 세션 = vault → 분해 → 분류 → 결재 → 정의서 → WBS 한 묶음. 작성자: ' + _annEsc(rfsCurrentUserName() || '(미로그인)') + '</div>';
+        if (!_rfsState.sessions.length) {
+            html += '<div style="padding:30px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">아직 세션이 없습니다. <b>+ 새 세션</b> 으로 시작하세요.</div>';
+        } else {
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;">';
+            _rfsState.sessions.forEach(function (s) {
+                var status = s.status || 'draft';
+                var statusColor = ({draft:'#8a8378',decomposing:'#b8852a',classifying:'#b8852a',approving:'#b8852a',composing:'#b8852a',ready:'#2a4a30',published:'#1a3a58',archived:'#8a8378'})[status] || '#8a8378';
+                html += '<div style="border:1px solid var(--c-border);border-radius:9px;padding:12px 14px;background:var(--c-card);cursor:pointer;" onclick="rfsOpenSession(\'' + s.id + '\')">'
+                    + '<div style="display:flex;align-items:center;gap:8px;">'
+                    + '<span style="font-weight:800;flex:1;">' + _annEsc(s.title) + '</span>'
+                    + '<span style="font-size:10px;padding:1px 7px;border-radius:9999px;background:' + statusColor + ';color:#fff;">' + status + '</span>'
+                    + '</div>'
+                    + '<div style="font-size:11px;color:var(--c-text3);margin-top:6px;">'
+                    + 'vault ' + ((s.vault_doc_ids||[]).length) + ' · 노드 ' + ((s.nodes||[]).length) + ' · ' + (s.version_label||'v1')
+                    + '</div>'
+                    + '<div style="font-size:10.5px;color:var(--c-text3);margin-top:4px;">👤 ' + _annEsc(s.created_by || '?') + ' · ' + (s.updated_at ? new Date(s.updated_at).toLocaleString() : '') + '</div>'
+                    + '</div>';
+            });
+            html += '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsNewSession() {
+        if (!rfsCurrentUser()) { showToast('로그인이 필요합니다 (작성자 정책)', 'alert'); return; }
+        var title = await uiPrompt({title: '새 정련 세션', message: '세션 제목', placeholder: 'e.g. pB-4 코어 v1'});
+        if (!title || !title.trim()) return;
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        try {
+            var res = await fetch(url + '/refinery/sessions', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({project_id: activeProjectId || null, title: title.trim(), user_id: rfsCurrentUser()})
+            });
+            if (!res.ok) { var err = await res.text(); showToast('세션 생성 실패: ' + err.slice(0, 200), 'alert'); return; }
+            var s = await res.json();
+            _rfsState.sessions.unshift(s);
+            rfsOpenSession(s.id);
+        } catch (e) { showToast('세션 생성 실패: ' + e.message, 'alert'); }
+    }
+
+    function rfsOpenSession(sid) {
+        var s = _rfsState.sessions.find(function (x) { return x.id === sid; });
+        if (!s) { showToast('세션을 찾지 못함', 'alert'); return; }
+        _rfsState.current = s;
+        _rfsState.nodes = s.nodes || [];
+        _rfsState.classifications = s.classifications || {};
+        _rfsState.vaultDocs = [];  // import 후 채워짐
+        _rfsState.step = (s.vault_doc_ids||[]).length ? 3 : 2;
+        document.getElementById('rfs-session-title').textContent = '— ' + s.title + ' (' + (s.version_label||'v1') + ')';
+        // vault 내용 로드
+        rfsLoadVaultDocs().then(function () {
+            rfsRenderStepper();
+            rfsRenderCurrentStep();
+        });
+    }
+
+    async function rfsLoadVaultDocs() {
+        var s = _rfsState.current; if (!s) return;
+        var ids = s.vault_doc_ids || []; if (!ids.length) { _rfsState.vaultDocs = []; return; }
+        var docs = [];
+        for (var i = 0; i < ids.length; i++) {
+            var d = (currentData.docs || []).find(function (x) { return x.id === ids[i]; });
+            if (d) {
+                var content = d.content || '';
+                try {
+                    if (typeof _mmpExpandHtmlEmbeds === 'function') content = await _mmpExpandHtmlEmbeds(d);
+                } catch (e) {}
+                docs.push({id: d.id, title: d.title, content: content});
+            }
+        }
+        _rfsState.vaultDocs = docs;
+    }
+
+    function rfsRenderVaultStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var html = '<div style="max-width:900px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">⓪ Vault — 원본 보존</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">HTML/DOCX/PDF/MD 첨부. 편집 잠금. 작성자: ' + _annEsc(rfsCurrentUserName()) + '</div>';
+        html += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsVaultImport()">+ 첨부 import</button>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsVaultPickFromDocs()">기존 문서에서 선택</button>';
+        html += '</div>';
+        var ids = (_rfsState.current && _rfsState.current.vault_doc_ids) || [];
+        if (!ids.length) {
+            html += '<div style="padding:30px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">vault 가 비어있습니다. 첨부 또는 기존 문서 선택.</div>';
+        } else {
+            html += '<div style="border:1px solid var(--c-border);border-radius:8px;overflow:hidden;">';
+            ids.forEach(function (did) {
+                var d = (currentData.docs || []).find(function (x) { return x.id === did; });
+                var title = d ? d.title : did;
+                var len = d ? (d.content || '').length : 0;
+                html += '<div style="padding:10px 14px;border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:8px;">'
+                    + '<span>📄</span>'
+                    + '<span style="flex:1;font-weight:600;">' + _annEsc(title) + '</span>'
+                    + '<span style="font-size:11px;color:var(--c-text3);">' + len + '자 · 🔒 잠금</span>'
+                    + '<button class="aihub-gpu-btn" style="font-size:10.5px;" onclick="rfsVaultRemove(\'' + did + '\')">제거</button>'
+                    + '</div>';
+            });
+            html += '</div>';
+            html += '<div style="margin-top:16px;text-align:right;"><button class="aihub-gpu-btn primary" onclick="rfsGoStep(3)">분해로 →</button></div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsVaultImport() {
+        // 파일 input 만들어 첨부 받기 (HTML/MD/DOCX/PDF)
+        var input = document.createElement('input');
+        input.type = 'file'; input.multiple = true;
+        input.accept = '.html,.htm,.md,.txt,.docx,.pdf';
+        input.onchange = async function () {
+            var files = Array.from(input.files || []);
+            for (var i = 0; i < files.length; i++) {
+                var f = files[i];
+                try {
+                    var content = await _rfsReadFile(f);
+                    var newDoc = {
+                        id: 'vault_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                        projectId: activeProjectId, parentId: null,
+                        title: '[VAULT] ' + f.name,
+                        emoji: '🔒', kind: 'personal',
+                        content: content,
+                        meta: {
+                            scope: 'personal', visibility: 'public',
+                            owner: rfsCurrentUser(),
+                            vault: true,
+                            refinerySessionId: (_rfsState.current && _rfsState.current.id) || null,
+                            history: [{action: 'imported', by: rfsCurrentUser(), at: new Date().toISOString(), detail: 'vault import (' + f.name + ')'}],
+                        },
+                        createdAt: Date.now(), updatedAt: Date.now(),
+                        createdBy: rfsCurrentUser(),
+                    };
+                    if (!Array.isArray(currentData.docs)) currentData.docs = [];
+                    currentData.docs.push(newDoc);
+                    if (typeof dbUpsertDoc === 'function') await dbUpsertDoc(newDoc);
+                    // 세션 vault_doc_ids 추가
+                    await rfsPatchSession({vault_doc_ids: ((_rfsState.current.vault_doc_ids||[]).concat([newDoc.id]))}, 'vault_added', '[VAULT] ' + f.name);
+                } catch (e) { showToast('첨부 실패: ' + f.name + ' — ' + e.message, 'alert'); }
+            }
+            await rfsLoadVaultDocs();
+            rfsRenderVaultStep();
+        };
+        input.click();
+    }
+
+    function _rfsReadFile(f) {
+        return new Promise(function (resolve, reject) {
+            var r = new FileReader();
+            r.onload = function () { resolve(r.result || ''); };
+            r.onerror = function () { reject(new Error('파일 읽기 실패')); };
+            // HTML/MD/TXT 는 text. DOCX/PDF 는 별도 처리 필요 — 일단 text 시도
+            r.readAsText(f, 'utf-8');
+        });
+    }
+
+    async function rfsVaultPickFromDocs() {
+        var pool = (currentData.docs || []).filter(function (d) { return d && d.id && d.kind !== 'diagram'; });
+        if (!pool.length) { showToast('선택 가능한 문서가 없습니다', 'alert'); return; }
+        var html = '<div style="font-size:12px;color:var(--c-text3);margin-bottom:8px;">vault 로 추가할 문서 선택 (다중 가능)</div>';
+        html += '<div style="max-height:50vh;overflow-y:auto;border:1px solid var(--c-border);border-radius:8px;">';
+        var already = new Set((_rfsState.current.vault_doc_ids || []));
+        pool.forEach(function (d) {
+            if (already.has(d.id)) return;
+            html += '<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--c-border);cursor:pointer;">'
+                + '<input type="checkbox" data-did="' + d.id + '">'
+                + '<span style="flex:1;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+                + '<span style="font-size:11px;color:var(--c-text3);">' + (d.kind || 'wiki') + '</span>'
+                + '</label>';
+        });
+        html += '</div>';
+        html += '<div style="margin-top:12px;text-align:right;"><button class="aihub-gpu-btn" onclick="_closeSimpleModal()">취소</button> <button class="aihub-gpu-btn primary" onclick="_rfsConfirmPickDocs()">추가</button></div>';
+        _openSimpleModal('📚 vault 에 기존 문서 추가', html);
+    }
+    async function _rfsConfirmPickDocs() {
+        var sel = document.querySelectorAll('#simple-modal-overlay input[type=checkbox]:checked');
+        var ids = Array.from(sel).map(function (c) { return c.dataset.did; });
+        if (!ids.length) { _closeSimpleModal(); return; }
+        _closeSimpleModal();
+        await rfsPatchSession({vault_doc_ids: ((_rfsState.current.vault_doc_ids||[]).concat(ids))}, 'vault_added', ids.length + '개 문서');
+        await rfsLoadVaultDocs();
+        rfsRenderVaultStep();
+    }
+
+    async function rfsVaultRemove(did) {
+        var newIds = (_rfsState.current.vault_doc_ids||[]).filter(function (x) { return x !== did; });
+        await rfsPatchSession({vault_doc_ids: newIds}, 'vault_removed', did);
+        await rfsLoadVaultDocs();
+        rfsRenderVaultStep();
+    }
+
+    async function rfsPatchSession(patch, action, detail) {
+        if (!_rfsState.current) return;
+        var url = rfsBackEnd();
+        try {
+            var res = await fetch(url + '/refinery/sessions/' + _rfsState.current.id, {
+                method: 'PATCH', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: rfsCurrentUser(), patch: patch, action: action || 'session_updated', detail: detail || ''})
+            });
+            if (!res.ok) { var err = await res.text(); showToast('세션 업데이트 실패: ' + err.slice(0, 200), 'alert'); return; }
+            var updated = await res.json();
+            _rfsState.current = updated;
+            // 세션 목록도 갱신
+            var idx = _rfsState.sessions.findIndex(function (x) { return x.id === updated.id; });
+            if (idx >= 0) _rfsState.sessions[idx] = updated;
+        } catch (e) { showToast('세션 업데이트 실패: ' + e.message, 'alert'); }
+    }
+
+    // ── 분해 단계
+    function rfsRenderDecomposeStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var nodeCount = (_rfsState.current.nodes || []).length;
+        var html = '<div style="max-width:1000px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">① 분해 — Decompose</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">vault ' + _rfsState.vaultDocs.length + '개를 청크 분할 → LLM 노드 추출 → 전역 dedup → 카테고리 트리</div>';
+        html += '<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;">';
+        html += '<label style="font-size:12px;">모델: <select id="rfs-decompose-model" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
+        html += '<option value="">기본 (qwen2.5-coder:14b 추천)</option>';
+        html += '<option value="qwen2.5-coder:14b">qwen2.5-coder:14b (속도)</option>';
+        html += '<option value="qwen2.5-coder:32b">qwen2.5-coder:32b (품질)</option>';
+        html += '</select></label>';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunDecompose()">분해 시작</button>';
+        html += '</div>';
+        html += '<div id="rfs-decompose-progress" style="display:none;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;">';
+        html += '<div id="rfs-prog-stage" style="font-weight:700;color:var(--c-accent);">⏳ 준비 중...</div>';
+        html += '<div style="height:6px;background:var(--ios-fill);border-radius:3px;overflow:hidden;margin:8px 0;"><div id="rfs-prog-bar" style="height:100%;background:linear-gradient(90deg,var(--c-accent),#ec4899);width:0%;transition:width .25s;"></div></div>';
+        html += '<div id="rfs-prog-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;color:var(--c-text2);background:var(--c-paper);padding:6px 8px;border-radius:6px;"></div>';
+        html += '</div>';
+        if (nodeCount) {
+            html += '<div style="padding:12px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
+            html += '✓ 노드 ' + nodeCount + '개 추출됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">분류로 →</button>';
+            html += '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsRunDecompose() {
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        if (!_rfsState.vaultDocs.length) { showToast('vault 가 비어있습니다', 'alert'); return; }
+        var model = document.getElementById('rfs-decompose-model').value || null;
+        var progEl = document.getElementById('rfs-decompose-progress');
+        var stageEl = document.getElementById('rfs-prog-stage');
+        var barEl = document.getElementById('rfs-prog-bar');
+        var logEl = document.getElementById('rfs-prog-log');
+        progEl.style.display = 'block';
+        function _log(msg) { logEl.textContent += '\n' + msg; logEl.scrollTop = logEl.scrollHeight; }
+        _rfsState.running = true;
+        var nodes = [];
+        try {
+            var body = {
+                session_id: _rfsState.current.id, project_id: activeProjectId,
+                user_id: rfsCurrentUser(),
+                vault_docs: _rfsState.vaultDocs, model: model,
+            };
+            var res = await fetch(url + '/refinery/decompose', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            });
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, {stream: true});
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i];
+                    if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim();
+                    if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'stage') { stageEl.textContent = '🔄 ' + (ev.message || ev.stage); _log('STAGE ' + (ev.message || '')); }
+                        else if (ev.event === 'chunk_start') { _log('▶ 청크 ' + ev.current + '/' + ev.total + ' (' + (ev.vault_title||'') + ')'); }
+                        else if (ev.event === 'chunk_done') { barEl.style.width = ev.percent + '%'; _log('✓ 청크 ' + ev.current + '/' + ev.total + ' — 누적 ' + ev.nodes_so_far + ' 노드'); }
+                        else if (ev.event === 'node_added') { nodes.push(ev.node); }
+                        else if (ev.event === 'dedup_done') { _log('🧹 dedup: ' + ev.merged + ' merged → ' + ev.kept + ' kept'); }
+                        else if (ev.event === 'tree_composed') { _log('🌲 트리 합성 완료'); }
+                        else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
+                        else if (ev.event === 'error') { _log('❌ ' + ev.message); }
+                        else if (ev.event === 'done') {
+                            stageEl.textContent = '✅ 완료 — 노드 ' + ev.node_count + '개 (' + ev.elapsed_sec + 's)';
+                            barEl.style.width = '100%';
+                            _log('✅ 완료 — 노드 ' + ev.node_count + ' (skip ' + ev.skipped_meta + ' meta)');
+                            // 세션에 노드 저장
+                            await rfsPatchSession({nodes: ev.nodes, status: 'classifying'}, 'decomposed', '노드 ' + ev.node_count);
+                            _rfsState.nodes = ev.nodes;
+                            setTimeout(function () { rfsRenderDecomposeStep(); }, 500);
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {
+            stageEl.textContent = '❌ 실패: ' + e.message;
+            _log('❌ ' + e.message);
+        } finally {
+            _rfsState.running = false;
+        }
+    }
+
+    // ── 분류 단계
+    function rfsRenderClassifyStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var nodes = _rfsState.current.nodes || [];
+        var cls = _rfsState.current.classifications || {};
+        var leafs = nodes.filter(function (n) { return n.kind !== 'category'; });
+        var classifiedCount = leafs.filter(function (n) { return cls[n.id]; }).length;
+        var html = '<div style="max-width:1200px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">② 분류 — Classify (' + classifiedCount + '/' + leafs.length + ')</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">노드별 4분면 결정. AI 추천(점선)으로 일괄 시작 추천.</div>';
+        html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunClassifySuggest()">🤖 AI 추천 받기</button>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsApplyAllSuggestions()">추천 일괄 적용</button>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsRunSimilarNodes()">🔍 유사 노드 탐지</button>';
+        html += '<select id="rfs-classify-filter" onchange="rfsRenderClassifyStep()" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
+        html += '<option value="all">전체</option><option value="unclassified">미분류만</option><option value="canon">✅ 확정</option><option value="hyp">🧪 가설</option><option value="later">📋 백로그</option><option value="cut">❌ 폐기</option>';
+        html += '</select>';
+        if (classifiedCount === leafs.length && classifiedCount > 0) {
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsGoStep(5)" style="margin-left:auto;">결재로 →</button>';
+        }
+        html += '</div>';
+        var filterVal = (document.getElementById('rfs-classify-filter') || {}).value || 'all';
+        var filtered = leafs.filter(function (n) {
+            if (filterVal === 'all') return true;
+            if (filterVal === 'unclassified') return !cls[n.id];
+            return cls[n.id] === filterVal;
+        });
+        html += '<div style="border:1px solid var(--c-border);border-radius:8px;overflow:hidden;">';
+        filtered.forEach(function (n) {
+            var cur = cls[n.id];
+            var sug = (_rfsState.suggestions || {})[n.id];
+            html += '<div style="padding:10px 14px;border-bottom:1px solid var(--c-border);background:var(--c-card);">';
+            html += '<div style="display:flex;align-items:flex-start;gap:8px;">';
+            html += '<div style="flex:1;">';
+            html += '<div style="font-weight:700;">' + _annEsc(n.title) + ' <span style="font-size:10px;color:var(--c-text3);font-weight:400;">· ' + (n.kind||'concept') + ' · 신뢰도 ' + (n.ai_confidence||0) + '</span></div>';
+            if (n.summary) html += '<div style="font-size:12px;color:var(--c-text2);margin-top:3px;">' + _annEsc(n.summary) + '</div>';
+            if (sug) html += '<div style="font-size:11px;color:var(--c-accent);margin-top:4px;">🤖 추천: <b>' + sug.category + '</b> (' + sug.confidence + '%) — ' + _annEsc(sug.reason||'') + '</div>';
+            html += '</div>';
+            ['canon','hyp','later','cut'].forEach(function (cat) {
+                var emoji = ({canon:'✅',hyp:'🧪',later:'📋',cut:'❌'})[cat];
+                var active = (cur === cat);
+                var sugMatch = (sug && sug.category === cat && !cur);
+                var style = 'padding:4px 9px;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:700;border:'
+                    + (active ? '2px solid var(--c-accent);background:var(--c-accent);color:#fff'
+                       : sugMatch ? '1px dashed var(--c-accent);background:var(--c-accent-soft);color:var(--c-accent)'
+                       : '1px solid var(--c-border);background:var(--c-paper);color:var(--c-text2)') + ';';
+                html += '<button onclick="rfsSetCategory(\'' + n.id + '\',\'' + cat + '\')" style="' + style + '">' + emoji + ' ' + cat + '</button>';
+            });
+            html += '</div>';
+            html += '</div>';
+        });
+        if (!filtered.length) html += '<div style="padding:20px;text-align:center;color:var(--c-text3);">조건에 맞는 노드 없음</div>';
+        html += '</div>';
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsSetCategory(nodeId, category) {
+        var cls = _rfsState.current.classifications || {};
+        cls[nodeId] = category;
+        await rfsPatchSession({classifications: cls}, 'classified', nodeId + '→' + category);
+        rfsRenderClassifyStep();
+    }
+
+    async function rfsRunClassifySuggest() {
+        var url = rfsBackEnd(); if (!url) return;
+        showToast('🤖 AI 분류 추천 시작...', 'info');
+        try {
+            var res = await fetch(url + '/refinery/classify-suggest', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({session_id: _rfsState.current.id, user_id: rfsCurrentUser(), nodes: _rfsState.current.nodes||[]}),
+            });
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            _rfsState.suggestions = {};
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, {stream: true});
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'suggestion' && ev.suggestion) {
+                            _rfsState.suggestions[ev.suggestion.node_id] = ev.suggestion;
+                        } else if (ev.event === 'done') {
+                            showToast('🤖 추천 완료 — ' + (ev.total||0) + '개', 'success');
+                            rfsRenderClassifyStep();
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) { showToast('추천 실패: ' + e.message, 'alert'); }
+    }
+
+    async function rfsApplyAllSuggestions() {
+        var cls = _rfsState.current.classifications || {};
+        Object.keys(_rfsState.suggestions||{}).forEach(function (nid) {
+            if (!cls[nid]) cls[nid] = _rfsState.suggestions[nid].category;
+        });
+        await rfsPatchSession({classifications: cls}, 'classifications_applied', 'AI 추천 일괄');
+        rfsRenderClassifyStep();
+        showToast('✓ 일괄 적용됨', 'success');
+    }
+
+    async function rfsRunSimilarNodes() {
+        var url = rfsBackEnd(); if (!url) return;
+        showToast('🔍 유사 노드 임베딩 검사...', 'info');
+        try {
+            var res = await fetch(url + '/refinery/similar-nodes', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nodes: _rfsState.current.nodes||[], threshold: 0.85}),
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var data = await res.json();
+            _rfsState.similarGroups = data.groups || [];
+            if (!_rfsState.similarGroups.length) { showToast('유사 노드 그룹 없음 (MECE 양호)', 'success'); return; }
+            var html = '<div style="font-size:12px;color:var(--c-text3);margin-bottom:8px;">유사도 0.85+ 그룹 ' + _rfsState.similarGroups.length + '개 — 중복 의심. 확인 후 일부 cut.</div>';
+            _rfsState.similarGroups.forEach(function (group, gi) {
+                html += '<div style="border:1px solid var(--c-border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--c-card);">';
+                html += '<div style="font-weight:700;margin-bottom:6px;">그룹 ' + (gi+1) + ' (' + group.length + '개)</div>';
+                group.forEach(function (nid) {
+                    var n = (_rfsState.current.nodes||[]).find(function (x) { return x.id === nid; });
+                    if (n) html += '<div style="padding:3px 0;">• ' + _annEsc(n.title) + '</div>';
+                });
+                html += '</div>';
+            });
+            html += '<div style="margin-top:12px;text-align:right;"><button class="aihub-gpu-btn" onclick="_closeSimpleModal()">확인</button></div>';
+            _openSimpleModal('🔍 유사 노드 그룹', html);
+        } catch (e) { showToast('유사 노드 실패: ' + e.message, 'alert'); }
+    }
+
+    // ── 결재 단계
+    function rfsRenderReviewStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var s = _rfsState.current;
+        var cls = s.classifications || {};
+        var nodes = (s.nodes||[]).filter(function (n) { return n.kind !== 'category'; });
+        var summary = {canon:0,hyp:0,later:0,cut:0};
+        nodes.forEach(function (n) { var c = cls[n.id]; if (c && summary[c] !== undefined) summary[c]++; });
+        var html = '<div style="max-width:900px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">③ 결재 — 분류 잠금</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">결재 발행은 <b>세션 작성자(' + _annEsc(s.created_by||'?') + ')</b> 만 가능. 통과 시 분류 잠금.</div>';
+        html += '<div style="padding:14px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;">';
+        html += '<div style="font-weight:700;margin-bottom:8px;">분류 요약</div>';
+        html += '<div>✅ 확정 ' + summary.canon + ' · 🧪 가설 ' + summary.hyp + ' · 📋 백로그 ' + summary.later + ' · ❌ 폐기 ' + summary.cut + '</div>';
+        html += '</div>';
+        if (s.review_request_id) {
+            html += '<div style="padding:14px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
+            html += '결재 발행됨 · ID: <code>' + s.review_request_id + '</code><br>';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsGoStep(6)" style="margin-top:10px;">정의서 작성으로 →</button>';
+            html += '</div>';
+        } else {
+            var canProposer = (s.created_by === rfsCurrentUser());
+            if (canProposer) {
+                html += '<button class="aihub-gpu-btn primary" onclick="rfsCreateReview()">결재 발행</button>';
+            } else {
+                html += '<div style="color:var(--c-text3);">세션 작성자만 결재 발행 가능</div>';
+            }
+            html += '<div style="margin-top:14px;color:var(--c-text3);font-size:11.5px;">또는 <button class="aihub-gpu-btn" onclick="rfsSkipReview()">결재 생략 (1인 모드)</button></div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsCreateReview() {
+        showToast('결재 발행 중...', 'info');
+        // 기존 dbUpsertReview 함수 사용 (review_requests 테이블)
+        var s = _rfsState.current;
+        var reviewId = 'rv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+        var reviewRow = {
+            id: reviewId, project_id: activeProjectId,
+            title: '[정련소] ' + s.title + ' 분류 ' + (s.version_label||'v1') + ' 결재',
+            type: 'decision', status: 'pending',
+            proposer_id: rfsCurrentUser(), proposer_name: rfsCurrentUserName(),
+            reason: '분류된 노드 ' + Object.keys(s.classifications||{}).length + '개 잠금 결재',
+            target_doc_id: s.id,  // refinery session 참조
+            expires_at: new Date(Date.now() + 3*24*60*60*1000).toISOString(),
+            log: [{at: new Date().toISOString(), action: 'created', by: rfsCurrentUser(), detail: 'refinery session #' + s.id}],
+            votes: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            created_by: rfsCurrentUser(),
+        };
+        try {
+            if (typeof dbUpsertReview === 'function') await dbUpsertReview(reviewRow);
+            await rfsPatchSession({review_request_id: reviewId, status: 'approving'}, 'review_created', reviewId);
+            showToast('✓ 결재 발행됨 — 통과 후 다음 단계', 'success');
+            rfsRenderReviewStep();
+        } catch (e) { showToast('결재 발행 실패: ' + e.message, 'alert'); }
+    }
+
+    async function rfsSkipReview() {
+        var ok = await uiConfirm({title: '결재 생략', message: '결재 없이 정의서로 진행합니다 (1인 모드)', confirmText: '진행'});
+        if (!ok) return;
+        await rfsPatchSession({review_request_id: '(skipped)', status: 'composing'}, 'review_skipped', '1인 모드');
+        rfsGoStep(6);
+    }
+
+    // ── 정의서 단계
+    function rfsRenderComposeStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var s = _rfsState.current;
+        var hasComposed = (_rfsState.composedFiles||[]).length > 0 || (s.generated_tree && s.generated_tree.files);
+        var html = '<div style="max-width:1300px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">④ 정의서 + 위키 트리</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">옵시디언 [[]] 링크 + frontmatter JSON 메타데이터 자동 작성. 본문/파일명/저장 대상 모두 편집 가능.</div>';
+        html += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunCompose()">' + (hasComposed ? '🔄 재생성' : '✨ 트리 생성') + '</button>';
+        if (hasComposed) html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(7)">위키 적용으로 →</button>';
+        html += '</div>';
+        html += '<div id="rfs-compose-progress" style="display:none;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;">';
+        html += '<div id="rfs-compose-stage" style="font-weight:700;color:var(--c-accent);">⏳</div>';
+        html += '<div style="height:6px;background:var(--ios-fill);border-radius:3px;overflow:hidden;margin:8px 0;"><div id="rfs-compose-bar" style="height:100%;background:linear-gradient(90deg,var(--c-accent),#ec4899);width:0%;transition:width .25s;"></div></div>';
+        html += '<div id="rfs-compose-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;color:var(--c-text2);background:var(--c-paper);padding:6px 8px;border-radius:6px;"></div>';
+        html += '</div>';
+        // 미리보기
+        if (hasComposed) {
+            html += '<div style="display:grid;grid-template-columns:300px 1fr;gap:12px;border:1px solid var(--c-border);border-radius:8px;overflow:hidden;">';
+            html += '<div style="background:var(--c-paper);border-right:1px solid var(--c-border);overflow-y:auto;max-height:60vh;padding:8px;">';
+            html += '<div style="font-weight:800;font-size:12px;margin-bottom:8px;">📁 트리 미리보기</div>';
+            (_rfsState.composedFiles||[]).forEach(function (f, fi) {
+                var sel = _rfsState.selectedFiles[f.path] !== false;  // 기본 true
+                html += '<div style="padding:5px 0;display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;" onclick="rfsSelectFile(' + fi + ')">';
+                html += '<input type="checkbox" ' + (sel?'checked':'') + ' onclick="event.stopPropagation();rfsToggleFile(\'' + f.path + '\')">';
+                html += '<span style="flex:1;">' + _annEsc(f.path) + '</span>';
+                var emoji = ({canon:'📖',wiki:'📚',personal:'👤'})[f.target_kind] || '📄';
+                html += '<span title="저장 대상" style="font-size:11px;">' + emoji + '</span>';
+                html += '</div>';
+            });
+            html += '</div>';
+            html += '<div id="rfs-compose-detail" style="padding:14px;overflow-y:auto;max-height:60vh;">';
+            html += '<div style="color:var(--c-text3);">좌측 파일 선택 시 본문 표시</div>';
+            html += '</div>';
+            html += '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    function rfsSelectFile(fi) {
+        var f = _rfsState.composedFiles[fi]; if (!f) return;
+        var detail = document.getElementById('rfs-compose-detail'); if (!detail) return;
+        var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+        html += '<input type="text" id="rfs-file-path" value="' + _annEsc(f.path) + '" style="flex:1;font-size:12px;padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);" onchange="rfsUpdateFilePath(' + fi + ',this.value)">';
+        html += '<select id="rfs-file-target" onchange="rfsUpdateFileTarget(' + fi + ',this.value)" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
+        ['canon','wiki','personal'].forEach(function (t) {
+            var lbl = ({canon:'📖 프로젝트 위키',wiki:'📚 일반 문서',personal:'👤 개인 문서'})[t];
+            html += '<option value="' + t + '"' + (f.target_kind===t?' selected':'') + '>' + lbl + '</option>';
+        });
+        html += '</select>';
+        html += '</div>';
+        html += '<textarea id="rfs-file-body" style="width:100%;height:50vh;font-family:ui-monospace,monospace;font-size:11.5px;padding:10px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);" onchange="rfsUpdateFileBody(' + fi + ',this.value)">' + _annEsc(f.body || '') + '</textarea>';
+        detail.innerHTML = html;
+    }
+    function rfsToggleFile(path) {
+        _rfsState.selectedFiles[path] = !(_rfsState.selectedFiles[path] !== false);
+    }
+    function rfsUpdateFilePath(fi, v) { _rfsState.composedFiles[fi].path = v; }
+    function rfsUpdateFileTarget(fi, v) { _rfsState.composedFiles[fi].target_kind = v; }
+    function rfsUpdateFileBody(fi, v) { _rfsState.composedFiles[fi].body = v; }
+
+    async function rfsRunCompose() {
+        var url = rfsBackEnd(); if (!url) return;
+        var progEl = document.getElementById('rfs-compose-progress'); progEl.style.display = 'block';
+        var stageEl = document.getElementById('rfs-compose-stage');
+        var barEl = document.getElementById('rfs-compose-bar');
+        var logEl = document.getElementById('rfs-compose-log');
+        function _log(m) { logEl.textContent += '\n' + m; logEl.scrollTop = logEl.scrollHeight; }
+        try {
+            var s = _rfsState.current;
+            var res = await fetch(url + '/refinery/compose-tree', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    session_id: s.id, project_id: activeProjectId, user_id: rfsCurrentUser(),
+                    nodes: s.nodes||[], classifications: s.classifications||{},
+                    vault_docs: _rfsState.vaultDocs,
+                    session_title: s.title,
+                }),
+            });
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, {stream: true});
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'stage') { stageEl.textContent = '🔄 ' + ev.message; _log('STAGE: ' + ev.message); }
+                        else if (ev.event === 'tree_built') { _log('🌲 트리 골격 — ' + ev.files_count + ' 파일'); }
+                        else if (ev.event === 'file_start') { _log('▶ [' + ev.current + '/' + ev.total + '] ' + ev.path); }
+                        else if (ev.event === 'file_done') { barEl.style.width = ev.percent + '%'; _log('✓ ' + ev.path + ' (' + ev.body_len + '자)'); }
+                        else if (ev.event === 'tree_composed') { _rfsState.composedFiles = ev.files; _log('🔗 옵시디언 링크 후처리 완료'); }
+                        else if (ev.event === 'done') {
+                            stageEl.textContent = '✅ 완료';
+                            barEl.style.width = '100%';
+                            _log('✅ 완료');
+                            await rfsPatchSession({generated_tree: {files: _rfsState.composedFiles}}, 'composed', _rfsState.composedFiles.length + '개 파일');
+                            setTimeout(function () { rfsRenderComposeStep(); }, 500);
+                        } else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
+                        else if (ev.event === 'error') { _log('❌ ' + ev.message); }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) { stageEl.textContent = '❌ ' + e.message; _log('❌ ' + e.message); }
+    }
+
+    // ── 위키 적용
+    function rfsRenderApplyTreeStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var files = _rfsState.composedFiles || (((_rfsState.current||{}).generated_tree||{}).files || []);
+        var selectedCount = files.filter(function (f) { return _rfsState.selectedFiles[f.path] !== false; }).length;
+        var html = '<div style="max-width:900px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑤ 위키 적용 — Commit</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">선택된 ' + selectedCount + '/' + files.length + ' 파일을 wiki_docs 에 일괄 insert. 기존 파일은 archived_versions 보존.</div>';
+        html += '<div style="padding:14px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);">';
+        html += '<div style="margin-bottom:10px;font-weight:700;">선택 파일 ' + selectedCount + '개:</div>';
+        files.forEach(function (f) {
+            if (_rfsState.selectedFiles[f.path] === false) return;
+            var emoji = ({canon:'📖',wiki:'📚',personal:'👤'})[f.target_kind] || '📄';
+            html += '<div style="padding:4px 0;font-size:12px;">' + emoji + ' ' + _annEsc(f.path) + '</div>';
+        });
+        html += '<div style="margin-top:12px;display:flex;gap:8px;">';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunApplyTree()">위키에 적용</button>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(6)">← 정의서로</button>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsRunApplyTree() {
+        var url = rfsBackEnd(); if (!url) return;
+        var files = (_rfsState.composedFiles||[]).filter(function (f) { return _rfsState.selectedFiles[f.path] !== false; });
+        if (!files.length) { showToast('선택된 파일이 없습니다', 'alert'); return; }
+        var ok = await uiConfirm({title: '위키 적용', message: files.length + '개 파일을 적용합니다. 기존 동일 경로는 archived 보존 후 덮어쓰기.', confirmText: '적용'});
+        if (!ok) return;
+        try {
+            var res = await fetch(url + '/refinery/apply-tree', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    session_id: _rfsState.current.id, user_id: rfsCurrentUser(),
+                    project_id: activeProjectId, files: files, create_archive: true,
+                }),
+            });
+            if (!res.ok) { var err = await res.text(); throw new Error(err.slice(0, 200)); }
+            var data = await res.json();
+            showToast('✓ 위키 적용 완료 — 신규 ' + data.created.length + ', 갱신 ' + data.updated.length + (data.warnings.length ? ', 경고 ' + data.warnings.length : ''), 'success');
+            rfsGoStep(8);
+        } catch (e) { showToast('적용 실패: ' + e.message, 'alert'); }
+    }
+
+    // ── 작업 제안
+    function rfsRenderProposeWorkStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var proposed = _rfsState.proposedWork;
+        var html = '<div style="max-width:1000px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑥ WBS / 태스크 / 이슈 자동 제안</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">확정 노드 → WBS 그룹핑 → 4~8시간 태스크 분할. 가설/리스크 → 이슈.</div>';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunProposeWork()">' + (proposed ? '🔄 재제안' : '✨ 제안 받기') + '</button>';
+        html += '<div id="rfs-propose-progress" style="display:none;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin:14px 0;"><div id="rfs-propose-stage">⏳</div><div id="rfs-propose-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px;border-radius:6px;"></div></div>';
+        if (proposed) {
+            html += '<div style="margin-top:14px;display:flex;gap:8px;">';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsApplyWork(\'all\')">⊕ 모두 생성</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsApplyWork(\'p0\')">⊕ P0/P1 만</button>';
+            html += '</div>';
+            html += '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+            // WBS
+            html += '<div><h3 style="font-size:13px;margin:0 0 8px;">WBS (' + (proposed.wbs_nodes||[]).length + ')</h3>';
+            (proposed.wbs_nodes||[]).forEach(function (w) {
+                html += '<div style="padding:8px;border:1px solid var(--c-border);border-radius:6px;margin-bottom:6px;background:var(--c-card);font-size:12px;"><b>' + _annEsc(w.title) + '</b> · ' + w.estimated_days + 'd<div style="font-size:11px;color:var(--c-text3);">' + _annEsc(w.description||'') + '</div></div>';
+            });
+            html += '</div>';
+            // 태스크/이슈
+            html += '<div><h3 style="font-size:13px;margin:0 0 8px;">태스크 ' + (proposed.tasks||[]).length + ' · 이슈 ' + (proposed.issues||[]).length + '</h3>';
+            (proposed.tasks||[]).slice(0, 20).forEach(function (t) {
+                html += '<div style="padding:6px 8px;border:1px solid var(--c-border);border-radius:6px;margin-bottom:4px;background:var(--c-card);font-size:11.5px;">' + _annEsc(t.title) + ' <span style="color:var(--c-text3);">· ' + t.priority + ' · ' + t.hours + 'h</span></div>';
+            });
+            (proposed.issues||[]).forEach(function (iss) {
+                html += '<div style="padding:6px 8px;border:1px solid var(--c-border);border-radius:6px;margin-bottom:4px;background:var(--c-card);font-size:11.5px;color:#b53236;">⚠ ' + _annEsc(iss.title) + '</div>';
+            });
+            html += '</div>';
+            html += '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsRunProposeWork() {
+        var url = rfsBackEnd(); if (!url) return;
+        var pEl = document.getElementById('rfs-propose-progress'); pEl.style.display = 'block';
+        var sEl = document.getElementById('rfs-propose-stage');
+        var lEl = document.getElementById('rfs-propose-log');
+        function _log(m) { lEl.textContent += '\n' + m; lEl.scrollTop = lEl.scrollHeight; }
+        _rfsState.proposedWork = {wbs_nodes: [], tasks: [], issues: []};
+        try {
+            var s = _rfsState.current;
+            var res = await fetch(url + '/refinery/propose-work', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({session_id: s.id, user_id: rfsCurrentUser(), nodes: s.nodes||[], classifications: s.classifications||{}}),
+            });
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, {stream:true});
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'stage') sEl.textContent = '🔄 ' + ev.message;
+                        else if (ev.event === 'wbs_proposed') { _rfsState.proposedWork.wbs_nodes.push(ev.wbs); _log('+ WBS: ' + ev.wbs.title); }
+                        else if (ev.event === 'tasks_proposed') _log('+ ' + ev.tasks_count + ' tasks for ' + ev.wbs_id);
+                        else if (ev.event === 'issue_proposed') { _rfsState.proposedWork.issues.push(ev.issue); _log('+ Issue: ' + ev.issue.title); }
+                        else if (ev.event === 'done') {
+                            _rfsState.proposedWork.tasks = ev.tasks || [];
+                            sEl.textContent = '✅ ' + (ev.summary || '완료');
+                            _log('✅ ' + (ev.summary || ''));
+                            rfsRenderProposeWorkStep();
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) { sEl.textContent = '❌ ' + e.message; }
+    }
+
+    async function rfsApplyWork(filter) {
+        var url = rfsBackEnd(); if (!url) return;
+        var p = _rfsState.proposedWork; if (!p) return;
+        var tasks = p.tasks||[];
+        if (filter === 'p0') tasks = tasks.filter(function (t) { return ['p0','p1'].indexOf(t.priority) >= 0; });
+        var ok = await uiConfirm({title: '작업 생성', message: 'WBS ' + (p.wbs_nodes||[]).length + ' · 태스크 ' + tasks.length + ' · 이슈 ' + (p.issues||[]).length + ' 생성', confirmText: '생성'});
+        if (!ok) return;
+        try {
+            var res = await fetch(url + '/refinery/apply-work', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId,
+                    wbs_nodes: p.wbs_nodes||[], tasks: tasks, issues: p.issues||[],
+                }),
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var data = await res.json();
+            showToast('✓ 생성 완료 — WBS ' + data.wbs_created.length + ', 태스크 ' + data.tasks_created.length + ', 이슈 ' + data.issues_created.length, 'success');
+            rfsGoStep(9);
+        } catch (e) { showToast('생성 실패: ' + e.message, 'alert'); }
+    }
+
+    function rfsRenderDoneStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var s = _rfsState.current;
+        var html = '<div style="max-width:700px;margin:0 auto;text-align:center;padding:40px 20px;">';
+        html += '<div style="font-size:60px;">🎉</div>';
+        html += '<h2 style="font-size:22px;margin:14px 0;">정련 세션 완료</h2>';
+        html += '<div style="color:var(--c-text2);margin-bottom:20px;">' + _annEsc(s.title) + '</div>';
+        html += '<div style="text-align:left;display:inline-block;font-size:13px;background:var(--c-card);padding:14px 18px;border-radius:8px;border:1px solid var(--c-border);">';
+        html += '📚 vault: ' + (s.vault_doc_ids||[]).length + '<br>';
+        html += '🌲 노드: ' + (s.nodes||[]).length + '<br>';
+        html += '📋 분류: ' + Object.keys(s.classifications||{}).length + '<br>';
+        html += '📄 위키 문서: ' + (s.generated_doc_ids||[]).length + '<br>';
+        html += '🏗 WBS: ' + (s.generated_wbs_ids||[]).length + '<br>';
+        html += '📋 태스크: ' + (s.generated_task_ids||[]).length + '<br>';
+        html += '⚠ 이슈: ' + (s.generated_issue_ids||[]).length;
+        html += '</div>';
+        html += '<div style="margin-top:24px;">';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsArchiveSession()">아카이브 후 새 세션</button> ';
+        html += '<button class="aihub-gpu-btn" onclick="rfsBackToList()">세션 목록</button>';
+        html += '</div>';
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    async function rfsArchiveSession() {
+        await rfsPatchSession({status: 'archived'}, 'archived', '완료');
+        rfsBackToList();
     }
 
     async function _mmpApplyDiagram(diagram, docs) {

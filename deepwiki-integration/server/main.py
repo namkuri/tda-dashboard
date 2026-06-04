@@ -30,7 +30,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r222"
+SERVER_REVISION = "r223"
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -628,6 +628,400 @@ async def mindmap_explain(req: MindmapExplainRequest):
         model=req.model,
     )
     return _sse_indexer(gen, busy_kind="mindmap_explain", busy_project=req.project_id)
+
+
+# ─────────────────────────────────────────────
+# [r223] 연구 정련소 (Research Refinery)
+# ─────────────────────────────────────────────
+from refinery import _session_store as _rfs
+from refinery._author_guard import require_author
+from refinery.decomposer import decompose as _rfs_decompose
+from refinery.classifier import classify_suggest as _rfs_classify
+from refinery.similar_nodes import find_similar_groups as _rfs_similar
+from refinery.composer import (
+    build_tree_skeleton as _rfs_build_tree,
+    compose_file_body as _rfs_compose_body,
+    compose_vault_list_md as _rfs_compose_vault_list,
+    compose_changelog_md as _rfs_compose_changelog,
+)
+from refinery.linker import link_files as _rfs_link
+from refinery.work_proposer import propose_work as _rfs_propose
+from refinery.apply_ops import apply_tree as _rfs_apply_tree, apply_work as _rfs_apply_work
+
+
+class RefinerySessionCreate(BaseModel):
+    project_id: Optional[str] = None
+    title: str
+    user_id: str
+
+
+class RefinerySessionPatch(BaseModel):
+    user_id: str
+    patch: Dict[str, Any]
+    action: str = "session_updated"
+    detail: str = ""
+
+
+class RefineryDecomposeRequest(BaseModel):
+    session_id: str
+    project_id: Optional[str] = None
+    user_id: str
+    vault_docs: List[Dict[str, Any]] = []  # [{id, title, content}]
+    model: Optional[str] = None
+
+
+class RefineryClassifyRequest(BaseModel):
+    session_id: str
+    user_id: str
+    nodes: List[Dict[str, Any]] = []
+    model: Optional[str] = None
+    batch_size: int = 5
+
+
+class RefinerySimilarRequest(BaseModel):
+    nodes: List[Dict[str, Any]]
+    threshold: float = 0.85
+
+
+class RefineryComposeRequest(BaseModel):
+    session_id: str
+    project_id: Optional[str] = None
+    user_id: str
+    nodes: List[Dict[str, Any]]
+    classifications: Dict[str, str]  # {node_id: 'canon'|'hyp'|'later'|'cut'}
+    vault_docs: List[Dict[str, Any]] = []
+    session_title: str
+    model: Optional[str] = None
+
+
+class RefineryFileOverride(BaseModel):
+    path: str
+    body: str
+    target_kind: str = "canon"
+    visibility: str = "public"  # personal 일 때만
+    category: Optional[str] = None
+    node_ids: List[str] = []
+    is_overview: bool = False
+
+
+class RefineryApplyTreeRequest(BaseModel):
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    files: List[RefineryFileOverride]  # 선택된 파일만
+    create_archive: bool = True
+
+
+class RefineryProposeWorkRequest(BaseModel):
+    session_id: str
+    user_id: str
+    nodes: List[Dict[str, Any]]
+    classifications: Dict[str, str]
+    model: Optional[str] = None
+
+
+class RefineryApplyWorkRequest(BaseModel):
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    wbs_nodes: List[Dict[str, Any]] = []
+    tasks: List[Dict[str, Any]] = []
+    issues: List[Dict[str, Any]] = []
+
+
+@app.get("/refinery/sessions")
+async def refinery_list_sessions(project_id: Optional[str] = None):
+    return {"sessions": _rfs.list_sessions(project_id)}
+
+
+@app.get("/refinery/sessions/{sid}")
+async def refinery_get_session(sid: str):
+    s = _rfs.get_session(sid)
+    if not s:
+        raise HTTPException(404, f"세션 {sid} 없음")
+    return s
+
+
+@app.post("/refinery/sessions")
+async def refinery_create_session(req: RefinerySessionCreate):
+    require_author(req.user_id, "세션 생성")
+    try:
+        s = _rfs.create_session(project_id=req.project_id, title=req.title, user_id=req.user_id)
+        return s
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+
+@app.patch("/refinery/sessions/{sid}")
+async def refinery_update_session(sid: str, req: RefinerySessionPatch):
+    require_author(req.user_id, "세션 수정")
+    try:
+        return _rfs.update_session(sid, req.patch, user_id=req.user_id, action=req.action, detail=req.detail)
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+
+@app.delete("/refinery/sessions/{sid}")
+async def refinery_delete_session(sid: str, user_id: str):
+    require_author(user_id, "세션 삭제")
+    ok = _rfs.delete_session(sid, user_id=user_id)
+    return {"deleted": ok}
+
+
+@app.post("/refinery/decompose")
+async def refinery_decompose(req: RefineryDecomposeRequest):
+    """vault → 노드 트리 (SSE 분할 호출)."""
+    require_author(req.user_id, "분해")
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    gen = _rfs_decompose(
+        session_id=req.session_id,
+        project_id=req.project_id,
+        vault_docs=req.vault_docs,
+        model=req.model,
+        user_id=req.user_id,
+    )
+    return _sse_indexer(gen, busy_kind="refinery_decompose", busy_project=req.project_id)
+
+
+@app.post("/refinery/classify-suggest")
+async def refinery_classify_suggest(req: RefineryClassifyRequest):
+    require_author(req.user_id, "분류 추천")
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    gen = _rfs_classify(nodes=req.nodes, model=req.model, batch_size=req.batch_size)
+    return _sse_indexer(gen, busy_kind="refinery_classify")
+
+
+@app.post("/refinery/similar-nodes")
+async def refinery_similar_nodes(req: RefinerySimilarRequest):
+    groups = await _rfs_similar(req.nodes, threshold=req.threshold)
+    return {"groups": groups}
+
+
+@app.post("/refinery/compose-tree")
+async def refinery_compose_tree(req: RefineryComposeRequest):
+    """트리 합성 + 파일 본문 자동 작성 (SSE)."""
+    require_author(req.user_id, "정의서 작성")
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+
+    async def _gen():
+        yield {"event": "stage", "message": "트리 골격 생성 중"}
+        skeleton = _rfs_build_tree(
+            session_title=req.session_title,
+            nodes=req.nodes,
+            classifications=req.classifications,
+            project_id=req.project_id,
+        )
+        files = skeleton["files"]
+        total = len(files)
+        yield {"event": "tree_built", "root": skeleton["root"], "files_count": total}
+        # session mock — composer 가 참고
+        session = {"id": req.session_id, "title": req.session_title}
+        composed_files: List[Dict[str, Any]] = []
+        # 노드 인덱스
+        node_by_id = {n["id"]: n for n in req.nodes}
+        for idx, fmeta in enumerate(files):
+            yield {"event": "file_start", "current": idx + 1, "total": total, "path": fmeta["path"]}
+            if fmeta.get("is_vault_list"):
+                body = _rfs_compose_vault_list(vault_docs=req.vault_docs, session=session, user_id=req.user_id)
+            elif fmeta.get("is_changelog"):
+                body = _rfs_compose_changelog(session=session, user_id=req.user_id)
+            else:
+                related = [f for f in files if f["path"] != fmeta["path"]]
+                included = [node_by_id[nid] for nid in (fmeta.get("node_ids") or []) if nid in node_by_id]
+                if not included and not fmeta.get("is_overview"):
+                    # 노드 없는 일반 파일은 skip
+                    continue
+                body = await _rfs_compose_body(
+                    file_meta=fmeta,
+                    nodes=included,
+                    related_files=related,
+                    session=session,
+                    user_id=req.user_id,
+                    model=req.model,
+                )
+            composed_files.append({**fmeta, "body": body})
+            yield {
+                "event": "file_done", "current": idx + 1, "total": total,
+                "path": fmeta["path"], "body_len": len(body),
+                "percent": round((idx + 1) / total * 100, 1),
+            }
+        # 옵시디언 링크 후처리
+        yield {"event": "stage", "message": "옵시디언 [[]] 링크 후처리"}
+        linked = _rfs_link(composed_files)
+        yield {"event": "tree_composed", "files": linked, "files_count": len(linked)}
+        yield {"event": "done", "summary": {"files_count": len(linked)}}
+
+    return _sse_indexer(_gen(), busy_kind="refinery_compose_tree", busy_project=req.project_id)
+
+
+@app.post("/refinery/apply-tree")
+async def refinery_apply_tree(req: RefineryApplyTreeRequest):
+    """트리 일괄 commit (부분 선택은 프론트가 files 에 포함 여부로 결정)."""
+    require_author(req.user_id, "위키 적용")
+    s = _rfs.get_session(req.session_id)
+    if not s:
+        raise HTTPException(404, "세션 없음")
+    result = _rfs_apply_tree(
+        session=s,
+        files=[f.model_dump() for f in req.files],
+        user_id=req.user_id,
+        project_id=req.project_id,
+        create_archive=req.create_archive,
+    )
+    # 세션에 생성 결과 기록
+    new_doc_ids = [c["id"] for c in result["created"]] + [u["id"] for u in result["updated"]]
+    _rfs.update_session(
+        req.session_id,
+        {
+            "status": "published",
+            "generated_doc_ids": (s.get("generated_doc_ids") or []) + new_doc_ids,
+        },
+        user_id=req.user_id, action="wiki_applied",
+        detail=f"신규 {len(result['created'])} · 갱신 {len(result['updated'])} · 경고 {len(result['warnings'])}",
+    )
+    return result
+
+
+@app.post("/refinery/propose-work")
+async def refinery_propose_work(req: RefineryProposeWorkRequest):
+    """WBS/태스크/이슈 제안 (SSE)."""
+    require_author(req.user_id, "작업 제안")
+    if LLM_BUSY_STATE["running"]:
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    gen = _rfs_propose(nodes=req.nodes, classifications=req.classifications, model=req.model)
+    return _sse_indexer(gen, busy_kind="refinery_propose_work")
+
+
+@app.post("/refinery/apply-work")
+async def refinery_apply_work(req: RefineryApplyWorkRequest):
+    """제안된 WBS/태스크/이슈 일괄 생성."""
+    require_author(req.user_id, "작업 생성")
+    s = _rfs.get_session(req.session_id)
+    if not s:
+        raise HTTPException(404, "세션 없음")
+    result = _rfs_apply_work(
+        session=s, wbs_nodes=req.wbs_nodes, tasks=req.tasks, issues=req.issues,
+        user_id=req.user_id, project_id=req.project_id,
+    )
+    _rfs.update_session(
+        req.session_id,
+        {
+            "generated_wbs_ids": (s.get("generated_wbs_ids") or []) + [w["id"] for w in result["wbs_created"]],
+            "generated_task_ids": (s.get("generated_task_ids") or []) + [t["id"] for t in result["tasks_created"]],
+            "generated_issue_ids": (s.get("generated_issue_ids") or []) + [i["id"] for i in result["issues_created"]],
+        },
+        user_id=req.user_id, action="work_applied",
+        detail=f"WBS {len(result['wbs_created'])} · 태스크 {len(result['tasks_created'])} · 이슈 {len(result['issues_created'])}",
+    )
+    return result
+
+
+@app.get("/refinery/schema-sql")
+async def refinery_schema_sql():
+    """설정→DB 스키마 점검 SQL 에 포함될 SQL 반환."""
+    return {"sql": _rfs.SCHEMA_SQL}
+
+
+# [r223] diff / promote
+from refinery.diff_ops import session_diff as _rfs_diff, promote_hypothesis as _rfs_promote
+
+
+class RefineryDiffRequest(BaseModel):
+    session_id_a: str
+    session_id_b: str
+
+
+class RefineryPromoteRequest(BaseModel):
+    session_id: str
+    user_id: str
+    node_ids: List[str]
+    playtest_result: str = "positive"
+
+
+@app.post("/refinery/diff")
+async def refinery_diff(req: RefineryDiffRequest):
+    a = _rfs.get_session(req.session_id_a)
+    b = _rfs.get_session(req.session_id_b)
+    if not a or not b: raise HTTPException(404, "세션 없음")
+    return _rfs_diff(a, b)
+
+
+@app.post("/refinery/promote")
+async def refinery_promote(req: RefineryPromoteRequest):
+    s = _rfs.get_session(req.session_id)
+    if not s: raise HTTPException(404, "세션 없음")
+    result = _rfs_promote(session=s, node_ids=req.node_ids, user_id=req.user_id, playtest_result=req.playtest_result)
+    _rfs.update_session(req.session_id, result["session_patch"], user_id=req.user_id, action="hypothesis_promoted",
+                       detail=f"{result['promoted_count']}개 → canon")
+    return result
+
+
+class AuthorMigrateRequest(BaseModel):
+    user_id: str  # 요청자
+    table: str = "wiki_docs"
+    fill_with: str = "system:unknown"  # 이 값으로 NULL 채움
+    dry_run: bool = True
+
+
+@app.post("/refinery/admin/migrate-authors")
+async def refinery_migrate_authors(req: AuthorMigrateRequest):
+    """작성자 NULL 인 행 카운트 + (dry_run=false 시) 채움."""
+    require_author(req.user_id, "마이그레이션")
+    store = get_store()
+    try:
+        # NULL 카운트
+        r = store.client.table(req.table).select("id", count="exact").is_("created_by", "null").limit(1).execute()
+        null_count = r.count or 0
+        if req.dry_run:
+            return {"table": req.table, "null_count": null_count, "dry_run": True, "applied": 0}
+        # 채움
+        update_res = store.client.table(req.table).update({"created_by": req.fill_with}).is_("created_by", "null").execute()
+        return {"table": req.table, "null_count_before": null_count, "applied": len(update_res.data or []), "fill_with": req.fill_with}
+    except Exception as e:
+        raise HTTPException(500, f"마이그레이션 실패: {e}")
+
+
+@app.get("/refinery/health")
+async def refinery_health():
+    """정련소 모듈 헬스 + /goal 워크플로 명세."""
+    return {
+        "ok": True,
+        "revision": SERVER_REVISION,
+        "modules": ["decomposer", "classifier", "similar_nodes", "composer", "linker", "work_proposer", "apply_ops", "diff_ops"],
+        "goal_steps": [
+            {"n": 1, "label": "세션 생성", "endpoint": "POST /refinery/sessions"},
+            {"n": 2, "label": "vault import", "endpoint": "PATCH /refinery/sessions/{id}"},
+            {"n": 3, "label": "분해", "endpoint": "POST /refinery/decompose"},
+            {"n": 4, "label": "AI 분류 추천", "endpoint": "POST /refinery/classify-suggest"},
+            {"n": 5, "label": "유사 노드 그룹", "endpoint": "POST /refinery/similar-nodes"},
+            {"n": 6, "label": "분류 확정", "endpoint": "PATCH /refinery/sessions/{id}"},
+            {"n": 7, "label": "결재 발행", "endpoint": "(외부) dbUpsertReview"},
+            {"n": 8, "label": "결재 통과 대기", "endpoint": "(외부)"},
+            {"n": 9, "label": "트리 합성", "endpoint": "POST /refinery/compose-tree"},
+            {"n": 10, "label": "위키 적용", "endpoint": "POST /refinery/apply-tree"},
+            {"n": 11, "label": "작업 제안", "endpoint": "POST /refinery/propose-work"},
+            {"n": 12, "label": "작업 생성", "endpoint": "POST /refinery/apply-work"},
+            {"n": 13, "label": "diff", "endpoint": "POST /refinery/diff"},
+            {"n": 14, "label": "promote", "endpoint": "POST /refinery/promote"},
+            {"n": 15, "label": "세션 archive", "endpoint": "PATCH /refinery/sessions/{id}"},
+            {"n": 16, "label": "검증 완료", "endpoint": "(클라이언트)"},
+        ],
+    }
 
 
 @app.get("/wiki/pages")
