@@ -105,8 +105,10 @@ def delete_session(sid: str, *, user_id: str) -> bool:
 
 
 # DB_OPTIONAL_TABLES 패턴 — 사용자 SQL
+# 전체 풀버전(인덱스·트리거·RLS·NOT NULL 강제·확인 쿼리)은
+# docs/tda_r223_refinery_migration.sql 참조.
 SCHEMA_SQL = """
--- [r223] 연구 정련소 세션
+-- [r223] 연구 정련소 세션 (간단 버전 — 상세는 docs/tda_r223_refinery_migration.sql)
 create table if not exists refinery_sessions (
   id text primary key,
   project_id text,
@@ -130,6 +132,13 @@ create table if not exists refinery_sessions (
   version_label text default 'v1',
   history jsonb default '[]'::jsonb
 );
--- 작성자 NOT NULL 강제 (기존 데이터 백필 후)
--- alter table wiki_docs alter column created_by set not null; -- 기존 NULL 있으면 마이그레이션 도구로
+create index if not exists idx_refinery_sessions_project on refinery_sessions(project_id, updated_at desc);
+create index if not exists idx_refinery_sessions_status  on refinery_sessions(status);
+create index if not exists idx_refinery_sessions_created_by on refinery_sessions(created_by);
+
+-- 작성자 NOT NULL 강제 (기존 데이터 백필 후) — 풀버전 SQL 참조:
+-- 1) POST /refinery/admin/migrate-authors {table:'wiki_docs',dry_run:true} 로 NULL 카운트
+-- 2) dry_run:false 로 채움
+-- 3) docs/tda_r223_refinery_migration.sql §4 의 alter 주석 해제 후 실행
 """
+
