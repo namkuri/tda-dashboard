@@ -30,7 +30,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r224"
+SERVER_REVISION = "r225"
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -49,13 +49,34 @@ LLM_BUSY_STATE: Dict[str, Any] = {
 
 def _busy_set(**kwargs):
     LLM_BUSY_STATE.update(kwargs)
+    # [r225] heartbeat — 갱신될 때마다 last_update. stale 판정용.
+    LLM_BUSY_STATE["last_update"] = time.time()
 
 
 def _busy_clear():
     LLM_BUSY_STATE.update({
         "running": False, "kind": None, "project_id": None, "started_at": None,
         "stage": None, "current": 0, "total": 0, "category": None, "message": None,
+        "last_update": None,
     })
+
+
+# [r225] busy stale 자동 해제 — client disconnect 후 finally 가 안 돌아 busy 가
+# 영구 점유되는 버그 방어. 90초 동안 이벤트 갱신 없으면 죽은 작업으로 간주해 해제.
+_BUSY_STALE_SEC = 90
+
+
+def _busy_active() -> bool:
+    """진짜 LLM 점유 중인지 — stale 이면 자동 해제 후 False."""
+    if not LLM_BUSY_STATE.get("running"):
+        return False
+    last = LLM_BUSY_STATE.get("last_update") or LLM_BUSY_STATE.get("started_at") or 0
+    if time.time() - last > _BUSY_STALE_SEC:
+        print(f"[main] ⚠ busy stale 자동 해제 (kind={LLM_BUSY_STATE.get('kind')}, "
+              f"{int(time.time() - last)}s 무응답)")
+        _busy_clear()
+        return False
+    return True
 
 
 # [r133] 마지막 wiki 생성 진단 로그 — SSE 죽어서 사용자가 못 본 에러를 retrieve 가능
@@ -198,7 +219,7 @@ async def health(verbose: bool = False):
         out["top_sources"] = store.top_sources(limit=15)
     # [r126] LLM 점유 상태 노출
     out["llm_busy"] = dict(LLM_BUSY_STATE)
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         out["llm_busy_human"] = _busy_human()
     return out
 
@@ -211,7 +232,7 @@ async def chat(req: ChatRequest):
 
     # [r126] 위키/인덱싱이 진행 중이면 — 같은 Ollama 모델을 다중 동시 호출하면
     #   양쪽 모두 매우 느려지거나 타임아웃. 명확한 안내 후 차단.
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         busy_msg = (
             "⚠ **로컬 LLM이 다른 작업으로 점유 중입니다**\n\n"
             + _busy_human()
@@ -305,6 +326,8 @@ def _sse_indexer(gen, *, busy_kind: Optional[str] = None, busy_project: Optional
             async for event in gen:
                 # state 업데이트 — event 키에 따라 자동 매핑
                 if busy_kind:
+                    # [r225] 모든 이벤트마다 heartbeat — stale 오판 방지
+                    LLM_BUSY_STATE["last_update"] = time.time()
                     et = event.get("event")
                     if et == "stage":
                         _busy_set(stage=event.get("stage") or LLM_BUSY_STATE["stage"],
@@ -427,7 +450,7 @@ async def index_sync(req: IndexSyncRequest):
     Ollama 가 다른 작업으로 점유 중이면 거부 (busy 게이트).
     응답: SSE — phase 별 진행률 + 총 결과 요약.
     """
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'busy', 'message': _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -521,7 +544,7 @@ async def index_sync(req: IndexSyncRequest):
 async def wiki_generate(req: WikiGenerateRequest):
     """Git 레포 → LLM 자동 위키 페이지 N개 생성. SSE 진행률 스트리밍."""
     # [r126] 다른 LLM 작업이 진행 중이면 거부 (동시 호출 시 둘 다 망가짐)
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -583,7 +606,7 @@ async def mindmap_generate(req: MindmapGenerateRequest):
 
     응답 done 이벤트의 diagram payload를 그대로 wiki_docs.meta.diagram에 저장하면 그래프 뷰에서 즉시 렌더됨.
     """
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -611,7 +634,7 @@ async def mindmap_explain(req: MindmapExplainRequest):
       - 텍스트의 [^N] 각주 → 클릭 시 sources[N-1] popover
       - followups 3개 → 클릭 시 그 query 로 재호출
     """
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -800,7 +823,7 @@ async def refinery_delete_session(sid: str, user_id: str):
 async def refinery_decompose(req: RefineryDecomposeRequest):
     """vault → 노드 트리 (SSE 분할 호출)."""
     require_author(req.user_id, "분해")
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -818,7 +841,7 @@ async def refinery_decompose(req: RefineryDecomposeRequest):
 @app.post("/refinery/classify-suggest")
 async def refinery_classify_suggest(req: RefineryClassifyRequest):
     require_author(req.user_id, "분류 추천")
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -837,7 +860,7 @@ async def refinery_similar_nodes(req: RefinerySimilarRequest):
 async def refinery_compose_tree(req: RefineryComposeRequest):
     """트리 합성 + 파일 본문 자동 작성 (SSE)."""
     require_author(req.user_id, "정의서 작성")
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -926,7 +949,7 @@ async def refinery_apply_tree(req: RefineryApplyTreeRequest):
 async def refinery_propose_work(req: RefineryProposeWorkRequest):
     """WBS/태스크/이슈 제안 (SSE)."""
     require_author(req.user_id, "작업 제안")
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -1022,6 +1045,31 @@ async def refinery_migrate_authors(req: AuthorMigrateRequest):
         return {"table": req.table, "null_count_before": null_count, "applied": len(update_res.data or []), "fill_with": req.fill_with}
     except Exception as e:
         raise HTTPException(500, f"마이그레이션 실패: {e}")
+
+
+class ForceClearRequest(BaseModel):
+    confirm: bool = True
+
+
+@app.post("/llm/force-clear")
+async def llm_force_clear(req: ForceClearRequest = ForceClearRequest()):
+    """[r225] LLM busy 강제 해제 — stuck 상태에서 사용자가 즉시 풀 수 있게."""
+    prev = dict(LLM_BUSY_STATE)
+    _busy_clear()
+    return {"cleared": True, "previous_kind": prev.get("kind"), "was_running": prev.get("running")}
+
+
+@app.get("/llm/busy")
+async def llm_busy_status():
+    """[r225] 현재 LLM busy 상태 — 정련소 진입 시 확인 (stale 자동 해제)."""
+    active = _busy_active()
+    return {
+        "active": active,
+        "kind": LLM_BUSY_STATE.get("kind") if active else None,
+        "human": _busy_human() if active else None,
+        "started_at": LLM_BUSY_STATE.get("started_at") if active else None,
+        "stage": LLM_BUSY_STATE.get("stage") if active else None,
+    }
 
 
 @app.get("/refinery/health")
@@ -1233,7 +1281,7 @@ async def diag_last_generation():
 @app.post("/wiki/extend")
 async def wiki_extend(req: WikiExtendRequest):
     """[r132] 기존 위키 페이지에 LLM 으로 새 섹션 추가. SSE 진행률 + 본문에 append."""
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
@@ -1254,7 +1302,7 @@ async def wiki_extend(req: WikiExtendRequest):
 @app.post("/wiki/audit")
 async def wiki_audit(req: WikiAuditRequest):
     """canon 문서 × 1차 자동 위키 대조 → 2차 일치도 보고서 생성."""
-    if LLM_BUSY_STATE["running"]:
+    if _busy_active():
         async def busy_gen():
             yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업이 진행 중입니다: ' + _busy_human()}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"

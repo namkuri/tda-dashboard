@@ -4613,6 +4613,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .rfs-step.done .rfs-step-num { background: #2a4a30; color: #fff; }
         .rfs-step-label { font-size: 11.5px; }
         .rfs-step-arrow { color: var(--c-text3); font-size: 16px; margin: 0 2px; }
+        /* [r225] 분해 진행 애니메이션 */
+        .rfs-dc-prog.active { box-shadow: 0 0 0 0 rgba(201,91,75,.4); animation: rfsDcGlow 2s ease-in-out infinite; }
+        @keyframes rfsDcGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(201,91,75,.35); } 50% { box-shadow: 0 0 0 5px rgba(201,91,75,0); } }
+        .rfs-dc-spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--c-accent); border-top-color: transparent; border-radius: 50%; animation: rfsDcSpin .7s linear infinite; }
+        @keyframes rfsDcSpin { to { transform: rotate(360deg); } }
+        .rfs-dc-bar.indeterminate > div { width: 35% !important; animation: rfsDcIndet 1.2s ease-in-out infinite; }
+        @keyframes rfsDcIndet { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+        .rfs-dc-chip {
+            display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 9999px;
+            background: var(--ios-fill); color: var(--c-text2); border: 1px solid var(--c-border);
+            white-space: nowrap;
+        }
+        .rfs-dc-chip-new {
+            animation: rfsDcChipIn .5s cubic-bezier(.2,.8,.2,1) both;
+            background: var(--c-accent-soft); color: var(--c-accent); border-color: var(--c-accent);
+        }
+        @keyframes rfsDcChipIn {
+            0% { opacity: 0; transform: translateY(8px) scale(.85); }
+            60% { transform: translateY(-2px) scale(1.04); }
+            100% { opacity: 1; transform: none; }
+        }
         #mmp-prog-widget.mini .mmp-prog-mini-ico { display: inline-block; animation: mmpSpin 1.4s linear infinite; }
         @keyframes mmpSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .mmp-prog-head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13.5px; color: var(--c-text); }
@@ -5527,6 +5548,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <div class="aihub-tile" onclick="switchView('deepwikiPages')"><span class="aihub-tile-ico">✦</span><div style="flex:1;"><div class="aihub-tile-t">Deep Wiki</div><div class="aihub-tile-d">Git 레포 → 자동 위키 생성·감사</div></div><button class="aihub-tile-gear" onclick="event.stopPropagation();aihubOpenOptions('wiki')" title="AI 옵션 설정">⚙️</button></div>
                         <div class="aihub-tile" onclick="switchView('graph');setTimeout(function(){ if(typeof mmpOpenPicker==='function') mmpOpenPicker(false); },120)"><span class="aihub-tile-ico">🧠</span><div style="flex:1;"><div class="aihub-tile-t">마인드맵 만들기</div><div class="aihub-tile-d">문서를 LLM으로 마인드맵화</div></div><button class="aihub-tile-gear" onclick="event.stopPropagation();aihubOpenOptions('mindmap')" title="AI 옵션 설정">⚙️</button></div>
                     </div>
+                </section>
+
+                <!-- [r225] 백엔드 URL 설정 -->
+                <section class="aihub-card">
+                    <div class="aihub-card-head"><h3>🔌 백엔드 서버 URL</h3><span class="aihub-card-sub" id="aihub-backend-status">확인 중…</span></div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <input id="aihub-backend-url" type="text" placeholder="http://localhost:8000 또는 Cloudflare 터널 URL" style="flex:1;min-width:280px;font-size:12.5px;padding:7px 11px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);">
+                        <button class="aihub-gpu-btn primary" onclick="aihubSaveBackendUrl()" style="font-size:12px;">저장</button>
+                        <button class="aihub-gpu-btn" onclick="aihubTestBackend()" style="font-size:12px;">연결 테스트</button>
+                    </div>
+                    <div class="aihub-hint">대화형 AI · Deep Wiki · 마인드맵 · 연구 정련소 모두 이 백엔드를 사용합니다. (대화형 AI 설정과 동기화)</div>
                 </section>
 
                 <!-- GPU 서버 / 터널 상태 -->
@@ -6693,6 +6725,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             aihubRenderGpus();
             aihubRenderModels();
             aihubRenderHistory();
+            aihubLoadBackendUrl();  // [r225] 백엔드 URL 입력 채우기 + 상태
             // 상태 칩
             var pill = document.getElementById('aihub-status-pill');
             if (pill) {
@@ -6702,6 +6735,41 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
         }
         function aihubRefresh() { if (typeof _gpuFetchHosts === 'function') _gpuFetchHosts().then(aihubRender); }
+        // [r225] AI Agent 페이지 백엔드 URL 설정 — 대화형 AI 설정(dwState.settings.backendUrl)과 동기화
+        function aihubLoadBackendUrl() {
+            var inp = document.getElementById('aihub-backend-url'); if (!inp) return;
+            try { var s = _dwGetSettings(); inp.value = s.backendUrl || ''; } catch (e) {}
+            aihubTestBackend(true);  // silent
+        }
+        function aihubSaveBackendUrl() {
+            var inp = document.getElementById('aihub-backend-url'); if (!inp) return;
+            var url = (inp.value || '').trim().replace(/\/$/, '');
+            try {
+                var s = _dwGetSettings();
+                s.backendUrl = url;
+                _dwSaveSettings(s);
+                showToast('✓ 백엔드 URL 저장됨 — 모든 AI 기능에 적용', 'success');
+                aihubTestBackend();
+            } catch (e) { showToast('저장 실패: ' + e.message, 'alert'); }
+        }
+        async function aihubTestBackend(silent) {
+            var statusEl = document.getElementById('aihub-backend-status');
+            var inp = document.getElementById('aihub-backend-url');
+            var url = inp ? (inp.value || '').trim().replace(/\/$/, '') : '';
+            if (!url) { if (statusEl) { statusEl.textContent = '미설정'; statusEl.style.color = 'var(--c-text3)'; } return; }
+            if (statusEl) { statusEl.textContent = '확인 중…'; statusEl.style.color = 'var(--c-text3)'; }
+            try {
+                var res = await fetch(url + '/health', { method: 'GET' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var j = await res.json();
+                var rev = j.server_revision || '?';
+                if (statusEl) { statusEl.textContent = '🟢 연결됨 · ' + rev + (j.ollama === 'connected' ? ' · Ollama OK' : ''); statusEl.style.color = '#2c6849'; }
+                if (!silent) showToast('🟢 백엔드 연결 OK (' + rev + ')', 'success');
+            } catch (e) {
+                if (statusEl) { statusEl.textContent = '🔴 연결 실패'; statusEl.style.color = '#d2393d'; }
+                if (!silent) showToast('🔴 연결 실패 — URL/서버/터널 확인', 'alert');
+            }
+        }
         function _aihubAgo(t) {
             if (!t) return '-';
             var ms = (typeof t === 'number') ? t : new Date(t).getTime();
@@ -10525,7 +10593,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r224';
+        var _AHUB_FRONT_REV = 'r225';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -30844,6 +30912,16 @@ ${intrLog}
         selectedWork: {wbs: {}, tasks: {}, issues: {}},
         running: false,
         log: [],
+        // [r225] 분해 실시간 상태 보존 — 페이지 이동 후 재진입해도 진행 표시
+        decompose: {
+            running: false,        // 분해 진행 중
+            abort: null,           // AbortController
+            stage: '',             // 현재 단계 텍스트
+            percent: 0,            // 진행률
+            log: [],               // 로그 라인
+            liveNodes: [],         // 실시간 추출 노드 (애니메이션용)
+            startedAt: 0,
+        },
     };
 
     var RFS_STEPS = [
@@ -31041,6 +31119,15 @@ ${intrLog}
     function rfsOpenSession(sid) {
         var s = _rfsState.sessions.find(function (x) { return x.id === sid; });
         if (!s) { showToast('세션을 찾지 못함', 'alert'); return; }
+        // [r225] 다른 세션 열 때 진행 중 분해가 있으면 경고 + 중단
+        if (_rfsState.decompose.running && _rfsState.current && _rfsState.current.id !== sid) {
+            if (_rfsState.decompose.abort) { try { _rfsState.decompose.abort.abort(); } catch (e) {} }
+            _rfsState.decompose.running = false;
+        }
+        // 다른 세션이면 분해 상태 리셋 (같은 세션 재진입은 보존)
+        if (!_rfsState.current || _rfsState.current.id !== sid) {
+            _rfsState.decompose = { running: false, abort: null, stage: '', percent: 0, log: [], liveNodes: [], startedAt: 0 };
+        }
         _rfsState.current = s;
         _rfsState.nodes = s.nodes || [];
         _rfsState.classifications = s.classifications || {};
@@ -31209,43 +31296,90 @@ ${intrLog}
     function rfsRenderDecomposeStep() {
         var main = document.getElementById('rfs-main'); if (!main) return;
         var nodeCount = (_rfsState.current.nodes || []).length;
+        var dc = _rfsState.decompose;
         var html = '<div style="max-width:1000px;margin:0 auto;">';
         html += '<h2 style="margin:0 0 8px;font-size:18px;">① 분해 — Decompose</h2>';
         html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">vault ' + _rfsState.vaultDocs.length + '개를 청크 분할 → LLM 노드 추출 → 전역 dedup → 카테고리 트리</div>';
-        html += '<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;">';
+        html += '<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
         html += '<label style="font-size:12px;">모델: <select id="rfs-decompose-model" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
         html += '<option value="">기본 (qwen2.5-coder:14b 추천)</option>';
         html += '<option value="qwen2.5-coder:14b">qwen2.5-coder:14b (속도)</option>';
         html += '<option value="qwen2.5-coder:32b">qwen2.5-coder:32b (품질)</option>';
         html += '</select></label>';
-        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunDecompose()">분해 시작</button>';
+        if (dc.running) {
+            html += '<button class="aihub-gpu-btn" onclick="rfsStopDecompose()" style="border-color:#d2393d;color:#d2393d;">■ 중단</button>';
+            html += '<span style="font-size:11.5px;color:var(--c-accent);font-weight:700;">⟳ 분해 진행 중…</span>';
+        } else {
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsRunDecompose()">' + (nodeCount ? '🔄 재분해' : '분해 시작') + '</button>';
+        }
         html += '</div>';
-        html += '<div id="rfs-decompose-progress" style="display:none;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;">';
-        html += '<div id="rfs-prog-stage" style="font-weight:700;color:var(--c-accent);">⏳ 준비 중...</div>';
-        html += '<div style="height:6px;background:var(--ios-fill);border-radius:3px;overflow:hidden;margin:8px 0;"><div id="rfs-prog-bar" style="height:100%;background:linear-gradient(90deg,var(--c-accent),#ec4899);width:0%;transition:width .25s;"></div></div>';
-        html += '<div id="rfs-prog-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;color:var(--c-text2);background:var(--c-paper);padding:6px 8px;border-radius:6px;"></div>';
+        // 진행 위젯 — running 이거나 직전 로그 있으면 표시 (상태 보존)
+        var showProg = dc.running || (dc.log && dc.log.length);
+        html += '<div id="rfs-decompose-progress" class="rfs-dc-prog' + (dc.running ? ' active' : '') + '" style="' + (showProg ? '' : 'display:none;') + 'padding:14px;border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);margin-bottom:14px;">';
+        html += '<div id="rfs-prog-stage" style="font-weight:700;color:var(--c-accent);display:flex;align-items:center;gap:8px;">' + (dc.running ? '<span class="rfs-dc-spinner"></span>' : '') + (_annEsc(dc.stage) || '⏳ 준비 중...') + '</div>';
+        html += '<div class="rfs-dc-bar' + (dc.running && dc.percent === 0 ? ' indeterminate' : '') + '" style="height:7px;background:var(--ios-fill);border-radius:4px;overflow:hidden;margin:10px 0;position:relative;"><div id="rfs-prog-bar" style="height:100%;background:linear-gradient(90deg,var(--c-accent),#ec4899);width:' + (dc.percent||0) + '%;transition:width .35s;border-radius:4px;"></div></div>';
+        // 실시간 추출 노드 칩 (애니메이션)
+        html += '<div style="font-size:11px;color:var(--c-text3);margin:6px 0 4px;">추출된 노드 <b id="rfs-dc-count" style="color:var(--c-accent);">' + (dc.liveNodes ? dc.liveNodes.length : 0) + '</b>개</div>';
+        html += '<div id="rfs-dc-nodes" style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;margin-bottom:8px;">';
+        (dc.liveNodes || []).slice(-40).forEach(function (n) {
+            html += '<span class="rfs-dc-chip">' + _annEsc((n.title||'').slice(0, 22)) + '</span>';
+        });
         html += '</div>';
-        if (nodeCount) {
+        html += '<div id="rfs-prog-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:120px;overflow-y:auto;color:var(--c-text2);background:var(--c-paper);padding:6px 8px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((dc.log||[]).join('\n')) + '</div>';
+        html += '</div>';
+        if (nodeCount && !dc.running) {
             html += '<div style="padding:12px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
             html += '✓ 노드 ' + nodeCount + '개 추출됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">분류로 →</button>';
             html += '</div>';
         }
         html += '</div>';
         main.innerHTML = html;
+        // 로그 스크롤 맨 아래로
+        var le = document.getElementById('rfs-prog-log'); if (le) le.scrollTop = le.scrollHeight;
+    }
+
+    function rfsStopDecompose() {
+        var dc = _rfsState.decompose;
+        if (dc.abort) { try { dc.abort.abort(); } catch (e) {} }
+        dc.running = false;
+        dc.stage = '■ 사용자 중단됨';
+        // 백엔드 busy 도 해제
+        var url = rfsBackEnd();
+        if (url) { fetch(url + '/llm/force-clear', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(function(){}); }
+        rfsRenderDecomposeStep();
     }
 
     async function rfsRunDecompose() {
         var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
         if (!_rfsState.vaultDocs.length) { showToast('vault 가 비어있습니다', 'alert'); return; }
-        var model = document.getElementById('rfs-decompose-model').value || null;
-        var progEl = document.getElementById('rfs-decompose-progress');
-        var stageEl = document.getElementById('rfs-prog-stage');
-        var barEl = document.getElementById('rfs-prog-bar');
-        var logEl = document.getElementById('rfs-prog-log');
-        progEl.style.display = 'block';
-        function _log(msg) { logEl.textContent += '\n' + msg; logEl.scrollTop = logEl.scrollHeight; }
-        _rfsState.running = true;
-        var nodes = [];
+        if (_rfsState.decompose.running) { showToast('이미 분해 진행 중', 'alert'); return; }
+        // [r225] busy 사전 체크 — stuck 이면 강제 해제 안내
+        try {
+            var bres = await fetch(url + '/llm/busy');
+            if (bres.ok) {
+                var bj = await bres.json();
+                if (bj.active) {
+                    var ok = await uiConfirm({
+                        title: '⚠ 다른 LLM 작업 진행 중',
+                        message: '현재 "' + (bj.human || bj.kind || '작업') + '" 이(가) 백엔드 GPU를 점유 중입니다.\n\n끊긴 이전 작업이 안 풀린 경우 "강제 해제 후 시작" 을 누르세요.',
+                        confirmText: '강제 해제 후 시작',
+                        cancelText: '대기'
+                    });
+                    if (!ok) return;
+                    await fetch(url + '/llm/force-clear', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+                }
+            }
+        } catch (e) { /* busy 체크 실패는 무시하고 진행 */ }
+
+        var modelSel = document.getElementById('rfs-decompose-model');
+        var model = (modelSel && modelSel.value) || null;
+        var dc = _rfsState.decompose;
+        dc.running = true; dc.stage = '🚀 분해 요청…'; dc.percent = 0;
+        dc.log = []; dc.liveNodes = []; dc.startedAt = Date.now();
+        var ac = new AbortController(); dc.abort = ac;
+        rfsRenderDecomposeStep();
+        function _log(msg) { dc.log.push(msg); if (dc.log.length > 300) dc.log = dc.log.slice(-300); _rfsDcUpdateLog(); }
+
         try {
             var body = {
                 session_id: _rfsState.current.id, project_id: activeProjectId,
@@ -31254,13 +31388,14 @@ ${intrLog}
             };
             var res = await fetch(url + '/refinery/decompose', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(body),
+                body: JSON.stringify(body), signal: ac.signal,
             });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0,120)); }
             if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
-            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            var reader = res.body.getReader(); var decd = new TextDecoder(); var buf = '';
             while (true) {
-                var ch = await reader.read(); if (ch.done) break;
-                buf += dec.decode(ch.value, {stream: true});
+                var chk = await reader.read(); if (chk.done) break;
+                buf += decd.decode(chk.value, {stream: true});
                 var lines = buf.split('\n'); buf = lines.pop() || '';
                 for (var i = 0; i < lines.length; i++) {
                     var line = lines[i];
@@ -31269,32 +31404,63 @@ ${intrLog}
                     if (!data || data === '[DONE]') continue;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.event === 'stage') { stageEl.textContent = '🔄 ' + (ev.message || ev.stage); _log('STAGE ' + (ev.message || '')); }
+                        if (ev.event === 'stage') { dc.stage = '🔄 ' + (ev.message || ev.stage); _rfsDcUpdateStage(); _log('STAGE ' + (ev.message || '')); }
                         else if (ev.event === 'chunk_start') { _log('▶ 청크 ' + ev.current + '/' + ev.total + ' (' + (ev.vault_title||'') + ')'); }
-                        else if (ev.event === 'chunk_done') { barEl.style.width = ev.percent + '%'; _log('✓ 청크 ' + ev.current + '/' + ev.total + ' — 누적 ' + ev.nodes_so_far + ' 노드'); }
-                        else if (ev.event === 'node_added') { nodes.push(ev.node); }
+                        else if (ev.event === 'chunk_done') { dc.percent = ev.percent; _rfsDcUpdateBar(); _log('✓ 청크 ' + ev.current + '/' + ev.total + ' — 누적 ' + ev.nodes_so_far + ' 노드'); }
+                        else if (ev.event === 'node_added') { dc.liveNodes.push(ev.node); _rfsDcAddNodeChip(ev.node); }
                         else if (ev.event === 'dedup_done') { _log('🧹 dedup: ' + ev.merged + ' merged → ' + ev.kept + ' kept'); }
                         else if (ev.event === 'tree_composed') { _log('🌲 트리 합성 완료'); }
                         else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'error') { _log('❌ ' + ev.message); }
                         else if (ev.event === 'done') {
-                            stageEl.textContent = '✅ 완료 — 노드 ' + ev.node_count + '개 (' + ev.elapsed_sec + 's)';
-                            barEl.style.width = '100%';
+                            dc.stage = '✅ 완료 — 노드 ' + ev.node_count + '개 (' + ev.elapsed_sec + 's)';
+                            dc.percent = 100; _rfsDcUpdateStage(); _rfsDcUpdateBar();
                             _log('✅ 완료 — 노드 ' + ev.node_count + ' (skip ' + ev.skipped_meta + ' meta)');
-                            // 세션에 노드 저장
                             await rfsPatchSession({nodes: ev.nodes, status: 'classifying'}, 'decomposed', '노드 ' + ev.node_count);
                             _rfsState.nodes = ev.nodes;
-                            setTimeout(function () { rfsRenderDecomposeStep(); }, 500);
+                            dc.running = false; dc.abort = null;
+                            setTimeout(function () { if (_rfsState.step === 3) rfsRenderDecomposeStep(); }, 600);
                         }
                     } catch (e) {}
                 }
             }
+            // 스트림 끝났는데 done 안 왔으면
+            if (dc.running) { dc.running = false; dc.abort = null; }
         } catch (e) {
-            stageEl.textContent = '❌ 실패: ' + e.message;
-            _log('❌ ' + e.message);
-        } finally {
-            _rfsState.running = false;
+            if (e.name === 'AbortError') { dc.stage = '■ 중단됨'; }
+            else { dc.stage = '❌ 실패: ' + (e.message||e); _log('❌ ' + (e.message||e)); }
+            dc.running = false; dc.abort = null;
+            if (_rfsState.step === 3) rfsRenderDecomposeStep();
         }
+    }
+
+    // [r225] 진행 위젯 부분 갱신 — 전체 리렌더 없이 (애니메이션 보존)
+    function _rfsDcUpdateStage() {
+        var el = document.getElementById('rfs-prog-stage'); var dc = _rfsState.decompose;
+        if (el) el.innerHTML = (dc.running ? '<span class="rfs-dc-spinner"></span>' : '') + _annEsc(dc.stage || '');
+    }
+    function _rfsDcUpdateBar() {
+        var bar = document.getElementById('rfs-prog-bar'); var dc = _rfsState.decompose;
+        var wrap = bar && bar.parentNode;
+        if (bar) { bar.style.width = (dc.percent||0) + '%'; if (dc.percent > 0 && wrap) wrap.classList.remove('indeterminate'); }
+    }
+    function _rfsDcUpdateLog() {
+        var el = document.getElementById('rfs-prog-log'); var dc = _rfsState.decompose;
+        if (el) { el.textContent = (dc.log||[]).join('\n'); el.scrollTop = el.scrollHeight; }
+    }
+    function _rfsDcAddNodeChip(node) {
+        var box = document.getElementById('rfs-dc-nodes'); var dc = _rfsState.decompose;
+        var cnt = document.getElementById('rfs-dc-count'); if (cnt) cnt.textContent = dc.liveNodes.length;
+        if (!box) return;
+        var chip = document.createElement('span');
+        chip.className = 'rfs-dc-chip rfs-dc-chip-new';
+        chip.textContent = (node.title || '').slice(0, 22);
+        box.appendChild(chip);
+        // 40개 초과 시 앞 제거
+        while (box.children.length > 40) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+        // 애니메이션 클래스 제거 (재사용)
+        setTimeout(function () { chip.classList.remove('rfs-dc-chip-new'); }, 600);
     }
 
     // ── 분류 단계
