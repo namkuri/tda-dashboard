@@ -10689,7 +10689,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r230';
+        var _AHUB_FRONT_REV = 'r231';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31020,6 +31020,11 @@ ${intrLog}
             stageStartedAt: 0,     // [r229] 현재 단계 시작 시각 (경과초)
             stageTimer: null,      // [r229] 1초 갱신 타이머
         },
+        // [r231] 위키 트리 생성(compose) 진행 상태 보존 — 분해와 동일 패턴
+        compose: {
+            running: false, abort: null, stage: '', percent: 0, log: [],
+            startedAt: 0, stageTimer: null,
+        },
     };
 
     var RFS_STEPS = [
@@ -31047,7 +31052,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r230';
+    var _RFS_FRONT_REV = 'r231';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31224,10 +31229,12 @@ ${intrLog}
             if (_rfsState.decompose.abort) { try { _rfsState.decompose.abort.abort(); } catch (e) {} }
             _rfsState.decompose.running = false;
         }
-        // 다른 세션이면 분해 상태 리셋 (같은 세션 재진입은 보존)
+        // 다른 세션이면 분해/compose 상태 리셋 (같은 세션 재진입은 보존)
         if (!_rfsState.current || _rfsState.current.id !== sid) {
-            _rfsDcStopTicker();
+            _rfsDcStopTicker(); _rfsCpStopTicker();
             _rfsState.decompose = { running: false, abort: null, stage: '', percent: 0, log: [], liveNodes: [], startedAt: 0, stageStartedAt: 0, stageTimer: null };
+            _rfsState.compose = { running: false, abort: null, stage: '', percent: 0, log: [], startedAt: 0, stageTimer: null };
+            _rfsState.composedFiles = [];
         }
         _rfsState.current = s;
         _rfsState.nodes = s.nodes || [];
@@ -31253,6 +31260,10 @@ ${intrLog}
                 try {
                     if (typeof _mmpExpandHtmlEmbeds === 'function') content = await _mmpExpandHtmlEmbeds(d);
                 } catch (e) {}
+                // [r231] vault 가 raw HTML(.html 파일)이면 style/script/태그 제거 — CSS 누출 차단
+                if (/<style|<!doctype|<html|<body/i.test(content) && typeof _mmpStripHtml === 'function') {
+                    content = _mmpStripHtml(content);
+                }
                 docs.push({id: d.id, title: d.title, content: content});
             }
         }
@@ -31818,10 +31829,21 @@ ${intrLog}
         html += '<div style="font-weight:700;margin-bottom:8px;">분류 요약</div>';
         html += '<div>✅ 확정 ' + summary.canon + ' · 🧪 가설 ' + summary.hyp + ' · 📋 백로그 ' + summary.later + ' · ❌ 폐기 ' + summary.cut + '</div>';
         html += '</div>';
-        if (s.review_request_id) {
+        if (s.review_request_id && s.review_request_id !== '(skipped)') {
             html += '<div style="padding:14px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
-            html += '결재 발행됨 · ID: <code>' + s.review_request_id + '</code><br>';
-            html += '<button class="aihub-gpu-btn primary" onclick="rfsGoStep(6)" style="margin-top:10px;">정의서 작성으로 →</button>';
+            html += '결재 발행됨 · ID: <code>' + s.review_request_id + '</code> <span id="rfs-review-state" style="font-size:11px;color:var(--c-text3);">상태 확인 중…</span><br>';
+            html += '<div style="margin-top:10px;display:flex;gap:8px;">';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsGoStep(6)">정의서 작성으로 →</button>';
+            // [r231] 결재 취소 — review_request_id 클리어 + status 롤백
+            html += '<button class="aihub-gpu-btn" onclick="rfsCancelReview()" style="border-color:#d2393d;color:#d2393d;">결재 취소·재발행</button>';
+            html += '</div>';
+            html += '</div>';
+            // 결재 실제 상태 비동기 확인 (삭제됐으면 자동 롤백 안내)
+            setTimeout(rfsCheckReviewState, 50);
+        } else if (s.review_request_id === '(skipped)') {
+            html += '<div style="padding:14px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);">';
+            html += '⏭ 결재 생략됨 (1인 모드) <button class="aihub-gpu-btn primary" onclick="rfsGoStep(6)" style="margin-left:10px;">정의서 작성으로 →</button>';
+            html += ' <button class="aihub-gpu-btn" onclick="rfsCancelReview()" style="margin-left:6px;">분류로 되돌리기</button>';
             html += '</div>';
         } else {
             var canProposer = (s.created_by === rfsCurrentUser());
@@ -31868,6 +31890,41 @@ ${intrLog}
         rfsGoStep(6);
     }
 
+    // [r231] 결재 취소 — review_request_id 클리어 + status 를 분류(classifying) 로 롤백
+    async function rfsCancelReview() {
+        var ok = await uiConfirm({title: '결재 취소', message: '결재를 취소하고 분류 단계로 되돌립니다. (이미 발행된 결재함의 항목은 별도 삭제 필요)', confirmText: '취소·롤백'});
+        if (!ok) return;
+        await rfsPatchSession({review_request_id: null, status: 'classifying'}, 'review_cancelled', '결재 취소·롤백');
+        showToast('결재 취소됨 — 분류 단계로 롤백', 'info');
+        rfsRenderReviewStep();
+    }
+    // [r231] 결재 실제 상태 조회 — 결재함에서 삭제됐으면 자동 롤백 안내
+    async function rfsCheckReviewState() {
+        var s = _rfsState.current; var el = document.getElementById('rfs-review-state');
+        if (!s || !s.review_request_id || !el) return;
+        // currentData.reviews 또는 supabase 조회
+        var rv = null;
+        try {
+            if (window.currentData && Array.isArray(currentData.reviews)) {
+                rv = currentData.reviews.find(function (x) { return x && x.id === s.review_request_id; });
+            }
+        } catch (e) {}
+        if (!rv && supabaseClient) {
+            try {
+                var r = await supabaseClient.from('review_requests').select('id,status').eq('id', s.review_request_id).limit(1).execute ? null : null;
+            } catch (e) {}
+        }
+        if (rv) {
+            var stLabel = ({pending:'⏳ 대기',approved:'✅ 승인',rejected:'❌ 반려',expired:'⌛ 만료',closed:'🔒 종료'})[rv.status] || rv.status;
+            el.textContent = '· ' + stLabel;
+            el.style.color = rv.status === 'approved' ? '#2c6849' : (rv.status === 'rejected' ? '#d2393d' : 'var(--c-text3)');
+        } else {
+            // 결재 못 찾음 — 삭제됐을 수 있음
+            el.innerHTML = '· ⚠ 결재함에서 찾을 수 없음 (삭제됨?) <a href="#" onclick="event.preventDefault();rfsCancelReview()" style="color:#d2393d;">분류로 롤백</a>';
+            el.style.color = '#d2393d';
+        }
+    }
+
     // ── 정의서 단계
     function rfsRenderComposeStep() {
         var main = document.getElementById('rfs-main'); if (!main) return;
@@ -31876,14 +31933,22 @@ ${intrLog}
         var html = '<div style="max-width:1300px;margin:0 auto;">';
         html += '<h2 style="margin:0 0 8px;font-size:18px;">④ 정의서 + 위키 트리</h2>';
         html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">옵시디언 [[]] 링크 + frontmatter JSON 메타데이터 자동 작성. 본문/파일명/저장 대상 모두 편집 가능.</div>';
-        html += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
-        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunCompose()">' + (hasComposed ? '🔄 재생성' : '✨ 트리 생성') + '</button>';
-        if (hasComposed) html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(7)">위키 적용으로 →</button>';
+        var cp = _rfsState.compose;
+        html += '<div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">';
+        if (cp.running) {
+            html += '<button class="aihub-gpu-btn" onclick="rfsStopCompose()" style="border-color:#d2393d;color:#d2393d;">■ 중단</button>';
+            html += '<span style="font-size:11.5px;color:var(--c-accent);font-weight:700;">⟳ 트리 생성 진행 중…</span>';
+        } else {
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsRunCompose()">' + (hasComposed ? '🔄 재생성' : '✨ 트리 생성') + '</button>';
+            if (hasComposed) html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(7)">위키 적용으로 →</button>';
+        }
         html += '</div>';
-        html += '<div id="rfs-compose-progress" style="display:none;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;">';
-        html += '<div id="rfs-compose-stage" style="font-weight:700;color:var(--c-accent);">⏳</div>';
-        html += '<div style="height:6px;background:var(--ios-fill);border-radius:3px;overflow:hidden;margin:8px 0;"><div id="rfs-compose-bar" style="height:100%;background:linear-gradient(90deg,var(--c-accent),#ec4899);width:0%;transition:width .25s;"></div></div>';
-        html += '<div id="rfs-compose-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;color:var(--c-text2);background:var(--c-paper);padding:6px 8px;border-radius:6px;"></div>';
+        // [r231] 진행 위젯 — running 또는 직전 로그 있으면 표시 (상태 보존)
+        var showCp = cp.running || (cp.log && cp.log.length);
+        html += '<div id="rfs-compose-progress" style="' + (showCp ? '' : 'display:none;') + 'padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;">';
+        html += '<div id="rfs-compose-stage" style="font-weight:700;color:var(--c-accent);">' + (cp.running ? '<span class="rfs-dc-spinner"></span>' : '') + _annEsc(cp.stage || '⏳') + '</div>';
+        html += '<div style="height:6px;background:var(--ios-fill);border-radius:3px;overflow:hidden;margin:8px 0;"><div id="rfs-compose-bar" style="height:100%;background:linear-gradient(90deg,var(--c-accent),#ec4899);width:' + (cp.percent||0) + '%;transition:width .25s;"></div></div>';
+        html += '<div id="rfs-compose-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;color:var(--c-text2);background:var(--c-paper);padding:6px 8px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((cp.log||[]).join('\n')) + '</div>';
         html += '</div>';
         // 미리보기
         if (hasComposed) {
@@ -31931,13 +31996,28 @@ ${intrLog}
     function rfsUpdateFileTarget(fi, v) { _rfsState.composedFiles[fi].target_kind = v; }
     function rfsUpdateFileBody(fi, v) { _rfsState.composedFiles[fi].body = v; }
 
+    // [r231] compose 진행 위젯 부분 갱신 (분해와 동일 패턴 — 상태 보존)
+    function _rfsCpUpdateStage() {
+        var el = document.getElementById('rfs-compose-stage'); var cp = _rfsState.compose;
+        if (!el) return;
+        var sp = cp.running ? '<span class="rfs-dc-spinner"></span>' : '';
+        var et = (cp.running && cp.startedAt) ? ' <span style="color:var(--c-text3);font-weight:400;">(' + Math.floor((Date.now()-cp.startedAt)/1000) + 's)</span>' : '';
+        el.innerHTML = sp + _annEsc(cp.stage || '') + et;
+    }
+    function _rfsCpUpdateBar() { var b = document.getElementById('rfs-compose-bar'); if (b) b.style.width = (_rfsState.compose.percent||0) + '%'; }
+    function _rfsCpUpdateLog() { var el = document.getElementById('rfs-compose-log'); if (el) { el.textContent = (_rfsState.compose.log||[]).join('\n'); el.scrollTop = el.scrollHeight; } }
+    function _rfsCpStartTicker() { _rfsCpStopTicker(); _rfsState.compose.stageTimer = setInterval(function(){ if(_rfsState.compose.running)_rfsCpUpdateStage(); else _rfsCpStopTicker(); }, 1000); }
+    function _rfsCpStopTicker() { if (_rfsState.compose.stageTimer) { clearInterval(_rfsState.compose.stageTimer); _rfsState.compose.stageTimer=null; } }
+
     async function rfsRunCompose() {
         var url = rfsBackEnd(); if (!url) return;
-        var progEl = document.getElementById('rfs-compose-progress'); progEl.style.display = 'block';
-        var stageEl = document.getElementById('rfs-compose-stage');
-        var barEl = document.getElementById('rfs-compose-bar');
-        var logEl = document.getElementById('rfs-compose-log');
-        function _log(m) { logEl.textContent += '\n' + m; logEl.scrollTop = logEl.scrollHeight; }
+        if (_rfsState.compose.running) { showToast('이미 트리 생성 진행 중', 'alert'); return; }
+        var cp = _rfsState.compose;
+        cp.running = true; cp.stage = '🚀 트리 합성 요청…'; cp.percent = 0; cp.log = []; cp.startedAt = Date.now();
+        var ac = new AbortController(); cp.abort = ac;
+        rfsRenderComposeStep();
+        _rfsCpStartTicker();
+        function _log(m) { cp.log.push(m); if (cp.log.length > 300) cp.log = cp.log.slice(-300); _rfsCpUpdateLog(); }
         try {
             var s = _rfsState.current;
             var res = await fetch(url + '/refinery/compose-tree', {
@@ -31945,10 +32025,10 @@ ${intrLog}
                 body: JSON.stringify({
                     session_id: s.id, project_id: activeProjectId, user_id: rfsCurrentUser(),
                     nodes: s.nodes||[], classifications: s.classifications||{},
-                    vault_docs: _rfsState.vaultDocs,
-                    session_title: s.title,
-                }),
+                    vault_docs: _rfsState.vaultDocs, session_title: s.title,
+                }), signal: ac.signal,
             });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0,120)); }
             if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
             var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
             while (true) {
@@ -31960,23 +32040,39 @@ ${intrLog}
                     var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.event === 'stage') { stageEl.textContent = '🔄 ' + ev.message; _log('STAGE: ' + ev.message); }
+                        if (ev.event === 'stage') { cp.stage = '🔄 ' + ev.message; _rfsCpUpdateStage(); _log('STAGE: ' + ev.message); }
                         else if (ev.event === 'tree_built') { _log('🌲 트리 골격 — ' + ev.files_count + ' 파일'); }
-                        else if (ev.event === 'file_start') { _log('▶ [' + ev.current + '/' + ev.total + '] ' + ev.path); }
-                        else if (ev.event === 'file_done') { barEl.style.width = ev.percent + '%'; _log('✓ ' + ev.path + ' (' + ev.body_len + '자)'); }
-                        else if (ev.event === 'tree_composed') { _rfsState.composedFiles = ev.files; _log('🔗 옵시디언 링크 후처리 완료'); }
+                        else if (ev.event === 'file_start') { cp.stage = '🔄 파일 작성 [' + ev.current + '/' + ev.total + '] ' + (ev.path||''); _rfsCpUpdateStage(); _log('▶ [' + ev.current + '/' + ev.total + '] ' + ev.path); }
+                        else if (ev.event === 'file_done') { cp.percent = ev.percent; _rfsCpUpdateBar(); _log('✓ ' + ev.path + ' (' + ev.body_len + '자)'); }
+                        else if (ev.event === 'tree_composed') { _rfsState.composedFiles = ev.files; _log('🔗 옵시디언 링크 후처리 완료 (' + (ev.files_count||0) + '파일)'); }
                         else if (ev.event === 'done') {
-                            stageEl.textContent = '✅ 완료';
-                            barEl.style.width = '100%';
-                            _log('✅ 완료');
-                            await rfsPatchSession({generated_tree: {files: _rfsState.composedFiles}}, 'composed', _rfsState.composedFiles.length + '개 파일');
-                            setTimeout(function () { rfsRenderComposeStep(); }, 500);
+                            cp.stage = '✅ 완료 — ' + ((_rfsState.composedFiles||[]).length) + '개 파일'; cp.percent = 100;
+                            cp.running = false; cp.abort = null; _rfsCpStopTicker();
+                            _rfsCpUpdateStage(); _rfsCpUpdateBar(); _log('✅ 완료');
+                            // 메모리 우선 + best-effort PATCH (generated_tree 큰 경우 대비)
+                            _rfsState.current.generated_tree = {files: _rfsState.composedFiles};
+                            var saved = await rfsPatchSession({generated_tree: {files: _rfsState.composedFiles}}, 'composed', (_rfsState.composedFiles||[]).length + '개 파일');
+                            if (!saved) { _log('⚠ 트리 DB 저장 실패 — 메모리로 진행. 새로고침 전 위키 적용 권장.'); }
+                            setTimeout(function () { if (_rfsState.step === 6) rfsRenderComposeStep(); }, 500);
                         } else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'error') { _log('❌ ' + ev.message); }
                     } catch (e) {}
                 }
             }
-        } catch (e) { stageEl.textContent = '❌ ' + e.message; _log('❌ ' + e.message); }
+            if (cp.running) { cp.running = false; cp.abort = null; _rfsCpStopTicker(); }
+        } catch (e) {
+            if (e.name === 'AbortError') { cp.stage = '■ 중단됨'; }
+            else { cp.stage = '❌ ' + (e.message||e); _log('❌ ' + (e.message||e)); }
+            cp.running = false; cp.abort = null; _rfsCpStopTicker();
+            if (_rfsState.step === 6) rfsRenderComposeStep();
+        }
+    }
+    function rfsStopCompose() {
+        var cp = _rfsState.compose;
+        if (cp.abort) { try { cp.abort.abort(); } catch (e) {} }
+        cp.running = false; _rfsCpStopTicker(); cp.stage = '■ 사용자 중단됨';
+        var url = rfsBackEnd(); if (url) fetch(url + '/llm/force-clear', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(function(){});
+        rfsRenderComposeStep();
     }
 
     // ── 위키 적용

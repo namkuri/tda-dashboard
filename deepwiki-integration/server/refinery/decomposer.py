@@ -52,17 +52,52 @@ def _normalize_title(t: str) -> str:
     return re.sub(r"\s+", " ", (t or "").lower().strip())
 
 
-def _chunk_vault(vault_docs: List[Dict[str, Any]], chunk_size: int = 4000) -> List[Dict[str, Any]]:
+def _strip_html_css(text: str) -> str:
+    """[r231] HTML 본문에서 style/script/CSS/태그 제거 — vault 가 .html 일 때
+    <style> 의 CSS 코드가 본문으로 새어들어가 'CSS 스타일링/폰트 설정' 같은
+    무관 노드가 추출되던 문제 차단."""
+    if not text:
+        return text
+    t = text
+    # style/script 블록 통째 제거 (CSS·JS 코드)
+    t = re.sub(r"<style[^>]*>.*?</style>", " ", t, flags=re.DOTALL | re.IGNORECASE)
+    t = re.sub(r"<script[^>]*>.*?</script>", " ", t, flags=re.DOTALL | re.IGNORECASE)
+    t = re.sub(r"<!--.*?-->", " ", t, flags=re.DOTALL)
+    # 블록 경계 → 줄바꿈 (문단 보존)
+    t = re.sub(r"</(p|div|li|h[1-6]|tr|section|article|figure|figcaption)>", "\n", t, flags=re.IGNORECASE)
+    t = re.sub(r"<(br|hr)[^>]*>", "\n", t, flags=re.IGNORECASE)
+    # 나머지 태그 제거
+    t = re.sub(r"<[^>]+>", " ", t)
+    # 엔티티
+    t = (t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<")
+           .replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'"))
+    # 공백 정리
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
+def _looks_html(text: str) -> bool:
+    low = (text or "")[:2000].lower()
+    return ("<style" in low) or ("<!doctype" in low) or ("<html" in low) or ("<body" in low)
+
+
+def _chunk_vault(vault_docs: List[Dict[str, Any]], chunk_size: int = 6000) -> List[Dict[str, Any]]:
     """vault 본문 합쳐 청크 단위 분할. 청크마다 출처 doc 정보 보존.
 
-    1) 줄 단위로 누적 (chunk_size 근처에서 새 청크)
-    2) 한 줄이 chunk_size 초과면 강제 글자 단위 분할
+    [r231] HTML 이면 style/script/태그 제거 후 청크. chunk_size 6000 으로 키워
+    청크 수↓(노드 과다 완화). 한 줄이 chunk_size 초과면 강제 글자 단위 분할.
     """
     out = []
     for vd in vault_docs:
         body = (vd.get("content") or "").strip()
         if not body:
             continue
+        # [r231] HTML 본문이면 CSS/script/태그 제거
+        if _looks_html(body):
+            body = _strip_html_css(body)
+            if not body.strip():
+                continue
         # 매우 긴 한 줄 강제 분할
         # 줄단위 → 누적 → chunk_size 초과 시 split
         lines = body.split("\n")
@@ -90,17 +125,24 @@ def _chunk_vault(vault_docs: List[Dict[str, Any]], chunk_size: int = 4000) -> Li
     return out
 
 
-_SYSTEM_DECOMPOSE = """당신은 연구 문서를 정련해 마인드맵 노드로 추출하는 도구입니다.
+_SYSTEM_DECOMPOSE = """당신은 연구 문서에서 **핵심 개념(대분류·중분류)만** 골라내는 도구입니다.
+
+[가장 중요한 규칙 — 핵심만]
+- 이 청크의 **대주제·중주제·핵심 결정·핵심 가설·핵심 리스크만** 추출합니다.
+- ❌ 사소한 디테일, 예시, 부연 설명, 형식·UI·스타일·CSS·폰트·레이아웃, 단순 나열 항목,
+  반복되는 개념은 노드로 만들지 마세요.
+- 청크 하나당 **2~5개**가 적정. 정말 핵심이 없으면 0개. 절대 10개 넘기지 마세요.
+- "이게 문서 전체에서 중요한가?"를 스스로 물어 통과한 것만 노드화.
 
 [엄격 규칙]
-1. **vault 청크 안 텍스트만 노드화**. 청크에 없는 일반 지식·메타 어구·시스템 메시지 어구는 노드가 될 수 없음.
+1. **vault 청크 안 텍스트만 노드화**. 청크에 없는 일반 지식·메타 어구·시스템 어구 금지.
 2. 각 노드 title 은 1~5 단어 키워드. 서술 금지.
 3. 출력은 ```json ... ``` 블록 안 JSON 한 개:
 ```json
 {
   "nodes": [
     {
-      "title": "키워드",
+      "title": "핵심 키워드",
       "summary": "1~2 문장 요약",
       "span_text": "청크에서 가장 관련 깊은 30~80자 원문 발췌",
       "ai_confidence": 0~100,
@@ -110,8 +152,8 @@ _SYSTEM_DECOMPOSE = """당신은 연구 문서를 정련해 마인드맵 노드�
   ]
 }
 ```
-4. canon = 확정된 사실/시스템. hyp = 가설/playtest 필요. later = 좋은 아이디어지만 MVP 이후. cut = 폐기/범위 밖.
-5. risk = 경고/리스크, decision = 결정 사안, fact = 단순 사실, hypothesis = 검증 필요 가설, question = 미해결 질문, concept = 일반 개념.
+4. canon = 확정된 핵심 사실/시스템. hyp = 핵심 가설/playtest 필요. later = MVP 이후. cut = 폐기/범위 밖.
+5. risk = 핵심 리스크, decision = 핵심 결정, fact = 핵심 사실, question = 핵심 미해결 질문, concept = 핵심 개념.
 """
 
 
@@ -173,7 +215,7 @@ async def decompose(
 {ch['text']}
 <<<END>>>
 
-JSON 한 개만 출력. nodes 배열에 최소 1개, 최대 12개 노드.
+JSON 한 개만 출력. **핵심 개념만 2~5개** (사소·스타일·형식·예시 제외, 없으면 0개).
 """
         try:
             buf = ""
