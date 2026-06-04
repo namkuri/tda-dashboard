@@ -3104,6 +3104,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .aihub-idx-stage { font-size: 12.5px; font-weight: 700; color: var(--c-accent); margin-bottom: 6px; }
         .aihub-idx-log { max-height: 200px; overflow-y: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; color: var(--c-text2); line-height: 1.6; white-space: pre-wrap; word-break: break-word; background: var(--c-card); border: 1px solid var(--c-border); border-radius: 6px; padding: 8px 10px; }
         .aihub-gpu-list { display: flex; flex-direction: column; gap: 8px; }
+        /* [r227] 내 백엔드 등록 폼 — GPU 카드 상단 */
+        .aihub-gpu-register { padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--c-border); border-radius: 9px; background: var(--c-card); }
         .aihub-gpu-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--c-border); border-radius: 9px; background: var(--c-paper); flex-wrap: wrap; }
         .aihub-gpu-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
         .aihub-gpu-dot.online { background: #2e9e5b; box-shadow: 0 0 8px rgba(46,158,91,.5); }
@@ -5550,17 +5552,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     </div>
                 </section>
 
-                <!-- [r225] 백엔드 URL 설정 -->
-                <section class="aihub-card">
-                    <div class="aihub-card-head"><h3>🔌 백엔드 서버 URL</h3><span class="aihub-card-sub" id="aihub-backend-status">확인 중…</span></div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                        <input id="aihub-backend-url" type="text" placeholder="http://localhost:8000 또는 Cloudflare 터널 URL" style="flex:1;min-width:280px;font-size:12.5px;padding:7px 11px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);">
-                        <button class="aihub-gpu-btn primary" onclick="aihubSaveBackendUrl()" style="font-size:12px;">저장</button>
-                        <button class="aihub-gpu-btn" onclick="aihubTestBackend()" style="font-size:12px;">연결 테스트</button>
-                    </div>
-                    <div class="aihub-hint">대화형 AI · Deep Wiki · 마인드맵 · 연구 정련소 모두 이 백엔드를 사용합니다. (대화형 AI 설정과 동기화)</div>
-                </section>
-
                 <!-- [r226] Gemini 계정 (무료 API 키) -->
                 <section class="aihub-card">
                     <div class="aihub-card-head"><h3>🌟 Gemini 계정 (무료 API)</h3><span class="aihub-card-sub" id="aihub-gemini-status">미등록</span></div>
@@ -5575,6 +5566,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <!-- GPU 서버 / 터널 상태 -->
                 <section class="aihub-card">
                     <div class="aihub-card-head"><h3>🖥 GPU 서버 / 터널 상태</h3><span class="aihub-card-sub" id="aihub-gpu-count">로딩 중…</span></div>
+                    <!-- [r227] 내 백엔드 URL 등록 → 팀 공유 (gpu_hosts) -->
+                    <div class="aihub-gpu-register">
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                            <input id="aihub-backend-url" type="text" placeholder="내 백엔드 URL (http://localhost:8000 또는 Cloudflare 터널)" style="flex:1;min-width:260px;font-size:12.5px;padding:7px 11px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);">
+                            <button class="aihub-gpu-btn primary" onclick="aihubSaveBackendUrl()" style="font-size:12px;">저장</button>
+                            <button class="aihub-gpu-btn" onclick="aihubTestBackend()" style="font-size:12px;">연결 테스트</button>
+                            <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                                <input type="checkbox" id="aihub-share-toggle" onchange="aihubToggleShare(this.checked)"> 🚀 팀에 공유
+                            </label>
+                            <span class="aihub-card-sub" id="aihub-backend-status" style="margin-left:auto;">확인 중…</span>
+                        </div>
+                        <div class="aihub-hint">내 백엔드 URL을 저장하면 대화형 AI·Deep Wiki·마인드맵·연구 정련소가 이 서버를 씁니다. <b>🚀 팀에 공유</b>를 켜면 <code>gpu_hosts</code>에 등록되어 팀원이 아래 목록에서 발견·▶사용할 수 있습니다 (30초 헬스체크, 탭 닫으면 자동 오프라인).</div>
+                    </div>
                     <div id="aihub-gpu-list" class="aihub-gpu-list"></div>
                 </section>
 
@@ -6749,9 +6753,30 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function aihubRefresh() { if (typeof _gpuFetchHosts === 'function') _gpuFetchHosts().then(aihubRender); }
         // [r225] AI Agent 페이지 백엔드 URL 설정 — 대화형 AI 설정(dwState.settings.backendUrl)과 동기화
         function aihubLoadBackendUrl() {
-            var inp = document.getElementById('aihub-backend-url'); if (!inp) return;
-            try { var s = _dwGetSettings(); inp.value = s.backendUrl || ''; } catch (e) {}
+            var inp = document.getElementById('aihub-backend-url');
+            var toggle = document.getElementById('aihub-share-toggle');
+            try {
+                var s = _dwGetSettings();
+                if (inp) inp.value = s.backendUrl || '';
+                if (toggle) toggle.checked = !!s.shareGpu;  // [r227] 공유 상태 반영
+            } catch (e) {}
             aihubTestBackend(true);  // silent
+        }
+        // [r227] 팀 공유 토글 — gpu_hosts 등록/해제
+        function aihubToggleShare(on) {
+            var s = _dwGetSettings();
+            if (on && !s.backendUrl) {
+                showToast('먼저 백엔드 URL을 저장하세요', 'alert');
+                var t = document.getElementById('aihub-share-toggle'); if (t) t.checked = false;
+                return;
+            }
+            s.shareGpu = !!on;
+            _dwSaveSettings(s);
+            if (typeof _gpuApplyShareToggle === 'function') _gpuApplyShareToggle();
+            else if (on && typeof _gpuStartHeartbeat === 'function') _gpuStartHeartbeat();
+            else if (!on && typeof _gpuStopHeartbeat === 'function') _gpuStopHeartbeat();
+            // 등록 반영 위해 잠시 후 목록 갱신
+            setTimeout(function () { if (typeof _gpuFetchHosts === 'function') _gpuFetchHosts().then(aihubRenderGpus); }, 1800);
         }
         function aihubSaveBackendUrl() {
             var inp = document.getElementById('aihub-backend-url'); if (!inp) return;
@@ -10664,7 +10689,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r226';
+        var _AHUB_FRONT_REV = 'r227';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31020,7 +31045,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r226';
+    var _RFS_FRONT_REV = 'r227';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
