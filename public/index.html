@@ -10689,7 +10689,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r228';
+        var _AHUB_FRONT_REV = 'r229';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31017,6 +31017,8 @@ ${intrLog}
             log: [],               // 로그 라인
             liveNodes: [],         // 실시간 추출 노드 (애니메이션용)
             startedAt: 0,
+            stageStartedAt: 0,     // [r229] 현재 단계 시작 시각 (경과초)
+            stageTimer: null,      // [r229] 1초 갱신 타이머
         },
     };
 
@@ -31045,7 +31047,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r228';
+    var _RFS_FRONT_REV = 'r229';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31224,7 +31226,8 @@ ${intrLog}
         }
         // 다른 세션이면 분해 상태 리셋 (같은 세션 재진입은 보존)
         if (!_rfsState.current || _rfsState.current.id !== sid) {
-            _rfsState.decompose = { running: false, abort: null, stage: '', percent: 0, log: [], liveNodes: [], startedAt: 0 };
+            _rfsDcStopTicker();
+            _rfsState.decompose = { running: false, abort: null, stage: '', percent: 0, log: [], liveNodes: [], startedAt: 0, stageStartedAt: 0, stageTimer: null };
         }
         _rfsState.current = s;
         _rfsState.nodes = s.nodes || [];
@@ -31449,7 +31452,7 @@ ${intrLog}
     function rfsStopDecompose() {
         var dc = _rfsState.decompose;
         if (dc.abort) { try { dc.abort.abort(); } catch (e) {} }
-        dc.running = false;
+        dc.running = false; _rfsDcStopTicker();
         dc.stage = '■ 사용자 중단됨';
         // 백엔드 busy 도 해제
         var url = rfsBackEnd();
@@ -31483,9 +31486,10 @@ ${intrLog}
         var model = (modelSel && modelSel.value) || null;
         var dc = _rfsState.decompose;
         dc.running = true; dc.stage = '🚀 분해 요청…'; dc.percent = 0;
-        dc.log = []; dc.liveNodes = []; dc.startedAt = Date.now();
+        dc.log = []; dc.liveNodes = []; dc.startedAt = Date.now(); dc.stageStartedAt = Date.now();
         var ac = new AbortController(); dc.abort = ac;
         rfsRenderDecomposeStep();
+        _rfsDcStartTicker();  // [r229] 단계별 경과초 1초 갱신
         function _log(msg) { dc.log.push(msg); if (dc.log.length > 300) dc.log = dc.log.slice(-300); _rfsDcUpdateLog(); }
 
         try {
@@ -31512,12 +31516,13 @@ ${intrLog}
                     if (!data || data === '[DONE]') continue;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.event === 'stage') { dc.stage = '🔄 ' + (ev.message || ev.stage); _rfsDcUpdateStage(); _log('STAGE ' + (ev.message || '')); }
+                        if (ev.event === 'stage') { dc.stage = '🔄 ' + (ev.message || ev.stage); dc.stageStartedAt = Date.now(); _rfsDcUpdateStage(); _log('STAGE ' + (ev.message || '')); }
+                        else if (ev.event === 'tree_progress') { dc.stage = '🔄 카테고리 트리 합성 — LLM 응답 ' + (ev.received_chars||0) + '자 수신 (' + (ev.waited_sec||0) + 's)'; _rfsDcUpdateStage(); }
+                        else if (ev.event === 'tree_composed') { _log('🌲 트리 합성 완료 (' + (ev.method||'?') + ' · 카테고리 ' + (ev.categories||0) + '개)'); }
                         else if (ev.event === 'chunk_start') { _log('▶ 청크 ' + ev.current + '/' + ev.total + ' (' + (ev.vault_title||'') + ')'); }
                         else if (ev.event === 'chunk_done') { dc.percent = ev.percent; _rfsDcUpdateBar(); _log('✓ 청크 ' + ev.current + '/' + ev.total + ' — 누적 ' + ev.nodes_so_far + ' 노드'); }
                         else if (ev.event === 'node_added') { dc.liveNodes.push(ev.node); _rfsDcAddNodeChip(ev.node); }
                         else if (ev.event === 'dedup_done') { _log('🧹 dedup: ' + ev.merged + ' merged → ' + ev.kept + ' kept'); }
-                        else if (ev.event === 'tree_composed') { _log('🌲 트리 합성 완료'); }
                         else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'error') { _log('❌ ' + ev.message); }
                         else if (ev.event === 'done') {
@@ -31539,7 +31544,7 @@ ${intrLog}
                                 }, 'decomposed', '노드 ' + ev.node_count);
                             } catch (e) {}
                             _rfsState.nodes = ev.nodes;
-                            dc.running = false; dc.abort = null;
+                            dc.running = false; dc.abort = null; _rfsDcStopTicker();
                             if (leaf > 0) {
                                 dc.stage = '✅ 완료 — 노드 ' + ev.node_count + '개 (' + ev.elapsed_sec + 's)';
                                 _rfsDcUpdateStage(); _rfsDcUpdateBar();
@@ -31557,19 +31562,41 @@ ${intrLog}
                 }
             }
             // 스트림 끝났는데 done 안 왔으면
-            if (dc.running) { dc.running = false; dc.abort = null; }
+            if (dc.running) { dc.running = false; dc.abort = null; _rfsDcStopTicker(); }
         } catch (e) {
             if (e.name === 'AbortError') { dc.stage = '■ 중단됨'; }
             else { dc.stage = '❌ 실패: ' + (e.message||e); _log('❌ ' + (e.message||e)); }
-            dc.running = false; dc.abort = null;
+            dc.running = false; dc.abort = null; _rfsDcStopTicker();
             if (_rfsState.step === 3) rfsRenderDecomposeStep();
         }
     }
 
-    // [r225] 진행 위젯 부분 갱신 — 전체 리렌더 없이 (애니메이션 보존)
+    // [r225/r229] 진행 위젯 부분 갱신 — 전체 리렌더 없이 (애니메이션 보존) + 단계별 경과초
     function _rfsDcUpdateStage() {
         var el = document.getElementById('rfs-prog-stage'); var dc = _rfsState.decompose;
-        if (el) el.innerHTML = (dc.running ? '<span class="rfs-dc-spinner"></span>' : '') + _annEsc(dc.stage || '');
+        if (!el) return;
+        var sp = dc.running ? '<span class="rfs-dc-spinner"></span>' : '';
+        var et = '';
+        if (dc.running && dc.stageStartedAt) {
+            var secs = Math.floor((Date.now() - dc.stageStartedAt) / 1000);
+            et = ' <span style="color:var(--c-text3);font-weight:400;">(' + secs + 's)</span>';
+        }
+        var total = '';
+        if (dc.running && dc.startedAt) {
+            var tsec = Math.floor((Date.now() - dc.startedAt) / 1000);
+            total = ' <span style="color:var(--c-text3);font-weight:400;font-size:10.5px;">· 전체 ' + tsec + 's</span>';
+        }
+        el.innerHTML = sp + _annEsc(dc.stage || '') + et + total;
+    }
+    function _rfsDcStartTicker() {
+        _rfsDcStopTicker();
+        _rfsState.decompose.stageTimer = setInterval(function () {
+            if (_rfsState.decompose.running) _rfsDcUpdateStage();
+            else _rfsDcStopTicker();
+        }, 1000);
+    }
+    function _rfsDcStopTicker() {
+        if (_rfsState.decompose.stageTimer) { clearInterval(_rfsState.decompose.stageTimer); _rfsState.decompose.stageTimer = null; }
     }
     function _rfsDcUpdateBar() {
         var bar = document.getElementById('rfs-prog-bar'); var dc = _rfsState.decompose;

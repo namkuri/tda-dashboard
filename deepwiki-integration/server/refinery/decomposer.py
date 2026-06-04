@@ -259,13 +259,55 @@ JSON 한 개만 출력. nodes 배열에 최소 1개, 최대 12개 노드.
     deduped_nodes = list(seen_title.values())
     yield {"event": "dedup_done", "merged": merged, "kept": len(deduped_nodes)}
 
-    # 트리 합성
-    yield {"event": "stage", "stage": "compose_tree", "message": "카테고리 트리 합성 중…"}
+    # 트리 합성 — [r229] 노드 많으면 LLM 미사용 로직 그룹핑(즉시), 적으면 LLM(스트리밍+타임아웃)
     categories: List[Dict[str, Any]] = []
-    try:
+
+    def _mk_cat(title: str) -> Dict[str, Any]:
+        return {
+            "id": _uid("cat"), "title": title[:40], "summary": "", "source_refs": [],
+            "ai_confidence": 100, "auto_category_hint": "canon", "kind": "category",
+            "parent_id": None, "created_by": author, "created_at": _now_iso(),
+            "history": [history_entry("category_created", author)],
+        }
+
+    LLM_TREE_MAX_NODES = 120   # 이보다 많으면 로직 그룹핑
+    if len(deduped_nodes) > LLM_TREE_MAX_NODES:
+        # [r229] 로직 그룹핑 — LLM 미사용. auto_category_hint + kind 로 즉시 분류.
+        yield {"event": "stage", "stage": "compose_tree",
+               "message": f"카테고리 트리 합성 — 로직 그룹핑 (노드 {len(deduped_nodes)}개 > {LLM_TREE_MAX_NODES}, LLM 미사용·즉시)"}
+        # hint+kind 별 버킷
+        bucket_label = {
+            ("canon", "risk"): "리스크 & 방어",
+            ("hyp", "risk"): "리스크 & 방어",
+            ("canon", "concept"): "핵심 개념",
+            ("canon", "fact"): "사실 & 근거",
+            ("canon", "decision"): "결정 사항",
+            ("hyp", "hypothesis"): "가설 (검증 대기)",
+            ("hyp", "concept"): "가설 (검증 대기)",
+            ("later", "concept"): "백로그",
+            ("cut", "concept"): "폐기 후보",
+            ("canon", "question"): "미해결 질문",
+        }
+        cat_by_label: Dict[str, Dict[str, Any]] = {}
+        for n in deduped_nodes:
+            hint = (n.get("auto_category_hint") or "later")
+            kind = (n.get("kind") or "concept")
+            label = bucket_label.get((hint, kind))
+            if not label:
+                label = {"canon": "확정 항목", "hyp": "가설 (검증 대기)",
+                         "later": "백로그", "cut": "폐기 후보"}.get(hint, "기타")
+            if label not in cat_by_label:
+                cat_by_label[label] = _mk_cat(label)
+            n["parent_id"] = cat_by_label[label]["id"]
+        categories = list(cat_by_label.values())
+        yield {"event": "tree_composed", "method": "logic", "categories": len(categories)}
+    else:
+        # [r229] LLM 트리 합성 — 스트리밍 진행 + 90초 타임아웃. 실패해도 노드 보존.
+        yield {"event": "stage", "stage": "compose_tree",
+               "message": f"카테고리 트리 합성 — LLM 호출 (노드 {len(deduped_nodes)}개)"}
         node_listing = "\n".join(
             f"- {n['id']}: {n['title']} ({n['kind']}, {n['auto_category_hint']})"
-            for n in deduped_nodes[:200]
+            for n in deduped_nodes
         )
         user_prompt = f"""다음 노드 {len(deduped_nodes)}개를 카테고리 트리로 합성:
 
@@ -273,45 +315,63 @@ JSON 한 개만 출력. nodes 배열에 최소 1개, 최대 12개 노드.
 
 JSON 한 개. categories 배열, 각 category 는 1~5 단어 title + 노드 ID 배열."""
         buf = ""
-        async for delta in ollama.chat_stream(
-            messages=[
-                {"role": "system", "content": _SYSTEM_COMPOSE_TREE},
-                {"role": "user", "content": user_prompt},
-            ],
-            model=model,
-            temperature=0.3,
-        ):
-            buf += delta
-        parsed = _extract_json(buf)
-        if parsed and isinstance(parsed.get("categories"), list):
-            for cat in parsed["categories"]:
-                if not isinstance(cat, dict): continue
-                title = (cat.get("title") or "").strip()
-                node_ids = cat.get("node_ids") or []
-                if title and isinstance(node_ids, list):
-                    if _is_meta_leak(title): continue
-                    cat_node = {
-                        "id": _uid("cat"),
-                        "title": title[:40],
-                        "summary": "",
-                        "source_refs": [],
-                        "ai_confidence": 100,
-                        "auto_category_hint": "canon",
-                        "kind": "category",
-                        "parent_id": None,
-                        "created_by": author,
-                        "created_at": _now_iso(),
-                        "history": [history_entry("category_created", author)],
-                    }
-                    categories.append(cat_node)
-                    # 자식 노드들의 parent_id 설정
-                    for nid in node_ids:
-                        for n in deduped_nodes:
-                            if n["id"] == nid:
-                                n["parent_id"] = cat_node["id"]
-                                break
-    except Exception as e:
-        yield {"event": "warn", "message": f"트리 합성 실패(노드는 보존): {e}"}
+        try:
+            import asyncio as _asyncio
+
+            async def _consume():
+                nonlocal buf
+                async for delta in ollama.chat_stream(
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_COMPOSE_TREE},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    model=model, temperature=0.3,
+                ):
+                    buf += delta
+
+            task = _asyncio.ensure_future(_consume())
+            # 0.8초마다 진행(받은 글자수) 보고. 90초 타임아웃.
+            waited = 0.0
+            while not task.done():
+                await _asyncio.sleep(0.8)
+                waited += 0.8
+                yield {"event": "tree_progress", "received_chars": len(buf), "waited_sec": round(waited, 1)}
+                if waited > 90:
+                    task.cancel()
+                    yield {"event": "warn", "message": "트리 합성 90초 초과 — 로직 그룹핑으로 폴백"}
+                    break
+            if task.done() and not task.cancelled():
+                exc = task.exception()
+                if exc:
+                    yield {"event": "warn", "message": f"트리 합성 LLM 실패: {exc}"}
+            parsed = _extract_json(buf) if buf else None
+            if parsed and isinstance(parsed.get("categories"), list):
+                for cat in parsed["categories"]:
+                    if not isinstance(cat, dict): continue
+                    title = (cat.get("title") or "").strip()
+                    node_ids = cat.get("node_ids") or []
+                    if title and isinstance(node_ids, list) and not _is_meta_leak(title):
+                        cat_node = _mk_cat(title)
+                        categories.append(cat_node)
+                        for nid in node_ids:
+                            for n in deduped_nodes:
+                                if n["id"] == nid:
+                                    n["parent_id"] = cat_node["id"]
+                                    break
+            # LLM 결과 비었으면 로직 폴백
+            if not categories:
+                yield {"event": "warn", "message": "LLM 카테고리 비어있음 — hint 기반 로직 그룹핑 폴백"}
+                cat_by_hint: Dict[str, Dict[str, Any]] = {}
+                for n in deduped_nodes:
+                    label = {"canon": "확정 항목", "hyp": "가설 (검증 대기)",
+                             "later": "백로그", "cut": "폐기 후보"}.get(n.get("auto_category_hint") or "later", "기타")
+                    if label not in cat_by_hint:
+                        cat_by_hint[label] = _mk_cat(label)
+                    n["parent_id"] = cat_by_hint[label]["id"]
+                categories = list(cat_by_hint.values())
+            yield {"event": "tree_composed", "method": "llm" if categories else "none", "categories": len(categories)}
+        except Exception as e:
+            yield {"event": "warn", "message": f"트리 합성 실패(노드는 보존): {e}"}
 
     all_final = categories + deduped_nodes
     elapsed = time.time() - started
