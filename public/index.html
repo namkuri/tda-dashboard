@@ -5561,6 +5561,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <div class="aihub-hint">대화형 AI · Deep Wiki · 마인드맵 · 연구 정련소 모두 이 백엔드를 사용합니다. (대화형 AI 설정과 동기화)</div>
                 </section>
 
+                <!-- [r226] Gemini 계정 (무료 API 키) -->
+                <section class="aihub-card">
+                    <div class="aihub-card-head"><h3>🌟 Gemini 계정 (무료 API)</h3><span class="aihub-card-sub" id="aihub-gemini-status">미등록</span></div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <input id="aihub-gemini-key" type="password" placeholder="Gemini API 키 (AI Studio 무료 발급)" style="flex:1;min-width:280px;font-size:12.5px;padding:7px 11px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);">
+                        <button class="aihub-gpu-btn primary" onclick="aihubSaveGeminiKey()" style="font-size:12px;">등록·검증</button>
+                        <button class="aihub-gpu-btn" onclick="aihubClearGeminiKey()" style="font-size:12px;">해제</button>
+                    </div>
+                    <div class="aihub-hint">⚠ 웹 구독(Google AI Pro)과 별개입니다. <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--c-accent);">AI Studio</a>에서 <b>무료</b>로 발급한 키를 넣으세요. 무료 등급은 <b>Flash 계열</b>만(2026.4+) — 정련소·마인드맵에 충분. 대량 작업 시 분당 한도 주의. 키는 백엔드 메모리에만 저장(재시작 시 재등록).</div>
+                </section>
+
                 <!-- GPU 서버 / 터널 상태 -->
                 <section class="aihub-card">
                     <div class="aihub-card-head"><h3>🖥 GPU 서버 / 터널 상태</h3><span class="aihub-card-sub" id="aihub-gpu-count">로딩 중…</span></div>
@@ -6726,6 +6737,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             aihubRenderModels();
             aihubRenderHistory();
             aihubLoadBackendUrl();  // [r225] 백엔드 URL 입력 채우기 + 상태
+            aihubLoadGeminiStatus();  // [r226] Gemini 키 등록 상태
             // 상태 칩
             var pill = document.getElementById('aihub-status-pill');
             if (pill) {
@@ -6769,6 +6781,65 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (statusEl) { statusEl.textContent = '🔴 연결 실패'; statusEl.style.color = '#d2393d'; }
                 if (!silent) showToast('🔴 연결 실패 — URL/서버/터널 확인', 'alert');
             }
+        }
+        // [r226] Gemini 무료 API 키 등록 — 백엔드 메모리에 저장(웹 구독과 별개)
+        var _aihubGeminiModels = [];  // 등록 성공 시 무료 모델 목록
+        async function aihubLoadGeminiStatus() {
+            var statusEl = document.getElementById('aihub-gemini-status');
+            var url = (_dwGetSettings() || {}).backendUrl;
+            if (!url) { if (statusEl) statusEl.textContent = '백엔드 URL 먼저'; return; }
+            try {
+                var res = await fetch(url + '/llm/gemini-config');
+                if (!res.ok) return;
+                var j = await res.json();
+                if (!j.has_module) { if (statusEl) { statusEl.textContent = '백엔드 모듈 미설치'; statusEl.style.color = '#d2393d'; } return; }
+                if (j.configured) {
+                    if (statusEl) { statusEl.textContent = '🟢 등록됨 (' + (j.masked || '') + ')'; statusEl.style.color = '#2c6849'; }
+                    _aihubGeminiModels = j.free_models || [];
+                } else {
+                    if (statusEl) { statusEl.textContent = '미등록'; statusEl.style.color = 'var(--c-text3)'; }
+                    _aihubGeminiModels = j.free_models || [];  // 등록 전에도 표시용
+                }
+            } catch (e) { if (statusEl) statusEl.textContent = '확인 실패'; }
+        }
+        async function aihubSaveGeminiKey() {
+            var inp = document.getElementById('aihub-gemini-key');
+            var key = inp ? (inp.value || '').trim() : '';
+            if (!key) { showToast('Gemini API 키를 입력하세요', 'alert'); return; }
+            var url = (_dwGetSettings() || {}).backendUrl;
+            if (!url) { showToast('백엔드 URL 먼저 설정', 'alert'); return; }
+            var statusEl = document.getElementById('aihub-gemini-status');
+            if (statusEl) { statusEl.textContent = '검증 중…'; statusEl.style.color = 'var(--c-text3)'; }
+            try {
+                var res = await fetch(url + '/llm/gemini-config', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({api_key: key, label: '내 Gemini'})
+                });
+                if (!res.ok) { var err = await res.text(); throw new Error(err.slice(0, 150)); }
+                var j = await res.json();
+                _aihubGeminiModels = j.free_models || [];
+                if (statusEl) { statusEl.textContent = '🟢 등록됨 (' + (j.masked || '') + ')'; statusEl.style.color = '#2c6849'; }
+                if (inp) inp.value = '';
+                showToast('🌟 Gemini 등록 완료 — 무료 모델 ' + _aihubGeminiModels.length + '종 사용 가능', 'success');
+            } catch (e) {
+                if (statusEl) { statusEl.textContent = '🔴 검증 실패'; statusEl.style.color = '#d2393d'; }
+                showToast('Gemini 등록 실패: ' + (e.message || e), 'alert');
+            }
+        }
+        async function aihubClearGeminiKey() {
+            var url = (_dwGetSettings() || {}).backendUrl; if (!url) return;
+            try { await fetch(url + '/llm/gemini-config', {method: 'DELETE'}); } catch (e) {}
+            _aihubGeminiModels = [];
+            var statusEl = document.getElementById('aihub-gemini-status');
+            if (statusEl) { statusEl.textContent = '미등록'; statusEl.style.color = 'var(--c-text3)'; }
+            showToast('Gemini 키 해제됨', 'info');
+        }
+        // [r226] 정련소/마인드맵 모델 드롭다운에 추가할 Gemini 옵션 HTML
+        function _rfsGeminiModelOptions() {
+            if (!_aihubGeminiModels || !_aihubGeminiModels.length) return '';
+            return _aihubGeminiModels.map(function (m) {
+                return '<option value="' + m + '">🌟 ' + m + ' (Gemini 무료)</option>';
+            }).join('');
         }
         function _aihubAgo(t) {
             if (!t) return '-';
@@ -10593,7 +10664,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r225';
+        var _AHUB_FRONT_REV = 'r226';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -30939,6 +31010,8 @@ ${intrLog}
     function rfsEnter() {
         // [r224] 진입 시 백엔드 헬스 핑 → 배너로 상태 표시
         rfsHealthCheck();
+        // [r226] Gemini 무료 모델 목록 로드 (분해 모델 드롭다운용)
+        if (typeof aihubLoadGeminiStatus === 'function') aihubLoadGeminiStatus();
         // 세션 목록 로드
         rfsLoadSessions();
         rfsRenderStepper();
@@ -30947,7 +31020,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r224';
+    var _RFS_FRONT_REV = 'r226';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31305,6 +31378,7 @@ ${intrLog}
         html += '<option value="">기본 (qwen2.5-coder:14b 추천)</option>';
         html += '<option value="qwen2.5-coder:14b">qwen2.5-coder:14b (속도)</option>';
         html += '<option value="qwen2.5-coder:32b">qwen2.5-coder:32b (품질)</option>';
+        html += (typeof _rfsGeminiModelOptions === 'function' ? _rfsGeminiModelOptions() : '');  // [r226] Gemini 무료 모델
         html += '</select></label>';
         if (dc.running) {
             html += '<button class="aihub-gpu-btn" onclick="rfsStopDecompose()" style="border-color:#d2393d;color:#d2393d;">■ 중단</button>';

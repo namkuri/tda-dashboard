@@ -21,6 +21,7 @@ import time
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
+from llm_router import get_llm  # [r226] Gemini/Ollama 라우팅
 from ._author_guard import history_entry, llm_author
 
 
@@ -134,7 +135,7 @@ async def decompose(
     user_id: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """vault → 노드 트리 추출. SSE 이벤트."""
-    ollama = get_ollama()
+    ollama = get_llm(model)  # [r226] gemini-* 면 Gemini, 아니면 Ollama
     author = llm_author(model or "default")
     started = time.time()
 

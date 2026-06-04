@@ -8,6 +8,7 @@ import time
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
+from llm_router import get_llm  # [r226]
 from ._author_guard import history_entry, llm_author
 
 
@@ -161,7 +162,7 @@ async def compose_file_body(
     model: Optional[str] = None,
 ) -> str:
     """LLM 한 번 호출로 파일 본문 작성."""
-    ollama = get_ollama()
+    ollama = get_llm(model)  # [r226]
     related_listing = ", ".join(f"[[{(f.get('node_title') or f['path'].split('/')[-1].replace('.md',''))}]]" for f in related_files[:20])
     vault_refs = []
     for n in nodes:

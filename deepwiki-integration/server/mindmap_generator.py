@@ -23,6 +23,7 @@ from io import BytesIO
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
+from llm_router import get_llm, is_gemini_model  # [r226]
 from wiki_generator import _safe_format  # [r147] brace KeyError 방지
 
 # [r202] 첨부 파일 텍스트 추출 — HTML/DOCX/TXT/MD 지원. 실패해도 본문 생성은 진행.
@@ -380,9 +381,15 @@ async def generate_mindmap(
         yield {"event": "error", "message": "문서가 없습니다."}
         return
 
-    ollama = get_ollama()
+    # [r226] gemini-* 면 Gemini, 아니면 Ollama
+    try:
+        ollama = get_llm(model)
+    except Exception as e:
+        yield {"event": "error", "message": str(e)}
+        return
     if not await ollama.ping():
-        yield {"event": "error", "message": "Ollama 연결 실패. GPU 호스트가 가동 중인지 확인하세요."}
+        _svc = "Gemini" if is_gemini_model(model) else "Ollama"
+        yield {"event": "error", "message": f"{_svc} 연결 실패 — " + ("API 키 확인" if is_gemini_model(model) else "GPU 호스트 가동 확인")}
         return
 
     # [r216] 수신 본문 진단 — 사용자가 어디서 누락됐는지 즉시 확인

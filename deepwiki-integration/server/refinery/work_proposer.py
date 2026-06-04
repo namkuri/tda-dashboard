@@ -10,6 +10,7 @@ import time
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
+from llm_router import get_llm  # [r226]
 
 
 _SYSTEM_WBS = """확정 노드들을 작업구조화(WBS) 그룹으로 묶는 도구입니다.
@@ -56,7 +57,7 @@ async def propose_work(
     SSE 이벤트:
       stage / wbs_proposed / tasks_proposed / issue_proposed / done
     """
-    ollama = get_ollama()
+    ollama = get_llm(model)  # [r226]
     canon_nodes = [n for n in nodes if classifications.get(n["id"]) == "canon" and n.get("kind") != "category"]
     hyp_nodes = [n for n in nodes if classifications.get(n["id"]) == "hyp"]
     risk_nodes = [n for n in nodes if (n.get("kind") == "risk")]

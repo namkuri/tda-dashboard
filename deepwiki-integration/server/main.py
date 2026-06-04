@@ -12,6 +12,13 @@ from pydantic import BaseModel
 from config import settings
 from ollama_client import get_ollama
 from supabase_store import get_store
+# [r226] Gemini 클라이언트 (선택적 — httpx 만 있으면 동작)
+try:
+    from gemini_client import get_gemini, FREE_TIER_MODELS as GEMINI_FREE_MODELS
+    _HAS_GEMINI = True
+except Exception:
+    _HAS_GEMINI = False
+    GEMINI_FREE_MODELS = []
 from rag import chat_stream as legacy_chat_stream  # [r108] 폴백용
 from agent import run as agent_run  # [r108] Tool Use 에이전트
 from retriever import retrieve, SIMILARITY_THRESHOLD
@@ -30,7 +37,10 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r225"
+SERVER_REVISION = "r226"
+
+# [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
+from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -1070,6 +1080,55 @@ async def llm_busy_status():
         "started_at": LLM_BUSY_STATE.get("started_at") if active else None,
         "stage": LLM_BUSY_STATE.get("stage") if active else None,
     }
+
+
+# [r226] Gemini API 키 등록/조회/테스트
+class GeminiConfigRequest(BaseModel):
+    api_key: str
+    label: Optional[str] = "내 Gemini"
+
+
+@app.post("/llm/gemini-config")
+async def llm_gemini_config(req: GeminiConfigRequest):
+    """Gemini API 키 등록 (프로세스 전역). 키는 마스킹해서만 응답."""
+    if not _HAS_GEMINI:
+        raise HTTPException(503, "Gemini 모듈 미설치 (httpx 필요)")
+    key = (req.api_key or "").strip()
+    if not key:
+        raise HTTPException(422, "api_key 필요")
+    # 검증 — ping
+    try:
+        client = get_gemini(key)
+        ok = await client.ping()
+    except Exception as e:
+        raise HTTPException(400, f"Gemini 키 검증 실패: {e}")
+    if not ok:
+        raise HTTPException(400, "Gemini 키가 유효하지 않습니다 (모델 목록 조회 실패)")
+    GEMINI_CONFIG["api_key"] = key
+    GEMINI_CONFIG["label"] = req.label or "내 Gemini"
+    models = await client.list_models()
+    free = [m for m in models if any(m.startswith(f) for f in GEMINI_FREE_MODELS)] or GEMINI_FREE_MODELS
+    return {"ok": True, "label": GEMINI_CONFIG["label"], "masked": "..." + key[-4:], "free_models": free}
+
+
+@app.get("/llm/gemini-config")
+async def llm_gemini_config_get():
+    """Gemini 키 등록 여부 (키 자체는 미노출)."""
+    key = GEMINI_CONFIG.get("api_key")
+    return {
+        "configured": bool(key),
+        "label": GEMINI_CONFIG.get("label"),
+        "masked": ("..." + key[-4:]) if key else None,
+        "has_module": _HAS_GEMINI,
+        "free_models": GEMINI_FREE_MODELS,
+    }
+
+
+@app.delete("/llm/gemini-config")
+async def llm_gemini_config_delete():
+    GEMINI_CONFIG["api_key"] = None
+    GEMINI_CONFIG["label"] = None
+    return {"ok": True}
 
 
 @app.get("/refinery/health")

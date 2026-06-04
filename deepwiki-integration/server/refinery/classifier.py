@@ -7,6 +7,7 @@ import re
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
+from llm_router import get_llm  # [r226]
 
 
 _SYSTEM = """당신은 연구 노드를 4 분면 중 하나로 추천하는 분류기입니다.
@@ -37,7 +38,7 @@ async def classify_suggest(
     model: Optional[str] = None,
     batch_size: int = 5,
 ) -> AsyncIterator[Dict[str, Any]]:
-    ollama = get_ollama()
+    ollama = get_llm(model)  # [r226]
     targets = [n for n in nodes if n.get("kind") != "category"]
     total = len(targets)
     if not total:

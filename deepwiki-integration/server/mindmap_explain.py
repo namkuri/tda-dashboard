@@ -18,6 +18,7 @@ import re
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from ollama_client import get_ollama
+from llm_router import get_llm  # [r226]
 from supabase_store import get_store
 
 
@@ -226,7 +227,7 @@ async def explain_node(
     user_question: Optional[str] = None,
     model: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
-    ollama = get_ollama()
+    ollama = get_llm(model)  # [r226] gemini-* 면 Gemini
 
     # 1) 노드 컨텍스트
     yield {"event": "stage", "stage": "locate", "message": f"노드 '{node_title}' 위치 확인 중…"}
