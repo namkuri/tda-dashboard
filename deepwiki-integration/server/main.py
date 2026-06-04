@@ -30,7 +30,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r223"
+SERVER_REVISION = "r224"
 
 # [r126] 위키 생성·인덱싱 진행 상태 (LLM 점유 가시화) — 단일 프로세스 글로벌
 #   /chat 등 다른 LLM 호출 엔드포인트가 busy 게이트로 이용하고 /health 가 노출.
@@ -632,21 +632,49 @@ async def mindmap_explain(req: MindmapExplainRequest):
 
 # ─────────────────────────────────────────────
 # [r223] 연구 정련소 (Research Refinery)
+# [r224] import 안전망 — refinery 모듈 import 실패해도 백엔드 전체는 살아남게.
+#        실패 시 _REFINERY_OK=False, 각 엔드포인트가 503 + 명확한 사유 반환.
 # ─────────────────────────────────────────────
-from refinery import _session_store as _rfs
-from refinery._author_guard import require_author
-from refinery.decomposer import decompose as _rfs_decompose
-from refinery.classifier import classify_suggest as _rfs_classify
-from refinery.similar_nodes import find_similar_groups as _rfs_similar
-from refinery.composer import (
-    build_tree_skeleton as _rfs_build_tree,
-    compose_file_body as _rfs_compose_body,
-    compose_vault_list_md as _rfs_compose_vault_list,
-    compose_changelog_md as _rfs_compose_changelog,
-)
-from refinery.linker import link_files as _rfs_link
-from refinery.work_proposer import propose_work as _rfs_propose
-from refinery.apply_ops import apply_tree as _rfs_apply_tree, apply_work as _rfs_apply_work
+_REFINERY_OK = True
+_REFINERY_ERR = None
+try:
+    from refinery import _session_store as _rfs
+    from refinery._author_guard import require_author
+    from refinery.decomposer import decompose as _rfs_decompose
+    from refinery.classifier import classify_suggest as _rfs_classify
+    from refinery.similar_nodes import find_similar_groups as _rfs_similar
+    from refinery.composer import (
+        build_tree_skeleton as _rfs_build_tree,
+        compose_file_body as _rfs_compose_body,
+        compose_vault_list_md as _rfs_compose_vault_list,
+        compose_changelog_md as _rfs_compose_changelog,
+    )
+    from refinery.linker import link_files as _rfs_link
+    from refinery.work_proposer import propose_work as _rfs_propose
+    from refinery.apply_ops import apply_tree as _rfs_apply_tree, apply_work as _rfs_apply_work
+except Exception as _rfs_imp_err:
+    import traceback as _rfs_tb
+    _REFINERY_OK = False
+    _REFINERY_ERR = f"{type(_rfs_imp_err).__name__}: {_rfs_imp_err}"
+    print("[main] ⚠ 연구 정련소 모듈 import 실패 — /refinery/* 비활성, 나머지는 정상")
+    print(_rfs_tb.format_exc())
+    # 더미 — 엔드포인트 정의 시점 NameError 방지 (호출 시 503)
+    def _rfs_unavailable(*a, **k):
+        raise HTTPException(503, f"연구 정련소 모듈 미로드: {_REFINERY_ERR}")
+    class _RfsStub:
+        SCHEMA_SQL = "-- refinery 모듈 미로드"
+        def __getattr__(self, _n): return _rfs_unavailable
+    _rfs = _RfsStub()
+    require_author = _rfs_unavailable
+    _rfs_decompose = _rfs_classify = _rfs_similar = _rfs_unavailable
+    _rfs_build_tree = _rfs_compose_body = _rfs_compose_vault_list = _rfs_compose_changelog = _rfs_unavailable
+    _rfs_link = _rfs_propose = _rfs_apply_tree = _rfs_apply_work = _rfs_unavailable
+
+
+def _refinery_guard():
+    """refinery 엔드포인트 진입 가드 — 미로드 시 503."""
+    if not _REFINERY_OK:
+        raise HTTPException(503, f"연구 정련소 모듈 미로드 (백엔드 재시작 필요): {_REFINERY_ERR}")
 
 
 class RefinerySessionCreate(BaseModel):
@@ -998,9 +1026,11 @@ async def refinery_migrate_authors(req: AuthorMigrateRequest):
 
 @app.get("/refinery/health")
 async def refinery_health():
-    """정련소 모듈 헬스 + /goal 워크플로 명세."""
+    """정련소 모듈 헬스 + /goal 워크플로 명세. (import 가드와 무관 — 항상 응답)"""
     return {
-        "ok": True,
+        "ok": _REFINERY_OK,
+        "module_loaded": _REFINERY_OK,
+        "module_error": _REFINERY_ERR,
         "revision": SERVER_REVISION,
         "modules": ["decomposer", "classifier", "similar_nodes", "composer", "linker", "work_proposer", "apply_ops", "diff_ops"],
         "goal_steps": [

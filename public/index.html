@@ -5503,6 +5503,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
             <!-- Stepper -->
             <div id="rfs-stepper" style="display:flex;align-items:center;gap:0;padding:10px 22px;border-bottom:1px solid var(--c-border);background:var(--c-paper);overflow-x:auto;"></div>
+            <!-- [r224] 백엔드 상태 배너 -->
+            <div id="rfs-health-banner" style="display:none;padding:10px 22px;font-size:12.5px;font-weight:700;"></div>
             <!-- 본문 영역 -->
             <div id="rfs-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
         </div>
@@ -10523,7 +10525,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r223';
+        var _AHUB_FRONT_REV = 'r224';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -30857,11 +30859,53 @@ ${intrLog}
     ];
 
     function rfsEnter() {
-        // 진입 시 세션 목록 로드
+        // [r224] 진입 시 백엔드 헬스 핑 → 배너로 상태 표시
+        rfsHealthCheck();
+        // 세션 목록 로드
         rfsLoadSessions();
         rfsRenderStepper();
         if (!_rfsState.current) rfsRenderSessionList();
         else rfsRenderCurrentStep();
+    }
+
+    // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
+    var _RFS_FRONT_REV = 'r224';
+    async function rfsHealthCheck() {
+        var banner = document.getElementById('rfs-health-banner');
+        if (!banner) return;
+        var url = rfsBackEnd();
+        function show(html, bg, color) {
+            banner.style.display = 'block';
+            banner.style.background = bg; banner.style.color = color;
+            banner.innerHTML = html;
+        }
+        function hide() { banner.style.display = 'none'; }
+        if (!url) {
+            show('⚙️ 백엔드 URL 미설정 — 설정 > Deep Wiki 백엔드 URL 입력 필요', 'rgba(245,158,11,.18)', '#92400e');
+            return;
+        }
+        try {
+            var res = await fetch(url + '/refinery/health', { method: 'GET' });
+            if (res.status === 404) {
+                show('⚠ 백엔드에 <b>/refinery</b> 라우트 없음 — 백엔드가 <b>구버전(r222 이하)</b>입니다.<br>서버 PC에서: <code>cd deepwiki-integration/server</code> → <code>git pull</code> → 백엔드 재시작(run_dev.bat)', 'rgba(245,158,11,.2)', '#92400e');
+                return;
+            }
+            if (!res.ok) { show('⚠ 백엔드 응답 오류 HTTP ' + res.status, 'rgba(210,57,61,.16)', '#b53236'); return; }
+            var j = await res.json();
+            if (!j.module_loaded) {
+                show('❌ 정련소 모듈 <b>import 실패</b> — ' + _annEsc(j.module_error || '?') + '<br>백엔드 콘솔 로그 확인 후 재시작 필요', 'rgba(210,57,61,.16)', '#b53236');
+                return;
+            }
+            if (j.revision !== _RFS_FRONT_REV && j.revision !== 'r223') {
+                show('⚠ 백엔드 ' + _annEsc(j.revision) + ' / 프론트 ' + _RFS_FRONT_REV + ' 불일치 — 백엔드 재시작 권장', 'rgba(245,158,11,.18)', '#92400e');
+                return;
+            }
+            // 정상
+            hide();
+        } catch (e) {
+            // Failed to fetch = 연결 자체 실패
+            show('🔴 백엔드 연결 실패 (<code>' + _annEsc(url) + '</code>) — ① 백엔드가 켜져 있는지(run_dev.bat) ② URL 정확한지 ③ Cloudflare 터널 살아있는지 확인', 'rgba(210,57,61,.16)', '#b53236');
+        }
     }
 
     function rfsBackEnd() { return (_dwGetSettings() || {}).backendUrl || ''; }
@@ -30878,10 +30922,13 @@ ${intrLog}
         try {
             var pid = activeProjectId || '';
             var res = await fetch(url + '/refinery/sessions' + (pid ? ('?project_id=' + encodeURIComponent(pid)) : ''));
-            if (!res.ok) return;
+            if (!res.ok) { console.warn('[rfs] sessions HTTP ' + res.status); return; }
             var data = await res.json();
             _rfsState.sessions = data.sessions || [];
-        } catch (e) { console.warn('[rfs] sessions load fail', e); }
+        } catch (e) {
+            // [r224] 조용히 삼키지 않고 배너에 반영 (rfsHealthCheck 가 이미 처리하지만 보강)
+            console.warn('[rfs] sessions load fail', e);
+        }
     }
 
     function rfsRenderStepper() {
@@ -30969,11 +31016,26 @@ ${intrLog}
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({project_id: activeProjectId || null, title: title.trim(), user_id: rfsCurrentUser()})
             });
-            if (!res.ok) { var err = await res.text(); showToast('세션 생성 실패: ' + err.slice(0, 200), 'alert'); return; }
+            if (res.status === 404) {
+                showToast('세션 생성 실패 — 백엔드에 /refinery 라우트 없음 (구버전). git pull + 백엔드 재시작 필요', 'alert');
+                rfsHealthCheck();
+                return;
+            }
+            if (res.status === 503) {
+                var e503 = await res.text();
+                showToast('세션 생성 실패 — 정련소 모듈 미로드: ' + e503.slice(0, 150), 'alert');
+                rfsHealthCheck();
+                return;
+            }
+            if (!res.ok) { var err = await res.text(); showToast('세션 생성 실패: HTTP ' + res.status + ' ' + err.slice(0, 150), 'alert'); return; }
             var s = await res.json();
             _rfsState.sessions.unshift(s);
             rfsOpenSession(s.id);
-        } catch (e) { showToast('세션 생성 실패: ' + e.message, 'alert'); }
+        } catch (e) {
+            // [r224] Failed to fetch = 연결 실패. 명확히 안내 + 배너 갱신
+            showToast('세션 생성 실패 — 백엔드 연결 불가 (' + (e.message || e) + '). 백엔드가 켜져 있는지/URL/터널 확인', 'alert');
+            rfsHealthCheck();
+        }
     }
 
     function rfsOpenSession(sid) {
