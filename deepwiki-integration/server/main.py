@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r241"
+SERVER_REVISION = "r242"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -710,6 +710,28 @@ def _refinery_guard():
         raise HTTPException(503, f"연구 정련소 모듈 미로드 (백엔드 재시작 필요): {_REFINERY_ERR}")
 
 
+# [r242] 회의록 자동작성 모듈 — import 실패해도 백엔드 전체는 생존, /meetings/* 만 503.
+_MEET_OK = True
+_MEET_ERR = None
+try:
+    from meetings import store as _mtg_store
+    from meetings import craig_client as _mtg_craig
+    from meetings import transcribe as _mtg_tr
+    from meetings import summarize as _mtg_sum
+except Exception as _mtg_imp_err:
+    import traceback as _mtg_tb
+    _MEET_OK = False
+    _MEET_ERR = f"{type(_mtg_imp_err).__name__}: {_mtg_imp_err}"
+    print("[main] ⚠ 회의록 모듈 import 실패 — /meetings/* 비활성, 나머지 정상")
+    print(_mtg_tb.format_exc())
+    _mtg_store = _mtg_craig = _mtg_tr = _mtg_sum = None
+
+
+def _meet_guard():
+    if not _MEET_OK:
+        raise HTTPException(503, f"회의록 모듈 미로드 (백엔드 재시작 필요): {_MEET_ERR}")
+
+
 class RefinerySessionCreate(BaseModel):
     project_id: Optional[str] = None
     title: str
@@ -996,6 +1018,183 @@ async def refinery_apply_work(req: RefineryApplyWorkRequest):
 async def refinery_schema_sql():
     """설정→DB 스키마 점검 SQL 에 포함될 SQL 반환."""
     return {"sql": _rfs.SCHEMA_SQL}
+
+
+# ════════════════════════════════════════════════════════════
+# [r242] 회의록 자동작성 — Craig(Discord 음성) → faster-whisper STT → LLM 회의록
+# ════════════════════════════════════════════════════════════
+class MeetingImportRequest(BaseModel):
+    user_id: str
+    project_id: Optional[str] = None
+    title: str = ""
+    craig_id: Optional[str] = None      # 녹음 ID 또는 rec 링크
+    craig_url: Optional[str] = None     # 직접 다운로드 URL(폴백)
+    key: Optional[str] = None
+    whisper_model: str = "medium"       # tiny|base|small|medium|large-v3
+    language: str = "ko"
+    model: Optional[str] = None         # 요약 LLM(미지정=기본)
+
+
+class MeetingSummarizeRequest(BaseModel):
+    model: Optional[str] = None
+
+
+class MeetingExportRequest(BaseModel):
+    user_id: str
+    project_id: Optional[str] = None
+
+
+@app.get("/meetings/health")
+async def meetings_health():
+    av = _mtg_tr.is_available() if _MEET_OK else {"faster_whisper": False, "ffmpeg": False, "error": _MEET_ERR}
+    return {"ok": _MEET_OK, "revision": SERVER_REVISION, "error": _MEET_ERR, "stt": av}
+
+
+@app.get("/meetings/schema-sql")
+async def meetings_schema_sql():
+    return {"sql": (_mtg_store.SCHEMA_SQL if _MEET_OK else "-- 회의록 모듈 미로드")}
+
+
+@app.get("/meetings/sessions")
+async def meetings_list(project_id: Optional[str] = None):
+    _meet_guard()
+    return {"sessions": _mtg_store.list_sessions(project_id)}
+
+
+@app.get("/meetings/sessions/{sid}")
+async def meetings_get(sid: str):
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    return s
+
+
+@app.delete("/meetings/sessions/{sid}")
+async def meetings_delete(sid: str):
+    _meet_guard()
+    return {"ok": _mtg_store.delete_session(sid)}
+
+
+@app.post("/meetings/import")
+async def meetings_import(req: MeetingImportRequest):
+    """Craig 녹음 → STT → 회의록 요약 → 저장 (SSE 진행 스트림)."""
+    _meet_guard()
+    if not (req.user_id or "").strip():
+        raise HTTPException(422, "user_id(작성자) 필요")
+    if _busy_active():
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM/STT 작업 중 — 잠시 후 재시도'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+
+    async def gen():
+        import os as _os, tempfile as _tmp, shutil as _sh
+        loop = asyncio.get_event_loop()
+        workdir = _tmp.mkdtemp(prefix="mtg_")
+        sess = None
+        try:
+            av = _mtg_tr.is_available()
+            if not av.get("faster_whisper") or not av.get("ffmpeg"):
+                yield {"event": "error", "message": "STT 준비 안 됨 — " + (av.get("error") or "faster-whisper/ffmpeg 설치 필요")}
+                return
+            yield {"event": "stage", "message": "세션 생성"}
+            sess = await loop.run_in_executor(None, lambda: _mtg_store.create_session(
+                project_id=req.project_id, title=req.title or "회의", user_id=req.user_id, craig_id=req.craig_id))
+            yield {"event": "session", "id": sess["id"]}
+
+            yield {"event": "stage", "message": "Craig 녹음 다운로드"}
+            if req.craig_url:
+                dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_url(req.craig_url, workdir))
+            else:
+                dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_recording(req.craig_id, req.key, workdir))
+            yield {"event": "downloaded", "count": dl.get("count")}
+
+            tracks = await loop.run_in_executor(None, lambda: _mtg_tr.list_tracks(workdir))
+            if not tracks:
+                yield {"event": "error", "message": "오디오 트랙을 찾지 못함(다운로드 형식 확인)"}
+                return
+            yield {"event": "stage", "message": f"트랙 {len(tracks)}개 화자별 STT"}
+            all_segs = []
+            participants = []
+            for i, tk in enumerate(tracks):
+                yield {"event": "track_start", "i": i + 1, "total": len(tracks), "speaker": tk["speaker"]}
+                segs = await loop.run_in_executor(
+                    None, lambda p=tk["path"], sp=tk["speaker"]: _mtg_tr.transcribe_track(p, sp, req.whisper_model, req.language))
+                all_segs.extend(segs)
+                participants.append({"name": tk["speaker"], "track": _os.path.basename(tk["path"])})
+                yield {"event": "track_done", "i": i + 1, "speaker": tk["speaker"], "segs": len(segs)}
+
+            merged = _mtg_tr.merge_segments(all_segs)
+            text = _mtg_tr.segments_to_text(merged)
+            dur = int(max([s["t"] + s["dur"] for s in merged], default=0))
+            await loop.run_in_executor(None, lambda: _mtg_store.update_session(sess["id"], {
+                "status": "summarizing", "segments": merged, "transcript_text": text,
+                "participants": participants, "duration_sec": dur, "model": req.whisper_model}))
+            yield {"event": "transcribed", "segments": len(merged), "duration_sec": dur}
+
+            yield {"event": "stage", "message": "회의록 요약(LLM)"}
+            summary = await _mtg_sum.summarize(merged, title=req.title, model=req.model)
+            await loop.run_in_executor(None, lambda: _mtg_store.update_session(sess["id"], {"status": "ready", "summary": summary}))
+            yield {"event": "done", "id": sess["id"], "summary": summary,
+                   "participants": participants, "segments_count": len(merged), "duration_sec": dur}
+        except Exception as e:
+            import traceback as _tb
+            _tb.print_exc()
+            if sess:
+                try:
+                    _mtg_store.update_session(sess["id"], {"status": "error"})
+                except Exception:
+                    pass
+            yield {"event": "error", "message": str(e)}
+        finally:
+            try:
+                _sh.rmtree(workdir, ignore_errors=True)
+            except Exception:
+                pass
+
+    return _sse_indexer(gen(), busy_kind="meeting_import")
+
+
+@app.post("/meetings/sessions/{sid}/summarize")
+async def meetings_resummarize(sid: str, req: MeetingSummarizeRequest):
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    summary = await _mtg_sum.summarize(s.get("segments") or [], title=s.get("title") or "", model=req.model)
+    _mtg_store.update_session(sid, {"summary": summary, "status": "ready"})
+    return {"ok": True, "summary": summary}
+
+
+@app.post("/meetings/sessions/{sid}/export-wiki")
+async def meetings_export_wiki(sid: str, req: MeetingExportRequest):
+    """회의록 요약을 wiki_docs 문서로 내보내기."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    md = _mtg_sum.to_markdown(s.get("title") or "회의", s.get("summary") or {},
+                              started_at=s.get("started_at") or "", participants=s.get("participants") or [])
+    import time as _t
+    doc_id = f"doc_{int(_t.time() * 1000)}_{int.from_bytes(__import__('os').urandom(2), 'big')}"
+    now_ms = int(_t.time() * 1000)
+    row = {
+        "id": doc_id, "project_id": req.project_id, "parent_id": None,
+        "title": (s.get("title") or "회의") + " 회의록", "kind": "wiki", "emoji": "📝",
+        "content": md, "meta": {"meetingSessionId": sid, "tags": ["meeting", "회의록"]},
+        "sort_order": now_ms % 100000, "is_collapsed": False, "is_deprecated": False,
+        "doc_type": "plan", "linked_task_ids": [], "linked_doc_ids": [], "is_locked": False,
+        "created_by": req.user_id, "updated_by": req.user_id,
+        "update_history": [{"action": "meeting_export", "by": req.user_id, "detail": "회의록 자동 내보내기"}],
+        "updated_at": now_ms,
+    }
+    try:
+        get_store().client.table("wiki_docs").insert(row).execute()
+    except Exception as e:
+        raise HTTPException(500, f"위키 내보내기 실패: {e}")
+    _mtg_store.update_session(sid, {"wiki_doc_id": doc_id})
+    return {"ok": True, "doc_id": doc_id}
 
 
 # [r223] diff / promote

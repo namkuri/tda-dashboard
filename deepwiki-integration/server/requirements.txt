@@ -9,3 +9,5 @@ GitPython==3.1.43
 tiktoken==0.8.0
 python-docx==1.1.2  # [r202] 마인드맵 생성 시 DOCX 첨부 텍스트 추출
 pypdf==5.1.0  # [r205] 마인드맵 생성 시 PDF 첨부 텍스트 추출
+# [r242] 회의록 자동작성 — 음성→텍스트(STT). GPU 권장 + 별도 ffmpeg(PATH) 설치 필요.
+faster-whisper>=1.0.0

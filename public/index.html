@@ -4157,6 +4157,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <!-- [r81 #1] 에셋 매니저 — 문서 밑 -->
                     <button class="cs-nav" data-nav="assets" id="cs-nav-assets" onclick="switchView('assets')" title="에셋 매니저 (유니티 타겟 에셋 트리·상태·연결)"><span class="cs-ico">🎮</span><span class="cs-label">에셋 매니저</span></button>
                     <button class="cs-nav" data-nav="personal" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
+                    <!-- [r242] 회의록 자동작성 — Discord 음성(Craig) → STT → 회의록 -->
+                    <button class="cs-nav" data-nav="meetings" id="cs-nav-meetings" onclick="switchView('meetings')" title="회의록 자동작성 — Discord 음성(Craig 녹음)을 자동 텍스트화·요약"><span class="cs-ico">🎙</span><span class="cs-label">회의록 자동작성</span></button>
                     <button class="cs-nav" data-nav="graph" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
                     <!-- [r112] 진짜 Deep Wiki — 유니티 Git 레포 LLM 자동 분석 + 기획 일치도 보고서 (DeepWiki-Open 모사). 자동 생성기는 r113~r116에 단계적 구축 -->
                     <button class="cs-nav" data-nav="deepwikiPages" id="cs-nav-deepwiki-pages" onclick="switchView('deepwikiPages')" title="Deep Wiki — 유니티 Git 레포를 LLM이 자동 분석한 위키 페이지 (1차) + 기획 일치도 보고서 (2차)"><span class="cs-ico">📘</span><span class="cs-label">Deep Wiki</span></button>
@@ -5614,6 +5616,21 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div id="rfs-health-banner" style="display:none;padding:10px 22px;font-size:12.5px;font-weight:700;"></div>
             <!-- 본문 영역 -->
             <div id="rfs-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
+        </div>
+
+        <!-- [r242] 회의록 자동작성 — Discord 음성(Craig) → STT → 회의록 -->
+        <div id="meetings-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:hidden;background:var(--c-paper);display:flex;flex-direction:column;">
+            <div style="padding:14px 22px;border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:12px;background:var(--c-card);">
+                <div style="font-size:20px;">🎙</div>
+                <div style="flex:1;">
+                    <div style="font-size:15px;font-weight:800;color:var(--c-text);">회의록 자동작성 <span id="mtg-title" style="color:var(--c-text2);font-weight:600;font-size:13px;margin-left:8px;"></span></div>
+                    <div style="font-size:11px;color:var(--c-text3);margin-top:2px;">Discord 음성 → Craig 녹음 → 화자별 STT → LLM 회의록</div>
+                </div>
+                <button class="aihub-gpu-btn primary" style="font-size:12px;" onclick="mtgImportDialog()">+ Craig 가져오기</button>
+                <button class="aihub-gpu-btn" style="font-size:12px;" onclick="mtgOpen()">← 회의 목록</button>
+            </div>
+            <div id="mtg-health-banner" style="display:none;padding:10px 22px;font-size:12.5px;font-weight:700;"></div>
+            <div id="mtg-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
         </div>
 
         <div id="aihub-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:auto;padding:18px 22px;background:var(--c-paper);">
@@ -10909,7 +10926,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r241';
+        var _AHUB_FRONT_REV = 'r242';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -16136,6 +16153,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var _csRfs = document.getElementById('cs-nav-refinery'); if (_csRfs) _csRfs.classList.toggle('active', viewName === 'refinery');
             var _rfsVw = document.getElementById('refinery-view'); if (_rfsVw) { _rfsVw.classList.toggle('hidden', viewName !== 'refinery'); _rfsVw.style.display = (viewName === 'refinery') ? 'flex' : 'none'; }
             if (viewName === 'refinery' && typeof rfsEnter === 'function') setTimeout(rfsEnter, 30);
+            // [r242] 회의록 자동작성
+            var _csMtg = document.getElementById('cs-nav-meetings'); if (_csMtg) _csMtg.classList.toggle('active', viewName === 'meetings');
+            var _mtgVw = document.getElementById('meetings-view'); if (_mtgVw) { _mtgVw.classList.toggle('hidden', viewName !== 'meetings'); _mtgVw.style.display = (viewName === 'meetings') ? 'flex' : 'none'; }
+            if (viewName === 'meetings' && typeof mtgOpen === 'function') setTimeout(mtgOpen, 30);
             if (viewName === 'aiHub' && typeof aihubRender === 'function') aihubRender();
             // [r208] AI Hub 진입 시 마지막 동기화 시각 갱신
             if (viewName === 'aiHub' && typeof ahubRefreshIdxBadge === 'function') setTimeout(ahubRefreshIdxBadge, 30);
@@ -17305,7 +17326,9 @@ return data;
             // [r207] AI 사용 히스토리 — 팀 공유. kind: chat|wiki|audit|mindmap. host: tunnel_url. out_summary: 산출물 요약.
             //   gpu_status_log: 호스트 상태 변화(24시간 바·집계용). status: online|busy|offline|degraded
             ['ai_usage_logs', "id text primary key, project_id text, user_id text, user_name text, kind text, model text, host text, gpu_host_id text, in_tokens int default 0, out_tokens int default 0, dur_ms bigint default 0, detail text, out_summary text, created_at timestamptz default now()"],
-            ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"]
+            ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"],
+            // [r242] 회의록 자동작성 — Craig 녹음 → STT → LLM 회의록
+            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text"]
         ];
         function dbMigrationSql() {
             var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존', ''];
@@ -31637,7 +31660,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r241';
+    var _RFS_FRONT_REV = 'r242';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31679,6 +31702,221 @@ ${intrLog}
     function rfsBackEnd() { return (_dwGetSettings() || {}).backendUrl || ''; }
     function rfsCurrentUser() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.id) || null; }
     function rfsCurrentUserName() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || rfsCurrentUser() || ''; }
+
+    // ════════════════════════════════════════════════════════════
+    // [r242] 회의록 자동작성 — Craig(Discord 음성) → STT → LLM 회의록
+    // ════════════════════════════════════════════════════════════
+    var _mtgState = { sessions: [], current: null, importing: false };
+    function _mtgFmtDur(sec) { sec = parseInt(sec || 0, 10); var m = Math.floor(sec / 60), s = sec % 60; return (m ? (m + '분 ') : '') + s + '초'; }
+    function _mtgSpeakerColor(name) {
+        var pal = ['#c96442', '#2a7ab8', '#2e9e5b', '#9a6bcf', '#b8852a', '#c0497a', '#3aa8a0', '#7a8a3a'];
+        var h = 0; name = String(name || ''); for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+        return pal[h % pal.length];
+    }
+    function mtgOpen() {
+        _mtgState.current = null;
+        var t = document.getElementById('mtg-title'); if (t) t.textContent = '';
+        mtgHealthCheck();
+        mtgLoadSessions().then(mtgRenderList);
+    }
+    async function mtgHealthCheck() {
+        var banner = document.getElementById('mtg-health-banner'); if (!banner) return;
+        var url = rfsBackEnd();
+        function show(html, bg, color) { banner.style.display = 'block'; banner.style.background = bg; banner.style.color = color; banner.innerHTML = html; }
+        if (!url) { show('⚙️ 백엔드 URL 미설정 — 설정 > Deep Wiki 백엔드 URL 입력 필요', 'rgba(245,158,11,.18)', '#92400e'); return; }
+        try {
+            var res = await fetch(url + '/meetings/health');
+            if (res.status === 404) { show('⚠ 백엔드에 <b>/meetings</b> 라우트 없음 — 백엔드 git pull + 재시작 필요', 'rgba(245,158,11,.2)', '#92400e'); return; }
+            var j = await res.json();
+            if (!j.ok) { show('⚠ 회의록 모듈 미로드 — ' + _annEsc(j.error || '') + ' (백엔드 재시작 필요)', 'rgba(245,158,11,.2)', '#92400e'); return; }
+            var stt = j.stt || {};
+            if (!stt.faster_whisper || !stt.ffmpeg) { show('⚠ STT 준비 안 됨 — ' + _annEsc(stt.error || 'faster-whisper/ffmpeg 설치 필요') + '. 서버에 <code>pip install faster-whisper</code> + <code>ffmpeg</code> 설치 후 재시작', 'rgba(245,158,11,.2)', '#92400e'); return; }
+            banner.style.display = 'none';
+        } catch (e) { show('🔴 백엔드 연결 실패 — 백엔드/URL/터널 확인', 'rgba(210,57,61,.16)', '#b53236'); }
+    }
+    async function mtgLoadSessions() {
+        var url = rfsBackEnd(); if (!url) return;
+        try {
+            var pid = activeProjectId || '';
+            var res = await fetch(url + '/meetings/sessions' + (pid ? ('?project_id=' + encodeURIComponent(pid)) : ''));
+            if (!res.ok) return;
+            var d = await res.json(); _mtgState.sessions = d.sessions || [];
+        } catch (e) { console.warn('[mtg] sessions load', e); }
+    }
+    function mtgRenderList() {
+        var main = document.getElementById('mtg-main'); if (!main) return;
+        var html = '<div style="max-width:900px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 6px;font-size:20px;">회의 세션</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:16px;">Discord에서 Craig로 녹음 후, 녹음 ID/링크로 가져오면 화자별로 텍스트화하고 회의록을 자동 작성합니다.</div>';
+        if (!_mtgState.sessions.length) {
+            html += '<div style="padding:30px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">아직 회의가 없습니다. <b>+ Craig 가져오기</b>로 시작하세요.</div>';
+        } else {
+            html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+            _mtgState.sessions.forEach(function (s) {
+                var st = s.status || 'draft';
+                var stc = ({importing: '#b8852a', transcribing: '#b8852a', summarizing: '#b8852a', ready: '#2a4a30', error: '#b53236'})[st] || '#8a8378';
+                var parts = (s.participants || []).map(function (p) { return p.name; }).join(', ');
+                html += '<div style="border:1px solid var(--c-border);border-radius:9px;padding:12px 14px;background:var(--c-card);cursor:pointer;" onclick="mtgOpenSession(\'' + s.id + '\')">'
+                    + '<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;flex:1;">🎙 ' + _annEsc(s.title) + '</span>'
+                    + '<span style="font-size:10px;padding:1px 7px;border-radius:9999px;background:' + stc + ';color:#fff;">' + st + '</span></div>'
+                    + '<div style="font-size:11px;color:var(--c-text3);margin-top:6px;">' + (parts ? ('👥 ' + _annEsc(parts) + ' · ') : '') + '⏱ ' + _mtgFmtDur(s.duration_sec) + (s.created_at ? (' · ' + new Date(s.created_at).toLocaleString()) : '') + '</div>'
+                    + '</div>';
+            });
+            html += '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+    function mtgImportDialog() {
+        if (!rfsCurrentUser()) { showToast('로그인이 필요합니다', 'alert'); return; }
+        var main = document.getElementById('mtg-main'); if (!main) return;
+        var h = '<div style="max-width:680px;margin:0 auto;">';
+        h += '<h2 style="margin:0 0 6px;font-size:18px;">+ Craig 녹음 가져오기</h2>';
+        h += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:16px;">Craig 봇이 DM으로 준 <b>녹음 링크</b>(또는 ID+key)를 붙여넣으세요. 화자별 멀티트랙을 받아 자동 텍스트화합니다.</div>';
+        h += '<div style="display:flex;flex-direction:column;gap:10px;">';
+        h += '<label style="font-size:12px;font-weight:700;">회의 제목<input id="mtg-f-title" type="text" placeholder="예: 2026 W23 기획 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
+        h += '<label style="font-size:12px;font-weight:700;">Craig 녹음 링크 또는 ID<input id="mtg-f-id" type="text" placeholder="https://craig.chat/rec/XXXX?key=YYYY  또는  XXXX" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
+        h += '<label style="font-size:12px;font-weight:700;">key (링크에 포함됐으면 비워두기)<input id="mtg-f-key" type="text" placeholder="(선택)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
+        h += '<details style="font-size:12px;"><summary style="cursor:pointer;color:var(--c-text2);">고급 옵션</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">';
+        h += '<label style="font-size:12px;">Whisper 모델 <select id="mtg-f-model" style="margin-left:6px;padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"><option value="tiny">tiny(빠름)</option><option value="base">base</option><option value="small">small</option><option value="medium" selected>medium(권장)</option><option value="large-v3">large-v3(정확/느림)</option></select></label>';
+        h += '<label style="font-size:12px;">언어 <select id="mtg-f-lang" style="margin-left:6px;padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"><option value="ko" selected>한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="">자동감지</option></select></label>';
+        h += '<label style="font-size:12px;">직접 다운로드 URL(폴백)<input id="mtg-f-url" type="text" placeholder="(Craig 자동 다운로드 실패 시 zip/오디오 직링크)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>';
+        h += '</div></details>';
+        h += '<div style="display:flex;gap:8px;margin-top:6px;"><button id="mtg-import-btn" class="aihub-gpu-btn primary" onclick="mtgRunImport()">가져오기 시작</button><button class="aihub-gpu-btn" onclick="mtgOpen()">취소</button></div>';
+        h += '</div>';
+        h += '<div id="mtg-import-progress" style="display:none;margin-top:16px;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);"><div id="mtg-import-stage" style="font-weight:700;color:var(--c-accent);"></div><div id="mtg-import-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:200px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px 8px;border-radius:6px;white-space:pre-wrap;"></div></div>';
+        h += '</div>';
+        main.innerHTML = h;
+    }
+    async function mtgRunImport() {
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        if (_mtgState.importing) { showToast('이미 가져오는 중', 'alert'); return; }
+        var title = (document.getElementById('mtg-f-title') || {}).value || '';
+        var cid = (document.getElementById('mtg-f-id') || {}).value || '';
+        var key = (document.getElementById('mtg-f-key') || {}).value || '';
+        var durl = (document.getElementById('mtg-f-url') || {}).value || '';
+        var wmodel = (document.getElementById('mtg-f-model') || {}).value || 'medium';
+        var lang = (document.getElementById('mtg-f-lang') || {}).value;
+        if (!cid.trim() && !durl.trim()) { showToast('녹음 링크/ID 또는 직접 URL을 입력하세요', 'alert'); return; }
+        _mtgState.importing = true;
+        var btn = document.getElementById('mtg-import-btn'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="rfs-dc-spinner"></span> 진행 중…'; }
+        var prog = document.getElementById('mtg-import-progress'); if (prog) prog.style.display = 'block';
+        var stageEl = document.getElementById('mtg-import-stage'), logEl = document.getElementById('mtg-import-log');
+        function stage(m) { if (stageEl) stageEl.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
+        function log(m) { if (logEl) { logEl.textContent += (logEl.textContent ? '\n' : '') + m; logEl.scrollTop = logEl.scrollHeight; } }
+        try {
+            var res = await fetch(url + '/meetings/import', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: rfsCurrentUser(), project_id: activeProjectId || null, title: title.trim(),
+                    craig_id: cid.trim() || null, craig_url: durl.trim() || null, key: key.trim() || null,
+                    whisper_model: wmodel, language: lang})
+            });
+            if (res.status === 503) { var e5 = await res.text(); throw new Error('회의록 모듈 미로드: ' + e5.slice(0, 120)); }
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(), dec = new TextDecoder(), buf = '', doneId = null;
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, {stream: true});
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'stage') { stage(ev.message); log('▶ ' + ev.message); }
+                        else if (ev.event === 'downloaded') log('  ↳ 트랙 ' + ev.count + '개 다운로드');
+                        else if (ev.event === 'track_start') { stage('STT ' + ev.i + '/' + ev.total + ' — ' + ev.speaker); }
+                        else if (ev.event === 'track_done') log('  ✓ ' + ev.speaker + ' (' + ev.segs + '문장)');
+                        else if (ev.event === 'transcribed') log('  📝 대화 ' + ev.segments + '세그먼트 · ' + _mtgFmtDur(ev.duration_sec));
+                        else if (ev.event === 'done') { doneId = ev.id; log('✅ 회의록 완료'); }
+                        else if (ev.event === 'error') { log('❌ ' + ev.message); showToast('가져오기 실패: ' + ev.message, 'alert'); }
+                    } catch (e) {}
+                }
+            }
+            _mtgState.importing = false;
+            await mtgLoadSessions();
+            if (doneId) mtgOpenSession(doneId); else mtgRenderList();
+        } catch (e) {
+            _mtgState.importing = false;
+            if (btn) { btn.disabled = false; btn.textContent = '가져오기 시작'; }
+            log('❌ ' + (e.message || e)); showToast('가져오기 실패: ' + (e.message || e), 'alert');
+        }
+    }
+    async function mtgOpenSession(id) {
+        var url = rfsBackEnd(); if (!url) return;
+        var main = document.getElementById('mtg-main'); if (main) main.innerHTML = '<div style="padding:40px;text-align:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            _mtgState.current = await res.json();
+            mtgRenderDetail();
+        } catch (e) { showToast('회의 로드 실패: ' + (e.message || e), 'alert'); mtgRenderList(); }
+    }
+    function mtgRenderDetail() {
+        var main = document.getElementById('mtg-main'); var s = _mtgState.current; if (!main || !s) return;
+        var t = document.getElementById('mtg-title'); if (t) t.textContent = '— ' + s.title;
+        var segs = s.segments || [], sum = s.summary || {};
+        var h = '<div style="display:flex;gap:14px;align-items:flex-start;">';
+        // 좌: 대화내역
+        h += '<div style="flex:1;min-width:0;border:1px solid var(--c-border);border-radius:10px;background:var(--c-paper);max-height:80vh;overflow-y:auto;">';
+        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;font-weight:700;font-size:13px;">💬 대화내역 <span style="color:var(--c-text3);font-weight:400;">' + segs.length + '문장 · ' + _mtgFmtDur(s.duration_sec) + '</span></div>';
+        h += '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px;">';
+        if (!segs.length) h += '<div style="color:var(--c-text3);">대화내역이 없습니다.</div>';
+        segs.forEach(function (g) {
+            var c = _mtgSpeakerColor(g.speaker); var tt = parseInt(g.t || 0, 10); var mm = Math.floor(tt / 60), ss = tt % 60;
+            h += '<div style="display:flex;gap:8px;font-size:12.5px;line-height:1.5;">'
+                + '<span style="flex-shrink:0;color:var(--c-text3);font-family:ui-monospace,monospace;font-size:10.5px;width:38px;text-align:right;">' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss + '</span>'
+                + '<span style="flex-shrink:0;font-weight:700;color:' + c + ';min-width:64px;">' + _annEsc(g.speaker) + '</span>'
+                + '<span style="flex:1;">' + _annEsc(g.text) + '</span></div>';
+        });
+        h += '</div></div>';
+        // 우: 회의록
+        h += '<div style="flex:0 0 420px;max-width:44%;border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);max-height:80vh;overflow-y:auto;">';
+        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;display:flex;align-items:center;gap:6px;"><span style="font-weight:700;font-size:13px;flex:1;">📝 회의록</span>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgResummarize(\'' + s.id + '\')">🔄 재요약</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgExportWiki(\'' + s.id + '\')">📄 위키로</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;border-color:#d2393d;color:#d2393d;" onclick="mtgDelete(\'' + s.id + '\')">🗑</button></div>';
+        h += '<div style="padding:12px 14px;font-size:12.5px;line-height:1.6;">';
+        if (sum.error) h += '<div style="color:#b53236;font-size:11.5px;margin-bottom:8px;">⚠ ' + _annEsc(sum.error) + '</div>';
+        if (sum.tldr) h += '<div style="font-weight:700;margin-bottom:4px;">요약</div><div style="margin-bottom:12px;color:var(--c-text2);">' + _annEsc(sum.tldr) + '</div>';
+        if ((sum.agenda || []).length) { h += '<div style="font-weight:700;margin-bottom:4px;">안건</div><ul style="margin:0 0 12px;padding-left:18px;color:var(--c-text2);">' + sum.agenda.map(function (a) { return '<li>' + _annEsc(a) + '</li>'; }).join('') + '</ul>'; }
+        if ((sum.topics || []).length) { h += '<div style="font-weight:700;margin-bottom:4px;">논의</div>'; sum.topics.forEach(function (tp) { h += '<div style="margin-bottom:8px;"><div style="font-weight:600;">• ' + _annEsc(tp.title || '') + '</div><div style="color:var(--c-text3);font-size:12px;margin-left:10px;">' + _annEsc(tp.summary || '') + '</div></div>'; }); }
+        if ((sum.decisions || []).length) { h += '<div style="font-weight:700;margin:8px 0 4px;">결정사항</div><ul style="margin:0 0 12px;padding-left:18px;color:var(--c-text2);">' + sum.decisions.map(function (d) { return '<li>' + _annEsc(d) + '</li>'; }).join('') + '</ul>'; }
+        if ((sum.action_items || []).length) { h += '<div style="font-weight:700;margin:8px 0 4px;">액션 아이템</div><div style="display:flex;flex-direction:column;gap:4px;">' + sum.action_items.map(function (a) { var due = a.due ? (' <span style="color:var(--c-text3);">(' + _annEsc(a.due) + ')</span>') : ''; return '<label style="display:flex;gap:6px;align-items:baseline;"><input type="checkbox" disabled><span><b>' + _annEsc(a.who || '') + '</b> — ' + _annEsc(a.what || '') + due + '</span></label>'; }).join('') + '</div>'; }
+        if (!sum.tldr && !(sum.agenda || []).length && !(sum.decisions || []).length) h += '<div style="color:var(--c-text3);">요약이 없습니다. 🔄 재요약을 눌러보세요.</div>';
+        if (s.wiki_doc_id) h += '<div style="margin-top:12px;font-size:11px;color:var(--c-text3);">✓ 위키 문서로 내보냄</div>';
+        h += '</div></div>';
+        h += '</div>';
+        main.innerHTML = h;
+    }
+    async function mtgResummarize(id) {
+        var url = rfsBackEnd(); if (!url) return;
+        showToast('🔄 재요약 중…', 'info');
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/summarize', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})});
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            await mtgOpenSession(id); showToast('✓ 재요약 완료', 'success');
+        } catch (e) { showToast('재요약 실패: ' + (e.message || e), 'alert'); }
+    }
+    async function mtgExportWiki(id) {
+        var url = rfsBackEnd(); if (!url) return;
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/export-wiki', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: rfsCurrentUser(), project_id: activeProjectId || null})});
+            if (!res.ok) { var er = await res.text(); throw new Error(er.slice(0, 150)); }
+            var d = await res.json();
+            showToast('✓ 위키 문서로 내보냄', 'success');
+            if (typeof initSupabase === 'function') { try { await initSupabase(); } catch (e) {} }
+            if (_mtgState.current && _mtgState.current.id === id) { _mtgState.current.wiki_doc_id = d.doc_id; mtgRenderDetail(); }
+        } catch (e) { showToast('내보내기 실패: ' + (e.message || e), 'alert'); }
+    }
+    async function mtgDelete(id) {
+        var ok = await uiConfirm({title: '회의 삭제', message: '이 회의 세션(대화내역·회의록)을 삭제할까요?', confirmText: '삭제', danger: true});
+        if (!ok) return;
+        var url = rfsBackEnd(); if (!url) return;
+        try { await fetch(url + '/meetings/sessions/' + id, {method: 'DELETE'}); } catch (e) {}
+        _mtgState.current = null; await mtgLoadSessions(); mtgRenderList();
+        showToast('삭제됨', 'info');
+    }
 
     function _rfsLog(msg) {
         _rfsState.log.push({at: new Date().toISOString(), msg: msg});
