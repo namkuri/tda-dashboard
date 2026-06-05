@@ -30,6 +30,20 @@ if errorlevel 1 (
     goto :error
 )
 
+REM ---------- [r243] Meeting minutes STT deps (non-fatal: only meetings feature) ----------
+where ffmpeg >nul 2>nul
+if errorlevel 1 (
+    echo [WARN] ffmpeg NOT on PATH - meeting transcription disabled. Install: winget install Gyan.FFmpeg  then use a NEW shell.
+) else (
+    echo [OK] ffmpeg found
+)
+python -c "import faster_whisper" 2>nul
+if errorlevel 1 (
+    echo [WARN] faster-whisper NOT installed in venv - run: pip install faster-whisper   ^(run check_meetings.bat for details^)
+) else (
+    echo [OK] faster-whisper installed
+)
+
 echo [OK] venv ready - auto-reload enabled
 echo.
 echo Server: http://localhost:8000
