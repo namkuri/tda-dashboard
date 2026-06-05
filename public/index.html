@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r243';
+        var _AHUB_FRONT_REV = 'r244';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31704,7 +31704,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r243';
+    var _RFS_FRONT_REV = 'r244';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31750,14 +31750,17 @@ ${intrLog}
     // ════════════════════════════════════════════════════════════
     // [r242] 회의록 자동작성 — Craig(Discord 음성) → STT → LLM 회의록
     // ════════════════════════════════════════════════════════════
-    var _mtgState = { sessions: [], current: null, importing: false };
+    var _mtgState = { sessions: [], current: null, importing: false, _poll: null };
     function _mtgFmtDur(sec) { sec = parseInt(sec || 0, 10); var m = Math.floor(sec / 60), s = sec % 60; return (m ? (m + '분 ') : '') + s + '초'; }
+    function _mtgInProgress(s) { return s && ['importing', 'transcribing', 'summarizing'].indexOf(s.status) >= 0; }
+    function _mtgStopPoll() { if (_mtgState._poll) { clearInterval(_mtgState._poll); _mtgState._poll = null; } }
     function _mtgSpeakerColor(name) {
         var pal = ['#c96442', '#2a7ab8', '#2e9e5b', '#9a6bcf', '#b8852a', '#c0497a', '#3aa8a0', '#7a8a3a'];
         var h = 0; name = String(name || ''); for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
         return pal[h % pal.length];
     }
     function mtgOpen() {
+        _mtgStopPoll();
         _mtgState.current = null;
         var t = document.getElementById('mtg-title'); if (t) t.textContent = '';
         mtgHealthCheck();
@@ -31813,6 +31816,7 @@ ${intrLog}
     }
     function mtgImportDialog() {
         if (!rfsCurrentUser()) { showToast('로그인이 필요합니다', 'alert'); return; }
+        _mtgStopPoll();
         var main = document.getElementById('mtg-main'); if (!main) return;
         var h = '<div style="max-width:680px;margin:0 auto;">';
         h += '<h2 style="margin:0 0 6px;font-size:18px;">+ Craig 녹음 가져오기</h2>';
@@ -31904,21 +31908,40 @@ ${intrLog}
             log('❌ ' + (e.message || e)); showToast('가져오기 실패: ' + (e.message || e), 'alert');
         }
     }
-    async function mtgOpenSession(id) {
+    async function mtgOpenSession(id, _isPoll) {
         var url = rfsBackEnd(); if (!url) return;
-        var main = document.getElementById('mtg-main'); if (main) main.innerHTML = '<div style="padding:40px;text-align:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
+        var main = document.getElementById('mtg-main');
+        if (main && !_isPoll) main.innerHTML = '<div style="padding:40px;text-align:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
         try {
             var res = await fetch(url + '/meetings/sessions/' + id);
             if (!res.ok) throw new Error('HTTP ' + res.status);
             _mtgState.current = await res.json();
             mtgRenderDetail();
+            // [r244] 처리 중이면 자동 새로고침(폴링), 완료/에러면 중지
+            _mtgStopPoll();
+            if (_mtgInProgress(_mtgState.current)) {
+                _mtgState._poll = setInterval(function () {
+                    if (!_mtgState.current || _mtgState.current.id !== id || currentView !== 'meetings') { _mtgStopPoll(); return; }
+                    mtgOpenSession(id, true);
+                }, 5000);
+            }
         } catch (e) { showToast('회의 로드 실패: ' + (e.message || e), 'alert'); mtgRenderList(); }
     }
     function mtgRenderDetail() {
         var main = document.getElementById('mtg-main'); var s = _mtgState.current; if (!main || !s) return;
         var t = document.getElementById('mtg-title'); if (t) t.textContent = '— ' + s.title;
         var segs = s.segments || [], sum = s.summary || {};
-        var h = '<div style="display:flex;gap:14px;align-items:flex-start;">';
+        var h = '';
+        // [r244] 처리 중 배너 (자동 새로고침 중)
+        if (_mtgInProgress(s)) {
+            var stmsg = ({importing: '오디오 준비/다운로드', transcribing: '화자별 STT', summarizing: '회의록 요약'})[s.status] || '처리';
+            h += '<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--c-border);border-radius:8px;background:rgba(245,158,11,.14);color:#92400e;font-size:12.5px;display:flex;align-items:center;gap:8px;">'
+                + '<span class="rfs-dc-spinner"></span><span style="flex:1;"><b>' + stmsg + ' 진행 중</b> — 5초마다 자동 새로고침. <b>가져오기 창</b>을 닫거나 새로고침/페이지 이탈 시 처리가 중단됩니다. (긴 회의·CPU면 수 분 소요, 백엔드 콘솔에 진행 표시)</span>'
+                + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgOpenSession(\'' + s.id + '\',true)">🔄 새로고침</button></div>';
+        } else if (s.status === 'error') {
+            h += '<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #d2393d;border-radius:8px;background:rgba(210,57,61,.12);color:#b53236;font-size:12.5px;">❌ 처리 실패 — 백엔드 콘솔에서 원인 확인. 🗑로 지우고 다시 시도(자동 다운로드가 안 되면 파일 업로드 권장).</div>';
+        }
+        h += '<div style="display:flex;gap:14px;align-items:flex-start;">';
         // 좌: 대화내역
         h += '<div style="flex:1;min-width:0;border:1px solid var(--c-border);border-radius:10px;background:var(--c-paper);max-height:80vh;overflow-y:auto;">';
         h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;font-weight:700;font-size:13px;">💬 대화내역 <span style="color:var(--c-text3);font-weight:400;">' + segs.length + '문장 · ' + _mtgFmtDur(s.duration_sec) + '</span></div>';
