@@ -23,12 +23,16 @@ alter table if exists product_stages add column if not exists stream_id text;
 -- ── wbs_nodes: Stream (체인은 기존 links jsonb 로 표현) ──────
 alter table if exists wbs_nodes add column if not exists stream_id text;
 
+-- ── wiki_docs: Stream (정의·분류 축). 출처 키워드(origin_node_ids)는 기존 meta(jsonb)에 stash ──
+alter table if exists wiki_docs add column if not exists stream_id text;
+
 -- ── 조회 가속(선택) ─────────────────────────────────────────
 create index if not exists idx_tasks_stream    on tasks(stream_id);
 create index if not exists idx_sprints_stream  on sprints(stream_id);
 create index if not exists idx_sprints_stage   on sprints(stage_id);
 create index if not exists idx_stages_stream   on product_stages(stream_id);
 create index if not exists idx_wbs_stream      on wbs_nodes(stream_id);
+create index if not exists idx_wiki_stream     on wiki_docs(stream_id);
 
 -- ============================================================
 -- 위키 표준 분류체계 (계획서 §7-A, 결정 #5)

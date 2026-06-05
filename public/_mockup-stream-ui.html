@@ -29,8 +29,16 @@
   .ptag.art{background:#f3e6dd;color:#9a5a37;border-color:#e7cdb9;}
   .ptag.tool{background:#e9ece2;color:#566041;border-color:#d6dcc6;}
 
-  /* ── 흐름(5열) ── */
-  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:start;}
+  /* ── 흐름(6열: 위키 | 키워드 | Task | Sprint | STAGE | WBS) ── */
+  .flow{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;align-items:start;}
+  .axis{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--c-text3);margin:2px 0 8px;flex-wrap:wrap;}
+  .axis b.def{color:#8a5f72;}
+  .axis b.hub{color:var(--c-accent);}
+  .axis b.flw{color:#9a6a3a;}
+  .col.wiki-col{background:#f3eef4;border-color:#e3d6e6;}
+  .scard.wikicard{background:#fbf6fb;border-color:#e6d8e8;}
+  .scard.wikicard.cat{background:#efe2f0;border-color:#ddc9df;}
+  .scard.wikicard.hot{border-color:#8a5f72;box-shadow:0 0 0 2px rgba(138,95,114,.25);}
   .col{background:var(--c-card2);border:1px solid var(--c-border);border-radius:12px;padding:8px;min-height:200px;}
   .col-h{font-size:12px;font-weight:800;color:var(--c-text2);padding:4px 6px 8px;display:flex;align-items:center;gap:6px;}
   .col-h .n{margin-left:auto;font-weight:400;color:var(--c-text3);}
@@ -77,7 +85,7 @@
 <body>
 <div class="wrap">
   <h1>연구 정련소 — 도출 Stream UI <span style="color:var(--c-accent);">목업</span></h1>
-  <div class="sub">예시 문서 <b>'전투 시스템 설계.md'</b> → 분해 → 도출된 한 묶음(Stream): <b>전투 코어 MVP</b>. 카드에 마우스를 올리면 <b>키워드 → Task → Sprint → STAGE → WBS</b> 계보가 강조됩니다. (정적 목업 — 실제 동작 아님)</div>
+  <div class="sub">예시 문서 <b>'전투 시스템 설계.md'</b> → 분해 → 도출된 한 묶음(Stream): <b>전투 코어 MVP</b>. 카드에 마우스를 올리면 계보가 강조됩니다 — 키워드(허브) 기준 <b>왼쪽=위키(정의·분류)</b>, <b>오른쪽=Task→Sprint→STAGE→WBS(작업·시간)</b>. (정적 목업 — 실제 동작 아님)</div>
 
   <div class="toolbar">
     <div class="seg">
@@ -101,16 +109,28 @@
 
   <!-- ══════════ 흐름(5열) ══════════ -->
   <div id="view-flow">
-    <div class="arrowrow"><div></div><div>→</div><div>→</div><div>→</div><div>→</div></div>
+    <div class="axis">
+      <b class="def">📚 위키 = 정의·분류 축 (시간 흐름과 무관)</b><span>◂</span>
+      <b class="hub">🌲 키워드 = 허브</b><span>▸</span>
+      <b class="flw">작업·시간 흐름: Task → Sprint → STAGE → WBS</b>
+    </div>
     <div class="flow">
-      <!-- 1 키워드 노드 -->
+      <!-- 0 위키 (정의·분류 축 — 키워드 좌측) -->
+      <div class="col wiki-col">
+        <div class="col-h">📚 위키 (정의·분류) <span class="n">3</span></div>
+        <div class="scard wikicard cat" data-id="wk0" data-link="wk1 wk2 wk3"><span class="chk">✓</span><div class="ttl">1.1 전투 (분류)</div><div class="mini">WIKI_TAX · 필요 가지만 생성</div></div>
+        <div class="scard wikicard" data-id="wk1" data-link="n2 n3"><span class="chk">✓</span><div class="ttl">📄 콤보 시스템</div><div class="mini"><span class="origin">⟵ 콤보·캔슬</span></div><div class="mini">정의·규칙·파라미터(Well-Defined)</div></div>
+        <div class="scard wikicard" data-id="wk2" data-link="n4"><span class="chk">✓</span><div class="ttl">📄 히트박스 판정</div><div class="mini"><span class="origin">⟵ 히트박스</span></div><div class="mini">정의·파라미터</div></div>
+        <div class="scard wikicard" data-id="wk3" data-link="n5"><span class="chk">✓</span><div class="ttl">📄 가드·패링</div><div class="mini"><span class="origin">⟵ 가드</span></div><div class="mini">정의·규칙</div></div>
+      </div>
+      <!-- 1 키워드 노드 (허브) -->
       <div class="col">
         <div class="col-h">🌲 키워드 노드 <span class="n">5</span></div>
-        <div class="scard cat" data-id="n1" data-link="n2 n3 n4 n5"><span class="chk">✓</span><div class="ttl">전투 시스템</div><div class="mini">분류 · 마인드맵 추출</div></div>
-        <div class="scard" data-id="n2" data-link="t2 t3"><span class="chk">✓</span><div class="ttl">콤보</div><div class="mini">concept · 신뢰도 88</div></div>
-        <div class="scard" data-id="n3" data-link="t4"><span class="chk">✓</span><div class="ttl">캔슬</div><div class="mini">concept · 신뢰도 80</div></div>
-        <div class="scard" data-id="n4" data-link="t1 t6"><span class="chk">✓</span><div class="ttl">히트박스</div><div class="mini">concept · 신뢰도 85</div></div>
-        <div class="scard" data-id="n5" data-link="t5 t7"><span class="chk">✓</span><div class="ttl">가드/패링</div><div class="mini">concept · 신뢰도 76</div></div>
+        <div class="scard cat" data-id="n1" data-link="wk0 n2 n3 n4 n5"><span class="chk">✓</span><div class="ttl">전투 시스템</div><div class="mini">분류 · 마인드맵 추출</div></div>
+        <div class="scard" data-id="n2" data-link="wk1 t2 t3"><span class="chk">✓</span><div class="ttl">콤보</div><div class="mini">concept · 신뢰도 88</div></div>
+        <div class="scard" data-id="n3" data-link="wk1 t4"><span class="chk">✓</span><div class="ttl">캔슬</div><div class="mini">concept · 신뢰도 80</div></div>
+        <div class="scard" data-id="n4" data-link="wk2 t1 t6"><span class="chk">✓</span><div class="ttl">히트박스</div><div class="mini">concept · 신뢰도 85</div></div>
+        <div class="scard" data-id="n5" data-link="wk3 t5 t7"><span class="chk">✓</span><div class="ttl">가드/패링</div><div class="mini">concept · 신뢰도 76</div></div>
       </div>
       <!-- 2 Task -->
       <div class="col">
@@ -159,7 +179,13 @@
 
   <!-- ══════════ 트리 뷰 ══════════ -->
   <div id="view-tree" class="tree hide">
-    <div class="hint">STAGE → Sprint → Task 계보를 접고 펴며 위→아래로 본다. 각 Task에 공정 배지 + ⟵ 출처 키워드.</div>
+    <div class="hint">작업·시간 축은 STAGE → Sprint → Task 로, 위키(정의) 축은 별도 블록으로 본다. 각 Task/문서에 ⟵ 출처 키워드.</div>
+    <details open style="border-color:#e3d6e6;background:#f7f1f8;">
+      <summary><span class="chk" style="position:static;">✓</span>📚 위키 (정의·분류 축) — 1.1 전투 <span class="spgoal">시간 흐름과 무관 · 필요 가지만 생성</span></summary>
+      <div class="taskline">📄 콤보 시스템 <span class="origin">⟵ 콤보·캔슬</span><span class="spgoal">정의·규칙·파라미터</span></div>
+      <div class="taskline">📄 히트박스 판정 <span class="origin">⟵ 히트박스</span><span class="spgoal">정의·파라미터</span></div>
+      <div class="taskline">📄 가드·패링 <span class="origin">⟵ 가드</span><span class="spgoal">정의·규칙</span></div>
+    </details>
     <details open>
       <summary><span class="chk" style="position:static;">✓</span>🎯 전투 코어 MVP <span class="badge">MVP</span><span class="badge life">build</span><span class="spgoal">Sprint 3 · 공정 4종 · 예상 6.5d</span></summary>
 
@@ -185,7 +211,7 @@
     <div class="hint">🏗 이 STAGE는 채택 시 기존 WBS '전투 시스템'에 부착되고, Sprint 3개가 타임라인 막대(W23~W25)로 배치됩니다.</div>
   </div>
 
-  <div class="note">📝 <b>두 방식 비교</b> — <b>흐름(5열)</b>: 키워드→WBS 인과를 가로로 한눈에, 마우스오버로 계보 추적이 직관적(선별 판단에 강함). <b>트리</b>: STAGE 중심으로 위→아래 정리, 화면이 좁아도 보기 편하고 모바일 친화적. 둘 다 만들어 <b>토글 제공</b>도 가능합니다. 어느 쪽을 기본으로 할지 알려주세요.</div>
+  <div class="note">📝 <b>채택: 흐름(6열) 기본 + 트리 토글.</b> 키워드(허브)를 가운데 두고 <b>왼쪽=위키(정의·분류 축, 시간 무관)</b>, <b>오른쪽=Task→Sprint→STAGE→WBS(작업·시간 축)</b>. 한 키워드에 마우스를 올리면 그 키워드의 <b>위키 문서</b>와 <b>작업 계보</b>가 동시에 강조돼 위키까지 한 번에 추적됩니다. 트리 뷰는 위키(정의)와 STAGE(작업)를 별도 블록으로 정리.</div>
 </div>
 
 <script>
