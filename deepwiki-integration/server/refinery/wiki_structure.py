@@ -107,6 +107,7 @@ async def derive_wiki_structure(
     nodes: List[Dict[str, Any]],
     wiki_tax: Optional[List[Dict[str, Any]]] = None,
     context: str = "",
+    instruction: str = "",
     model: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """분해 노드 → WIKI_TAX 매핑 위키 구조(목차). SSE: stage / doc_proposed / done."""
@@ -122,6 +123,8 @@ async def derive_wiki_structure(
         "위 키워드 계층을 참조해, 각 말단 게임요소를 4단계 이상 깊은 폴더로 흩어 "
         "위키 문서 구조(목차) JSON 으로 출력하세요. 같은 폴더에 몰지 마세요."
     )
+    if instruction:
+        prompt += f"\n\n[추가 지시]\n{instruction}"
     buf = ""
     try:
         async for delta in llm.chat_stream(

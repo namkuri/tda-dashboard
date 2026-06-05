@@ -103,6 +103,7 @@ async def stagize(
     tasks: List[Dict[str, Any]],
     context: str = "",
     rule: str = "auto",
+    instruction: str = "",
     model: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """스프린트 → STAGE 정의 (SSE: stage / stage_proposed / done)."""
@@ -118,6 +119,8 @@ async def stagize(
             for s in sorted(sprints, key=lambda x: x.get("seq", 0))
         )
         prompt = f"[기존 프로젝트]\n{context or '(없음)'}\n\n[스프린트(실제 작업 포함)]\n{sp_block}\n\n핵심 내용을 담은 STAGE 묶음 JSON 출력."
+        if instruction:
+            prompt += f"\n\n[추가 지시]\n{instruction}"
         buf = ""
         try:
             async for delta in llm.chat_stream(

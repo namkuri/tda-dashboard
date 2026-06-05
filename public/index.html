@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r266';
+        var _AHUB_FRONT_REV = 'r267';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31749,7 +31749,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r266';
+    var _RFS_FRONT_REV = 'r267';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -34205,7 +34205,7 @@ ${intrLog}
         var h = '<div class="rfs-st-axis"><b style="color:var(--c-accent);opacity:.85;">📚 위키=정의축</b><span>◂</span><b style="color:var(--c-accent);">🌲 키워드(허브)</b><span>▸</span><b style="color:var(--c-text2);">작업·시간: Task→Sprint→STAGE→WBS</b></div>';
         h += '<div class="rfs-st-flow">';
         // 0 위키
-        h += '<div class="rfs-st-col wikicol"><div class="rfs-st-h">📚 위키 (정의) <button class="rfs-st-add" onclick="rfsStreamAddItem(\'wiki\')">+ 추가</button><span class="n">' + wiki.length + '</span></div>';
+        h += '<div class="rfs-st-col wikicol"><div class="rfs-st-h">📚 위키 (정의) <button class="rfs-st-add" onclick="rfsStreamAdjustDialog(\'wiki\')" title="재도출">🔄</button><button class="rfs-st-add" onclick="rfsStreamAddItem(\'wiki\')">+ 추가</button><span class="n">' + wiki.length + '</span></div>';
         if (!wiki.length) h += '<div style="font-size:10.5px;color:var(--c-text3);padding:4px;">위키 구조는 <b>⑤</b>에서 도출·채택합니다. 채택 후 여기서 키워드↔위키 계보가 보입니다.</div>';
         wiki.forEach(function (wk) {
             h += _rfsStreamCard('wiki', wk.id, '<div class="ttl">📄 ' + _annEsc(wk.title) + '</div>' + ((wk.outline || []).length ? '<div class="mini">목차 ' + wk.outline.length + '</div>' : ''), { wiki: true, nocheck: true, link: (wk.origin_node_ids || wk.node_ids || []) });
@@ -34225,7 +34225,7 @@ ${intrLog}
         (byParent['__root'] || []).forEach(function (n) { renderNode(n, 0); });
         h += '</div>';
         // 2 Task
-        h += '<div class="rfs-st-col"><div class="rfs-st-h">✅ Task <button class="rfs-st-add" onclick="rfsStreamAddItem(\'tasks\')">+ 추가</button><span class="n">' + tasks.length + '</span></div>';
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">✅ Task <button class="rfs-st-add" onclick="rfsStreamAdjustDialog(\'tasks\')" title="재도출">🔄</button><button class="rfs-st-add" onclick="rfsStreamAddItem(\'tasks\')">+ 추가</button><span class="n">' + tasks.length + '</span></div>';
         tasks.forEach(function (t) {
             var dep = (t.depends_on || []).length ? '<span class="rfs-st-dep">의존 ' + t.depends_on.length + '</span>' : '';
             var tag = t.process_tag ? '<span class="rfs-st-tag">' + _annEsc(t.process_tag) + ' ' + _annEsc(_rfsTagName(t.process_tag)) + '</span>' : '<span style="font-size:9.5px;color:#b0651f;">공정?</span>';
@@ -34235,14 +34235,14 @@ ${intrLog}
         });
         h += '</div>';
         // 3 Sprint
-        h += '<div class="rfs-st-col"><div class="rfs-st-h">🏃 Sprint <button class="rfs-st-add" onclick="rfsStreamAddItem(\'sprints\')">+ 추가</button><span class="n">' + sprints.length + '</span></div>';
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">🏃 Sprint <button class="rfs-st-add" onclick="rfsStreamAdjustDialog(\'sprints\')" title="재도출">🔄</button><button class="rfs-st-add" onclick="rfsStreamAddItem(\'sprints\')">+ 추가</button><span class="n">' + sprints.length + '</span></div>';
         sprints.forEach(function (sp) {
             h += _rfsStreamCard('sprints', sp.id, '<div class="ttl">🏃 ' + _annEsc(sp.week_label || ('Sprint ' + sp.seq)) + '</div><div class="mini">Task ' + (sp.task_ids || []).length + ' · ' + Math.round(sp.hours || 0) + 'h' + (sp.goal ? '' : '') + '</div>' + (sp.goal ? '<div class="mini" style="color:var(--c-text2);">' + _annEsc(sp.goal) + '</div>' : ''),
                 { link: (sp.task_ids || []).concat([seqStage[sp.seq]]) });
         });
         h += '</div>';
         // 4 STAGE
-        h += '<div class="rfs-st-col"><div class="rfs-st-h">🎯 STAGE <button class="rfs-st-add" onclick="rfsStreamAddItem(\'stages\')">+ 추가</button><span class="n">' + stages.length + '</span></div>';
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">🎯 STAGE <button class="rfs-st-add" onclick="rfsStreamAdjustDialog(\'stages\')" title="재도출">🔄</button><button class="rfs-st-add" onclick="rfsStreamAddItem(\'stages\')">+ 추가</button><span class="n">' + stages.length + '</span></div>';
         stages.forEach(function (stg) {
             var tags = (stg.tags || []).map(function (tg) { return '<span class="rfs-st-tag">' + _annEsc(tg) + '</span>'; }).join('');
             var spIds = sprints.filter(function (sp) { return (stg.sprint_seqs || []).indexOf(sp.seq) >= 0; }).map(function (sp) { return sp.id; });
@@ -34251,7 +34251,7 @@ ${intrLog}
         });
         h += '</div>';
         // 5 WBS + 타임라인
-        h += '<div class="rfs-st-col"><div class="rfs-st-h">🏗 WBS+타임라인 <button class="rfs-st-add" onclick="rfsStreamAddItem(\'wbs\')">+ 추가</button><span class="n">' + wbs.length + '</span></div>';
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">🏗 WBS+타임라인 <button class="rfs-st-add" onclick="rfsStreamAdjustDialog(\'wbs\')" title="재도출">🔄</button><button class="rfs-st-add" onclick="rfsStreamAddItem(\'wbs\')">+ 추가</button><span class="n">' + wbs.length + '</span></div>';
         wbs.forEach(function (w) {
             var segs = (w.links || {})._segments || [];
             var spIds = sprints.filter(function (sp) { return ((w.links || {}).taskIds || []).some(function (tid) { return (sp.task_ids || []).indexOf(tid) >= 0; }); }).map(function (sp) { return sp.id; });
@@ -34574,6 +34574,81 @@ ${intrLog}
             }
             _rfsState.streamDirty = false;
             showToast('🔗 다른 열 재조정 완료', 'success');
+        } catch (e) { showToast('재조정 실패: ' + (e.message || e), 'alert'); }
+        _rfsState.streamRunning = false; if (_rfsState.step === 4) rfsRenderStreamStep();
+    }
+
+    // ── [r267] #3 열별 재도출 — 증량/압축 옵션 팝업 + 연쇄
+    function rfsStreamAdjustDialog(column) {
+        if (_rfsState.streamRunning) { showToast('진행 중에는 불가', 'alert'); return; }
+        var label = { tasks: 'Task', sprints: 'Sprint', stages: 'STAGE', wbs: 'WBS', wiki: '위키 구조' }[column] || column;
+        var levels = [['-2', '🗜 압축강'], ['-1', '압축'], ['0', '유지'], ['1', '증량'], ['2', '📈 증량강']];
+        var lv = 0;
+        var ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;';
+        ov.innerHTML = '<div style="background:var(--c-card);border:1px solid var(--c-border);border-radius:12px;padding:18px 20px;max-width:440px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.3);">'
+            + '<div style="font-weight:800;font-size:15px;margin-bottom:4px;">🔄 ' + label + ' 재도출</div>'
+            + '<div style="font-size:11.5px;color:var(--c-text3);margin-bottom:12px;">증량(더 잘게·많이) ↔ 압축(더 크게·적게) 정도와 상세 지시를 정하세요.</div>'
+            + '<div style="font-size:11px;color:var(--c-text2);margin-bottom:5px;">정도</div>'
+            + '<div id="rfs-adj-levels" style="display:flex;gap:5px;margin-bottom:12px;">' + levels.map(function (l) { return '<button data-lv="' + l[0] + '" style="flex:1;padding:6px 4px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text2);font-size:11px;cursor:pointer;">' + l[1] + '</button>'; }).join('') + '</div>'
+            + '<div style="font-size:11px;color:var(--c-text2);margin-bottom:5px;">상세 지시(선택)</div>'
+            + '<textarea id="rfs-adj-instr" rows="3" placeholder="예: 전투 관련 작업을 더 세분화. UI 작업은 통합." style="width:100%;box-sizing:border-box;padding:7px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);font-size:12px;resize:vertical;"></textarea>'
+            + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button id="rfs-adj-cancel" class="aihub-gpu-btn">취소</button><button id="rfs-adj-go" class="aihub-gpu-btn primary">🔄 재도출</button></div></div>';
+        document.body.appendChild(ov);
+        function setLv(v) { lv = parseInt(v); ov.querySelectorAll('#rfs-adj-levels button').forEach(function (b) { var on = b.getAttribute('data-lv') === String(lv); b.style.background = on ? 'var(--c-accent)' : 'var(--c-paper)'; b.style.color = on ? '#fff' : 'var(--c-text2)'; b.style.borderColor = on ? 'var(--c-accent)' : 'var(--c-border)'; }); }
+        ov.querySelectorAll('#rfs-adj-levels button').forEach(function (b) { b.onclick = function () { setLv(b.getAttribute('data-lv')); }; });
+        setLv(0);
+        function close() { if (ov.parentNode) document.body.removeChild(ov); }
+        ov.querySelector('#rfs-adj-cancel').onclick = close;
+        ov.onclick = function (e) { if (e.target === ov) close(); };
+        ov.querySelector('#rfs-adj-go').onclick = function () { var instr = (ov.querySelector('#rfs-adj-instr').value || '').trim(); close(); rfsStreamAdjust(column, lv, instr); };
+    }
+    async function _rfsAdjustColumnCall(column, level, instruction) {
+        var url = rfsBackEnd(); var cfg = _rfsState.streamCfg; var s = _rfsState.stream || {};
+        function _log(m) { _rfsState.streamLog.push(m); var l = document.getElementById('rfs-st-log'); if (l) { l.textContent = _rfsState.streamLog.join('\n'); l.scrollTop = l.scrollHeight; } }
+        function _stage(m) { var e = document.getElementById('rfs-st-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
+        var res = await fetch(url + '/refinery/adjust-column', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId, column: column, level: level, instruction: instruction || '', tasks: s.tasks || [], sprints: s.sprints || [], stages: s.stages || [], nodes: (_rfsState.current && _rfsState.current.nodes) || [], pm_tax: _rfsPmTax(), wiki_tax: (typeof WIKI_TAX !== 'undefined' ? WIKI_TAX : []), cross_links: (_rfsState.current && _rfsState.current.cross_links) || [], project_state: _rfsProjState(), capacity_hours: cfg.capacity_hours, sprint_weeks: cfg.sprint_weeks, rule: cfg.rule, strict: !!cfg.strict }),
+        });
+        if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+        var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = ''; var done = null;
+        while (true) {
+            var ch = await reader.read(); if (ch.done) break; buf += dec.decode(ch.value, { stream: true }); var lines = buf.split('\n'); buf = lines.pop() || '';
+            for (var i = 0; i < lines.length; i++) { var line = lines[i]; if (!line.startsWith('data:')) continue; var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue; try { var ev = JSON.parse(data); if (ev.event === 'stage') _stage(ev.message); else if (ev.event === 'warn') _log('⚠ ' + ev.message); else if (ev.event === 'error') { _log('❌ ' + ev.message); showToast('재도출 실패: ' + ev.message, 'alert'); } else if (ev.event === 'done') done = ev; } catch (e) {} }
+        }
+        return done;
+    }
+    async function rfsStreamAdjust(column, level, instruction) {
+        var s = _rfsState.stream; if (!s) { showToast('먼저 도출하세요', 'alert'); return; }
+        if (_rfsState.streamRunning) { showToast('이미 진행 중', 'alert'); return; }
+        _rfsState.streamRunning = true; _rfsState.streamLog = ['🔄 ' + column + ' 재도출 (정도 ' + level + ')…']; rfsRenderStreamStep();
+        try {
+            var done = await _rfsAdjustColumnCall(column, level, instruction);
+            if (done) {
+                if (column === 'tasks') s.tasks = done.tasks || [];
+                else if (column === 'sprints') s.sprints = done.sprints || [];
+                else if (column === 'stages') s.stages = done.stages || [];
+                else if (column === 'wbs') s.wbs = done.wbs || [];
+                else if (column === 'wiki') _rfsState.wikiPlan = { docs: done.wiki || [] };
+                showToast('🔄 ' + column + ' 재도출 완료', 'success');
+            }
+        } catch (e) { showToast('재도출 실패: ' + (e.message || e), 'alert'); }
+        _rfsState.streamRunning = false; if (_rfsState.step === 4) rfsRenderStreamStep();
+        var lower = { tasks: ['sprints', 'stages', 'wbs'], sprints: ['stages', 'wbs'], stages: ['wbs'] }[column];
+        if (lower && lower.length) {
+            var ok = await uiConfirm({ title: '연쇄 재조정', message: '"' + column + '" 을(를) 바꿨습니다. 이에 따라 하위 열(' + lower.join('/') + ')도 함께 재조정할까요?', confirmText: '재조정', cancelText: '아니오' });
+            if (ok) await _rfsStreamCascadeLower(column);
+        }
+    }
+    async function _rfsStreamCascadeLower(fromColumn) {
+        if (fromColumn === 'tasks') { await rfsStreamRecon(); return; }
+        var s = _rfsState.stream; if (!s) return;
+        _rfsState.streamRunning = true; _rfsState.streamLog = ['🔗 하위 열 재조정…']; rfsRenderStreamStep();
+        try {
+            var seq = (fromColumn === 'sprints') ? ['stages', 'wbs'] : ['wbs'];
+            for (var i = 0; i < seq.length; i++) { var d = await _rfsAdjustColumnCall(seq[i], 0, ''); if (d) { if (seq[i] === 'stages') s.stages = d.stages || []; else if (seq[i] === 'wbs') s.wbs = d.wbs || []; } }
+            showToast('🔗 하위 열 재조정 완료', 'success');
         } catch (e) { showToast('재조정 실패: ' + (e.message || e), 'alert'); }
         _rfsState.streamRunning = false; if (_rfsState.step === 4) rfsRenderStreamStep();
     }

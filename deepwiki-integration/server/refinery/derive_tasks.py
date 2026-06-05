@@ -103,9 +103,12 @@ async def derive_tasks(
     nodes: List[Dict[str, Any]],
     pm_tax: Optional[List[Dict[str, Any]]] = None,
     context: str = "",
+    instruction: str = "",
     model: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
-    """키워드 노드 → 공정태그 부착 Task 도출 (SSE: stage / task_proposed / done)."""
+    """키워드 노드 → 공정태그 부착 Task 도출 (SSE: stage / task_proposed / done).
+
+    instruction: 재도출 시 증량/압축 등 사용자 조정 지시(프롬프트에 덧붙임)."""
     llm = get_llm(model)
     leaves = [n for n in nodes if n.get("kind") != "category"]
     pool = leaves or nodes
@@ -114,6 +117,8 @@ async def derive_tasks(
     yield {"event": "stage", "message": f"키워드 {len(pool)}개 → 공정별 Task 도출 요청"}
 
     prompt = build_user_prompt(pool, pm_tax or [], context)
+    if instruction:
+        prompt += f"\n\n[추가 지시]\n{instruction}"
     buf = ""
     try:
         async for delta in llm.chat_stream(

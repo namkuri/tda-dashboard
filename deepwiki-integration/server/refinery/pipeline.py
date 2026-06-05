@@ -140,3 +140,81 @@ async def rederive_downstream(
         "event": "done", "tasks": tasks, "sprints": sprints, "stages": stages, "wbs": wbs,
         "summary": f"재조정 — Task {len(tasks)} · Sprint {len(sprints)} · STAGE {len(stages)} · WBS {len(wbs)}",
     }
+
+
+_LEVEL_HINT = {
+    2: "결과를 매우 잘게·많이 늘려라(증량 강).",
+    1: "결과를 더 잘게·많이 늘려라(증량).",
+    0: "",
+    -1: "결과를 더 크게·적게 압축하라(압축).",
+    -2: "결과를 매우 크게·적게 압축하라(압축 강).",
+}
+
+
+async def adjust_column(
+    *,
+    column: str,
+    level: int = 0,
+    instruction: str = "",
+    tasks: Optional[List[Dict[str, Any]]] = None,
+    sprints: Optional[List[Dict[str, Any]]] = None,
+    stages: Optional[List[Dict[str, Any]]] = None,
+    nodes: Optional[List[Dict[str, Any]]] = None,
+    pm_tax: Optional[List[Dict[str, Any]]] = None,
+    wiki_tax: Optional[List[Dict[str, Any]]] = None,
+    cross_links: Optional[List[Dict[str, Any]]] = None,
+    context: str = "",
+    capacity_hours: float = 80.0,
+    strict: bool = False,
+    rule: str = "auto",
+    start_date: str = "2026-01-05",
+    sprint_weeks: int = 2,
+    model: Optional[str] = None,
+) -> AsyncIterator[Dict[str, Any]]:
+    """[r267] 한 열만 재도출(증량/압축 level + 지시). done 에 그 열의 새 항목."""
+    try:
+        lv = int(level)
+    except Exception:
+        lv = 0
+    instr = (_LEVEL_HINT.get(lv, "") + " " + (instruction or "")).strip()
+    tasks, sprints, stages = tasks or [], sprints or [], stages or []
+
+    if column == "tasks":
+        new_tasks: List[Dict[str, Any]] = []
+        async for ev in derive_tasks(nodes=nodes or [], pm_tax=pm_tax, context=context, instruction=instr, model=model):
+            if ev.get("event") == "done":
+                new_tasks = ev.get("tasks") or []
+            elif ev.get("event") in ("stage", "task_proposed", "warn"):
+                yield ev
+        yield {"event": "done", "column": "tasks", "tasks": new_tasks}
+    elif column == "sprints":
+        cap = max(8.0, float(capacity_hours) * (1.5 ** (-lv)))  # +level → 작은 용량 → 더 많은 스프린트
+        yield {"event": "stage", "message": f"스프린트 재분할 — 용량 {round(cap)}h"}
+        packed = pack_sprints(tasks, capacity_hours=cap, strict=strict)
+        yield {"event": "done", "column": "sprints", "sprints": packed["sprints"]}
+    elif column == "stages":
+        r = rule
+        if lv >= 1:
+            r = "by_count:1"
+        elif lv <= -1:
+            r = "all_one"
+        new_stages: List[Dict[str, Any]] = []
+        async for ev in stagize(sprints=sprints, tasks=tasks, context=context, rule=r, instruction=instr, model=model):
+            if ev.get("event") == "done":
+                new_stages = ev.get("stages") or []
+            elif ev.get("event") in ("stage", "stage_proposed", "warn"):
+                yield ev
+        yield {"event": "done", "column": "stages", "stages": new_stages}
+    elif column == "wbs":
+        wbs = build_wbs(stages=stages, sprints=sprints, tasks=tasks, start_date=start_date, sprint_weeks=sprint_weeks)
+        yield {"event": "done", "column": "wbs", "wbs": wbs}
+    elif column == "wiki":
+        docs: List[Dict[str, Any]] = []
+        async for ev in derive_wiki_structure(nodes=nodes or [], wiki_tax=wiki_tax, context=context, instruction=instr, model=model):
+            if ev.get("event") == "done":
+                docs = ev.get("docs") or []
+            elif ev.get("event") in ("stage", "doc_proposed", "warn"):
+                yield ev
+        yield {"event": "done", "column": "wiki", "wiki": docs}
+    else:
+        yield {"event": "error", "message": f"알 수 없는 열: {column}"}
