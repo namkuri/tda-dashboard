@@ -58,6 +58,54 @@ def rank_docs(rows: List[Dict[str, Any]], kws: set, top: int = 5, max_chars: int
     return "[관련 기존 문서(RAG)]\n" + "\n".join(parts)
 
 
+def _query_from_nodes(nodes: List[Dict[str, Any]], limit: int = 20) -> str:
+    """분해 노드 → 의미검색 쿼리 문자열(대분류 + 주요 잎 제목)."""
+    cats = [n.get("title") for n in (nodes or []) if n.get("kind") == "category" and n.get("title")]
+    leaves = [n.get("title") for n in (nodes or []) if n.get("kind") != "category" and n.get("title")]
+    parts = (cats[:6] + leaves[:14])[:limit]
+    return " ".join(parts)[:500]
+
+
+def _format_chunks(chunks: List[Dict[str, Any]], max_chars: int = 2000) -> str:
+    parts: List[str] = []
+    used = 0
+    for c in (chunks or []):
+        title = c.get("source_title") or c.get("source_path") or "자료"
+        snip = (c.get("content") or "").strip().replace("\n", " ")[:300]
+        if not snip:
+            continue
+        line = f"- [{c.get('source_type', '?')}:{title}] {snip}"
+        if used + len(line) > max_chars:
+            break
+        parts.append(line)
+        used += len(line)
+    if not parts:
+        return ""
+    return "[관련 기존 자료(의미검색 RAG)]\n" + "\n".join(parts)
+
+
+async def retrieve_semantic(
+    *,
+    nodes: List[Dict[str, Any]],
+    project_id: Optional[str] = None,
+    top_k: int = 8,
+    max_chars: int = 2000,
+) -> str:
+    """[r262] 임베딩 의미검색 RAG — 기존 retriever(ollama.embed + pgvector + 하이브리드)
+    를 재사용해 분해 키워드와 의미적으로 가까운 기존 자료(위키/코드/WBS/태스크)를 검색.
+    실패(임베딩/DB 미가용) 시 빈 문자열."""
+    q = _query_from_nodes(nodes)
+    if not q:
+        return ""
+    try:
+        from retriever import retrieve
+        chunks = await retrieve(q, project_id=project_id,
+                                source_types=["wiki", "code", "wbs", "task", "issue"], top_k=top_k)
+    except Exception:
+        return ""
+    return _format_chunks(chunks, max_chars)
+
+
 def retrieve_relevant(
     *,
     nodes: List[Dict[str, Any]],
