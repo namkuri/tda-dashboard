@@ -1760,8 +1760,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .editor-mode-live    #preview-area    { display:none !important; }
         .editor-mode-live    #doc-livepreview { display:block !important; }
         #doc-livepreview { padding:16px 20px; line-height:1.7; }
-        .lp-row { display:flex; align-items:flex-start; }
-        .lp-gutter { flex:0 0 auto; width:32px; text-align:right; padding-right:10px; color:#9a958a; font-size:11px; font-family:ui-monospace,monospace; user-select:none; opacity:.55; padding-top:3px; }
+        .lp-row { display:flex; align-items:baseline; }   /* [r235 #3] 번호를 본문 첫 줄 baseline 에 정렬 */
+        .lp-gutter { flex:0 0 auto; width:34px; text-align:right; padding-right:10px; color:#9a958a; font-size:12px; font-family:ui-monospace,monospace; user-select:none; opacity:.55; }
         #doc-livepreview:not(.lp-lines) .lp-gutter { display:none; }
         .lp-content { flex:1; min-width:0; cursor:text; border-radius:4px; padding:1px 4px; }
         .lp-content:hover { background:rgba(127,127,127,.06); }
@@ -5971,25 +5971,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <span id="doc-save-status" style="font-size:11px;color:var(--c-text3);margin-right:4px;white-space:nowrap;">All changes saved</span>
                         <span id="save-sync-badge" title="" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;cursor:help;background:#d1fae5;color:#065f46;">☁️ DB 저장됨</span>
                         <span id="presence-bar" style="display:none;align-items:center;gap:2px;margin-right:6px;"></span>
-                        <!-- 모드 탭 -->
+                        <!-- 모드 탭 [r235 #1] 본문(라이브 편집)/소스 두 개만 -->
                         <div style="display:flex;gap:2px;padding:4px 0;">
-                            <button id="tab-live" onclick="setEditorMode('live')" title="라이브 프리뷰 — 옵시디언식(클릭해 편집, 다른 곳 클릭 시 렌더)"
+                            <button id="tab-live" onclick="setEditorMode('live')" title="본문 — 클릭해 바로 편집(옵시디언식), 다른 곳 클릭 시 렌더"
                                 style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:#c96442;color:white;transition:all 0.15s;">
-                                📑 라이브
+                                📖 본문
                             </button>
-                            <button id="tab-source" onclick="setEditorMode('source')" title="소스 편집"
+                            <button id="tab-source" onclick="setEditorMode('source')" title="소스 편집 (마크다운 원본)"
                                 style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#6f6b5d;transition:all 0.15s;">
                                 📝 소스
                             </button>
-                            <button id="tab-preview" onclick="setEditorMode('preview')" title="미리보기 (읽기 전용)"
-                                style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#6f6b5d;transition:all 0.15s;">
-                                👀 미리보기
-                            </button>
-                            <button id="tab-split" onclick="setEditorMode('split')" title="분할 보기"
-                                style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#6f6b5d;transition:all 0.15s;">
-                                ⇄ 분할
-                            </button>
-                            <button id="btn-lp-lines" onclick="lpToggleLineNums()" title="줄 번호 보이기/숨기기 (라이브)"
+                            <button id="btn-lp-lines" onclick="lpToggleLineNums()" title="줄 번호 보이기/숨기기 (본문)"
                                 style="padding:4px 10px;border-radius:6px;border:1px solid var(--c-border);cursor:pointer;font-size:12px;font-weight:600;background:#c96442;color:#fff;transition:all 0.15s;">
                                 #️⃣
                             </button>
@@ -8247,7 +8239,19 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 _fmM[1].split(/\r?\n/).forEach(function (ln) {
                     if (!ln.trim()) return;
                     var kv = ln.match(/^([A-Za-z0-9_\-]+)\s*:\s*([\s\S]*)$/);
-                    if (kv) _fmRows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(kv[1]) + '</span><span class="md-fm-val">' + _sprintEsc(kv[2]) + '</span></div>';
+                    if (kv) {
+                        var _fk = kv[1], _fv = kv[2];
+                        // [r235 #4] 작성자/수정자 uuid → 이름
+                        if (/^(created_by|updated_by|owner|author|by|assignee)$/i.test(_fk)) {
+                            var _rid = _fv.replace(/^["']|["']$/g, '').trim();
+                            var _nm = (typeof _uidToName === 'function') ? _uidToName(_rid) : _rid;
+                            if (_nm && _nm !== _rid) {
+                                _fmRows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(_fk) + '</span><span class="md-fm-val" title="' + _sprintEsc(_rid) + '">' + _sprintEsc(_nm) + '</span></div>';
+                                return;
+                            }
+                        }
+                        _fmRows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(_fk) + '</span><span class="md-fm-val">' + _sprintEsc(_fv) + '</span></div>';
+                    }
                     else _fmRows += '<div class="md-fm-row"><span class="md-fm-val">' + _sprintEsc(ln.trim()) + '</span></div>';
                 });
                 var _fmHtml = '<details class="md-frontmatter"><summary class="md-fm-summary">속성 (메타데이터)</summary><div class="md-fm-body">' + _fmRows + '</div></details>';
@@ -8407,12 +8411,17 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var a = '<sup class="md-fn-ref"><a id="fnref-' + sl + '" href="#fn-' + sl + '">[' + num[id] + ']</a></sup>';
                     var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂'; inlineTableStore[ph] = a; _tableStore[ph] = a; return ph;
                 });
-                // 각주 섹션 — vault:ID 링크는 클릭 가능한 위키링크로
+                // 각주 섹션 — (vault:파일명?find=) 링크를 실제 문서로 해석해 클릭 가능한 위키링크로 [r235 #5]
                 var sec = '<div class="md-footnotes"><div class="md-fn-title">각주</div><ol class="md-fn-list">';
                 ids.forEach(function (id) {
                     var sl = _wlSlug(id) || ('fn' + num[id]);
-                    var safe = _sprintEsc(defs[id]).replace(/\[([^\]]*)\]\(vault:([A-Za-z0-9_\-]+)(?:\?[^)]*)?\)/g, function (_x, txt, vid) {
-                        return '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + vid + '">📄 ' + (txt || '원본') + '</a>';
+                    var safe = _sprintEsc(defs[id]).replace(/\[([^\]]*)\]\(vault:([^)?\s]+)(?:\?([^)]*))?\)/g, function (_x, txt, target, q) {
+                        var hit = (typeof _vaultResolve === 'function') ? _vaultResolve(target) : null;
+                        var findAttr = '';
+                        if (q) { var fm = q.match(/find=([^&]*)/); if (fm) { var ftxt = fm[1]; try { ftxt = decodeURIComponent(ftxt.replace(/&amp;/g, '&')); } catch (e) {} findAttr = ' data-wl-find="' + _sprintEsc(ftxt) + '"'; } }
+                        var label = (txt && txt.trim()) ? txt : (hit ? (hit.title || '원본') : '원본');
+                        if (hit) return '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(hit.id) + '"' + findAttr + '>📄 ' + label + '</a>';
+                        return '<span class="md-fn-src" title="원본 문서를 찾지 못함">📄 ' + label + '</span>';
                     });
                     sec += '<li id="fn-' + sl + '">' + safe + ' <a class="md-fn-back" href="#fnref-' + sl + '" title="본문으로">↩</a></li>';
                 });
@@ -8453,17 +8462,40 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (s == null) return '';
             return String(s).toLowerCase().replace(/<[^>]+>/g, '').replace(/[\s_]+/g, '-').replace(/[^\p{L}\p{N}\-]+/gu, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
         }
+        // [r235 #4] user id(uuid) → 표시 이름. 프론트매터 created_by/updated_by 등에서 사용.
+        function _uidToName(id) {
+            id = String(id == null ? '' : id).trim().replace(/^["']|["']$/g, '');
+            if (!id) return '';
+            var u = (typeof currentData !== 'undefined' && currentData.users || []).find(function (x) { return x.id === id; });
+            if (u) return u.displayName || u.name || u.email || id;
+            if (typeof currentUser !== 'undefined' && currentUser && currentUser.id === id) return currentUser.displayName || currentUser.name || currentUser.email || id;
+            return id;
+        }
         // [r233 #5] 위키링크 제목 정규화 — 정의서 링크([[루프 비선형화]])와 실제 문서 제목
         //   ('0.루프_비선형화', '[VAULT] x.html' 등) 의 표기 차이를 흡수해 매칭 성공률을 높임.
         function _wlNorm(s) {
             return String(s == null ? '' : s)
                 .toLowerCase().trim()
+                .replace(/\?.*$/, '')                       // [r235 #5] 쿼리(?find=...) 제거
                 .replace(/\.(md|html?|txt)$/i, '')        // 확장자
                 .replace(/^\[vault\]\s*/i, '')             // [VAULT] 접두
                 .replace(/^\d+(\.\d+)*[.)]\s*/, '')        // "0." "1.2." "3)" 번호 접두
                 .replace(/[_\-]+/g, ' ')                    // 언더스코어/하이픈 → 공백
                 .replace(/\s+/g, ' ')
                 .trim();
+        }
+        // [r235 #5] vault: 링크 대상(파일명/제목/ID)을 실제 문서로 해석 — 각주의 (vault:xxx) 링크용
+        function _vaultResolve(target) {
+            target = String(target || '').trim();
+            if (!target) return null;
+            var docs = (typeof currentData !== 'undefined' && currentData.docs) || [];
+            var hit = docs.find(function (d) { return d.id === target; });           // 1) 직접 ID
+            if (hit) return hit;
+            var nt = _wlNorm(target);
+            if (!nt) return null;
+            hit = docs.find(function (d) { return (d.meta && d.meta.vault) && _wlNorm(d.title) === nt; }); // 2) vault 제목 정규화
+            if (hit) return hit;
+            return docs.find(function (d) { return _wlNorm(d.title) === nt; }) || null; // 3) 일반 문서 정규화
         }
         // [r193] 문서의 헤더 목록(text + slug + level) — 자동완성/내부 점프용
         function _wlDocHeaders(docId) {
@@ -10807,7 +10839,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r234';
+        var _AHUB_FRONT_REV = 'r235';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -22135,11 +22167,13 @@ addEventListener("resize",sendPos);
             var type = wl.getAttribute('data-wl-type');
             var id = wl.getAttribute('data-wl-id');
             var hash = wl.getAttribute('data-wl-hash'); // [r193] 헤더 슬러그
+            var find = wl.getAttribute('data-wl-find'); // [r235 #5] 각주 인용 위치
             if (type === 'task') navToTask(id);
             else if (type === 'doc') {
                 if (hash && id === activeDocId) { _wlScrollToHeader(hash); return; }  // 같은 문서면 스크롤만
                 navToDoc(id);
                 if (hash) setTimeout(function () { _wlScrollToHeader(hash); }, 220);  // 다른 문서 → 열린 뒤 스크롤
+                if (find) setTimeout(function () { _wlFindInDoc(find); }, 320);        // 각주 인용 텍스트로 스크롤
             }
             else if (type === 'hash') _wlScrollToHeader(hash); // [r193] [[#헤더]] — 현재 문서 내부 점프
             else if (type === 'code' && typeof gitGoRef === 'function') gitGoRef(id);
@@ -22158,6 +22192,23 @@ addEventListener("resize",sendPos);
             var prev = el.style.backgroundColor; el.style.transition = 'background-color .4s';
             el.style.backgroundColor = 'var(--c-accent-soft)';
             setTimeout(function () { el.style.backgroundColor = prev || ''; }, 1400);
+        }
+        // [r235 #5] 각주 인용 텍스트로 스크롤 + 하이라이트 (best-effort 앞부분 매칭)
+        function _wlFindInDoc(needle) {
+            needle = String(needle == null ? '' : needle).trim(); if (needle.length < 2) return;
+            var host = document.getElementById('doc-livepreview');
+            if (!host || getComputedStyle(host).display === 'none') host = document.getElementById('doc-preview-container');
+            if (!host) return;
+            var frag = needle.slice(0, 12);
+            var els = host.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6,td,blockquote,.lp-content,pre');
+            for (var i = 0; i < els.length; i++) {
+                if ((els[i].textContent || '').indexOf(frag) >= 0) {
+                    els[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    var el = els[i], p = el.style.backgroundColor; el.style.transition = 'background-color .4s'; el.style.backgroundColor = 'var(--c-accent-soft)';
+                    setTimeout(function () { el.style.backgroundColor = p || ''; }, 1600);
+                    return;
+                }
+            }
         }
         // [코드 인용 임베드] 헤더 클릭=접기/펼치기, ↗Git=Git탭에서 열기 (GitHub 링크는 기본 동작)
         document.addEventListener('click', function(e) {
@@ -25720,6 +25771,7 @@ ${intrLog}
                 if (cur && cur.fence) { cur.text += '\n' + ln; if (fenceM && fenceM[1][0] === cur.fence[0]) pushCur(); continue; }
                 if (fenceM) { pushCur(); cur = { text: ln, ln: i, fence: fenceM[1] }; continue; }
                 if (ln.trim() === '') { pushCur(); blocks.push({ blank: true, text: ln, ln: i }); continue; }
+                if (/^#{1,6}\s/.test(ln)) { pushCur(); blocks.push({ text: ln, ln: i }); continue; }  // [r235] 헤딩은 단독 블록(깔끔한 줄번호·편집)
                 if (cur) cur.text += '\n' + ln; else cur = { text: ln, ln: i };
             }
             pushCur();
@@ -25744,9 +25796,13 @@ ${intrLog}
             var blocks = _lpSplitBlocks(content);
             host._lpBlocks = blocks;
             var frag = '';
+            var n = 0, metaSkipped = false;   // [r235 #2] 연속 번호(생략 없음), 메타데이터 블록은 제외
             blocks.forEach(function (b, idx) {
                 if (b.blank) { frag += '<div class="lp-blank" data-idx="' + idx + '"></div>'; return; }
-                frag += '<div class="lp-row" data-idx="' + idx + '"><div class="lp-gutter">' + (b.ln + 1) + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + '</div></div>';
+                var isMeta = !metaSkipped && /^﻿?\s*---\s*\r?\n[A-Za-z_][\w\-]*\s*:/.test(b.text);
+                if (isMeta) metaSkipped = true;
+                var num = isMeta ? '' : (++n);
+                frag += '<div class="lp-row' + (isMeta ? ' lp-meta-row' : '') + '" data-idx="' + idx + '"><div class="lp-gutter">' + num + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + '</div></div>';
             });
             host.innerHTML = frag;
         }
@@ -25795,7 +25851,9 @@ ${intrLog}
             var statusEl = document.getElementById('doc-save-status'); if (statusEl) { statusEl.textContent = '수정 중...'; statusEl.style.color = '#f59e0b'; }
             clearTimeout(_docSaveTimer); _docSaveTimer = setTimeout(flushDocSave, 1200);
         }
-        // 라이브 영역 클릭 위임 — 링크/임베드가 아니면 해당 블록 편집 진입
+        // 라이브 영역 클릭 위임 — 링크/임베드가 아니면 해당 블록 편집 진입.
+        // [r235 #1] 캡처 단계로 등록 — 본문 영역의 다른 핸들러가 버블 단계에서 stopPropagation 해도
+        //   클릭이 먼저 도달하도록(위키링크 캡처 핸들러가 링크는 먼저 가로채 네비게이션 유지).
         document.addEventListener('click', function (e) {
             if (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'live') return;
             var host = document.getElementById('doc-livepreview');
@@ -25805,7 +25863,7 @@ ${intrLog}
             var row = e.target.closest('.lp-row, .lp-blank'); if (!row) return;
             var idx = parseInt(row.getAttribute('data-idx'), 10);
             if (!isNaN(idx)) _lpEnterEdit(idx);
-        });
+        }, true);
 
         var _previewFormatBarEl = null;
         function showPreviewFormatBar() {
@@ -31324,7 +31382,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r234';
+    var _RFS_FRONT_REV = 'r235';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;

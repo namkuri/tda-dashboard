@@ -61,7 +61,7 @@ def build_tree_skeleton(
       "root": "🔬 {session_title} 시스템 정의서",
       "files": [
         {
-          "path": "🌟 한장정의서.md",
+          "path": "한장정의서.md",
           "target_kind": "canon",
           "category": "overview",
           "node_ids": [...],
