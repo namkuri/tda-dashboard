@@ -31683,16 +31683,16 @@ ${intrLog}
         wikiPlan: null,       // [r246] 위키 구조(목차) 추천 {docs:[{title, outline:[...]}]}
     };
 
+    // [r248] 흐름 재설계 — 분류/결재/정의서/위키적용/작업제안 → 들여오기추천 + 위키구조 + 위키본문.
+    //   (구 단계 렌더 함수는 본문에 남아있으나 흐름에서 분리됨 = 비활성)
     var RFS_STEPS = [
         { num: 1, label: '세션 생성', section: 'list' },
         { num: 2, label: 'Vault 추가', section: 'vault' },
         { num: 3, label: '분해', section: 'decompose' },
-        { num: 4, label: '분류', section: 'classify' },
-        { num: 5, label: '결재', section: 'review' },
-        { num: 6, label: '정의서', section: 'compose' },
-        { num: 7, label: '위키 적용', section: 'apply_tree' },
-        { num: 8, label: '작업 제안', section: 'propose_work' },
-        { num: 9, label: '완료', section: 'done' },
+        { num: 4, label: '들여오기 추천', section: 'intake' },
+        { num: 5, label: '위키 구조', section: 'wiki_plan' },
+        { num: 6, label: '위키 본문', section: 'wiki_body' },
+        { num: 7, label: '완료', section: 'done' },
     ];
 
     function rfsEnter() {
@@ -32511,12 +32511,16 @@ ${intrLog}
             case 'list': rfsRenderSessionList(); break;
             case 'vault': rfsRenderVaultStep(); break;
             case 'decompose': rfsRenderDecomposeStep(); break;
+            case 'intake': rfsRenderIntakeStep(); break;          // [r248] ④ 들여오기 추천
+            case 'wiki_plan': rfsRenderWikiPlanStep(); break;     // [r248] ⑤ 위키 구조
+            case 'wiki_body': rfsRenderWikiBodyStep(); break;     // [r248] ⑥ 위키 본문
+            case 'done': rfsRenderDoneStep(); break;
+            // 구 단계(비활성, 함수는 잔존) — 직접 호출 시에만 진입
             case 'classify': rfsRenderClassifyStep(); break;
             case 'review': rfsRenderReviewStep(); break;
             case 'compose': rfsRenderComposeStep(); break;
             case 'apply_tree': rfsRenderApplyTreeStep(); break;
             case 'propose_work': rfsRenderProposeWorkStep(); break;
-            case 'done': rfsRenderDoneStep(); break;
             default: rfsRenderSessionList();
         }
     }
@@ -32525,7 +32529,7 @@ ${intrLog}
         var main = document.getElementById('rfs-main'); if (!main) return;
         var html = '<div style="max-width:900px;margin:0 auto;">';
         html += '<h2 style="margin:0 0 14px;font-size:20px;">정련 세션 목록</h2>';
-        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:18px;">한 세션 = vault → 분해 → 분류 → 결재 → 정의서 → WBS 한 묶음. 작성자: ' + _annEsc(rfsCurrentUserName() || '(미로그인)') + '</div>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:18px;">한 세션 = vault → 분해 → 들여오기 추천(STAGE·WBS·스프린트·이슈) → 위키 구조 → 위키 본문 한 묶음. 작성자: ' + _annEsc(rfsCurrentUserName() || '(미로그인)') + '</div>';
         if (!_rfsState.sessions.length) {
             html += '<div style="padding:30px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">아직 세션이 없습니다. <b>+ 새 세션</b> 으로 시작하세요.</div>';
         } else {
@@ -32865,7 +32869,7 @@ ${intrLog}
         }
         if (nodeCount && !dc.running) {
             html += '<div style="padding:12px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
-            html += '✓ 노드 ' + nodeCount + '개 확정됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">분류로 →</button>';
+            html += '✓ 노드 ' + nodeCount + '개 확정됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">들여오기 추천으로 →</button>';
             html += '</div>';
         } else if (!dc.running && (_rfsState.current && _rfsState.current.last_decompose) && (_rfsState.current.last_decompose.leaf_count === 0)) {
             // [r228] 직전 분해가 0개였음 — 진단 표시
@@ -34321,7 +34325,7 @@ ${intrLog}
         html += '<span style="margin-left:auto;display:flex;gap:6px;">';
         html += '<button class="aihub-gpu-btn primary" onclick="rfsArchiveSession()">아카이브 후 새 세션</button>';
         html += '<button class="aihub-gpu-btn" onclick="rfsBackToList()">세션 목록</button>';
-        html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(8)">← 작업 제안</button>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(6)">← 위키 본문</button>';
         html += '</span></div>';
 
         // 2분할: 좌 목록 / 우 내용
@@ -34329,7 +34333,7 @@ ${intrLog}
         html += '<div style="flex:0 0 380px;max-width:42%;">';
         // 요약 칩
         html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;">';
-        [['📚 vault', (s.vault_doc_ids || []).length], ['🌲 노드', (s.nodes || []).length], ['📄 문서', docIds.length], ['🏗 WBS', wbsIds.length], ['✅ 태스크', taskIds.length], ['⚠ 이슈', issueIds.length]].forEach(function (c) {
+        [['📚 vault', (s.vault_doc_ids || []).length], ['🌲 노드', (s.nodes || []).length], ['🎯 STAGE', (s.generated_stage_ids || []).length], ['🏃 스프린트', (s.generated_sprint_ids || []).length], ['📄 문서', docIds.length], ['🏗 WBS', wbsIds.length], ['✅ 태스크', taskIds.length], ['⚠ 이슈', issueIds.length]].forEach(function (c) {
             html += '<span style="background:var(--c-card);border:1px solid var(--c-border);border-radius:20px;padding:3px 10px;font-weight:700;">' + c[0] + ' ' + c[1] + '</span>';
         });
         html += '</div>';
