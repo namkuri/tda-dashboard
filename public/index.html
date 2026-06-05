@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r253';
+        var _AHUB_FRONT_REV = 'r255';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31715,7 +31715,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r253';
+    var _RFS_FRONT_REV = 'r255';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -32847,10 +32847,11 @@ ${intrLog}
             html += '<button class="aihub-gpu-btn" onclick="rfsStopDecompose()" style="border-color:#d2393d;color:#d2393d;">■ 중단</button>';
             html += '<span style="font-size:11.5px;color:var(--c-accent);font-weight:700;">⟳ LLM 분해 진행 중…</span>';
         } else if (_rfsState._analyzing) {
-            html += '<button class="aihub-gpu-btn primary" disabled style="opacity:.7;"><span class="rfs-dc-spinner"></span> 로직 분석 중…</button>';
+            html += '<button class="aihub-gpu-btn primary" disabled style="opacity:.7;"><span class="rfs-dc-spinner"></span> ' + (_rfsState._mmDecomposing ? '마인드맵 추출 중…' : '로직 분석 중…') + '</button>';
         } else {
-            html += '<button class="aihub-gpu-btn primary" onclick="rfsRunAnalyze()">' + ((st || nodeCount) ? '🔄 로직 재분석' : '🔍 로직 구조 분석') + '</button>';
-            html += '<button class="aihub-gpu-btn" onclick="rfsRunDecompose()">🤖 LLM으로 분해' + (nodeCount ? ' (재분해)' : '') + '</button>';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsRunMindmapDecompose()">🧠 마인드맵으로 추출' + (st && st.cross_links ? ' (재추출)' : '') + '</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsRunAnalyze()">' + ((st || nodeCount) ? '🔄 로직 재분석' : '🔍 로직 구조') + '</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsRunDecompose()">🤖 LLM 분해' + (nodeCount ? ' (재분해)' : '') + '</button>';
         }
         html += '</div>';
         // 진행 위젯 — running 이거나 직전 로그 있으면 표시 (상태 보존)
@@ -33062,6 +33063,47 @@ ${intrLog}
         }
     }
 
+    // [r255] 마인드맵 추출기 재사용(결정 #1) — 트리+cross_links → 정련소 노드(구조 미리보기)
+    async function rfsRunMindmapDecompose() {
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        if (!_rfsState.vaultDocs.length) { showToast('vault 가 비어있습니다 — 먼저 ② Vault 추가', 'alert'); return; }
+        if (_rfsState._analyzing) return;
+        _rfsState._analyzing = true; _rfsState._mmDecomposing = true; rfsRenderDecomposeStep();
+        try {
+            var res = await fetch(url + '/refinery/decompose-mindmap', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ session_id: _rfsState.current.id, project_id: activeProjectId, user_id: rfsCurrentUser(), vault_docs: _rfsState.vaultDocs }),
+            });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0, 120)); }
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = ''; var done = null;
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, {stream: true});
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try { var ev = JSON.parse(data); if (ev.event === 'done') done = ev; else if (ev.event === 'error') showToast('마인드맵 추출 실패: ' + ev.message, 'alert'); } catch (e) {}
+                }
+            }
+            if (done && (done.nodes || []).length) {
+                _rfsState.structure = {
+                    nodes: done.nodes || [], cross_links: done.cross_links || [],
+                    leaf_count: done.leaf_count || 0,
+                    section_count: (done.nodes || []).filter(function (n) { return n.kind === 'category'; }).length,
+                    method: 'mindmap',
+                };
+                showToast('🧠 마인드맵 추출 — 노드 ' + (done.node_count || 0) + ' · 개념관계 ' + (done.cross_link_count || 0), 'success');
+            } else showToast('마인드맵 결과가 비었습니다 — 다른 방식(로직/LLM)을 시도하세요.', 'alert');
+        } catch (e) {
+            showToast('마인드맵 추출 실패: ' + (e.message || e), 'alert');
+        } finally {
+            _rfsState._analyzing = false; _rfsState._mmDecomposing = false;
+            if (_rfsState.step === 3) rfsRenderDecomposeStep();
+        }
+    }
+
     // [r246] 로직 구조 채택 → 세션 노드로 확정하고 다음 단계로
     async function rfsAdoptStructure() {
         var st = _rfsState.structure;
@@ -33069,13 +33111,15 @@ ${intrLog}
         var nodes = st.nodes;
         _rfsState.current.nodes = nodes;
         _rfsState.nodes = nodes;
+        _rfsState.current.cross_links = st.cross_links || [];   // [r255] Stream 의존도 힌트(메모리)
         _rfsState.current.last_decompose = {
             node_count: nodes.length,
             leaf_count: st.leaf_count || 0,
-            method: 'logic', has_headings: !!st.has_headings,
+            method: st.method || 'logic', has_headings: !!st.has_headings,
+            cross_links: (st.cross_links || []).length,
             at: new Date().toISOString(),
         };
-        var saved = await rfsPatchSession({nodes: nodes, status: 'classifying', last_decompose: _rfsState.current.last_decompose}, 'analyzed', '로직 ' + nodes.length + '노드');
+        var saved = await rfsPatchSession({nodes: nodes, status: 'classifying', last_decompose: _rfsState.current.last_decompose}, 'analyzed', (st.method || 'logic') + ' ' + nodes.length + '노드');
         if (!saved) showToast('⚠ DB 저장 실패 — 메모리로 진행. 새로고침 전 작업 완료 권장.', 'alert');
         _rfsState.structure = null;
         rfsGoStep(4);

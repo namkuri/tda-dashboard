@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r253"
+SERVER_REVISION = "r255"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -1184,6 +1184,53 @@ async def refinery_apply_stream(req: RefineryApplyStreamRequest):
     except Exception as e:
         result.setdefault("warnings", []).append(f"세션 이력 갱신 실패(생성은 완료): {e}")
     return result
+
+
+@app.post("/refinery/decompose-mindmap")
+async def refinery_decompose_mindmap(req: RefineryDecomposeRequest):
+    """[r255] ③ 분해 — 마인드맵 고도화 추출기 재사용(결정 #1). 트리+cross_links → 정련소 노드."""
+    require_author(req.user_id, "마인드맵 분해")
+    if not _REFINERY_OK:
+        raise HTTPException(503, f"연구 정련소 모듈 미로드: {_REFINERY_ERR}")
+    if _busy_active():
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    docs = [{"id": d.get("id"), "title": d.get("title"), "content": d.get("content"), "attachment_urls": d.get("attachment_urls") or []} for d in (req.vault_docs or [])]
+
+    async def gen():
+        diagram = None
+        central = ""
+        branches = []
+        async for ev in generate_mindmap(docs=docs, model=req.model, mode="auto"):
+            if ev.get("event") == "done":
+                diagram = ev.get("diagram") or {}
+                central = ev.get("central") or "마인드맵"
+                branches = ev.get("branches_raw") or []
+                yield {"event": "stage", "message": "마인드맵 추출 완료 → 정련소 노드 변환"}
+            elif ev.get("event") in ("stage", "progress", "warn", "error"):
+                yield ev
+        # cross_links: diagram 의 dashed 엣지(개념 관계) → 제목쌍
+        node_title = {}
+        for nd in (diagram or {}).get("nodes", []):
+            node_title[nd.get("id")] = nd.get("title")
+        cls = []
+        for e in (diagram or {}).get("edges", []):
+            if e.get("style") == "dashed":
+                a, b = node_title.get(e.get("from")), node_title.get(e.get("to"))
+                if a and b:
+                    cls.append({"from": a, "to": b, "label": e.get("label") or ""})
+        conv = _rfs_mm_to_nodes(central=central, branches=branches, cross_links=cls)
+        yield {
+            "event": "done",
+            "nodes": conv["nodes"], "cross_links": conv["cross_links"],
+            "node_count": len(conv["nodes"]),
+            "leaf_count": sum(1 for n in conv["nodes"] if n.get("kind") != "category"),
+            "cross_link_count": len(conv["cross_links"]),
+            "summary": f"노드 {len(conv['nodes'])} · 개념관계 {len(conv['cross_links'])}",
+        }
+    return _sse_indexer(gen(), busy_kind="refinery_decompose_mindmap")
 
 
 @app.get("/refinery/schema-sql")
