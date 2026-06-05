@@ -1751,6 +1751,25 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .editor-mode-split   #source-area   { display:flex !important; flex:1; }
         .editor-mode-split   #split-divider { display:flex !important; }
         .editor-mode-split   #preview-area  { display:flex !important; flex:1; }
+        /* [r234 #7/#8/#9] 라이브 프리뷰 모드 */
+        .editor-mode-source  #doc-livepreview { display:none !important; }
+        .editor-mode-preview #doc-livepreview { display:none !important; }
+        .editor-mode-split   #doc-livepreview { display:none !important; }
+        .editor-mode-live    #source-area     { display:none !important; }
+        .editor-mode-live    #split-divider   { display:none !important; }
+        .editor-mode-live    #preview-area    { display:none !important; }
+        .editor-mode-live    #doc-livepreview { display:block !important; }
+        #doc-livepreview { padding:16px 20px; line-height:1.7; }
+        .lp-row { display:flex; align-items:flex-start; }
+        .lp-gutter { flex:0 0 auto; width:32px; text-align:right; padding-right:10px; color:#9a958a; font-size:11px; font-family:ui-monospace,monospace; user-select:none; opacity:.55; padding-top:3px; }
+        #doc-livepreview:not(.lp-lines) .lp-gutter { display:none; }
+        .lp-content { flex:1; min-width:0; cursor:text; border-radius:4px; padding:1px 4px; }
+        .lp-content:hover { background:rgba(127,127,127,.06); }
+        .lp-content > *:first-child { margin-top:0; }
+        .lp-content > *:last-child { margin-bottom:0; }
+        .lp-content.lp-empty { color:var(--c-text3); font-style:italic; opacity:.5; min-height:1.2em; }
+        .lp-blank { height:6px; }
+        .lp-edit { width:100%; box-sizing:border-box; border:1px solid var(--c-accent); border-radius:6px; padding:7px 9px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; line-height:1.65; background:var(--c-paper); color:var(--c-text); resize:none; outline:none; }
         /* tab active state */
         #doc-main-pane .tab-active { background:#c96442 !important; color:white !important; }
         #doc-main-pane .tab-inactive { background:transparent !important; color:#6f6b5d !important; }
@@ -5937,7 +5956,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
 
 
                 <!-- ■ 통합 에디터/미리보기 패널 -->
-                <div id="doc-main-pane" class="flex-1 flex flex-col bg-white border border-gray-200 relative transition-all editor-mode-source" style="min-width:280px;min-height:0;">
+                <div id="doc-main-pane" class="flex-1 flex flex-col bg-white border border-gray-200 relative transition-all editor-mode-live" style="min-width:280px;min-height:0;">
                     <div class="file-drop-overlay" id="editor-file-drop-overlay2"></div>
 
                     <!-- 탭 헤더 -->
@@ -5954,17 +5973,25 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         <span id="presence-bar" style="display:none;align-items:center;gap:2px;margin-right:6px;"></span>
                         <!-- 모드 탭 -->
                         <div style="display:flex;gap:2px;padding:4px 0;">
-                            <button id="tab-source" onclick="setEditorMode('source')" title="소스 편집"
+                            <button id="tab-live" onclick="setEditorMode('live')" title="라이브 프리뷰 — 옵시디언식(클릭해 편집, 다른 곳 클릭 시 렌더)"
                                 style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:#c96442;color:white;transition:all 0.15s;">
+                                📑 라이브
+                            </button>
+                            <button id="tab-source" onclick="setEditorMode('source')" title="소스 편집"
+                                style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#6f6b5d;transition:all 0.15s;">
                                 📝 소스
                             </button>
-                            <button id="tab-preview" onclick="setEditorMode('preview')" title="미리보기"
+                            <button id="tab-preview" onclick="setEditorMode('preview')" title="미리보기 (읽기 전용)"
                                 style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#6f6b5d;transition:all 0.15s;">
                                 👀 미리보기
                             </button>
                             <button id="tab-split" onclick="setEditorMode('split')" title="분할 보기"
                                 style="padding:4px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#6f6b5d;transition:all 0.15s;">
                                 ⇄ 분할
+                            </button>
+                            <button id="btn-lp-lines" onclick="lpToggleLineNums()" title="줄 번호 보이기/숨기기 (라이브)"
+                                style="padding:4px 10px;border-radius:6px;border:1px solid var(--c-border);cursor:pointer;font-size:12px;font-weight:600;background:#c96442;color:#fff;transition:all 0.15s;">
+                                #️⃣
                             </button>
                         </div>
                         <!-- 우측 액션 버튼 -->
@@ -6010,6 +6037,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                                 </div>
                             </div>
                         </div>
+                        <!-- [r234 #7/#8/#9] 라이브 프리뷰 영역 (옵시디언식) -->
+                        <div id="doc-livepreview" class="markdown-body bg-white lp-lines" style="display:none;flex:1;overflow-y:auto;min-width:0;"></div>
                     </div>
 
                     <!-- 에디터 빈 상태 -->
@@ -10778,7 +10807,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r233';
+        var _AHUB_FRONT_REV = 'r234';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -18989,6 +19018,7 @@ return data;
             cancelAnimationFrame(window._loadDocRaf);
             window._loadDocRaf = requestAnimationFrame(function() {
                 updateDocPreview(content);
+                if (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'live' && typeof renderLivePreview === 'function') renderLivePreview(); // [r234] 라이브 렌더
                 setTimeout(function() {
                     markDocAsRead(activeDocId);
                     renderAnnotationsPanelPositioned();
@@ -25665,6 +25695,115 @@ ${intrLog}
             previewSyncToEditor();
         }
 
+        // ════════════════════════════════════════════════════════════
+        // [r234 #7/#8/#9] 라이브 프리뷰 — 옵시디언식: 블록 클릭→원본 편집, 블러→렌더, 줄번호
+        // ════════════════════════════════════════════════════════════
+        var _lpLineNums = true;
+        var _lpEditingIdx = null;
+
+        function lpToggleLineNums() {
+            _lpLineNums = !_lpLineNums;
+            var c = document.getElementById('doc-livepreview');
+            if (c) c.classList.toggle('lp-lines', _lpLineNums);
+            var b = document.getElementById('btn-lp-lines');
+            if (b) { b.style.background = _lpLineNums ? '#c96442' : 'var(--c-card)'; b.style.color = _lpLineNums ? '#fff' : '#6f6b5d'; }
+        }
+
+        // 소스 → 블록 배열. 빈 줄/코드펜스 경계 인식, 각 블록의 시작 줄번호(0-based) 보존.
+        function _lpSplitBlocks(text) {
+            var lines = String(text == null ? '' : text).split('\n');
+            var blocks = []; var cur = null;
+            function pushCur() { if (cur) { blocks.push(cur); cur = null; } }
+            for (var i = 0; i < lines.length; i++) {
+                var ln = lines[i];
+                var fenceM = ln.match(/^\s*(```+|~~~+)/);
+                if (cur && cur.fence) { cur.text += '\n' + ln; if (fenceM && fenceM[1][0] === cur.fence[0]) pushCur(); continue; }
+                if (fenceM) { pushCur(); cur = { text: ln, ln: i, fence: fenceM[1] }; continue; }
+                if (ln.trim() === '') { pushCur(); blocks.push({ blank: true, text: ln, ln: i }); continue; }
+                if (cur) cur.text += '\n' + ln; else cur = { text: ln, ln: i };
+            }
+            pushCur();
+            return blocks;
+        }
+        function _lpRenderBlockHtml(raw) {
+            try { return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(raw), (typeof domPurifyConfig !== 'undefined' ? domPurifyConfig : undefined)) : parseMarkdownWithTables(raw); }
+            catch (e) { return _sprintEsc(raw); }
+        }
+        function renderLivePreview() {
+            var host = document.getElementById('doc-livepreview'); if (!host) return;
+            var ta = document.getElementById('doc-editor-textarea');
+            var content = ta ? ta.value : '';
+            var doc = currentData.docs ? currentData.docs.find(function (d) { return d.id === activeDocId; }) : null;
+            if (doc && doc.content != null) content = doc.content;
+            host.classList.toggle('lp-lines', _lpLineNums);
+            if (!content || !content.trim()) {
+                host._lpBlocks = [{ text: '', ln: 0 }];
+                host.innerHTML = '<div class="lp-row" data-idx="0"><div class="lp-gutter">1</div><div class="lp-content lp-empty">비어 있음 — 클릭해 작성</div></div>';
+                return;
+            }
+            var blocks = _lpSplitBlocks(content);
+            host._lpBlocks = blocks;
+            var frag = '';
+            blocks.forEach(function (b, idx) {
+                if (b.blank) { frag += '<div class="lp-blank" data-idx="' + idx + '"></div>'; return; }
+                frag += '<div class="lp-row" data-idx="' + idx + '"><div class="lp-gutter">' + (b.ln + 1) + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + '</div></div>';
+            });
+            host.innerHTML = frag;
+        }
+        // 블록 클릭 → 원본 편집 (위키링크/이미지/임베드 클릭은 제외)
+        function _lpEnterEdit(idx) {
+            var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return;
+            var b = host._lpBlocks[idx]; if (!b) return;
+            if (_lpEditingIdx != null && _lpEditingIdx !== idx) _lpCommitEdit();
+            var row = host.querySelector('[data-idx="' + idx + '"]'); if (!row) return;
+            var ta = document.createElement('textarea');
+            ta.className = 'lp-edit'; ta.value = b.text || ''; ta.setAttribute('data-idx', idx);
+            row.className = 'lp-row';
+            row.innerHTML = '<div class="lp-gutter">' + ((b.ln || 0) + 1) + '</div>';
+            var wrap = document.createElement('div'); wrap.className = 'lp-content'; wrap.appendChild(ta); row.appendChild(wrap);
+            _lpEditingIdx = idx;
+            function autosize() { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
+            autosize(); ta.addEventListener('input', autosize);
+            ta.addEventListener('blur', _lpCommitEdit);
+            ta.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') { e.preventDefault(); _lpCancelEdit(); }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ta.blur(); }
+            });
+            ta.focus();
+            try { ta.selectionStart = ta.selectionEnd = ta.value.length; } catch (e) {}
+        }
+        function _lpCommitEdit() {
+            var host = document.getElementById('doc-livepreview'); if (!host || _lpEditingIdx == null) return;
+            var idx = _lpEditingIdx;
+            var ta = host.querySelector('textarea.lp-edit[data-idx="' + idx + '"]'); if (!ta) { _lpEditingIdx = null; return; }
+            var blocks = host._lpBlocks || [];
+            if (blocks[idx]) blocks[idx].text = ta.value;
+            _lpEditingIdx = null;
+            var content = blocks.map(function (x) { return x.text; }).join('\n');
+            _lpCommit(content);
+            renderLivePreview();
+        }
+        function _lpCancelEdit() { _lpEditingIdx = null; renderLivePreview(); }
+        // 라이브 편집 → 저장 파이프라인(소스 textarea 동기화 + autosave)
+        function _lpCommit(newContent) {
+            var ta = document.getElementById('doc-editor-textarea'); if (ta) ta.value = newContent;
+            var doc = currentData.docs ? currentData.docs.find(function (d) { return d.id === activeDocId; }) : null;
+            if (doc) { doc.content = newContent; doc._contentLoaded = true; doc.updatedAt = Date.now(); }
+            var statusEl = document.getElementById('doc-save-status'); if (statusEl) { statusEl.textContent = '수정 중...'; statusEl.style.color = '#f59e0b'; }
+            clearTimeout(_docSaveTimer); _docSaveTimer = setTimeout(flushDocSave, 1200);
+        }
+        // 라이브 영역 클릭 위임 — 링크/임베드가 아니면 해당 블록 편집 진입
+        document.addEventListener('click', function (e) {
+            if (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'live') return;
+            var host = document.getElementById('doc-livepreview');
+            if (!host || !host.contains(e.target)) return;
+            if (e.target.closest('a, .wikilink, .md-code-embed, input, button, .tda-html-mount, iframe, summary')) return;
+            if (e.target.closest('textarea.lp-edit')) return;
+            var row = e.target.closest('.lp-row, .lp-blank'); if (!row) return;
+            var idx = parseInt(row.getAttribute('data-idx'), 10);
+            if (!isNaN(idx)) _lpEnterEdit(idx);
+        });
+
         var _previewFormatBarEl = null;
         function showPreviewFormatBar() {
             var sel = window.getSelection();
@@ -28067,20 +28206,20 @@ ${intrLog}
         // ═══════════════════════════════════════════════
         // UNIFIED EDITOR MODE
         // ═══════════════════════════════════════════════
-        var currentEditorMode = 'source'; // 'source' | 'preview' | 'split'
+        var currentEditorMode = 'live'; // [r234 #7] 'live' | 'source' | 'preview' | 'split' — 라이브가 기본
 
         function setEditorMode(mode) {
             currentEditorMode = mode;
             var pane = document.getElementById('doc-main-pane');
             if(!pane) return;
             // Remove existing mode classes
-            ['source','preview','split'].forEach(function(m) {
+            ['live','source','preview','split'].forEach(function(m) {
                 pane.classList.remove('editor-mode-' + m);
             });
             pane.classList.add('editor-mode-' + mode);
 
             // Tab button states
-            ['source','preview','split'].forEach(function(m) {
+            ['live','source','preview','split'].forEach(function(m) {
                 var btn = document.getElementById('tab-' + m);
                 if(!btn) return;
                 if(m === mode) {
@@ -28092,8 +28231,13 @@ ${intrLog}
                 }
             });
 
+            // [r234] 라이브: 블록 렌더
+            if(mode === 'live') {
+                if(previewEditMode) disablePreviewEdit();
+                if(activeDocId) setTimeout(renderLivePreview, 20);
+            }
             // If switching to preview or split, refresh preview
-            if(mode === 'preview' || mode === 'split') {
+            else if(mode === 'preview' || mode === 'split') {
                 var ta = document.getElementById('doc-editor-textarea');
                 if(ta && activeDocId) {
                     setTimeout(function() {
@@ -31177,7 +31321,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r233';
+    var _RFS_FRONT_REV = 'r234';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
