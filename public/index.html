@@ -10905,7 +10905,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r239';
+        var _AHUB_FRONT_REV = 'r240';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -15692,18 +15692,22 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function gvTick() {
             var nodes = gvState.nodes, edges = gvState.edges, byId = gvState.byId, n = nodes.length;
             if (!n) return;
-            // [r65] 반발 + 충돌(겹침방지) + 스프링 + 약한 중심인력 → 자연스러운 클러스터, 고립노드는 바깥
-            var REP = 1900, SPRING = 0.05, CENTER = 0.010, a2 = gvState.alpha, GAP = 9;
+            // [r240 #6] 노드가 많아도 비비지 않게: 큰(허브) 노드일수록 넓은 반발장으로 자기 영역 확보,
+            //   연결이 느슨한(저차수) 노드일수록 중심인력 약화 → 바깥으로 밀려 궤도. 충돌 여백도 크기 비례.
+            var REP = 2400, SPRING = 0.05, CENTER = 0.013, a2 = gvState.alpha, GAP = 14;
+            var maxDeg = 1; for (var i=0;i<n;i++){ if ((nodes[i].deg||0) > maxDeg) maxDeg = nodes[i].deg; }
             for (var i=0;i<n;i++){ nodes[i].fx=0; nodes[i].fy=0; }
             for (var i=0;i<n;i++){
                 var A=nodes[i];
                 for (var j=i+1;j<n;j++){
                     var B=nodes[j]; var dx=A.x-B.x, dy=A.y-B.y, d2=dx*dx+dy*dy;
                     if (d2<1){ dx=Math.random()-0.5; dy=Math.random()-0.5; d2=1; }
-                    var d=Math.sqrt(d2), ux=dx/d, uy=dy/d, f=REP/d2;
-                    // 충돌: 반지름 합 + 여백보다 가까우면 강하게 밀어 깔끔한 간격 유지
-                    var minD = A.r + B.r + GAP;
-                    if (d < minD) f += (minD - d) * 0.85;
+                    var d=Math.sqrt(d2), ux=dx/d, uy=dy/d;
+                    // 반발장 = 기본 + 두 노드 크기 비례(큰 노드끼리는 더 넓게 떨어짐)
+                    var f = (REP + (A.r + B.r) * 42) / d2;
+                    // 충돌: 반지름 합 + (크기 비례) 여백보다 가까우면 강하게 밀어 겹침 제거
+                    var minD = A.r + B.r + GAP + (A.r + B.r) * 0.25;
+                    if (d < minD) f += (minD - d) * 1.0;
                     A.fx+=ux*f; A.fy+=uy*f; B.fx-=ux*f; B.fy-=uy*f;
                 }
             }
@@ -15715,9 +15719,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             }
             for (var i=0;i<n;i++){
                 var p=nodes[i]; if (p===gvState.drag) continue;
-                var cf = (p.type==='project') ? CENTER*2.5 : CENTER;
+                // 중심인력: 허브(고차수)는 강하게(중앙 고정), 느슨한 노드는 약하게(바깥 궤도)
+                var degN = (p.deg||0)/maxDeg;
+                var cf = (p.type==='project') ? CENTER*3 : CENTER*(0.18 + 0.82*degN);
                 p.fx += -p.x*cf; p.fy += -p.y*cf;
-                var dx=p.fx*a2, dy=p.fy*a2, mag=Math.sqrt(dx*dx+dy*dy), MAX=22;
+                var dx=p.fx*a2, dy=p.fy*a2, mag=Math.sqrt(dx*dx+dy*dy), MAX=24;
                 if (mag>MAX){ dx=dx/mag*MAX; dy=dy/mag*MAX; }
                 p.x+=dx; p.y+=dy;
             }
@@ -31615,7 +31621,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r239';
+    var _RFS_FRONT_REV = 'r240';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
