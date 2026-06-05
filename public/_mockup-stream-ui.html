@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>정련소 Stream UI 목업</title>
+<style>
+  :root{
+    --c-paper:#f6f2ea; --c-card:#fffdf8; --c-card2:#fbf7ef; --c-border:#e7dfd1;
+    --c-text:#2c2723; --c-text2:#6c6357; --c-text3:#9d9387;
+    --c-accent:#c96442; --c-accent2:#bd8a3e; --c-soft:#f1e6dd; --c-soft2:#efe7d6;
+    --c-ok:#4f7a52; --c-ok-soft:#e7efe2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--c-paper);color:var(--c-text);font:14px/1.5 -apple-system,'Segoe UI','Malgun Gothic',sans-serif;}
+  .wrap{max-width:1320px;margin:0 auto;padding:18px 20px 60px;}
+  h1{font-size:19px;margin:0 0 4px;}
+  .sub{color:var(--c-text3);font-size:12px;margin-bottom:14px;}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+  .seg{display:inline-flex;border:1px solid var(--c-border);border-radius:9px;overflow:hidden;background:var(--c-card);}
+  .seg button{border:0;background:transparent;padding:8px 16px;font-size:13px;font-weight:700;color:var(--c-text2);cursor:pointer;}
+  .seg button.on{background:var(--c-accent);color:#fff;}
+  .cap{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:12px;color:var(--c-text2);background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:6px 10px;}
+  .cap input{width:46px;padding:2px 4px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);text-align:center;}
+  .legend{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;}
+  .ptag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;background:var(--c-soft2);color:#7a5b2e;border:1px solid #e3d4b3;}
+  .ptag.code{background:#e9eef0;color:#3c5a66;border-color:#cfdde2;}
+  .ptag.design{background:#efe6f1;color:#6a4b75;border-color:#ddccdf;}
+  .ptag.art{background:#f3e6dd;color:#9a5a37;border-color:#e7cdb9;}
+  .ptag.tool{background:#e9ece2;color:#566041;border-color:#d6dcc6;}
+
+  /* ── 흐름(5열) ── */
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:start;}
+  .col{background:var(--c-card2);border:1px solid var(--c-border);border-radius:12px;padding:8px;min-height:200px;}
+  .col-h{font-size:12px;font-weight:800;color:var(--c-text2);padding:4px 6px 8px;display:flex;align-items:center;gap:6px;}
+  .col-h .n{margin-left:auto;font-weight:400;color:var(--c-text3);}
+  .scard{position:relative;background:var(--c-card);border:1px solid var(--c-border);border-radius:9px;padding:8px 9px;margin-bottom:7px;cursor:pointer;transition:opacity .12s,box-shadow .12s,border-color .12s,transform .08s;}
+  .scard:hover{transform:translateY(-1px);}
+  .scard .ttl{font-size:12.5px;font-weight:700;line-height:1.35;}
+  .scard .mini{font-size:10.5px;color:var(--c-text3);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .scard .chk{position:absolute;top:7px;right:7px;width:15px;height:15px;border:1.5px solid var(--c-accent);border-radius:4px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;}
+  .scard.cat{background:var(--c-soft);border-color:#e3d3c6;}
+  .scard.cat .ttl::before{content:'📁 ';}
+  .focusing .scard:not(.hot){opacity:.28;}
+  .scard.hot{border-color:var(--c-accent);box-shadow:0 0 0 2px rgba(201,100,66,.25);}
+  .origin{font-size:10px;color:var(--c-accent);background:var(--c-soft);border-radius:5px;padding:1px 5px;}
+  .hours{font-size:10px;color:var(--c-text3);}
+  .arrowrow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:-2px 0 2px;}
+  .arrowrow div{text-align:right;color:var(--c-text3);font-size:14px;padding-right:6px;}
+
+  /* ── STAGE 카드 강조 ── */
+  .stage-card{background:linear-gradient(180deg,#fff,#fbf3ec);border:1px solid #e6c9b8;}
+  .badge{display:inline-block;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:20px;background:var(--c-accent);color:#fff;}
+  .badge.life{background:var(--c-accent2);}
+
+  /* ── 타임라인 미니 ── */
+  .tl{margin-top:6px;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:8px;}
+  .tl-row{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:10.5px;}
+  .tl-row .lab{width:58px;color:var(--c-text2);flex-shrink:0;}
+  .tl-track{position:relative;flex:1;height:16px;background:var(--c-soft2);border-radius:5px;}
+  .tl-bar{position:absolute;height:16px;border-radius:5px;background:var(--c-accent);opacity:.85;display:flex;align-items:center;padding:0 6px;color:#fff;font-size:9px;white-space:nowrap;}
+
+  /* ── 트리 뷰 ── */
+  .tree details{background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;margin-bottom:8px;padding:4px 4px;}
+  .tree details details{margin:6px 6px 6px 18px;background:var(--c-card2);}
+  .tree summary{cursor:pointer;padding:8px 10px;font-weight:700;font-size:13px;list-style:none;display:flex;align-items:center;gap:8px;}
+  .tree summary::-webkit-details-marker{display:none}
+  .tree summary .chk{position:static;margin-right:2px;}
+  .tree .taskline{display:flex;align-items:center;gap:8px;padding:7px 10px 7px 36px;font-size:12.5px;border-top:1px dashed var(--c-border);}
+  .tree .spgoal{font-size:11px;color:var(--c-text3);font-weight:400;margin-left:auto;}
+  .hint{font-size:11.5px;color:var(--c-text3);margin:10px 2px;}
+  .note{margin-top:22px;padding:10px 12px;background:var(--c-soft);border:1px solid #e6d8c9;border-radius:9px;font-size:11.5px;color:#7a5b3e;}
+  .hide{display:none!important;}
+  .dep{font-size:10px;color:#a85c3e;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>연구 정련소 — 도출 Stream UI <span style="color:var(--c-accent);">목업</span></h1>
+  <div class="sub">예시 문서 <b>'전투 시스템 설계.md'</b> → 분해 → 도출된 한 묶음(Stream): <b>전투 코어 MVP</b>. 카드에 마우스를 올리면 <b>키워드 → Task → Sprint → STAGE → WBS</b> 계보가 강조됩니다. (정적 목업 — 실제 동작 아님)</div>
+
+  <div class="toolbar">
+    <div class="seg">
+      <button id="b-flow" class="on" onclick="setView('flow')">흐름 보기 (5열)</button>
+      <button id="b-tree" onclick="setView('tree')">트리 보기</button>
+    </div>
+    <div class="cap">⏱ 스프린트 용량
+      <label>길이 <input value="2" size="2"> 주</label>
+      <label>가용 <input value="40" size="2"> h/주</label>
+      <span style="color:var(--c-text3)">→ 80h/스프린트 (가변)</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span style="color:var(--c-text3);font-weight:700;">공정 태그(PM_TAX):</span>
+    <span class="ptag code">3.1.2 게임로직</span>
+    <span class="ptag design">1.1.1 코어루프</span>
+    <span class="ptag art">2.3.1 VFX</span>
+    <span class="ptag tool">3.3.3 사내툴</span>
+  </div>
+
+  <!-- ══════════ 흐름(5열) ══════════ -->
+  <div id="view-flow">
+    <div class="arrowrow"><div></div><div>→</div><div>→</div><div>→</div><div>→</div></div>
+    <div class="flow">
+      <!-- 1 키워드 노드 -->
+      <div class="col">
+        <div class="col-h">🌲 키워드 노드 <span class="n">5</span></div>
+        <div class="scard cat" data-id="n1" data-link="n2 n3 n4 n5"><span class="chk">✓</span><div class="ttl">전투 시스템</div><div class="mini">분류 · 마인드맵 추출</div></div>
+        <div class="scard" data-id="n2" data-link="t2 t3"><span class="chk">✓</span><div class="ttl">콤보</div><div class="mini">concept · 신뢰도 88</div></div>
+        <div class="scard" data-id="n3" data-link="t4"><span class="chk">✓</span><div class="ttl">캔슬</div><div class="mini">concept · 신뢰도 80</div></div>
+        <div class="scard" data-id="n4" data-link="t1 t6"><span class="chk">✓</span><div class="ttl">히트박스</div><div class="mini">concept · 신뢰도 85</div></div>
+        <div class="scard" data-id="n5" data-link="t5 t7"><span class="chk">✓</span><div class="ttl">가드/패링</div><div class="mini">concept · 신뢰도 76</div></div>
+      </div>
+      <!-- 2 Task -->
+      <div class="col">
+        <div class="col-h">✅ Task <span class="n">7</span></div>
+        <div class="scard" data-id="t1" data-link="n4 s1 st1 w1"><span class="chk">✓</span><div class="ttl">히트박스 컴포넌트 구현</div><div class="mini"><span class="ptag code">3.1.2</span><span class="origin">⟵ 히트박스</span><span class="hours">8h</span></div></div>
+        <div class="scard" data-id="t2" data-link="n2 s1 st1 w1"><span class="chk">✓</span><div class="ttl">콤보 입력 버퍼 구현</div><div class="mini"><span class="ptag code">3.1.2</span><span class="origin">⟵ 콤보</span><span class="hours">8h</span><span class="dep">의존: 히트박스</span></div></div>
+        <div class="scard" data-id="t3" data-link="n2 s1 st1 w1"><span class="chk">✓</span><div class="ttl">콤보 판정 테이블 설계</div><div class="mini"><span class="ptag design">1.1.1</span><span class="origin">⟵ 콤보</span><span class="hours">6h</span></div></div>
+        <div class="scard" data-id="t4" data-link="n3 s2 st1 w1"><span class="chk">✓</span><div class="ttl">캔슬 윈도우 로직</div><div class="mini"><span class="ptag code">3.1.2</span><span class="origin">⟵ 캔슬</span><span class="hours">8h</span><span class="dep">의존: 콤보버퍼</span></div></div>
+        <div class="scard" data-id="t5" data-link="n5 s2 st1 w1"><span class="chk">✓</span><div class="ttl">가드/패링 판정</div><div class="mini"><span class="ptag code">3.1.2</span><span class="origin">⟵ 가드</span><span class="hours">10h</span><span class="dep">의존: 히트박스</span></div></div>
+        <div class="scard" data-id="t6" data-link="n4 s3 st1 w1"><span class="chk">✓</span><div class="ttl">히트박스 디버그 뷰</div><div class="mini"><span class="ptag tool">3.3.3</span><span class="origin">⟵ 히트박스</span><span class="hours">6h</span></div></div>
+        <div class="scard" data-id="t7" data-link="n5 s3 st1 w1"><span class="chk">✓</span><div class="ttl">가드 이펙트</div><div class="mini"><span class="ptag art">2.3.1</span><span class="origin">⟵ 가드</span><span class="hours">6h</span><span class="dep">의존: 가드판정</span></div></div>
+      </div>
+      <!-- 3 Sprint -->
+      <div class="col">
+        <div class="col-h">🏃 Sprint <span class="n">3</span></div>
+        <div class="scard" data-id="s1" data-link="t1 t2 t3 st1"><span class="chk">✓</span><div class="ttl">2026 W23 · 전투 판정 코어</div><div class="mini">Task 3 · 22h / 80h</div></div>
+        <div class="scard" data-id="s2" data-link="t4 t5 st1"><span class="chk">✓</span><div class="ttl">2026 W24 · 콤보·가드 확장</div><div class="mini">Task 2 · 18h / 80h</div></div>
+        <div class="scard" data-id="s3" data-link="t6 t7 st1"><span class="chk">✓</span><div class="ttl">2026 W25 · 디버그·연출 폴리시</div><div class="mini">Task 2 · 12h / 80h</div></div>
+      </div>
+      <!-- 4 STAGE -->
+      <div class="col">
+        <div class="col-h">🎯 STAGE <span class="n">1</span></div>
+        <div class="scard stage-card" data-id="st1" data-link="s1 s2 s3"><span class="chk">✓</span>
+          <div class="ttl">전투 코어 MVP</div>
+          <div class="mini"><span class="badge">MVP</span><span class="badge life">build</span></div>
+          <div class="mini" style="margin-top:6px;">공정 합집합: <span class="ptag code">3.1.2</span><span class="ptag design">1.1.1</span><span class="ptag art">2.3.1</span><span class="ptag tool">3.3.3</span></div>
+          <div class="mini" style="margin-top:6px;color:var(--c-text2);">Sprint 3개 묶음 → 마일스톤</div>
+        </div>
+        <div class="hint">집계 규칙: <b>LLM 자율</b> · 옵션(공정 전환·N스프린트·lifecycle)</div>
+      </div>
+      <!-- 5 WBS + 타임라인 -->
+      <div class="col">
+        <div class="col-h">🏗 WBS + 타임라인 <span class="n">1</span></div>
+        <div class="scard" data-id="w1" data-link="s1 s2 s3"><span class="chk">✓</span><div class="ttl">전투 시스템</div><div class="mini">기존 WBS에 부착 · 예상 6.5d</div>
+          <div class="tl">
+            <div class="tl-row"><span class="lab">W23</span><div class="tl-track"><div class="tl-bar" style="left:0%;width:30%;">판정코어</div></div></div>
+            <div class="tl-row"><span class="lab">W24</span><div class="tl-track"><div class="tl-bar" style="left:33%;width:30%;background:var(--c-accent2);">콤보·가드</div></div></div>
+            <div class="tl-row"><span class="lab">W25</span><div class="tl-track"><div class="tl-bar" style="left:66%;width:24%;background:#7a8b54;">폴리시</div></div></div>
+          </div>
+          <div class="mini" style="margin-top:5px;">막대별 독립 일정 · 세그먼트 의존성(deps) 자동</div>
+        </div>
+      </div>
+    </div>
+    <div class="hint">✔ 각 항목 체크로 선별 채택. 상위(노드/Sprint/STAGE) 해제 시 하위 도출물도 함께 빠짐(계보 인지). 부분 재도출 = 한 열만 다시.</div>
+  </div>
+
+  <!-- ══════════ 트리 뷰 ══════════ -->
+  <div id="view-tree" class="tree hide">
+    <div class="hint">STAGE → Sprint → Task 계보를 접고 펴며 위→아래로 본다. 각 Task에 공정 배지 + ⟵ 출처 키워드.</div>
+    <details open>
+      <summary><span class="chk" style="position:static;">✓</span>🎯 전투 코어 MVP <span class="badge">MVP</span><span class="badge life">build</span><span class="spgoal">Sprint 3 · 공정 4종 · 예상 6.5d</span></summary>
+
+      <details open>
+        <summary><span class="chk" style="position:static;">✓</span>🏃 2026 W23 — 전투 판정 코어 <span class="spgoal">22h / 80h</span></summary>
+        <div class="taskline"><span class="chk" style="position:static;">✓</span>✅ 히트박스 컴포넌트 구현 <span class="ptag code">3.1.2</span><span class="origin">⟵ 히트박스</span><span class="spgoal">8h</span></div>
+        <div class="taskline"><span class="chk" style="position:static;">✓</span>✅ 콤보 입력 버퍼 구현 <span class="ptag code">3.1.2</span><span class="origin">⟵ 콤보</span><span class="dep">의존: 히트박스</span><span class="spgoal">8h</span></div>
+        <div class="taskline"><span class="chk" style="position:static;">✓</span>✅ 콤보 판정 테이블 설계 <span class="ptag design">1.1.1</span><span class="origin">⟵ 콤보</span><span class="spgoal">6h</span></div>
+      </details>
+
+      <details>
+        <summary><span class="chk" style="position:static;">✓</span>🏃 2026 W24 — 콤보·가드 확장 <span class="spgoal">18h / 80h</span></summary>
+        <div class="taskline"><span class="chk" style="position:static;">✓</span>✅ 캔슬 윈도우 로직 <span class="ptag code">3.1.2</span><span class="origin">⟵ 캔슬</span><span class="dep">의존: 콤보버퍼</span><span class="spgoal">8h</span></div>
+        <div class="taskline"><span class="chk" style="position:static;">✓</span>✅ 가드/패링 판정 <span class="ptag code">3.1.2</span><span class="origin">⟵ 가드</span><span class="dep">의존: 히트박스</span><span class="spgoal">10h</span></div>
+      </details>
+
+      <details>
+        <summary><span class="chk" style="position:static;">✓</span>🏃 2026 W25 — 디버그·연출 폴리시 <span class="spgoal">12h / 80h</span></summary>
+        <div class="taskline"><span class="chk" style="position:static;">✓</span>✅ 히트박스 디버그 뷰 <span class="ptag tool">3.3.3</span><span class="origin">⟵ 히트박스</span><span class="spgoal">6h</span></div>
+        <div class="taskline"><span class="chk" style="position:static;">✓</span>✅ 가드 이펙트 <span class="ptag art">2.3.1</span><span class="origin">⟵ 가드</span><span class="dep">의존: 가드판정</span><span class="spgoal">6h</span></div>
+      </details>
+    </details>
+    <div class="hint">🏗 이 STAGE는 채택 시 기존 WBS '전투 시스템'에 부착되고, Sprint 3개가 타임라인 막대(W23~W25)로 배치됩니다.</div>
+  </div>
+
+  <div class="note">📝 <b>두 방식 비교</b> — <b>흐름(5열)</b>: 키워드→WBS 인과를 가로로 한눈에, 마우스오버로 계보 추적이 직관적(선별 판단에 강함). <b>트리</b>: STAGE 중심으로 위→아래 정리, 화면이 좁아도 보기 편하고 모바일 친화적. 둘 다 만들어 <b>토글 제공</b>도 가능합니다. 어느 쪽을 기본으로 할지 알려주세요.</div>
+</div>
+
+<script>
+  function setView(v){
+    document.getElementById('view-flow').classList.toggle('hide', v!=='flow');
+    document.getElementById('view-tree').classList.toggle('hide', v!=='tree');
+    document.getElementById('b-flow').classList.toggle('on', v==='flow');
+    document.getElementById('b-tree').classList.toggle('on', v==='tree');
+  }
+  // 계보 강조 (한 홉: 자신 + data-link 대상)
+  var flow=document.querySelector('.flow');
+  var cards=[].slice.call(document.querySelectorAll('#view-flow .scard'));
+  cards.forEach(function(card){
+    card.addEventListener('mouseenter',function(){
+      var ids=[card.dataset.id].concat((card.dataset.link||'').split(' ').filter(Boolean));
+      flow.classList.add('focusing');
+      cards.forEach(function(c){ c.classList.toggle('hot', ids.indexOf(c.dataset.id)>=0); });
+    });
+    card.addEventListener('mouseleave',function(){
+      flow.classList.remove('focusing');
+      cards.forEach(function(c){ c.classList.remove('hot'); });
+    });
+  });
+</script>
+</body>
+</html>
