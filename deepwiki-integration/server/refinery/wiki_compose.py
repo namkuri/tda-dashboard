@@ -19,7 +19,9 @@ _SYSTEM = """당신은 게임개발 프로젝트 위키 문서를 작성하는 �
 1. 첫 줄은 frontmatter(--- ... ---) — title, category: canon, created_by, updated_by 포함.
 2. 본문은 주어진 목차의 각 항목을 `## 항목` 헤더로 만들고 내용을 채움.
 3. 참고 발췌에 근거해 작성하되, 없는 사실을 지어내지 말 것(불명확하면 'TBD').
-4. 출력은 frontmatter+본문 한 덩어리. 코드펜스(```)로 감싸지 말 것.
+4. **옵시디언 양방향 링크**: 본문에서 다른 위키 문서·원본 자료를 언급할 땐 `[[문서명]]`
+   형태로 연결하라([연결 후보] 목록의 제목을 정확히 사용). 지식 네트워크를 만드는 게 목적.
+5. 출력은 frontmatter+본문 한 덩어리. 코드펜스(```)로 감싸지 말 것.
 """
 
 
@@ -61,12 +63,25 @@ async def compose_wiki_body(
     vault_block = _vault_excerpt(vault_docs or [])
     files: List[Dict[str, Any]] = []
     total = len(docs or [])
+    # [r265] 옵시디언 링크 후보 — 다른 위키 문서 제목 + 원본 vault 제목
+    all_doc_titles = [(d.get("title") or "").strip() for d in (docs or []) if d.get("title")]
+    vault_titles = [(v.get("title") or "").strip() for v in (vault_docs or []) if v.get("title")]
     yield {"event": "stage", "message": f"위키 본문 작성 시작 — 문서 {total}개"}
 
     for idx, doc in enumerate(docs or []):
         title = (doc.get("title") or "문서").strip()
         outline = [str(x) for x in (doc.get("outline") or []) if str(x).strip()]
         outline_block = "\n".join(f"- {o}" for o in outline) if outline else "- 개요\n- 상세"
+        # 이 문서와 같은 상위 폴더의 형제 위키(우선) + 나머지 + vault
+        same_folder, other = [], []
+        my_top = (doc.get("folder_path") or [None])[0]
+        for d in (docs or []):
+            t = (d.get("title") or "").strip()
+            if not t or t == title:
+                continue
+            (same_folder if (d.get("folder_path") or [None])[0] == my_top else other).append(t)
+        link_cands = list(dict.fromkeys(same_folder + other + vault_titles))[:24]
+        link_block = ", ".join(f"[[{t}]]" for t in link_cands) if link_cands else "(없음)"
         yield {"event": "stage", "message": f"[{idx + 1}/{total}] {title} 작성 중…"}
         user_prompt = (
             f"문서 제목: {title}\n"
@@ -74,7 +89,8 @@ async def compose_wiki_body(
             f"작성자: {user_id}\n\n"
             f"[목차]\n{outline_block}\n\n"
             f"[참고 발췌]\n{vault_block}\n\n"
-            "위 목차 순서대로 위키 문서 본문을 작성하세요."
+            f"[연결 후보 — 관련된 것을 본문에 [[제목]] 으로 링크]\n{link_block}\n\n"
+            "위 목차 순서대로 위키 문서 본문을 작성하고, 관련 문서는 [[제목]] 으로 연결하세요."
         )
         buf = ""
         try:
@@ -91,6 +107,17 @@ async def compose_wiki_body(
         # 코드펜스 제거
         body = re.sub(r"^```(?:markdown|md)?\s*\n?", "", buf.strip())
         body = re.sub(r"\n?```\s*$", "", body).strip()
+        # [r265] 옵시디언 링크 보장 — LLM 이 [[]] 를 거의 안 넣었으면 '관련 문서' 푸터 추가
+        if body.count("[[") < 2:
+            rel = (same_folder[:5] or other[:5])
+            srcs = vault_titles[:4]
+            foot_parts = []
+            if rel:
+                foot_parts.append("- 관련 문서: " + " ".join(f"[[{t}]]" for t in rel))
+            if srcs:
+                foot_parts.append("- 원본 자료: " + " ".join(f"[[{t}]]" for t in srcs))
+            if foot_parts:
+                body = body + "\n\n## 관련 문서\n" + "\n".join(foot_parts) + "\n"
         # [r258] 폴더 계층(folder_path) 반영 — 깊은 위키 폴더 구조로 생성
         folders = [_slug(str(x)) for x in (doc.get("folder_path") or []) if str(x).strip()]
         path = "/".join([root] + folders + [_slug(title)]) + ".md"
