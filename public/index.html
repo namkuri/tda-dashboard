@@ -4159,6 +4159,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="personal" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
                     <!-- [r242] 회의록 자동작성 — Discord 음성(Craig) → STT → 회의록 -->
                     <button class="cs-nav" data-nav="meetings" id="cs-nav-meetings" onclick="switchView('meetings')" title="회의록 자동작성 — Discord 음성(Craig 녹음)을 자동 텍스트화·요약"><span class="cs-ico">🎙</span><span class="cs-label">회의록 자동작성</span></button>
+                    <!-- [r243] 프로덕트 관리 — Stage·생애주기·직무체계 태그 -->
+                    <button class="cs-nav" data-nav="product" id="cs-nav-product" onclick="switchView('product')" title="프로덕트 관리 — MVP/PoC 등 Stage 정의, 생애주기, 게임개발 직무체계 태그·담당자·산출물"><span class="cs-ico">🚀</span><span class="cs-label">프로덕트 관리</span></button>
                     <button class="cs-nav" data-nav="graph" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
                     <!-- [r112] 진짜 Deep Wiki — 유니티 Git 레포 LLM 자동 분석 + 기획 일치도 보고서 (DeepWiki-Open 모사). 자동 생성기는 r113~r116에 단계적 구축 -->
                     <button class="cs-nav" data-nav="deepwikiPages" id="cs-nav-deepwiki-pages" onclick="switchView('deepwikiPages')" title="Deep Wiki — 유니티 Git 레포를 LLM이 자동 분석한 위키 페이지 (1차) + 기획 일치도 보고서 (2차)"><span class="cs-ico">📘</span><span class="cs-label">Deep Wiki</span></button>
@@ -4685,6 +4687,26 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .rfs-done-item { display:flex; gap:7px; align-items:baseline; font-size:12.5px; padding:4px 8px; border-radius:6px; cursor:pointer; }
         .rfs-done-item:hover { background:rgba(127,127,127,.1); }
         .rfs-done-item.active { background:var(--c-accent-soft); color:var(--c-accent); }
+        /* [r243] 프로덕트 관리 — 필 태그 / 계층 / 타입 카드 */
+        .pm-pill { display:inline-flex; align-items:center; gap:5px; font-size:12px; padding:4px 11px; border-radius:14px; border:1px solid var(--c-border); background:var(--c-card); color:var(--c-text2); cursor:pointer; user-select:none; transition:all .12s; }
+        .pm-pill:hover { border-color:var(--c-accent); }
+        .pm-pill.sel { background:var(--c-accent); border-color:var(--c-accent); color:#fff; font-weight:700; }
+        .pm-pill.sel.lv2 { background:#2a7ab8; border-color:#2a7ab8; }
+        .pm-pill.sel.lv3 { background:#2e9e5b; border-color:#2e9e5b; }
+        .pm-pillrow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+        .pm-children { margin:6px 0 6px 14px; padding-left:12px; border-left:2px solid var(--c-border); }
+        .pm-type-card { flex:1; min-width:150px; border:1px solid var(--c-border); border-radius:10px; padding:10px 12px; background:var(--c-card); cursor:pointer; transition:all .12s; }
+        .pm-type-card:hover { border-color:var(--c-accent); }
+        .pm-type-card.sel { border-color:var(--c-accent); box-shadow:0 0 0 1px var(--c-accent) inset; background:var(--c-accent-soft); }
+        .pm-type-card .pm-type-name { font-weight:800; font-size:14px; }
+        .pm-type-card .pm-type-sub { font-size:11px; color:var(--c-text3); margin-top:1px; }
+        .pm-sec { border:1px solid var(--c-border); border-radius:10px; background:var(--c-card); padding:14px 16px; margin-bottom:14px; }
+        .pm-sec-h { font-weight:800; font-size:13px; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+        .pm-tagcard { border:1px solid var(--c-border); border-radius:9px; background:var(--c-paper); padding:10px 12px; margin-bottom:8px; }
+        .pm-input { box-sizing:border-box; padding:6px 9px; border:1px solid var(--c-border); border-radius:6px; background:var(--c-paper); color:var(--c-text); font-size:12.5px; }
+        .pm-lifecycle-card { flex:1; min-width:160px; border:1px solid var(--c-border); border-radius:9px; padding:9px 11px; background:var(--c-card); cursor:pointer; transition:all .12s; }
+        .pm-lifecycle-card:hover { border-color:var(--c-accent); }
+        .pm-lifecycle-card.sel { border-color:var(--c-accent); box-shadow:0 0 0 1px var(--c-accent) inset; background:var(--c-accent-soft); }
         /* [r233 #4/#6/#12] 옵시디언식 프론트매터(속성) 메타 패널 — 기본 접힘, 굵은 글씨 X */
         .md-frontmatter { margin: 0 0 14px; border: 1px solid var(--c-border); border-radius: 8px; background: var(--c-paper); font-size: 12.5px; overflow: hidden; }
         .md-frontmatter > .md-fm-summary { cursor: pointer; padding: 7px 12px; font-weight: 600; color: var(--c-text3); list-style: none; user-select: none; display: flex; align-items: center; gap: 6px; }
@@ -5631,6 +5653,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
             <div id="mtg-health-banner" style="display:none;padding:10px 22px;font-size:12.5px;font-weight:700;"></div>
             <div id="mtg-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
+        </div>
+
+        <!-- [r243] 프로덕트 관리 — Stage·생애주기·직무체계 태그 -->
+        <div id="product-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:hidden;background:var(--c-paper);display:flex;flex-direction:column;">
+            <div style="padding:14px 22px;border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:12px;background:var(--c-card);">
+                <div style="font-size:20px;">🚀</div>
+                <div style="flex:1;">
+                    <div style="font-size:15px;font-weight:800;color:var(--c-text);">프로덕트 관리 <span id="pm-title" style="color:var(--c-text2);font-weight:600;font-size:13px;margin-left:8px;"></span></div>
+                    <div style="font-size:11px;color:var(--c-text3);margin-top:2px;">Stage(MVP/PoC/Prototype/Pilot) · 생애주기 · 게임개발 직무체계 태그/담당자/산출물</div>
+                </div>
+                <button id="pm-new-btn" class="aihub-gpu-btn primary" style="font-size:12px;" onclick="pmNewStage()">+ 새 Stage</button>
+                <button class="aihub-gpu-btn" style="font-size:12px;" onclick="pmOpen()">← Stage 목록</button>
+            </div>
+            <div id="pm-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
         </div>
 
         <div id="aihub-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:auto;padding:18px 22px;background:var(--c-paper);">
@@ -10926,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r242';
+        var _AHUB_FRONT_REV = 'r243';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -16157,6 +16193,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var _csMtg = document.getElementById('cs-nav-meetings'); if (_csMtg) _csMtg.classList.toggle('active', viewName === 'meetings');
             var _mtgVw = document.getElementById('meetings-view'); if (_mtgVw) { _mtgVw.classList.toggle('hidden', viewName !== 'meetings'); _mtgVw.style.display = (viewName === 'meetings') ? 'flex' : 'none'; }
             if (viewName === 'meetings' && typeof mtgOpen === 'function') setTimeout(mtgOpen, 30);
+            // [r243] 프로덕트 관리
+            var _csPm = document.getElementById('cs-nav-product'); if (_csPm) _csPm.classList.toggle('active', viewName === 'product');
+            var _pmVw = document.getElementById('product-view'); if (_pmVw) { _pmVw.classList.toggle('hidden', viewName !== 'product'); _pmVw.style.display = (viewName === 'product') ? 'flex' : 'none'; }
+            if (viewName === 'product' && typeof pmOpen === 'function') setTimeout(pmOpen, 30);
             if (viewName === 'aiHub' && typeof aihubRender === 'function') aihubRender();
             // [r208] AI Hub 진입 시 마지막 동기화 시각 갱신
             if (viewName === 'aiHub' && typeof ahubRefreshIdxBadge === 'function') setTimeout(ahubRefreshIdxBadge, 30);
@@ -17328,7 +17368,9 @@ return data;
             ['ai_usage_logs', "id text primary key, project_id text, user_id text, user_name text, kind text, model text, host text, gpu_host_id text, in_tokens int default 0, out_tokens int default 0, dur_ms bigint default 0, detail text, out_summary text, created_at timestamptz default now()"],
             ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"],
             // [r242] 회의록 자동작성 — Craig 녹음 → STT → LLM 회의록
-            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text"]
+            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text"],
+            // [r243] 프로덕트 관리 — Stage(타입/생애주기/Goal) + 게임개발 직무체계 계층 태그
+            ['product_stages', "id text primary key, project_id text, name text not null default '새 Stage', type text, goal text default '', lifecycle text, tags jsonb default '[]'::jsonb, tag_meta jsonb default '{}'::jsonb, status text default 'active', sort_order bigint, created_by text, created_at timestamptz default now(), updated_at timestamptz default now()"]
         ];
         function dbMigrationSql() {
             var lines = ['-- TDA Dashboard 스키마 마이그레이션 (Supabase → SQL Editor에서 1회 실행)', '-- 멱등(여러 번 실행해도 안전), 기존 데이터 보존', ''];
@@ -31660,7 +31702,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r242';
+    var _RFS_FRONT_REV = 'r243';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31916,6 +31958,286 @@ ${intrLog}
         try { await fetch(url + '/meetings/sessions/' + id, {method: 'DELETE'}); } catch (e) {}
         _mtgState.current = null; await mtgLoadSessions(); mtgRenderList();
         showToast('삭제됨', 'info');
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // [r243] 프로덕트 관리 — Stage(타입/생애주기/Goal) + 게임개발 직무체계 태그
+    // ════════════════════════════════════════════════════════════
+    var PM_TYPES = [
+        {id: 'mvp', label: 'MVP', sub: '최소 실행가능 제품', desc: '최소 노력으로 고객에게 가치를 주고 가설을 검증·개선. "고객이 원하는 게 맞나?" 실사용자 피드백 필수, 지속 실험/개선.'},
+        {id: 'poc', label: 'PoC', sub: '개념 증명', desc: '신기술/아이디어의 타당성 검증. "이 기술이 생각대로 동작하나? 도입해도 되나?" 실사용자 피드백 없음.'},
+        {id: 'prototype', label: 'Prototype', sub: '프로토타입', desc: '중요 기능이 포함된 초기 모델. "이렇게 설계해 개발/양산해도 되나?" 개발 착수 전 검증·승인용.'},
+        {id: 'pilot', label: 'Pilot', sub: '시범 적용', desc: '전체 확대 전 소규모 시범 적용. "더 넓은 그룹으로 확장해도 되나?" 성공/실패 확인용(지속 검증은 아님).'},
+    ];
+    var PM_LIFECYCLES = [
+        {id: 'planning', label: '기획 (Discovery/Planning)', desc: '시장 조사 · 문제 정의 · 사용자 리서치 · 가설 설정'},
+        {id: 'build', label: '개발 (Delivery/Build)', desc: '설계(Design) · 구현(Development) · 테스트(QA)'},
+        {id: 'gtm', label: '출시·운영 (Go-to-Market/Ops)', desc: '배포 · 마케팅 · 성과 분석(로그) · 유지보수'},
+        {id: 'iterative', label: '고도화 (Iterative Improvement)', desc: '피드백 반영 · 기능 개선 · 피벗(Pivot)'},
+    ];
+    // 게임 개발 직무 및 공정 세분화 체계 (i=ID, p=부모, v=레벨, s=축약, l=전체)
+    var PM_TAX = [
+        {i:'1',p:null,v:1,s:'기획',l:'게임 기획 (Game Design)'},
+        {i:'1.1',p:'1',v:2,s:'시스템',l:'시스템 기획'},
+        {i:'1.1.1',p:'1.1',v:3,s:'코어 루프',l:'핵심 게임 메커니즘 설계 (Core Loop)'},
+        {i:'1.1.2',p:'1.1',v:3,s:'룰/승패',l:'룰 및 승패 조건 정의'},
+        {i:'1.1.3',p:'1.1',v:3,s:'조작/UI로직',l:'조작 체계 및 UI 로직 설계'},
+        {i:'1.1.4',p:'1.1',v:3,s:'밸런스/경제',l:'수치 밸런스 및 경제 시스템 설계'},
+        {i:'1.2',p:'1',v:2,s:'세계관/시나리오',l:'세계관 및 시나리오 기획'},
+        {i:'1.2.1',p:'1.2',v:3,s:'세계관',l:'세계관 설정 (Lore & World-building)'},
+        {i:'1.2.2',p:'1.2',v:3,s:'스토리/퀘스트',l:'메인 스토리 및 퀘스트 시나리오'},
+        {i:'1.2.3',p:'1.2',v:3,s:'캐릭터 설정',l:'캐릭터 설정 (배경·성격·관계도)'},
+        {i:'1.2.4',p:'1.2',v:3,s:'대사',l:'대사 스크립트 작성'},
+        {i:'1.3',p:'1',v:2,s:'레벨 디자인',l:'레벨 디자인'},
+        {i:'1.3.1',p:'1.3',v:3,s:'스테이지 구조',l:'스테이지 구조 설계 (Layout)'},
+        {i:'1.3.2',p:'1.3',v:3,s:'난이도/페이싱',l:'난이도 곡선 및 플레이 흐름 (Pacing)'},
+        {i:'1.3.3',p:'1.3',v:3,s:'오브젝트/기믹',l:'오브젝트 배치 및 기믹 설계'},
+        {i:'2',p:null,v:1,s:'아트',l:'게임 아트 (Game Art)'},
+        {i:'2.1',p:'2',v:2,s:'2D',l:'2D 아트'},
+        {i:'2.1.1',p:'2.1',v:3,s:'컨셉 아트',l:'컨셉 아트 (캐릭터·배경·아이템)'},
+        {i:'2.1.2',p:'2.1',v:3,s:'UI/UX',l:'UI/UX 디자인 (레이아웃·아이콘·폰트)'},
+        {i:'2.1.3',p:'2.1',v:3,s:'일러스트',l:'캐릭터·배경 일러스트'},
+        {i:'2.2',p:'2',v:2,s:'3D',l:'3D 아트'},
+        {i:'2.2.1',p:'2.2',v:3,s:'모델링',l:'모델링 (하이/로우폴리·스컬핑)'},
+        {i:'2.2.2',p:'2.2',v:3,s:'텍스처/재질',l:'텍스처링 및 재질 (PBR·채널맵)'},
+        {i:'2.2.3',p:'2.2',v:3,s:'리깅/스키닝',l:'리깅 및 스키닝 (본 구조)'},
+        {i:'2.2.4',p:'2.2',v:3,s:'애니메이션',l:'애니메이션 (키프레임·모션캡처)'},
+        {i:'2.3',p:'2',v:2,s:'비주얼 기술',l:'비주얼 기술 및 효과'},
+        {i:'2.3.1',p:'2.3',v:3,s:'VFX',l:'이펙트 제작 (VFX·파티클)'},
+        {i:'2.3.2',p:'2.3',v:3,s:'조명/렌더',l:'조명 및 렌더링 설정'},
+        {i:'2.3.3',p:'2.3',v:3,s:'셰이더',l:'셰이더 프로그래밍 (Material/Shader)'},
+        {i:'3',p:null,v:1,s:'개발',l:'프로그래밍 (Engineering)'},
+        {i:'3.1',p:'3',v:2,s:'클라이언트',l:'클라이언트 개발'},
+        {i:'3.1.1',p:'3.1',v:3,s:'엔진',l:'게임 엔진 구현 (Unity·Unreal·Custom)'},
+        {i:'3.1.2',p:'3.1',v:3,s:'게임 로직',l:'게임 로직 및 캐릭터 컨트롤러'},
+        {i:'3.1.3',p:'3.1',v:3,s:'AI',l:'AI 알고리즘 (내비게이션·행동트리)'},
+        {i:'3.1.4',p:'3.1',v:3,s:'UI 구현',l:'UI/UX 구현 및 시스템 연동'},
+        {i:'3.2',p:'3',v:2,s:'서버',l:'서버/백엔드 개발'},
+        {i:'3.2.1',p:'3.2',v:3,s:'네트워크',l:'네트워크 아키텍처·멀티플레이'},
+        {i:'3.2.2',p:'3.2',v:3,s:'DB',l:'데이터베이스 설계 및 저장'},
+        {i:'3.2.3',p:'3.2',v:3,s:'보안',l:'보안 및 해킹 방지'},
+        {i:'3.2.4',p:'3.2',v:3,s:'동기화',l:'실시간 동기화 및 트래픽 관리'},
+        {i:'3.3',p:'3',v:2,s:'툴/빌드',l:'툴 및 빌드 엔지니어링'},
+        {i:'3.3.1',p:'3.3',v:3,s:'CI/CD',l:'빌드 파이프라인 자동화 (CI/CD)'},
+        {i:'3.3.2',p:'3.3',v:3,s:'최적화',l:'플랫폼별 최적화 (PC·Mobile·Console)'},
+        {i:'3.3.3',p:'3.3',v:3,s:'사내 툴',l:'사내 개발 툴 제작·최적화'},
+        {i:'4',p:null,v:1,s:'사운드',l:'게임 사운드 (Game Sound)'},
+        {i:'4.1',p:'4',v:2,s:'음악',l:'음악 제작'},
+        {i:'4.1.1',p:'4.1',v:3,s:'BGM',l:'BGM 작곡·편곡'},
+        {i:'4.1.2',p:'4.1',v:3,s:'믹싱/마스터',l:'사운드 믹싱 및 마스터링'},
+        {i:'4.2',p:'4',v:2,s:'효과음/보이스',l:'효과음 및 보이스'},
+        {i:'4.2.1',p:'4.2',v:3,s:'폴리(SFX)',l:'폴리 작업 (환경음 생성)'},
+        {i:'4.2.2',p:'4.2',v:3,s:'UI 사운드',l:'UI 및 인터랙션 피드백 사운드'},
+        {i:'4.2.3',p:'4.2',v:3,s:'보이스',l:'성우 녹음 관리·보이스 가공'},
+        {i:'5',p:null,v:1,s:'운영/QA',l:'게임 운영 및 QA'},
+        {i:'5.1',p:'5',v:2,s:'QA',l:'QA (품질 보증)'},
+        {i:'5.1.1',p:'5.1',v:3,s:'빌드 검수',l:'기능·빌드 검수 (Smoke/Regression)'},
+        {i:'5.1.2',p:'5.1',v:3,s:'버그 트래킹',l:'버그 리포트 관리·트래킹'},
+        {i:'5.1.3',p:'5.1',v:3,s:'밸런스/UX',l:'밸런스 검증·UX 테스트'},
+        {i:'5.2',p:'5',v:2,s:'라이브 운영',l:'라이브 운영 (Live Ops)'},
+        {i:'5.2.1',p:'5.2',v:3,s:'라이브 패치',l:'라이브 패치·업데이트 배포'},
+        {i:'5.2.2',p:'5.2',v:3,s:'이벤트',l:'게임 내 이벤트 기획·관리'},
+        {i:'5.2.3',p:'5.2',v:3,s:'로그 분석',l:'유저 로그 분석·데이터 의사결정'},
+    ];
+    var _PM_TAX_BY = {}; PM_TAX.forEach(function (n) { _PM_TAX_BY[n.i] = n; });
+    function pmTaxNode(id) { return _PM_TAX_BY[id]; }
+    function pmTaxChildren(pid) { return PM_TAX.filter(function (n) { return n.p === pid; }); }
+    function pmTagPath(id) { var parts = [], n = pmTaxNode(id); while (n) { parts.unshift(n.s); n = n.p ? pmTaxNode(n.p) : null; } return parts.join(' › '); }
+    function _pmMembers() { return ((typeof currentData !== 'undefined' && currentData.users) || []).map(function (u) { return {id: u.id, name: (u.displayName || u.name || u.email || u.id)}; }); }
+    function _pmTypeInfo(id) { return PM_TYPES.find(function (t) { return t.id === id; }); }
+
+    var _pmState = {stages: [], current: null};
+    var _pmSaveTimer = null;
+
+    function pmOpen() {
+        _pmState.current = null;
+        var t = document.getElementById('pm-title'); if (t) t.textContent = '';
+        pmLoad().then(pmRenderList);
+    }
+    async function pmLoad() {
+        if (!supabaseClient) return;
+        try {
+            var q = supabaseClient.from('product_stages').select('*').order('sort_order', {ascending: false});
+            var res = await q;
+            if (res.error) { console.warn('[pm load]', res.error); _pmState.stages = []; return; }
+            var pid = activeProjectId;
+            _pmState.stages = (res.data || []).filter(function (r) { return (r.project_id || 'default') === pid; }).map(function (r) {
+                return {id: r.id, projectId: r.project_id, name: r.name, type: r.type, goal: r.goal || '', lifecycle: r.lifecycle,
+                    tags: r.tags || [], tagMeta: r.tag_meta || {}, status: r.status || 'active', sortOrder: r.sort_order,
+                    createdBy: r.created_by, createdAt: r.created_at};
+            });
+        } catch (e) { console.warn('[pm load]', e); _pmState.stages = []; }
+    }
+    async function dbUpsertProductStage(st) {
+        if (!supabaseClient || !st) return;
+        var payload = {
+            id: st.id, project_id: st.projectId || activeProjectId, name: st.name || '새 Stage',
+            type: st.type || null, goal: st.goal || '', lifecycle: st.lifecycle || null,
+            tags: st.tags || [], tag_meta: st.tagMeta || {}, status: st.status || 'active',
+            sort_order: st.sortOrder || (Date.now() % 2000000000), created_by: st.createdBy || (currentUser && currentUser.id) || null,
+            updated_at: new Date().toISOString(),
+        };
+        var {error} = await supabaseClient.from('product_stages').upsert(payload);
+        if (error) {
+            console.error('[pm upsert]', error);
+            if (typeof showToast === 'function') showToast('⚠️ Stage 저장 실패: ' + (error.message || '') + ' (product_stages 테이블 SQL 필요 — 설정>DB 스키마 점검)', 'alert');
+        }
+    }
+    function pmSave() {
+        if (!_pmState.current) return;
+        var ind = document.getElementById('pm-save-ind'); if (ind) ind.textContent = '저장 중…';
+        clearTimeout(_pmSaveTimer);
+        _pmSaveTimer = setTimeout(function () { dbUpsertProductStage(_pmState.current); var i2 = document.getElementById('pm-save-ind'); if (i2) i2.textContent = '저장됨'; }, 700);
+    }
+
+    function pmRenderList() {
+        var main = document.getElementById('pm-main'); if (!main) return;
+        var h = '<div style="max-width:920px;margin:0 auto;">';
+        h += '<h2 style="margin:0 0 6px;font-size:20px;">Stage 목록</h2>';
+        h += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:16px;">제품 검증 단계(Stage)별로 타입·생애주기·목표를 정의하고, 게임개발 직무체계로 태그·담당자·산출물을 관리합니다.</div>';
+        if (!_pmState.stages.length) {
+            h += '<div style="padding:30px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">아직 Stage가 없습니다. <b>+ 새 Stage</b>로 시작하세요.</div>';
+        } else {
+            h += '<div style="display:flex;flex-direction:column;gap:8px;">';
+            _pmState.stages.forEach(function (st) {
+                var ti = _pmTypeInfo(st.type); var lc = PM_LIFECYCLES.find(function (l) { return l.id === st.lifecycle; });
+                h += '<div style="border:1px solid var(--c-border);border-radius:9px;padding:12px 14px;background:var(--c-card);cursor:pointer;" onclick="pmOpenStage(\'' + st.id + '\')">'
+                    + '<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;flex:1;">🚀 ' + _annEsc(st.name) + '</span>'
+                    + (ti ? '<span class="pm-pill sel" style="cursor:default;">' + _annEsc(ti.label) + '</span>' : '<span style="font-size:11px;color:var(--c-text3);">타입 미정</span>') + '</div>'
+                    + '<div style="font-size:11px;color:var(--c-text3);margin-top:6px;">' + (lc ? ('🔄 ' + _annEsc(lc.label) + ' · ') : '') + '🏷 태그 ' + (st.tags || []).length + (ti ? (' · ' + _annEsc(ti.sub)) : '') + '</div>'
+                    + '</div>';
+            });
+            h += '</div>';
+        }
+        h += '</div>';
+        main.innerHTML = h;
+    }
+    async function pmNewStage() {
+        if (!currentUser) { showToast('로그인이 필요합니다', 'alert'); return; }
+        var name = await uiPrompt({title: '새 Stage', message: 'Stage 이름', placeholder: '예: MVP v1 / 전투 PoC'});
+        if (!name || !name.trim()) return;
+        var st = {id: 'pms_' + Date.now() + '_' + Math.floor(Math.random() * 1000), projectId: activeProjectId, name: name.trim(),
+            type: null, goal: '', lifecycle: null, tags: [], tagMeta: {}, status: 'active', sortOrder: Date.now() % 2000000000, createdBy: currentUser.id};
+        _pmState.stages.unshift(st); _pmState.current = st;
+        await dbUpsertProductStage(st);
+        pmRenderEditor();
+    }
+    function pmOpenStage(id) {
+        var st = _pmState.stages.find(function (x) { return x.id === id; });
+        if (!st) { showToast('Stage를 찾지 못함', 'alert'); return; }
+        _pmState.current = st; pmRenderEditor();
+    }
+    function pmSetName(v) { if (_pmState.current) { _pmState.current.name = v; var t = document.getElementById('pm-title'); if (t) t.textContent = '— ' + v; pmSave(); } }
+    function pmSetType(id) { if (!_pmState.current) return; _pmState.current.type = (_pmState.current.type === id ? null : id); pmSave(); pmRenderEditor(); }
+    function pmSetLifecycle(id) { if (!_pmState.current) return; _pmState.current.lifecycle = (_pmState.current.lifecycle === id ? null : id); pmSave(); pmRenderEditor(); }
+    function pmSetGoal(v) { if (_pmState.current) { _pmState.current.goal = v; pmSave(); } }
+    function pmToggleTag(id) {
+        if (!_pmState.current) return;
+        var tags = _pmState.current.tags || (_pmState.current.tags = []);
+        var idx = tags.indexOf(id);
+        if (idx >= 0) {
+            // 해제 시 하위(자식) 태그도 함께 해제 + 메타 정리
+            var rm = PM_TAX.filter(function (n) { return n.i === id || n.i.indexOf(id + '.') === 0; }).map(function (n) { return n.i; });
+            _pmState.current.tags = tags.filter(function (x) { return rm.indexOf(x) < 0; });
+            rm.forEach(function (x) { if (_pmState.current.tagMeta) delete _pmState.current.tagMeta[x]; });
+        } else { tags.push(id); }
+        pmSave(); pmRenderEditor();
+    }
+    function _pmTagMeta(id) { var tm = _pmState.current.tagMeta || (_pmState.current.tagMeta = {}); if (!tm[id]) tm[id] = {assignee: '', goal: '', deliverables: []}; return tm[id]; }
+    function pmSetTagAssignee(id, v) { _pmTagMeta(id).assignee = v; pmSave(); }
+    function pmSetTagGoal(id, v) { _pmTagMeta(id).goal = v; pmSave(); }
+    function pmSetDeliverable(id, di, v) { var d = _pmTagMeta(id).deliverables; if (d[di]) { d[di].name = v; pmSave(); } }
+    function pmAddDeliverable(id) { _pmTagMeta(id).deliverables.push({name: ''}); pmSave(); pmRenderEditor(); }
+    function pmRemoveDeliverable(id, di) { _pmTagMeta(id).deliverables.splice(di, 1); pmSave(); pmRenderEditor(); }
+    async function pmDelete(id) {
+        var ok = await uiConfirm({title: 'Stage 삭제', message: '이 Stage를 삭제할까요?', confirmText: '삭제', danger: true});
+        if (!ok) return;
+        if (supabaseClient) { try { await supabaseClient.from('product_stages').delete().eq('id', id); } catch (e) {} }
+        _pmState.stages = _pmState.stages.filter(function (x) { return x.id !== id; });
+        _pmState.current = null; pmRenderList(); showToast('삭제됨', 'info');
+    }
+
+    function _pmPill(n, sel) { return '<span class="pm-pill' + (sel ? (' sel lv' + n.v) : '') + '" onclick="pmToggleTag(\'' + n.i + '\')" title="' + _annEsc(n.l) + '">' + _annEsc(n.s) + '</span>'; }
+    function pmRenderEditor() {
+        var main = document.getElementById('pm-main'); var st = _pmState.current; if (!main || !st) return;
+        var t = document.getElementById('pm-title'); if (t) t.textContent = '— ' + st.name;
+        var sel = st.tags || [];
+        var mems = _pmMembers();
+        function memOptions(cur) { return '<option value="">(담당자 미지정)</option>' + mems.map(function (m) { return '<option value="' + _annEsc(m.id) + '"' + (cur === m.id ? ' selected' : '') + '>' + _annEsc(m.name) + '</option>'; }).join(''); }
+
+        var h = '<div style="max-width:1000px;margin:0 auto;">';
+        h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">';
+        h += '<input class="pm-input" style="flex:1;font-size:15px;font-weight:700;" value="' + _annEsc(st.name) + '" onchange="pmSetName(this.value)">';
+        h += '<span id="pm-save-ind" style="font-size:11px;color:var(--c-text3);">저장됨</span>';
+        h += '<button class="aihub-gpu-btn" style="font-size:11px;border-color:#d2393d;color:#d2393d;" onclick="pmDelete(\'' + st.id + '\')">🗑 삭제</button></div>';
+
+        // ── 타입
+        h += '<div class="pm-sec"><div class="pm-sec-h">① 타입 <span style="font-weight:400;color:var(--c-text3);font-size:11px;">검증 목적을 정하세요</span></div>';
+        h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        PM_TYPES.forEach(function (ty) {
+            var s = st.type === ty.id;
+            h += '<div class="pm-type-card' + (s ? ' sel' : '') + '" onclick="pmSetType(\'' + ty.id + '\')"><div class="pm-type-name">' + ty.label + '</div><div class="pm-type-sub">' + _annEsc(ty.sub) + '</div></div>';
+        });
+        h += '</div>';
+        var ti = _pmTypeInfo(st.type);
+        if (ti) h += '<div style="margin-top:8px;font-size:12px;color:var(--c-text2);background:var(--c-paper);border-radius:7px;padding:8px 10px;">💡 ' + _annEsc(ti.desc) + '</div>';
+        h += '<details style="margin-top:8px;font-size:12px;"><summary style="cursor:pointer;color:var(--c-text3);">4가지 타입 비교 보기</summary><div style="margin-top:6px;display:flex;flex-direction:column;gap:5px;">' + PM_TYPES.map(function (x) { return '<div><b>' + x.label + '</b> (' + _annEsc(x.sub) + ') — ' + _annEsc(x.desc) + '</div>'; }).join('') + '</div></details>';
+        h += '</div>';
+
+        // ── 생애주기
+        h += '<div class="pm-sec"><div class="pm-sec-h">② 생애주기</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        PM_LIFECYCLES.forEach(function (lc) {
+            var s = st.lifecycle === lc.id;
+            h += '<div class="pm-lifecycle-card' + (s ? ' sel' : '') + '" onclick="pmSetLifecycle(\'' + lc.id + '\')"><div style="font-weight:700;font-size:12.5px;">' + _annEsc(lc.label) + '</div><div style="font-size:10.5px;color:var(--c-text3);margin-top:2px;">' + _annEsc(lc.desc) + '</div></div>';
+        });
+        h += '</div></div>';
+
+        // ── Stage Goal
+        h += '<div class="pm-sec"><div class="pm-sec-h">③ Stage 목표 (Goal · Markdown)</div>';
+        h += '<textarea class="pm-input" style="width:100%;min-height:90px;font-family:inherit;line-height:1.6;" placeholder="이 Stage에서 검증/달성할 목표를 마크다운으로…" onchange="pmSetGoal(this.value)">' + _annEsc(st.goal || '') + '</textarea></div>';
+
+        // ── 직무/공정 태그 (계층 progressive)
+        h += '<div class="pm-sec"><div class="pm-sec-h">④ 직무/공정 태그 <span style="font-weight:400;color:var(--c-text3);font-size:11px;">대분류 선택 → 하위 표시. 중복 선택 가능</span></div>';
+        h += '<div class="pm-pillrow">' + pmTaxChildren(null).map(function (n1) { return _pmPill(n1, sel.indexOf(n1.i) >= 0); }).join('') + '</div>';
+        pmTaxChildren(null).forEach(function (n1) {
+            if (sel.indexOf(n1.i) < 0) return;
+            h += '<div class="pm-children"><div style="font-size:11px;color:var(--c-text3);margin-bottom:4px;">' + _annEsc(n1.s) + ' ›</div>';
+            h += '<div class="pm-pillrow">' + pmTaxChildren(n1.i).map(function (n2) { return _pmPill(n2, sel.indexOf(n2.i) >= 0); }).join('') + '</div>';
+            pmTaxChildren(n1.i).forEach(function (n2) {
+                if (sel.indexOf(n2.i) < 0) return;
+                var kids = pmTaxChildren(n2.i); if (!kids.length) return;
+                h += '<div class="pm-children"><div style="font-size:11px;color:var(--c-text3);margin-bottom:4px;">' + _annEsc(n2.s) + ' ›</div><div class="pm-pillrow">' + kids.map(function (n3) { return _pmPill(n3, sel.indexOf(n3.i) >= 0); }).join('') + '</div></div>';
+            });
+            h += '</div>';
+        });
+        h += '</div>';
+
+        // ── 선택 태그별 담당자/목표/산출물
+        h += '<div class="pm-sec"><div class="pm-sec-h">⑤ 선택 태그별 담당자 · 목표 · 산출물 <span style="font-weight:400;color:var(--c-text3);font-size:11px;">' + sel.length + '개 선택됨</span></div>';
+        if (!sel.length) {
+            h += '<div style="color:var(--c-text3);font-size:12px;padding:6px 0;">위에서 태그를 선택하면 여기에 항목이 나타납니다.</div>';
+        } else {
+            var ordered = sel.slice().sort();
+            ordered.forEach(function (id) {
+                var n = pmTaxNode(id); if (!n) return;
+                var tm = _pmTagMeta(id);
+                h += '<div class="pm-tagcard">';
+                h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-weight:700;font-size:12.5px;flex:1;">' + _annEsc(pmTagPath(id)) + '</span>';
+                h += '담당자 <select class="pm-input" style="font-size:11.5px;padding:3px 6px;" onchange="pmSetTagAssignee(\'' + id + '\',this.value)">' + memOptions(tm.assignee) + '</select></div>';
+                h += '<textarea class="pm-input" style="width:100%;min-height:56px;font-family:inherit;line-height:1.55;" placeholder="목표(md) — 이 항목에서 무엇을 달성?" onchange="pmSetTagGoal(\'' + id + '\',this.value)">' + _annEsc(tm.goal || '') + '</textarea>';
+                h += '<div style="margin-top:6px;font-size:11px;color:var(--c-text3);font-weight:700;">산출물</div>';
+                h += '<div style="display:flex;flex-direction:column;gap:4px;margin-top:3px;">';
+                (tm.deliverables || []).forEach(function (d, di) {
+                    h += '<div style="display:flex;gap:6px;align-items:center;"><input class="pm-input" style="flex:1;font-size:11.5px;padding:4px 8px;" value="' + _annEsc(d.name || '') + '" placeholder="산출물 이름(예: 코어루프 기획서)" onchange="pmSetDeliverable(\'' + id + '\',' + di + ',this.value)"><button class="aihub-gpu-btn" style="font-size:11px;padding:2px 8px;" onclick="pmRemoveDeliverable(\'' + id + '\',' + di + ')">✕</button></div>';
+                });
+                h += '</div><button class="aihub-gpu-btn" style="font-size:11px;margin-top:5px;" onclick="pmAddDeliverable(\'' + id + '\')">+ 산출물</button>';
+                h += '</div>';
+            });
+        }
+        h += '</div>';
+
+        h += '</div>';
+        main.innerHTML = h;
     }
 
     function _rfsLog(msg) {
