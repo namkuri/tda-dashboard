@@ -553,7 +553,7 @@ def apply_stream(
                 nn = wbs_map.get(d.get("n"), d.get("n"))
                 seg_deps.append({"n": nn, "s": d.get("s")})
             segs.append({
-                "id": seg_id, "start": seg.get("start"), "due": seg.get("due"),
+                "id": seg_id, "label": seg.get("label"), "start": seg.get("start"), "due": seg.get("due"),
                 "sprintIds": seg_sprint, "taskIds": seg_tasks, "issueIds": [],
                 "deps": seg_deps, "color": None,
             })

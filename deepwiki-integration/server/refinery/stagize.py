@@ -68,20 +68,33 @@ def group_sprints_by_rule(sprints: List[Dict[str, Any]], tasks: List[Dict[str, A
 
 # ── 메인(SSE) ───────────────────────────────────────────────
 _SYSTEM = """당신은 스프린트 묶음을 '제품 마일스톤(STAGE)'으로 정의하는 도구입니다.
-주어진 스프린트(각 목표·공정 분포)를 연속 묶음으로 그룹화하고, 각 묶음을 STAGE 로
-정의합니다. 한국어, 아래 JSON 만 출력.
+각 스프린트의 실제 작업 내용을 보고, 연속 묶음으로 그룹화해 STAGE 를 정의합니다.
+한국어, 아래 JSON 만 출력.
 
 [규칙]
 1. STAGE 는 연속된 스프린트들의 묶음(제품 목표가 바뀌는 지점에서 분리).
 2. type ∈ MVP|PoC|Prototype|Pilot, lifecycle ∈ planning|build|gtm|iterative.
-3. name 은 팀이 향할 방향이 보이는 한 줄, goal 은 1~2문장.
-4. sprint_seqs 는 입력 스프린트의 seq 정수만.
-5. 출력 JSON only.
+3. **name 은 그 묶음의 핵심 작업·게임요소를 포괄하는 구체적 명칭**.
+   "코어 기능 구축"·"기본 시스템" 같은 일반적/추상적 표현 금지. 실제 키워드를 녹여라.
+   예) "콤보·캔슬 전투 코어", "인벤토리·장비 시스템 MVP".
+4. goal 은 1~2문장으로 그 STAGE 가 달성하는 구체적 결과.
+5. **sprint_labels**: 각 스프린트(seq)에도 핵심 작업을 담은 짧은 이름을 붙여라(2~5단어).
+6. sprint_seqs 는 입력 스프린트의 seq 정수만.
+7. 출력 JSON only.
 
 ```json
-{ "stages":[{"name":"전투 코어 MVP","type":"MVP","lifecycle":"build","goal":"...","sprint_seqs":[1,2]}] }
+{ "stages":[{"name":"콤보·캔슬 전투 코어 MVP","type":"MVP","lifecycle":"build",
+   "goal":"콤보 입력·판정·캔슬까지 전투 코어 루프를 동작시킨다.",
+   "sprint_seqs":[1,2], "sprint_labels":{"1":"히트박스·콤보 판정","2":"캔슬·가드 확장"}}] }
 ```
 """
+
+
+def _sprint_brief(sp: Dict[str, Any], tasks: List[Dict[str, Any]], top: int = 4) -> str:
+    """스프린트의 핵심 작업 제목들(명명 근거)."""
+    tid = set(sp.get("task_ids") or [])
+    titles = [t.get("title") for t in tasks if t.get("id") in tid and t.get("title")][:top]
+    return ", ".join(titles) if titles else "(작업 없음)"
 
 
 async def stagize(
@@ -101,9 +114,10 @@ async def stagize(
         sp_block = "\n".join(
             f"- seq {s.get('seq')}: 공수 {round(s.get('hours',0))}h · 공정 "
             + ",".join(union_process_tags([s.get('seq')], sprints, tasks)[:5])
+            + f" · 작업: {_sprint_brief(s, tasks)}"
             for s in sorted(sprints, key=lambda x: x.get("seq", 0))
         )
-        prompt = f"[기존 프로젝트]\n{context or '(없음)'}\n\n[스프린트]\n{sp_block}\n\nSTAGE 묶음 JSON 출력."
+        prompt = f"[기존 프로젝트]\n{context or '(없음)'}\n\n[스프린트(실제 작업 포함)]\n{sp_block}\n\n핵심 내용을 담은 STAGE 묶음 JSON 출력."
         buf = ""
         try:
             async for delta in llm.chat_stream(
@@ -136,15 +150,40 @@ async def stagize(
         else:
             groups = [{"name": "", "type": "MVP", "lifecycle": "build", "goal": "", "sprint_seqs": all_seqs}]
 
+    # [r258] 스프린트 라벨 적용 — LLM sprint_labels 우선, 없으면 핵심 작업 제목으로 폴백
+    sprint_by_seq = {s.get("seq"): s for s in sprints}
+    for g in groups:
+        labels = g.get("sprint_labels") or {}
+        for sq in (g.get("sprint_seqs") or []):
+            sp = sprint_by_seq.get(int(sq) if str(sq).strip().isdigit() else sq)
+            if not sp:
+                continue
+            lab = labels.get(str(sq)) or labels.get(sq)
+            if not lab:
+                lab = _sprint_brief(sp, tasks, top=2)
+                if lab and lab != "(작업 없음)":
+                    lab = lab[:28]
+            if lab and lab != "(작업 없음)":
+                sp["week_label"] = lab[:40]
+
     stages_out: List[Dict[str, Any]] = []
     for idx, g in enumerate(groups):
         seqs = [int(x) for x in (g.get("sprint_seqs") or []) if str(x).strip().isdigit()]
         if not seqs:
             continue
         tags = union_process_tags(seqs, sprints, tasks)  # 역산(로직)
+        # 이름 폴백 — LLM 미제공 시 핵심 작업 제목 묶음으로
+        name = (g.get("name") or "").strip()
+        if not name:
+            briefs = []
+            for sq in seqs[:2]:
+                sp = sprint_by_seq.get(sq)
+                if sp:
+                    briefs.append(_sprint_brief(sp, tasks, top=1))
+            name = " · ".join([b for b in briefs if b and b != "(작업 없음)"]) or f"STAGE {idx + 1}"
         item = {
             "id": _uid("stage"),
-            "name": (g.get("name") or f"STAGE {idx + 1}")[:80],
+            "name": name[:80],
             "type": (g.get("type") or "MVP")[:20],
             "lifecycle": (g.get("lifecycle") or "build")[:20],
             "goal": (g.get("goal") or "")[:400],

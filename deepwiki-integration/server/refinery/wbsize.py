@@ -90,8 +90,14 @@ def build_wbs(
                             if key not in seen:
                                 seen.add(key)
                                 deps.append({"n": loc["wbs_id"], "s": loc["seg_id"]})
+            # [r258] 세그먼트 라벨 — 스프린트 주차라벨(핵심 작업) 사용. 없으면 첫 작업 제목.
+            seg_label = (sp.get("week_label") or "").strip()
+            if not seg_label:
+                first = task_by_id.get(tids[0]) if tids else None
+                seg_label = (first.get("title")[:24] if first and first.get("title") else f"구간 {sq}")
             segments.append({
                 "id": f"seg_{sq}",
+                "label": seg_label,
                 "start": win["start"], "due": win["due"],
                 "sprintIds": [],          # 실제 sprint id 는 apply 단계서 연결
                 "taskIds": list(tids),

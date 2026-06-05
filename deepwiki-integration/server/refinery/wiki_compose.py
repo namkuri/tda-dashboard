@@ -91,12 +91,15 @@ async def compose_wiki_body(
         # 코드펜스 제거
         body = re.sub(r"^```(?:markdown|md)?\s*\n?", "", buf.strip())
         body = re.sub(r"\n?```\s*$", "", body).strip()
+        # [r258] 폴더 계층(folder_path) 반영 — 깊은 위키 폴더 구조로 생성
+        folders = [_slug(str(x)) for x in (doc.get("folder_path") or []) if str(x).strip()]
+        path = "/".join([root] + folders + [_slug(title)]) + ".md"
         f = {
-            "path": f"{root}/{_slug(title)}.md",
+            "path": path,
             "body": body,
             "target_kind": "canon",
             "category": "canon",
-            "node_ids": doc.get("node_ids") or [],
+            "node_ids": doc.get("node_ids") or doc.get("origin_node_ids") or [],
         }
         files.append(f)
         yield {"event": "doc_done", "index": idx + 1, "total": total, "title": title, "path": f["path"]}
