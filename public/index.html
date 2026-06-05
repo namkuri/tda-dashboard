@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r246';
+        var _AHUB_FRONT_REV = 'r247';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31708,7 +31708,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r246';
+    var _RFS_FRONT_REV = 'r247';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -33916,6 +33916,375 @@ ${intrLog}
             btns.forEach(function (b) { b.disabled = false; });
             if (genBtn) genBtn.innerHTML = prev;
             showToast('생성 실패: ' + (e.message || e), 'alert');
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // [r247] ④ 들여오기 추천 — 분해 구조 → STAGE/WBS+태스크/스프린트/이슈/위키구조
+    //  분류(canon/hyp/later/cut)·결재 단계를 대체. 한 화면 추천→채택→생성.
+    // ════════════════════════════════════════════════════════════════
+    function _rfsIntakeSel() {
+        if (!_rfsState.intakeSel) _rfsState.intakeSel = { stages: {}, wbs: {}, sprints: {}, issues: {}, wiki: {} };
+        return _rfsState.intakeSel;
+    }
+    function _rfsIntakeOn(kind, id) { var s = _rfsIntakeSel()[kind] || {}; return s[id] !== false; }  // 기본 포함
+    function rfsToggleIntake(kind, id, on) { var s = _rfsIntakeSel(); (s[kind] = s[kind] || {})[id] = !!on; }
+    function rfsIntakeSelectAll(on) {
+        var it = _rfsState.intake; if (!it) return;
+        var s = _rfsIntakeSel();
+        ['stages', 'wbs', 'sprints', 'issues', 'wiki'].forEach(function (k) {
+            s[k] = s[k] || {};
+            var arr = k === 'wbs' ? (it.wbs_nodes || []) : (it[k] || []);
+            arr.forEach(function (x) { s[k][x.id] = !!on; });
+        });
+        rfsRenderIntakeStep();
+    }
+
+    function rfsRenderIntakeStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var it = _rfsState.intake;
+        var running = _rfsState.intakeRunning;
+        var html = '<div style="max-width:1040px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">④ 들여오기 추천 — 이 문서를 프로젝트로 어떻게 들여올까?</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">분해 구조를 훑어 <b>STAGE·WBS·태스크·스프린트·이슈·위키 구조</b>를 한 번에 추천합니다. 체크한 항목만 즉시 생성하고, 위키는 다음 단계에서 구조를 정합니다.</div>';
+        // 모델 + 실행 버튼
+        html += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+        html += '<label style="font-size:12px;">LLM 모델: <select id="rfs-intake-model" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);"><option value="">기본</option>' + (typeof _rfsGeminiModelOptions === 'function' ? _rfsGeminiModelOptions() : '') + '</select></label>';
+        if (running) html += '<button class="aihub-gpu-btn" disabled style="opacity:.6;"><span class="rfs-dc-spinner"></span> 추천 생성 중…</button>';
+        else html += '<button class="aihub-gpu-btn primary" onclick="rfsRunIntake()">' + (it ? '🔄 재추천' : '✨ 추천 받기') + '</button>';
+        html += '</div>';
+        // 진행 위젯
+        html += '<div id="rfs-intake-progress" style="' + (running ? '' : 'display:none;') + 'padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;"><div id="rfs-intake-stage" style="font-weight:700;color:var(--c-accent);">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '⏳') + '</div><div id="rfs-intake-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((_rfsState._intakeLog || []).join('\n')) + '</div></div>';
+
+        if (it && !running) {
+            var stages = it.stages || [], wbs = it.wbs_nodes || [], tasks = it.tasks || [], sprints = it.sprints || [], issues = it.issues || [], wiki = it.wiki || [];
+            // 액션 바
+            html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsApplyIntake()">⊕ 선택 항목 생성 → 위키 구조</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsIntakeSelectAll(true)">전체 선택</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsIntakeSelectAll(false)">전체 해제</button>';
+            html += '<span style="margin-left:auto;font-size:11px;color:var(--c-text3);">STAGE·스프린트·WBS·태스크·이슈는 즉시 생성, 위키는 ⑤단계로 이월</span>';
+            html += '</div>';
+            // 🎯 STAGE
+            html += _rfsIntakeGroup('🎯 STAGE (프로덕트 관리 개발 목표)', stages, function (s) {
+                return '<div style="font-weight:700;">' + _annEsc(s.name) + ' <span style="font-size:10px;padding:1px 7px;border-radius:9px;background:var(--c-accent-soft);color:var(--c-accent);">' + _annEsc(s.type) + '</span></div>'
+                    + (s.goal ? '<div style="font-size:11.5px;color:var(--c-text2);margin-top:3px;">' + _annEsc(s.goal) + '</div>' : '');
+            }, 'stages');
+            // 🏗 WBS + 태스크
+            html += '<div style="font-size:12px;font-weight:800;color:var(--c-text2);margin:14px 0 6px;">🏗 WBS / 태스크 <span style="color:var(--c-text3);font-weight:400;">· ' + wbs.length + ' 그룹 · ' + tasks.length + ' 태스크</span></div>';
+            html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+            _rfsState.intakeWbsCat = _rfsState.intakeWbsCat || {};
+            _rfsState.intakeWbsSprint = _rfsState.intakeWbsSprint || {};
+            wbs.forEach(function (w) {
+                var myTasks = tasks.filter(function (t) { return t.wbs_id === w.id; });
+                if (typeof _rfsState.intakeWbsCat[w.id] === 'undefined') _rfsState.intakeWbsCat[w.id] = _rfsDefaultCat();
+                html += '<div style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:12px;">';
+                html += '<div style="display:flex;align-items:flex-start;gap:8px;"><input type="checkbox" ' + (_rfsIntakeOn('wbs', w.id) ? 'checked' : '') + ' onchange="rfsToggleIntake(\'wbs\',\'' + w.id + '\',this.checked)" style="margin-top:3px;">';
+                html += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">🏗 ' + _annEsc(w.title) + ' <span style="color:var(--c-text3);font-weight:400;">· ' + w.estimated_days + 'd · 태스크 ' + myTasks.length + '</span></div>';
+                if (w.description) html += '<div style="font-size:11.5px;color:var(--c-text2);margin-top:3px;">' + _annEsc(w.description) + '</div>';
+                // 태스크 카테고리/스프린트
+                html += '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:11px;">';
+                html += '<label>칸반 <select onchange="_rfsState.intakeWbsCat[\'' + w.id + '\']=this.value" style="padding:2px 6px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);">' + rfsCatOptions(_rfsState.intakeWbsCat[w.id]) + '</select></label>';
+                html += '<label>스프린트 <select onchange="_rfsState.intakeWbsSprint[\'' + w.id + '\']=this.value" style="padding:2px 6px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);">' + rfsSprintOptions(_rfsState.intakeWbsSprint[w.id]) + '</select></label>';
+                html += '</div>';
+                // 태스크 칩
+                if (myTasks.length) {
+                    html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">';
+                    myTasks.forEach(function (t) { html += '<span style="font-size:10.5px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:6px;padding:2px 7px;">✅ ' + _annEsc(t.title) + ' <span style="color:var(--c-text3);">' + (t.priority || '').toUpperCase() + '</span></span>'; });
+                    html += '</div>';
+                }
+                html += '</div></div></div>';
+            });
+            if (!wbs.length) html += '<div style="color:var(--c-text3);font-size:12px;">추천 WBS 없음</div>';
+            html += '</div>';
+            // 🏃 스프린트
+            html += _rfsIntakeGroup('🏃 신규 스프린트', sprints, function (s) {
+                return '<div style="font-weight:700;">🏃 ' + _annEsc(s.week_label) + '</div>' + (s.goal ? '<div style="font-size:11.5px;color:var(--c-text2);margin-top:3px;">' + _annEsc(s.goal) + '</div>' : '');
+            }, 'sprints');
+            // ⚠ 이슈
+            html += _rfsIntakeGroup('⚠ 이슈 (가설/리스크)', issues, function (i) {
+                return '<div style="font-weight:700;">⚠ ' + _annEsc(i.title) + ' <span style="font-size:10px;color:var(--c-text3);">' + (i.priority || '').toUpperCase() + ' · ' + _annEsc(i.target || '') + '</span></div>' + (i.description ? '<div style="font-size:11.5px;color:var(--c-text2);margin-top:3px;">' + _annEsc(i.description) + '</div>' : '');
+            }, 'issues');
+            // 📚 위키 구조 (이월)
+            html += _rfsIntakeGroup('📚 위키 문서 구조 (목차만 · ⑤단계에서 채택→본문)', wiki, function (wk) {
+                var ol = (wk.outline || []).map(function (o) { return _annEsc(o); }).join(' · ');
+                return '<div style="font-weight:700;">📄 ' + _annEsc(wk.title) + '</div>' + (wk.summary ? '<div style="font-size:11.5px;color:var(--c-text2);margin-top:2px;">' + _annEsc(wk.summary) + '</div>' : '') + (ol ? '<div style="font-size:11px;color:var(--c-text3);margin-top:4px;">목차: ' + ol + '</div>' : '');
+            }, 'wiki');
+        }
+        html += '</div>';
+        main.innerHTML = html;
+        var le = document.getElementById('rfs-intake-log'); if (le) le.scrollTop = le.scrollHeight;
+    }
+
+    // 그룹 카드 렌더 (체크박스 + 내용) — kind 별 공통
+    function _rfsIntakeGroup(title, items, renderBody, kind) {
+        var h = '<div style="font-size:12px;font-weight:800;color:var(--c-text2);margin:14px 0 6px;">' + title + ' <span style="color:var(--c-text3);font-weight:400;">· ' + (items || []).length + '</span></div>';
+        if (!(items || []).length) return h + '<div style="color:var(--c-text3);font-size:12px;">추천 없음</div>';
+        h += '<div style="display:flex;flex-direction:column;gap:8px;">';
+        items.forEach(function (x) {
+            h += '<div style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:10px 12px;display:flex;align-items:flex-start;gap:8px;">';
+            h += '<input type="checkbox" ' + (_rfsIntakeOn(kind, x.id) ? 'checked' : '') + ' onchange="rfsToggleIntake(\'' + kind + '\',\'' + x.id + '\',this.checked)" style="margin-top:3px;">';
+            h += '<div style="flex:1;min-width:0;">' + renderBody(x) + '</div></div>';
+        });
+        return h + '</div>';
+    }
+
+    async function rfsRunIntake() {
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        var s = _rfsState.current; if (!s || !(s.nodes || []).length) { showToast('먼저 ③ 분해에서 노드를 확정하세요', 'alert'); return; }
+        if (_rfsState.intakeRunning) { showToast('이미 추천 생성 중', 'alert'); return; }
+        var modelSel = document.getElementById('rfs-intake-model');
+        var model = (modelSel && modelSel.value) || null;
+        _rfsState.intakeRunning = true; _rfsState._intakeLog = [];
+        _rfsState.intake = { stages: [], wbs_nodes: [], tasks: [], sprints: [], issues: [], wiki: [] };
+        rfsRenderIntakeStep();
+        function _log(m) { _rfsState._intakeLog.push(m); if (_rfsState._intakeLog.length > 200) _rfsState._intakeLog = _rfsState._intakeLog.slice(-200); var l = document.getElementById('rfs-intake-log'); if (l) { l.textContent = _rfsState._intakeLog.join('\n'); l.scrollTop = l.scrollHeight; } }
+        function _stage(m) { var e = document.getElementById('rfs-intake-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
+        try {
+            var res = await fetch(url + '/refinery/intake-plan', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: s.id, user_id: rfsCurrentUser(), project_id: activeProjectId, nodes: s.nodes || [], vault_docs: _rfsState.vaultDocs || [], model: model }),
+            });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0, 120)); }
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, { stream: true });
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'stage') { _stage(ev.message); _log('· ' + ev.message); }
+                        else if (ev.event === 'stage_proposed') { _rfsState.intake.stages.push(ev.stage); _log('+ STAGE: ' + ev.stage.name); }
+                        else if (ev.event === 'wbs_proposed') { _rfsState.intake.wbs_nodes.push(ev.wbs); _log('+ WBS: ' + ev.wbs.title); }
+                        else if (ev.event === 'sprint_proposed') { _rfsState.intake.sprints.push(ev.sprint); _log('+ 스프린트: ' + ev.sprint.week_label); }
+                        else if (ev.event === 'issue_proposed') { _rfsState.intake.issues.push(ev.issue); _log('+ 이슈: ' + ev.issue.title); }
+                        else if (ev.event === 'wiki_proposed') { _rfsState.intake.wiki.push(ev.wiki); _log('+ 위키: ' + ev.wiki.title); }
+                        else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
+                        else if (ev.event === 'error') { _log('❌ ' + ev.message); showToast('추천 실패: ' + ev.message, 'alert'); }
+                        else if (ev.event === 'done') {
+                            _rfsState.intake = { stages: ev.stages || [], wbs_nodes: ev.wbs_nodes || [], tasks: ev.tasks || [], sprints: ev.sprints || [], issues: ev.issues || [], wiki: ev.wiki || [] };
+                            _rfsState.intakeSel = null;  // 새 결과 → 선택 초기화(전체 포함)
+                            _log('✅ ' + (ev.summary || ''));
+                        }
+                    } catch (e) {}
+                }
+            }
+            _rfsState.intakeRunning = false;
+            if (_rfsState.step === 4) rfsRenderIntakeStep();
+        } catch (e) {
+            _rfsState.intakeRunning = false; _log('❌ ' + (e.message || e));
+            showToast('추천 실패: ' + (e.message || e), 'alert');
+            if (_rfsState.step === 4) rfsRenderIntakeStep();
+        }
+    }
+
+    async function rfsApplyIntake() {
+        var url = rfsBackEnd(); if (!url) return;
+        var it = _rfsState.intake; if (!it) { showToast('먼저 추천을 받으세요', 'alert'); return; }
+        if (_rfsState._applyingIntake) { showToast('이미 생성 중', 'alert'); return; }
+        var cat = _rfsState.intakeWbsCat || {}, spr = _rfsState.intakeWbsSprint || {};
+        var stagesSel = (it.stages || []).filter(function (x) { return _rfsIntakeOn('stages', x.id); });
+        var sprintsSel = (it.sprints || []).filter(function (x) { return _rfsIntakeOn('sprints', x.id); });
+        var wbsSel = (it.wbs_nodes || []).filter(function (w) { return _rfsIntakeOn('wbs', w.id); })
+            .map(function (w) { return { id: w.id, title: w.title, description: w.description, node_ids: w.node_ids, estimated_days: w.estimated_days, depends_on: w.depends_on, parent_id: null }; });
+        var wbsIds = {}; wbsSel.forEach(function (w) { wbsIds[w.id] = true; });
+        var tasksSel = (it.tasks || []).filter(function (t) { return wbsIds[t.wbs_id]; })
+            .map(function (t) { return { title: t.title, description: t.description, priority: t.priority, cat_id: cat[t.wbs_id] || null, sprint_id: spr[t.wbs_id] || null }; });
+        var issuesSel = (it.issues || []).filter(function (x) { return _rfsIntakeOn('issues', x.id); })
+            .map(function (i) { return { title: i.title, description: i.description, priority: i.priority, status: i.status, target: i.target }; });
+        var wikiSel = (it.wiki || []).filter(function (x) { return _rfsIntakeOn('wiki', x.id); });
+        // 위키는 ⑤단계로 이월
+        _rfsState.wikiPlan = { docs: wikiSel };
+
+        if (!stagesSel.length && !sprintsSel.length && !wbsSel.length && !tasksSel.length && !issuesSel.length) {
+            // 생성할 항목 없이 위키만 → 바로 ⑤로
+            if (wikiSel.length) { showToast('생성 항목 없음 — 위키 구조 단계로 이동', 'info'); rfsGoStep(5); return; }
+            showToast('선택된 항목이 없습니다', 'alert'); return;
+        }
+        var ok = await uiConfirm({ title: '들여오기 생성', message: 'STAGE ' + stagesSel.length + ' · 스프린트 ' + sprintsSel.length + ' · WBS ' + wbsSel.length + ' · 태스크 ' + tasksSel.length + ' · 이슈 ' + issuesSel.length + ' 생성\n위키 ' + wikiSel.length + '개는 다음 단계에서 본문 작성', confirmText: '생성' });
+        if (!ok) return;
+        _rfsState._applyingIntake = true;
+        var btns = document.querySelectorAll('#rfs-main button'); btns.forEach(function (b) { b.disabled = true; });
+        try {
+            var res = await fetch(url + '/refinery/apply-work', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId, stages: stagesSel, sprints: sprintsSel, wbs_nodes: wbsSel, tasks: tasksSel, issues: issuesSel }),
+            });
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 200)); }
+            var data = await res.json();
+            var warn = (data.warnings && data.warnings.length) ? (' · ⚠ ' + data.warnings.length) : '';
+            if (data.warnings && data.warnings.length) console.warn('[rfs] intake apply 경고', data.warnings);
+            showToast('✓ 생성 — STAGE ' + (data.stages_created || []).length + ', 스프린트 ' + (data.sprints_created || []).length + ', WBS ' + data.wbs_created.length + ', 태스크 ' + data.tasks_created.length + ', 이슈 ' + data.issues_created.length + warn, 'success');
+            _rfsState._applyingIntake = false;
+            if (typeof initSupabase === 'function') { try { await initSupabase(); } catch (e) { console.warn('[rfs] 재로드 실패', e); } }
+            rfsGoStep(5);
+        } catch (e) {
+            _rfsState._applyingIntake = false;
+            btns.forEach(function (b) { b.disabled = false; });
+            showToast('생성 실패: ' + (e.message || e), 'alert');
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // [r247] ⑤ 위키 구조 — 목차 먼저 채택 (본문은 ⑥에서)
+    // ════════════════════════════════════════════════════════════════
+    function _rfsWikiPlanSel() { if (!_rfsState.wikiPlanSel) _rfsState.wikiPlanSel = {}; return _rfsState.wikiPlanSel; }
+    function _rfsWikiPlanOn(id) { var s = _rfsWikiPlanSel(); return s[id] !== false; }
+    function rfsToggleWikiPlan(id, on) { _rfsWikiPlanSel()[id] = !!on; }
+
+    function rfsRenderWikiPlanStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var plan = _rfsState.wikiPlan || { docs: [] };
+        var docs = plan.docs || [];
+        var html = '<div style="max-width:1000px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑤ 위키 구조 — 목차 먼저 정하기</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">위키 본문은 분량이 많아, 먼저 <b>문서 구조(목차)</b>를 정하고 채택한 문서만 ⑥단계에서 본문을 작성합니다.</div>';
+        if (!docs.length) {
+            html += '<div style="padding:24px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">추천된 위키 구조가 없습니다. ④ 들여오기 추천에서 <b>📚 위키 문서 구조</b>를 받아 오세요. <div style="margin-top:10px;"><button class="aihub-gpu-btn" onclick="rfsGoStep(4)">← 들여오기 추천</button></div></div>';
+        } else {
+            html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsAdoptWikiPlan()">✓ 채택한 구조로 본문 작성 →</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(4)">← 들여오기 추천</button>';
+            html += '</div>';
+            html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+            docs.forEach(function (d) {
+                html += '<div style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:12px;">';
+                html += '<div style="display:flex;align-items:flex-start;gap:8px;"><input type="checkbox" ' + (_rfsWikiPlanOn(d.id) ? 'checked' : '') + ' onchange="rfsToggleWikiPlan(\'' + d.id + '\',this.checked)" style="margin-top:3px;">';
+                html += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">📄 ' + _annEsc(d.title) + '</div>';
+                if (d.summary) html += '<div style="font-size:11.5px;color:var(--c-text2);margin-top:3px;">' + _annEsc(d.summary) + '</div>';
+                if ((d.outline || []).length) {
+                    html += '<ol style="margin:8px 0 0;padding-left:20px;font-size:12px;color:var(--c-text2);">';
+                    d.outline.forEach(function (o) { html += '<li>' + _annEsc(o) + '</li>'; });
+                    html += '</ol>';
+                }
+                html += '</div></div></div>';
+            });
+            html += '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    function rfsAdoptWikiPlan() {
+        var plan = _rfsState.wikiPlan || { docs: [] };
+        var sel = (plan.docs || []).filter(function (d) { return _rfsWikiPlanOn(d.id); });
+        if (!sel.length) { showToast('채택할 문서를 선택하세요', 'alert'); return; }
+        _rfsState.wikiAdopted = sel;
+        _rfsState.wikiFiles = null;
+        rfsGoStep(6);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // [r247] ⑥ 위키 본문 — 채택된 목차 따라 본문 작성 → 위키 적용
+    // ════════════════════════════════════════════════════════════════
+    function rfsRenderWikiBodyStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        var adopted = _rfsState.wikiAdopted || [];
+        var running = _rfsState.wikiBodyRunning;
+        var files = _rfsState.wikiFiles;
+        var html = '<div style="max-width:1000px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑥ 위키 본문 작성</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">채택한 위키 구조 <b>' + adopted.length + '개</b> 문서의 본문을 목차에 따라 작성한 뒤, 프로젝트 위키에 적용합니다.</div>';
+        if (!adopted.length) {
+            html += '<div style="padding:24px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">채택된 위키 구조가 없습니다. <div style="margin-top:10px;"><button class="aihub-gpu-btn" onclick="rfsGoStep(5)">← 위키 구조</button></div></div>';
+            html += '</div>'; main.innerHTML = html; return;
+        }
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">';
+        html += '<label style="font-size:12px;">LLM 모델: <select id="rfs-wikibody-model" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);"><option value="">기본</option>' + (typeof _rfsGeminiModelOptions === 'function' ? _rfsGeminiModelOptions() : '') + '</select></label>';
+        if (running) html += '<button class="aihub-gpu-btn" disabled style="opacity:.6;"><span class="rfs-dc-spinner"></span> 본문 작성 중…</button>';
+        else html += '<button class="aihub-gpu-btn primary" onclick="rfsRunWikiBody()">' + (files ? '🔄 다시 작성' : '✍ 본문 작성') + '</button>';
+        if (files && files.length && !running) html += '<button class="aihub-gpu-btn primary" onclick="rfsApplyWikiBody()">📥 위키에 적용</button>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(5)">← 위키 구조</button>';
+        html += '</div>';
+        html += '<div id="rfs-wikibody-progress" style="' + (running ? '' : 'display:none;') + 'padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;"><div id="rfs-wikibody-stage" style="font-weight:700;color:var(--c-accent);">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '⏳') + '</div><div id="rfs-wikibody-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((_rfsState._wikiBodyLog || []).join('\n')) + '</div></div>';
+        // 작성된 본문 미리보기
+        if (files && files.length && !running) {
+            html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+            files.forEach(function (f) {
+                html += '<details style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:10px 12px;"><summary style="cursor:pointer;font-weight:700;font-size:12.5px;">📄 ' + _annEsc(f.path) + '</summary>';
+                html += '<pre style="margin:8px 0 0;font-size:11px;white-space:pre-wrap;color:var(--c-text2);max-height:300px;overflow-y:auto;">' + _annEsc((f.body || '').slice(0, 4000)) + '</pre></details>';
+            });
+            html += '</div>';
+        } else if (!running) {
+            html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+            adopted.forEach(function (d) { html += '<div style="font-size:12px;color:var(--c-text2);">📄 ' + _annEsc(d.title) + ' <span style="color:var(--c-text3);">· 목차 ' + ((d.outline || []).length) + '</span></div>'; });
+            html += '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+        var le = document.getElementById('rfs-wikibody-log'); if (le) le.scrollTop = le.scrollHeight;
+    }
+
+    async function rfsRunWikiBody() {
+        var url = rfsBackEnd(); if (!url) return;
+        var adopted = _rfsState.wikiAdopted || []; if (!adopted.length) { showToast('채택된 위키 구조가 없습니다', 'alert'); return; }
+        if (_rfsState.wikiBodyRunning) { showToast('이미 작성 중', 'alert'); return; }
+        var modelSel = document.getElementById('rfs-wikibody-model');
+        var model = (modelSel && modelSel.value) || null;
+        _rfsState.wikiBodyRunning = true; _rfsState._wikiBodyLog = []; _rfsState.wikiFiles = null;
+        rfsRenderWikiBodyStep();
+        function _log(m) { _rfsState._wikiBodyLog.push(m); if (_rfsState._wikiBodyLog.length > 200) _rfsState._wikiBodyLog = _rfsState._wikiBodyLog.slice(-200); var l = document.getElementById('rfs-wikibody-log'); if (l) { l.textContent = _rfsState._wikiBodyLog.join('\n'); l.scrollTop = l.scrollHeight; } }
+        function _stage(m) { var e = document.getElementById('rfs-wikibody-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
+        try {
+            var res = await fetch(url + '/refinery/compose-wiki-body', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId, docs: adopted, nodes: _rfsState.current.nodes || [], vault_docs: _rfsState.vaultDocs || [], model: model }),
+            });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0, 120)); }
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, { stream: true });
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'stage') { _stage(ev.message); _log('· ' + ev.message); }
+                        else if (ev.event === 'doc_done') { _log('✓ [' + ev.index + '/' + ev.total + '] ' + ev.title); }
+                        else if (ev.event === 'error') { _log('❌ ' + ev.message); showToast('작성 실패: ' + ev.message, 'alert'); }
+                        else if (ev.event === 'done') { _rfsState.wikiFiles = ev.files || []; _log('✅ ' + (ev.summary || '')); }
+                    } catch (e) {}
+                }
+            }
+            _rfsState.wikiBodyRunning = false;
+            if (_rfsState.step === 6) rfsRenderWikiBodyStep();
+        } catch (e) {
+            _rfsState.wikiBodyRunning = false; _log('❌ ' + (e.message || e));
+            showToast('작성 실패: ' + (e.message || e), 'alert');
+            if (_rfsState.step === 6) rfsRenderWikiBodyStep();
+        }
+    }
+
+    async function rfsApplyWikiBody() {
+        var url = rfsBackEnd(); if (!url) return;
+        var files = _rfsState.wikiFiles; if (!files || !files.length) { showToast('먼저 본문을 작성하세요', 'alert'); return; }
+        if (_rfsState._applyingWikiBody) return;
+        var ok = await uiConfirm({ title: '위키 적용', message: '문서 ' + files.length + '개를 프로젝트 위키에 적용합니다.', confirmText: '적용' });
+        if (!ok) return;
+        _rfsState._applyingWikiBody = true;
+        var btns = document.querySelectorAll('#rfs-main button'); btns.forEach(function (b) { b.disabled = true; });
+        try {
+            var res = await fetch(url + '/refinery/apply-tree', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId, files: files, create_archive: true }),
+            });
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 200)); }
+            var data = await res.json();
+            showToast('✓ 위키 적용 — 신규 ' + (data.created || []).length + ', 갱신 ' + (data.updated || []).length + ((data.warnings || []).length ? ', 경고 ' + data.warnings.length : ''), 'success');
+            _rfsState._applyingWikiBody = false;
+            if (typeof initSupabase === 'function') { try { await initSupabase(); } catch (e) {} }
+            rfsGoStep(7);
+        } catch (e) {
+            _rfsState._applyingWikiBody = false;
+            btns.forEach(function (b) { b.disabled = false; });
+            showToast('적용 실패: ' + (e.message || e), 'alert');
         }
     }
 

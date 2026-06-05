@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r246"
+SERVER_REVISION = "r247"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -686,6 +686,8 @@ try:
     from refinery.work_proposer import propose_work as _rfs_propose
     from refinery.apply_ops import apply_tree as _rfs_apply_tree, apply_work as _rfs_apply_work
     from refinery.structure import analyze_structure as _rfs_analyze  # [r246] 로직 우선 분해
+    from refinery.intake import propose_intake as _rfs_intake  # [r247] 들여오기 추천
+    from refinery.wiki_compose import compose_wiki_body as _rfs_wiki_body  # [r247] 위키 본문 작성
 except Exception as _rfs_imp_err:
     import traceback as _rfs_tb
     _REFINERY_OK = False
@@ -704,6 +706,7 @@ except Exception as _rfs_imp_err:
     _rfs_build_tree = _rfs_compose_body = _rfs_compose_vault_list = _rfs_compose_changelog = _rfs_unavailable
     _rfs_link = _rfs_propose = _rfs_apply_tree = _rfs_apply_work = _rfs_unavailable
     _rfs_analyze = _rfs_unavailable
+    _rfs_intake = _rfs_wiki_body = _rfs_unavailable
 
 
 def _refinery_guard():
@@ -812,6 +815,29 @@ class RefineryApplyWorkRequest(BaseModel):
     wbs_nodes: List[Dict[str, Any]] = []
     tasks: List[Dict[str, Any]] = []
     issues: List[Dict[str, Any]] = []
+    stages: List[Dict[str, Any]] = []    # [r247] product_stages
+    sprints: List[Dict[str, Any]] = []   # [r247] 신규 스프린트
+
+
+class RefineryIntakeRequest(BaseModel):
+    """[r247] 들여오기 추천 — 분해 구조를 프로젝트로 들여오는 계획 제안(SSE)."""
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    nodes: List[Dict[str, Any]] = []
+    vault_docs: List[Dict[str, Any]] = []
+    model: Optional[str] = None
+
+
+class RefineryComposeWikiBodyRequest(BaseModel):
+    """[r247] 채택된 위키 구조(목차) → 문서 본문 작성(SSE)."""
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    docs: List[Dict[str, Any]] = []      # [{title, summary, outline, node_ids?}]
+    nodes: List[Dict[str, Any]] = []
+    vault_docs: List[Dict[str, Any]] = []
+    model: Optional[str] = None
 
 
 @app.get("/refinery/sessions")
@@ -1012,6 +1038,7 @@ async def refinery_apply_work(req: RefineryApplyWorkRequest):
     result = _rfs_apply_work(
         session=s, wbs_nodes=req.wbs_nodes, tasks=req.tasks, issues=req.issues,
         user_id=req.user_id, project_id=req.project_id,
+        stages=req.stages, sprints=req.sprints,  # [r247]
     )
     _rfs.update_session(
         req.session_id,
@@ -1019,11 +1046,49 @@ async def refinery_apply_work(req: RefineryApplyWorkRequest):
             "generated_wbs_ids": (s.get("generated_wbs_ids") or []) + [w["id"] for w in result["wbs_created"]],
             "generated_task_ids": (s.get("generated_task_ids") or []) + [t["id"] for t in result["tasks_created"]],
             "generated_issue_ids": (s.get("generated_issue_ids") or []) + [i["id"] for i in result["issues_created"]],
+            # [r247] STAGE/스프린트 생성 이력
+            "generated_stage_ids": (s.get("generated_stage_ids") or []) + [x["id"] for x in result.get("stages_created", [])],
+            "generated_sprint_ids": (s.get("generated_sprint_ids") or []) + [x["id"] for x in result.get("sprints_created", [])],
         },
         user_id=req.user_id, action="work_applied",
-        detail=f"WBS {len(result['wbs_created'])} · 태스크 {len(result['tasks_created'])} · 이슈 {len(result['issues_created'])}",
+        detail=(
+            f"STAGE {len(result.get('stages_created', []))} · 스프린트 {len(result.get('sprints_created', []))} · "
+            f"WBS {len(result['wbs_created'])} · 태스크 {len(result['tasks_created'])} · 이슈 {len(result['issues_created'])}"
+        ),
     )
     return result
+
+
+@app.post("/refinery/intake-plan")
+async def refinery_intake_plan(req: RefineryIntakeRequest):
+    """[r247] 들여오기 추천 — 분해 구조 → STAGE/WBS+태스크/스프린트/이슈/위키구조 제안(SSE)."""
+    require_author(req.user_id, "들여오기 추천")
+    if _busy_active():
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    gen = _rfs_intake(nodes=req.nodes, vault_docs=req.vault_docs, model=req.model)
+    return _sse_indexer(gen, busy_kind="refinery_intake")
+
+
+@app.post("/refinery/compose-wiki-body")
+async def refinery_compose_wiki_body(req: RefineryComposeWikiBodyRequest):
+    """[r247] 채택된 위키 구조(목차) → 문서 본문 작성(SSE). files[] 는 이후 apply-tree 로 커밋."""
+    require_author(req.user_id, "위키 본문 작성")
+    s = _rfs.get_session(req.session_id)
+    if not s:
+        raise HTTPException(404, "세션 없음")
+    if _busy_active():
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    gen = _rfs_wiki_body(
+        docs=req.docs, nodes=req.nodes, vault_docs=req.vault_docs,
+        session=s, user_id=req.user_id, model=req.model,
+    )
+    return _sse_indexer(gen, busy_kind="refinery_wiki_body")
 
 
 @app.get("/refinery/schema-sql")

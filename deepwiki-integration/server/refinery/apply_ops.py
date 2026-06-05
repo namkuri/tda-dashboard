@@ -34,6 +34,14 @@ def _issue_id() -> str:
     return f"issue_{int(time.time() * 1000)}_{int.from_bytes(__import__('os').urandom(2), 'big')}"
 
 
+def _stage_id() -> str:
+    return f"stage_{int(time.time() * 1000)}_{int.from_bytes(__import__('os').urandom(2), 'big')}"
+
+
+def _sprint_id() -> str:
+    return f"sprint_{int(time.time() * 1000)}_{int.from_bytes(__import__('os').urandom(2), 'big')}"
+
+
 def apply_tree(
     *,
     session: Dict[str, Any],
@@ -244,22 +252,77 @@ def apply_work(
     issues: List[Dict[str, Any]],
     user_id: str,
     project_id: Optional[str] = None,
+    stages: Optional[List[Dict[str, Any]]] = None,    # [r247] 프로덕트 관리 STAGE
+    sprints: Optional[List[Dict[str, Any]]] = None,   # [r247] 신규 스프린트
 ) -> Dict[str, Any]:
-    """제안된 WBS/태스크/이슈 일괄 insert.
+    """제안된 STAGE/스프린트/WBS/태스크/이슈 일괄 insert.
 
     [r232] 핵심 수정: 각 테이블 스키마에 **없는 컬럼(history/updated_by)** 을 넣으면
     PostgREST 가 insert 전체를 거부 → "모두 생성" 했는데 아무것도 안 생기던 버그.
     stamp_metadata 대신 테이블별 실제 컬럼만 명시.
     [r232] parent_id(WBS 삽입 위치)·sprint_id(태스크 스프린트) 항목별 지정 지원.
+    [r247] stages → product_stages, sprints → sprints. 제안된 sprint id 를 태스크의
+           sprint_id 로 연결할 수 있도록 sprint_id_map 반환에 활용.
     """
     require_author(user_id, "작업 일괄 생성")
     store = get_store()
     session_id = session.get("id")
     now = _iso()
+    created_stages = []
+    created_sprints = []
     created_wbs = []
     created_tasks = []
     created_issues = []
     warnings = []
+
+    # [r247] STAGE — product_stages (id,project_id,name,type,goal,lifecycle,status,sort_order,created_by,...)
+    for stg in (stages or []):
+        new_id = _stage_id()
+        row = {
+            "id": new_id,
+            "project_id": project_id,
+            "name": stg.get("name") or "새 Stage",
+            "type": stg.get("type") or "MVP",
+            "goal": stg.get("goal") or "",
+            "lifecycle": stg.get("lifecycle") or "",
+            "status": "active",
+            "sort_order": _now_ms(),
+            "created_by": user_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        try:
+            store.client.table("product_stages").insert(row).execute()
+            created_stages.append({"id": new_id, "name": stg.get("name")})
+        except Exception as e:
+            warnings.append(f"STAGE 생성 실패({stg.get('name')}): {e}")
+
+    # [r247] 신규 스프린트 — sprints (week_label,goal,status,...). 제안 id → 실제 id 매핑.
+    sprint_id_map = {}
+    for sp in (sprints or []):
+        new_id = _sprint_id()
+        sprint_id_map[sp.get("id")] = new_id
+        row = {
+            "id": new_id,
+            "project_id": project_id,
+            "week_label": sp.get("week_label") or sp.get("weekLabel") or new_id,
+            "goal": sp.get("goal") or "",
+            "status": sp.get("status") or "planning",
+            "intrusion_count": 0,
+            "intrusion_log": [],
+            "carryover_from_previous": [],
+            "milestone_criteria": [],
+            "start_date": sp.get("start_date"),
+            "end_date": sp.get("end_date"),
+            "closed_at": None,
+            "history": [],
+            "participants": [],
+        }
+        try:
+            store.client.table("sprints").insert(row).execute()
+            created_sprints.append({"id": new_id, "week_label": row["week_label"]})
+        except Exception as e:
+            warnings.append(f"스프린트 생성 실패({row['week_label']}): {e}")
 
     # WBS — proposed.id 를 real id 로 매핑 (parent 가 같은 배치 내 WBS 일 수 있음)
     wbs_id_map = {}
@@ -311,7 +374,8 @@ def apply_work(
             "status": "pending",
             "zone": "shelf",
             "priority": t.get("priority", "p2"),
-            "sprint_id": t.get("sprint_id"),   # [r232] 항목별 스프린트 지정
+            # [r232] 항목별 스프린트 지정 + [r247] 신규 제안 스프린트 id 매핑 해석
+            "sprint_id": sprint_id_map.get(t.get("sprint_id"), t.get("sprint_id")),
             "cat_id": t.get("cat_id"),         # [r232] 칸반 카테고리 (없으면 null)
             "due_date": None,
             "assignees": [],
@@ -348,6 +412,8 @@ def apply_work(
             warnings.append(f"이슈 생성 실패({iss.get('title')}): {e}")
 
     return {
+        "stages_created": created_stages,    # [r247]
+        "sprints_created": created_sprints,   # [r247]
         "wbs_created": created_wbs,
         "tasks_created": created_tasks,
         "issues_created": created_issues,
