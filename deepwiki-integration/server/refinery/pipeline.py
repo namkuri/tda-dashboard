@@ -93,3 +93,50 @@ async def derive_stream(
         "tasks": tasks, "sprints": sprints, "stages": stages, "wbs": wbs, "wiki": wiki_docs,
         "summary": f"Task {len(tasks)} · Sprint {len(sprints)} · STAGE {len(stages)} · WBS {len(wbs)} · 위키 {len(wiki_docs)}",
     }
+
+
+async def rederive_downstream(
+    *,
+    tasks: List[Dict[str, Any]],
+    cross_links: Optional[List[Dict[str, Any]]] = None,
+    context: str = "",
+    capacity_hours: float = 80.0,
+    strict: bool = False,
+    rule: str = "auto",
+    start_date: str = "2026-01-05",
+    sprint_weeks: int = 2,
+    model: Optional[str] = None,
+) -> AsyncIterator[Dict[str, Any]]:
+    """[r266] 사용자가 Task 를 편집(추가/삭제)한 뒤, 그 변경을 반영해 의존→Sprint→STAGE→WBS
+    를 다시 도출(연쇄 재조정). derive_tasks 는 건너뛰고 C~E 만 재실행."""
+    # 기존 depends_on 초기화 후 재추론(편집 반영)
+    for t in tasks:
+        t["depends_on"] = []
+    yield {"event": "phase", "phase": "order", "message": "② 의존도 재추론 + 스프린트 재분할"}
+    async for ev in infer_tech_deps(tasks=tasks, model=model):
+        if ev.get("event") in ("stage", "warn"):
+            yield {**ev, "phase": "order"}
+    infer_deps_from_cross_links(tasks, cross_links or [])
+    ordered = topo_order(tasks)
+    tasks = ordered["tasks"]
+    yield {"event": "order_done", "levels": ordered.get("levels", 0), "tasks": tasks}
+    packed = pack_sprints(tasks, capacity_hours=capacity_hours, strict=strict)
+    sprints = packed["sprints"]
+    yield {"event": "sprints_done", "sprints": sprints, "count": len(sprints), "capacity_hours": packed["capacity_hours"]}
+
+    yield {"event": "phase", "phase": "stages", "message": "③ STAGE 재집계"}
+    stages: List[Dict[str, Any]] = []
+    async for ev in stagize(sprints=sprints, tasks=tasks, context=context, rule=rule, model=model):
+        if ev.get("event") == "done":
+            stages = ev.get("stages") or []
+        elif ev.get("event") in ("stage_proposed", "stage", "warn"):
+            yield {**ev, "phase": "stages"}
+    yield {"event": "stages_done", "stages": stages, "count": len(stages)}
+
+    yield {"event": "phase", "phase": "wbs", "message": "④ WBS 재구성"}
+    wbs = build_wbs(stages=stages, sprints=sprints, tasks=tasks, start_date=start_date, sprint_weeks=sprint_weeks)
+    yield {"event": "wbs_done", "wbs": wbs, "count": len(wbs)}
+    yield {
+        "event": "done", "tasks": tasks, "sprints": sprints, "stages": stages, "wbs": wbs,
+        "summary": f"재조정 — Task {len(tasks)} · Sprint {len(sprints)} · STAGE {len(stages)} · WBS {len(wbs)}",
+    }

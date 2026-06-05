@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r265"
+SERVER_REVISION = "r266"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -689,6 +689,7 @@ try:
     from refinery.intake import propose_intake as _rfs_intake  # [r247] 들여오기 추천
     from refinery.wiki_compose import compose_wiki_body as _rfs_wiki_body  # [r247] 위키 본문 작성
     from refinery.pipeline import derive_stream as _rfs_derive_stream  # [r253] 도출 파이프라인
+    from refinery.pipeline import rederive_downstream as _rfs_rederive  # [r266] 편집 후 다운스트림 재조정
     from refinery.from_mindmap import branches_to_nodes as _rfs_mm_to_nodes  # [r253] 마인드맵→노드
     from refinery.context import build_project_context as _rfs_build_ctx  # [r253] 프로젝트 컨텍스트
     from refinery.wiki_structure import derive_wiki_structure as _rfs_derive_wiki  # [r256] 위키 표준분류 구조
@@ -714,7 +715,7 @@ except Exception as _rfs_imp_err:
     _rfs_analyze = _rfs_unavailable
     _rfs_intake = _rfs_wiki_body = _rfs_unavailable
     _rfs_derive_stream = _rfs_apply_stream = _rfs_mm_to_nodes = _rfs_build_ctx = _rfs_unavailable
-    _rfs_derive_wiki = _rfs_unavailable
+    _rfs_derive_wiki = _rfs_rederive = _rfs_unavailable
     def _rfs_rag(*a, **k):
         return ""
     async def _rfs_rag_sem(*a, **k):
@@ -1178,6 +1179,40 @@ async def refinery_derive_stream(req: RefineryDeriveStreamRequest):
         wiki_tax=req.wiki_tax, with_wiki=req.with_wiki, model=req.model,
     )
     return _sse_indexer(gen, busy_kind="refinery_derive_stream")
+
+
+class RefineryRederiveRequest(BaseModel):
+    """[r266] 사용자 편집(Task 추가/삭제) 후 다운스트림(Sprint/STAGE/WBS) 재조정(SSE)."""
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    tasks: List[Dict[str, Any]] = []
+    cross_links: List[Dict[str, Any]] = []
+    capacity_hours: float = 80.0
+    strict: bool = False
+    rule: str = "auto"
+    start_date: str = "2026-01-05"
+    sprint_weeks: int = 2
+    model: Optional[str] = None
+
+
+@app.post("/refinery/rederive-downstream")
+async def refinery_rederive_downstream(req: RefineryRederiveRequest):
+    """[r266] Task 편집 반영 → 의존/Sprint/STAGE/WBS 재도출(SSE)."""
+    require_author(req.user_id, "다운스트림 재조정")
+    if not _REFINERY_OK:
+        raise HTTPException(503, f"연구 정련소 모듈 미로드: {_REFINERY_ERR}")
+    if _busy_active():
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    gen = _rfs_rederive(
+        tasks=req.tasks, cross_links=req.cross_links,
+        capacity_hours=req.capacity_hours, strict=req.strict, rule=req.rule,
+        start_date=req.start_date, sprint_weeks=req.sprint_weeks, model=req.model,
+    )
+    return _sse_indexer(gen, busy_kind="refinery_rederive")
 
 
 @app.post("/refinery/apply-stream")
