@@ -4620,6 +4620,30 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         @keyframes rfsDcGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(201,91,75,.35); } 50% { box-shadow: 0 0 0 5px rgba(201,91,75,0); } }
         .rfs-dc-spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--c-accent); border-top-color: transparent; border-radius: 50%; animation: rfsDcSpin .7s linear infinite; }
         @keyframes rfsDcSpin { to { transform: rotate(360deg); } }
+        /* [r233 #3] 위키 적용 후 대상 사이드바 탭 하이라이트 펄스 */
+        @keyframes rfsNavFlash { 0%,100% { box-shadow: none; } 18% { box-shadow: 0 0 0 2px var(--c-accent), 0 0 14px 2px rgba(201,91,75,.55); } }
+        .rfs-nav-flash { animation: rfsNavFlash .85s ease-in-out 2; border-radius: 8px; position: relative; z-index: 1; }
+        /* [r233 #4/#6/#12] 옵시디언식 프론트매터(속성) 메타 패널 — 기본 접힘, 굵은 글씨 X */
+        .md-frontmatter { margin: 0 0 14px; border: 1px solid var(--c-border); border-radius: 8px; background: var(--c-paper); font-size: 12.5px; overflow: hidden; }
+        .md-frontmatter > .md-fm-summary { cursor: pointer; padding: 7px 12px; font-weight: 600; color: var(--c-text3); list-style: none; user-select: none; display: flex; align-items: center; gap: 6px; }
+        .md-frontmatter > .md-fm-summary::-webkit-details-marker { display: none; }
+        .md-frontmatter > .md-fm-summary::before { content: '▸'; transition: transform .15s; font-size: 11px; }
+        .md-frontmatter[open] > .md-fm-summary::before { transform: rotate(90deg); }
+        .md-frontmatter[open] > .md-fm-summary { border-bottom: 1px solid var(--c-border); }
+        .md-fm-body { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+        .md-fm-row { display: flex; gap: 10px; align-items: baseline; }
+        .md-fm-key { flex: 0 0 130px; color: var(--c-text3); font-weight: 600; font-size: 11.5px; }
+        .md-fm-val { flex: 1; color: var(--c-text2); font-weight: 400; word-break: break-word; white-space: pre-wrap; }
+        /* [r233 #12] --- 구분선 살짝만 더 밝게(은은하게) */
+        #doc-preview-container hr, .markdown-body hr, .rfs-md-rendered hr { border: none; border-top: 1px solid var(--c-border); opacity: .6; margin: 18px 0; background: none; }
+        /* [r233 #10] 각주 — 의미있는 번호 각주 + 되돌아가기 */
+        .md-footnotes { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--c-border); font-size: 12.5px; }
+        .md-fn-title { font-weight: 700; color: var(--c-text3); margin-bottom: 4px; font-size: 12px; }
+        .md-fn-list { margin: 0; padding-left: 20px; color: var(--c-text2); }
+        .md-fn-list li { margin: 3px 0; }
+        sup.md-fn-ref { line-height: 0; }
+        sup.md-fn-ref a { color: var(--c-accent); text-decoration: none; font-weight: 700; padding: 0 1px; }
+        .md-fn-back { margin-left: 6px; color: var(--c-text3); text-decoration: none; }
         .rfs-dc-bar.indeterminate > div { width: 35% !important; animation: rfsDcIndet 1.2s ease-in-out infinite; }
         @keyframes rfsDcIndet { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
         .rfs-dc-chip {
@@ -5920,6 +5944,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <div style="display:flex;align-items:center;border-bottom:1px solid var(--c-border);background:var(--c-paper);flex-shrink:0;padding:0 8px 0 4px;gap:2px;">
                         <!-- 왼쪽: 문서 제목 + 저장 상태 -->
                         <h3 id="doc-editor-title" style="font-weight:700;font-size:14px;color:var(--c-text);padding:0 8px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">문서 제목</h3>
+                        <!-- [r233 #11] 문서 이동 뒤로/앞으로 (버전 기록 좌측, 우측 정렬 영역) -->
+                        <button id="doc-nav-back" onclick="_docNavBack()" title="이전 문서로" style="font-size:13px;font-weight:800;padding:2px 8px;border-radius:7px;border:1px solid var(--c-border);background:var(--c-card);color:var(--c-text2);cursor:pointer;opacity:.3;pointer-events:none;margin-right:2px;">←</button>
+                        <button id="doc-nav-fwd" onclick="_docNavFwd()" title="다음 문서로" style="font-size:13px;font-weight:800;padding:2px 8px;border-radius:7px;border:1px solid var(--c-border);background:var(--c-card);color:var(--c-text2);cursor:pointer;opacity:.3;pointer-events:none;margin-right:6px;">→</button>
                         <span id="doc-version-badge" onclick="openDocVersionHistory(activeDocId)" title="버전 기록 보기" style="display:none;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:9px;white-space:nowrap;cursor:pointer;background:var(--c-accent-soft);color:var(--c-accent);margin-right:4px;">v1</span>
                         <button id="doc-newver-btn" onclick="bumpDocVersion(activeDocId)" title="현재 내용을 새 버전으로 저장 (스냅샷)" style="display:none;font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;border:1px solid var(--c-border);background:var(--c-card);color:var(--c-text2);cursor:pointer;white-space:nowrap;margin-right:6px;">📌 새 버전</button>
                         <span id="doc-save-status" style="font-size:11px;color:var(--c-text3);margin-right:4px;white-space:nowrap;">All changes saved</span>
@@ -8183,6 +8210,23 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var text = md;
             var inlineTableStore = {}; // 이 호출에서만 쓰는 임시 저장소
 
+            // ── [r233 #4/#6/#12] PASS -1: 맨 위 프론트매터(---...---) → 옵시디언식 메타 패널(기본 접힘) ──
+            //   기존엔 굵은 글씨 + [[]] 링크로 잘못 렌더됐다. 속성 패널로 분리해 본문과 구분.
+            var _fmM = text.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+            if (_fmM && /^[A-Za-z_][\w\-]*\s*:/.test(_fmM[1].trim())) {
+                var _fmRows = '';
+                _fmM[1].split(/\r?\n/).forEach(function (ln) {
+                    if (!ln.trim()) return;
+                    var kv = ln.match(/^([A-Za-z0-9_\-]+)\s*:\s*([\s\S]*)$/);
+                    if (kv) _fmRows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(kv[1]) + '</span><span class="md-fm-val">' + _sprintEsc(kv[2]) + '</span></div>';
+                    else _fmRows += '<div class="md-fm-row"><span class="md-fm-val">' + _sprintEsc(ln.trim()) + '</span></div>';
+                });
+                var _fmHtml = '<details class="md-frontmatter"><summary class="md-fm-summary">속성 (메타데이터)</summary><div class="md-fm-body">' + _fmRows + '</div></details>';
+                var _fmPh = '⌂TBL' + (_tableStoreIdx++) + '⌂';
+                inlineTableStore[_fmPh] = _fmHtml; _tableStore[_fmPh] = _fmHtml;
+                text = _fmPh + '\n\n' + text.slice(_fmM[0].length);
+            }
+
             // ── PASS 0: <style> 및 <script> 블록 보존 ──
             text = text.replace(/<style[\s\S]*?<\/style>/gi, function(match) {
                 var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂';
@@ -8261,7 +8305,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     if (d.kind === 'personal') { var own = d.meta && d.meta.owner; if (own && own !== _meId) return false; }
                     return true;
                 };
-                var docHit = titlePart ? (currentData.docs || []).find(function (d) { return _wlVisible(d) && (d.title || '').toLowerCase() === lower; }) : null;
+                var docHit = null;
+                if (titlePart) {
+                    var _visDocs = (currentData.docs || []).filter(_wlVisible);
+                    docHit = _visDocs.find(function (d) { return (d.title || '').toLowerCase() === lower; });
+                    if (!docHit) { var _nrm = _wlNorm(titlePart); if (_nrm) docHit = _visDocs.find(function (d) { return _wlNorm(d.title) === _nrm; }); }  // [r233 #5] 정규화 매칭
+                }
                 var taskHit = (titlePart && !docHit) ? (currentData.tasks || []).find(function (tk) { return (tk.projectId || 'default') === activeProjectId && (tk.title || '').toLowerCase() === lower; }) : null;
                 // 표시 라벨
                 var disp;
@@ -8315,6 +8364,34 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 return ph; // 인라인이므로 줄바꿈 래핑 안 함
             });
 
+            // ── [r233 #10] PASS 2.75: 각주 [^N] / [^N]: ... → 의미있는 번호 각주 ──
+            (function () {
+                var defs = {};
+                text = text.replace(/^[ \t]*\[\^([^\]\n]+)\]:[ \t]*(.+)$/gm, function (_m, id, body) { defs[id.trim()] = body.trim(); return ''; });
+                var ids = Object.keys(defs);
+                if (!ids.length) return;
+                var num = {}; ids.forEach(function (id, i) { num[id] = i + 1; });
+                // 인라인 참조 [^id] → 위첨자 링크 (정의에 있는 것만)
+                text = text.replace(/\[\^([^\]\n]+)\]/g, function (m, id) {
+                    id = id.trim(); if (!(id in defs)) return m;
+                    var sl = _wlSlug(id) || ('fn' + num[id]);
+                    var a = '<sup class="md-fn-ref"><a id="fnref-' + sl + '" href="#fn-' + sl + '">[' + num[id] + ']</a></sup>';
+                    var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂'; inlineTableStore[ph] = a; _tableStore[ph] = a; return ph;
+                });
+                // 각주 섹션 — vault:ID 링크는 클릭 가능한 위키링크로
+                var sec = '<div class="md-footnotes"><div class="md-fn-title">각주</div><ol class="md-fn-list">';
+                ids.forEach(function (id) {
+                    var sl = _wlSlug(id) || ('fn' + num[id]);
+                    var safe = _sprintEsc(defs[id]).replace(/\[([^\]]*)\]\(vault:([A-Za-z0-9_\-]+)(?:\?[^)]*)?\)/g, function (_x, txt, vid) {
+                        return '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + vid + '">📄 ' + (txt || '원본') + '</a>';
+                    });
+                    sec += '<li id="fn-' + sl + '">' + safe + ' <a class="md-fn-back" href="#fnref-' + sl + '" title="본문으로">↩</a></li>';
+                });
+                sec += '</ol></div>';
+                var secPh = '⌂TBL' + (_tableStoreIdx++) + '⌂'; inlineTableStore[secPh] = sec; _tableStore[secPh] = sec;
+                text = text.replace(/\s+$/, '') + '\n\n' + secPh + '\n\n';
+            })();
+
             // ── PASS 3: marked.js로 마크다운 → HTML ──
             var html = marked.parse(text);
 
@@ -8346,6 +8423,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function _wlSlug(s) {
             if (s == null) return '';
             return String(s).toLowerCase().replace(/<[^>]+>/g, '').replace(/[\s_]+/g, '-').replace(/[^\p{L}\p{N}\-]+/gu, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+        }
+        // [r233 #5] 위키링크 제목 정규화 — 정의서 링크([[루프 비선형화]])와 실제 문서 제목
+        //   ('0.루프_비선형화', '[VAULT] x.html' 등) 의 표기 차이를 흡수해 매칭 성공률을 높임.
+        function _wlNorm(s) {
+            return String(s == null ? '' : s)
+                .toLowerCase().trim()
+                .replace(/\.(md|html?|txt)$/i, '')        // 확장자
+                .replace(/^\[vault\]\s*/i, '')             // [VAULT] 접두
+                .replace(/^\d+(\.\d+)*[.)]\s*/, '')        // "0." "1.2." "3)" 번호 접두
+                .replace(/[_\-]+/g, ' ')                    // 언더스코어/하이픈 → 공백
+                .replace(/\s+/g, ' ')
+                .trim();
         }
         // [r193] 문서의 헤더 목록(text + slug + level) — 자동완성/내부 점프용
         function _wlDocHeaders(docId) {
@@ -10689,7 +10778,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r232';
+        var _AHUB_FRONT_REV = 'r233';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -18750,6 +18839,7 @@ return data;
             if (typeof _dbPushRecentDoc === 'function') _dbPushRecentDoc(docId);
             var prevDocId = activeDocId;
             activeDocId = docId;
+            if (typeof _docNavRecord === 'function') _docNavRecord(docId); // [r233 #11] 이동 히스토리 기록
             if (typeof activeDocIdByKind === 'object' && activeDocIdByKind) activeDocIdByKind[currentDocKind] = docId; // [통합엔진] kind별 활성문서 기억
             _docLastSavedContent = null; // 새 문서 열면 저장 기준 초기화
             // 다른 문서 열면 접기 상태 초기화 (같은 문서는 유지)
@@ -19314,9 +19404,16 @@ return data;
         async function _wlCreateAndNav(title) {
             if (!title) return;
             title = String(title).trim(); if (!title) return;
-            var existing = (currentData.docs || []).find(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder) && (d.title || '').toLowerCase() === title.toLowerCase(); });
+            var _cand = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder); });
+            var existing = _cand.find(function (d) { return (d.title || '').toLowerCase() === title.toLowerCase(); });
+            if (!existing) { var _n = _wlNorm(title); if (_n) existing = _cand.find(function (d) { return _wlNorm(d.title) === _n; }); }  // [r233 #5] 정규화 매칭 후 이동
             if (existing) { if (typeof navToDoc === 'function') navToDoc(existing.id); return; }
             if (!currentUser) { if (typeof showToast === 'function') showToast('로그인이 필요합니다.', 'alert'); return; }
+            // [r233 #5] 해석 실패 시 즉시 새 문서를 만들지 않고 확인 — 실수로 빈 문서가 생기는 것 방지
+            var _mk = (typeof uiConfirm === 'function')
+                ? await uiConfirm({ title: '문서 없음', message: '"' + title + '" 문서를 찾지 못했습니다.\n같은 이름으로 새 문서를 만들까요?', confirmText: '새로 만들기', cancelText: '취소' })
+                : true;
+            if (!_mk) return;
             // 같은 위치(현재 문서의 부모)에 새 문서 생성
             var parentId = null;
             if (typeof activeDocId === 'string' && activeDocId) {
@@ -21925,6 +22022,34 @@ addEventListener("resize",sendPos);
                 if (el && el.classList.contains('modal-open')) closeModal(id);
             });
         }
+        // [r233 #11] 문서 이동 히스토리 (브라우저식 뒤로/앞으로)
+        var _docNav = { stack: [], idx: -1, lock: false };
+        function _docNavRecord(docId) {
+            if (_docNav.lock) return;                          // 뒤로/앞으로 이동 중엔 기록 안 함
+            if (_docNav.stack[_docNav.idx] === docId) return;  // 같은 문서 재오픈 무시
+            _docNav.stack = _docNav.stack.slice(0, _docNav.idx + 1); // 앞쪽(redo) 분기 제거
+            _docNav.stack.push(docId);
+            if (_docNav.stack.length > 100) _docNav.stack.shift();
+            _docNav.idx = _docNav.stack.length - 1;
+            _docNavUpdateBtns();
+        }
+        function _docNavUpdateBtns() {
+            var b = document.getElementById('doc-nav-back'), f = document.getElementById('doc-nav-fwd');
+            var canB = _docNav.idx > 0, canF = _docNav.idx < _docNav.stack.length - 1;
+            if (b) { b.style.opacity = canB ? '1' : '.3'; b.style.pointerEvents = canB ? 'auto' : 'none'; }
+            if (f) { f.style.opacity = canF ? '1' : '.3'; f.style.pointerEvents = canF ? 'auto' : 'none'; }
+        }
+        function _docNavGo(targetIdx) {
+            var id = _docNav.stack[targetIdx]; if (!id) return;
+            if (!(currentData.docs || []).some(function (d) { return d.id === id; })) { // 삭제된 문서는 스택에서 제거
+                _docNav.stack.splice(targetIdx, 1); if (_docNav.idx > targetIdx) _docNav.idx--; _docNavUpdateBtns(); return;
+            }
+            _docNav.idx = targetIdx; _docNav.lock = true;
+            if (typeof navToDoc === 'function') navToDoc(id); else openDoc(id);
+            setTimeout(function () { _docNav.lock = false; _docNavUpdateBtns(); }, 80);
+        }
+        function _docNavBack() { if (_docNav.idx > 0) _docNavGo(_docNav.idx - 1); }
+        function _docNavFwd() { if (_docNav.idx < _docNav.stack.length - 1) _docNavGo(_docNav.idx + 1); }
         function navToDoc(docId) {
             var d = currentData.docs.find(x => x.id === docId);
             if (!d) { showToast('문서를 찾을 수 없습니다 (삭제됨).', 'alert'); return; }
@@ -31052,7 +31177,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r232';
+    var _RFS_FRONT_REV = 'r233';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31700,8 +31825,14 @@ ${intrLog}
         var html = '<div style="max-width:1200px;margin:0 auto;">';
         html += '<h2 style="margin:0 0 8px;font-size:18px;">② 분류 — Classify (' + classifiedCount + '/' + leafs.length + ')</h2>';
         html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">노드별 4분면 결정. AI 추천(점선)으로 일괄 시작 추천.</div>';
-        html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">';
-        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunClassifySuggest()">🤖 AI 추천 받기</button>';
+        html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">';
+        // [r233 #1] 일괄 수동 분류 — 현재 필터에 보이는 노드를 한 번에 지정 (AI 추천 좌측 배치)
+        html += '<span style="font-size:11px;color:var(--c-text3);">일괄:</span>';
+        [['canon','✅','확정'],['hyp','🧪','가설'],['later','📋','백로그'],['cut','❌','폐기']].forEach(function (c) {
+            html += '<button class="aihub-gpu-btn" onclick="rfsBulkClassify(\'' + c[0] + '\')" title="필터에 보이는 노드를 모두 ' + c[2] + '로">' + c[1] + ' ' + c[2] + '</button>';
+        });
+        html += '<span style="width:1px;height:20px;background:var(--c-border);margin:0 2px;"></span>';
+        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunClassifySuggest()">🤖 AI 추천</button>';
         html += '<button class="aihub-gpu-btn" onclick="rfsApplyAllSuggestions()">추천 일괄 적용</button>';
         html += '<button class="aihub-gpu-btn" onclick="rfsRunSimilarNodes()">🔍 유사 노드 탐지</button>';
         html += '<select id="rfs-classify-filter" onchange="rfsRenderClassifyStep()" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
@@ -31752,6 +31883,26 @@ ${intrLog}
         cls[nodeId] = category;
         await rfsPatchSession({classifications: cls}, 'classified', nodeId + '→' + category);
         rfsRenderClassifyStep();
+    }
+
+    // [r233 #1] 일괄 수동 분류 — 현재 필터에 보이는 잎 노드를 한 번에 같은 카테고리로
+    async function rfsBulkClassify(category) {
+        var nodes = (_rfsState.current.nodes || []).filter(function (n) { return n.kind !== 'category'; });
+        var cls = _rfsState.current.classifications || {};
+        var filterVal = (document.getElementById('rfs-classify-filter') || {}).value || 'all';
+        var targets = nodes.filter(function (n) {
+            if (filterVal === 'all') return true;
+            if (filterVal === 'unclassified') return !cls[n.id];
+            return cls[n.id] === filterVal;
+        });
+        if (!targets.length) { showToast('대상 노드가 없습니다', 'alert'); return; }
+        var label = ({canon:'✅ 확정',hyp:'🧪 가설',later:'📋 백로그',cut:'❌ 폐기'})[category] || category;
+        var ok = await uiConfirm({ title: '일괄 분류', message: (filterVal === 'all' ? '전체' : '필터에 보이는') + ' ' + targets.length + '개 노드를 모두 [' + label + ']로 설정합니다.', confirmText: '적용' });
+        if (!ok) return;
+        targets.forEach(function (n) { cls[n.id] = category; });
+        await rfsPatchSession({classifications: cls}, 'classifications_applied', '일괄 ' + category + ' (' + targets.length + ')');
+        rfsRenderClassifyStep();
+        showToast('✓ ' + targets.length + '개 → ' + label, 'success');
     }
 
     async function rfsRunClassifySuggest() {
@@ -31985,7 +32136,9 @@ ${intrLog}
 
     function rfsSelectFile(fi) {
         var f = _rfsState.composedFiles[fi]; if (!f) return;
+        _rfsState._selFileIdx = fi;
         var detail = document.getElementById('rfs-compose-detail'); if (!detail) return;
+        var rendered = !!_rfsState._fileViewRendered;  // [r233 #2] 렌더링/원본 토글
         var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
         html += '<input type="text" id="rfs-file-path" value="' + _annEsc(f.path) + '" style="flex:1;font-size:12px;padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);" onchange="rfsUpdateFilePath(' + fi + ',this.value)">';
         html += '<select id="rfs-file-target" onchange="rfsUpdateFileTarget(' + fi + ',this.value)" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
@@ -31994,10 +32147,19 @@ ${intrLog}
             html += '<option value="' + t + '"' + (f.target_kind===t?' selected':'') + '>' + lbl + '</option>';
         });
         html += '</select>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsToggleFileView(' + fi + ')" title="원본(편집) ↔ 렌더링 미리보기">' + (rendered ? '✏️ 원본' : '👁 렌더링') + '</button>';
         html += '</div>';
-        html += '<textarea id="rfs-file-body" style="width:100%;height:50vh;font-family:ui-monospace,monospace;font-size:11.5px;padding:10px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);" onchange="rfsUpdateFileBody(' + fi + ',this.value)">' + _annEsc(f.body || '') + '</textarea>';
+        if (rendered) {
+            var rhtml = '';
+            try { rhtml = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(f.body || ''), (typeof domPurifyConfig !== 'undefined' ? domPurifyConfig : undefined)) : parseMarkdownWithTables(f.body || ''); }
+            catch (e) { rhtml = _annEsc(f.body || ''); }
+            html += '<div class="rfs-md-rendered markdown-body" style="height:50vh;overflow-y:auto;padding:14px 16px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);font-size:13px;line-height:1.7;">' + rhtml + '</div>';
+        } else {
+            html += '<textarea id="rfs-file-body" style="width:100%;height:50vh;font-family:ui-monospace,monospace;font-size:11.5px;padding:10px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);" onchange="rfsUpdateFileBody(' + fi + ',this.value)">' + _annEsc(f.body || '') + '</textarea>';
+        }
         detail.innerHTML = html;
     }
+    function rfsToggleFileView(fi) { _rfsState._fileViewRendered = !_rfsState._fileViewRendered; rfsSelectFile(fi); }
     function rfsToggleFile(path) {
         _rfsState.selectedFiles[path] = !(_rfsState.selectedFiles[path] !== false);
     }
@@ -32108,6 +32270,14 @@ ${intrLog}
         main.innerHTML = html;
     }
 
+    // [r233 #3] 사이드바 네비 탭 펄스 하이라이트
+    function _rfsFlashNav(view) {
+        var el = document.getElementById('cs-nav-' + view) || document.querySelector('[data-nav="' + view + '"]');
+        if (!el) return;
+        el.classList.remove('rfs-nav-flash'); void el.offsetWidth; el.classList.add('rfs-nav-flash');
+        setTimeout(function () { el.classList.remove('rfs-nav-flash'); }, 2000);
+    }
+
     async function rfsRunApplyTree() {
         var url = rfsBackEnd(); if (!url) return;
         var files = (_rfsState.composedFiles||[]).filter(function (f) { return _rfsState.selectedFiles[f.path] !== false; });
@@ -32143,6 +32313,11 @@ ${intrLog}
                 (f.node_ids || []).forEach(function (nid) { (docMap[nid] = docMap[nid] || []).push(did); });
             });
             _rfsState.appliedDocMap = docMap;
+            // [r233 #3] 적용된 target_kind 의 사이드바 탭 하이라이트
+            var _vk = {canon: 'canon', wiki: 'docs', personal: 'personal'};
+            var _seenKind = {};
+            files.forEach(function (f) { _seenKind[(f.target_kind || 'canon')] = true; });
+            Object.keys(_seenKind).forEach(function (k) { _rfsFlashNav(_vk[k] || 'canon'); });
             _rfsState._applyingTree = false;
             rfsGoStep(8);
         } catch (e) {

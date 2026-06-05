@@ -234,7 +234,9 @@ def compose_vault_list_md(*, vault_docs: List[Dict[str, Any]], session: Dict[str
         "",
     ]
     for vd in vault_docs:
-        lines.append(f"- [[{vd.get('title') or vd.get('id')}]] — `{vd.get('id')}`")
+        # [r233 #13] 제목 기반 [[...]] 은 '[VAULT] x.html' 의 대괄호 때문에 위키링크 정규식이
+        # 깨져 클릭이 동작하지 않았다. ID 기반 [[doc:ID]] 로 변경 — 항상 해석됨.
+        lines.append(f"- [[doc:{vd.get('id')}]]")
     return "\n".join(lines)
 
 
