@@ -1778,6 +1778,18 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .lp-toc-list a { color:var(--c-accent); text-decoration:none; cursor:pointer; }
         .lp-toc-list a:hover { text-decoration:underline; }
         .lp-toc-l1 { font-weight:700; } .lp-toc-l3 { padding-left:14px; } .lp-toc-l4 { padding-left:28px; } .lp-toc-l5,.lp-toc-l6 { padding-left:42px; }
+        /* [r237 A1] 인플레이스 라이브 편집 — 본문 스타일 유지, md 특수기호는 회색 노출 */
+        .lp-live-edit { outline:none; white-space:pre-wrap; word-break:break-word; border-radius:5px; box-shadow:0 0 0 1px var(--c-accent) inset; padding:2px 6px; min-height:1.4em; caret-color:var(--c-accent); }
+        .lp-live-edit .md-syn { color:var(--c-text3); opacity:.6; }
+        .lp-live-edit .md-syn-url { color:var(--c-text3); opacity:.7; text-decoration:underline; }
+        .lp-live-edit code { font-family:ui-monospace,monospace; font-size:.92em; background:rgba(127,127,127,.12); padding:0 3px; border-radius:3px; }
+        .lp-live-edit .lp-h { font-weight:700; }
+        .lp-live-edit .lp-h1 { font-size:1.7em; } .lp-live-edit .lp-h2 { font-size:1.4em; } .lp-live-edit .lp-h3 { font-size:1.2em; }
+        .lp-live-edit .lp-h4 { font-size:1.05em; } .lp-live-edit .lp-h5, .lp-live-edit .lp-h6 { font-size:1em; }
+        /* [r237 B2] 헤딩 섹션 편집 버튼 (MediaWiki 식) */
+        .lp-sec-edit { opacity:0; margin-left:8px; font-size:10.5px; font-weight:700; color:var(--c-accent); background:var(--c-card); border:1px solid var(--c-border); border-radius:5px; padding:1px 7px; cursor:pointer; vertical-align:middle; transition:opacity .12s; }
+        .lp-row:hover .lp-sec-edit { opacity:.85; }
+        .lp-sec-edit:hover { opacity:1 !important; background:var(--c-accent); color:#fff; }
         /* tab active state */
         #doc-main-pane .tab-active { background:#c96442 !important; color:white !important; }
         #doc-main-pane .tab-inactive { background:transparent !important; color:#6f6b5d !important; }
@@ -10847,7 +10859,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r236';
+        var _AHUB_FRONT_REV = 'r237';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -25759,6 +25771,7 @@ ${intrLog}
         // ════════════════════════════════════════════════════════════
         var _lpLineNums = true;
         var _lpEditingIdx = null;
+        var _lpEditingSection = null;   // [r237 B2] {start,end} 섹션 편집 상태
 
         function lpToggleLineNums() {
             _lpLineNums = !_lpLineNums;
@@ -25826,7 +25839,8 @@ ${intrLog}
                 var isMeta = !metaSkipped && /^﻿?\s*---\s*\r?\n[A-Za-z_][\w\-]*\s*:/.test(b.text);
                 if (isMeta) metaSkipped = true;
                 var num = isMeta ? '' : (++n);
-                frag += '<div class="lp-row' + (isMeta ? ' lp-meta-row' : '') + '" data-idx="' + idx + '"><div class="lp-gutter">' + num + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + '</div></div>';
+                var secBtn = /^#{1,6}\s/.test(b.text) ? '<button class="lp-sec-edit" onclick="_lpEditSection(' + idx + ')" title="이 섹션 전체를 소스로 편집">✎ 편집</button>' : '';  // [r237 B2]
+                frag += '<div class="lp-row' + (isMeta ? ' lp-meta-row' : '') + '" data-idx="' + idx + '"><div class="lp-gutter">' + num + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + secBtn + '</div></div>';
             });
             host.innerHTML = tocHtml + frag;
         }
@@ -25840,43 +25854,114 @@ ${intrLog}
             var p = el.style.backgroundColor; el.style.transition = 'background-color .4s'; el.style.backgroundColor = 'var(--c-accent-soft)';
             setTimeout(function () { el.style.backgroundColor = p || ''; }, 1200);
         }
-        // 블록 클릭 → 원본 편집 (위키링크/이미지/임베드 클릭은 제외)
+        // [r237 A1] md → 토큰화 HTML (특수기호 회색, 내용은 본문 스타일). textContent 는 원본 md 보존.
+        function _lpEscHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function _lpTokenizeInline(s) {
+            s = _lpEscHtml(s);
+            s = s.replace(/`([^`]+)`/g, '<span class="md-syn">`</span><code>$1</code><span class="md-syn">`</span>');
+            s = s.replace(/\*\*([^*]+)\*\*/g, '<span class="md-syn">**</span><b>$1</b><span class="md-syn">**</span>');
+            s = s.replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<span class="md-syn">*</span><i>$2</i><span class="md-syn">*</span>');
+            s = s.replace(/\[\[([^\]]+)\]\]/g, '<span class="md-syn">[[</span><span class="md-syn-url">$1</span><span class="md-syn">]]</span>');
+            s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="md-syn">[</span>$1<span class="md-syn">](</span><span class="md-syn-url">$2</span><span class="md-syn">)</span>');
+            return s;
+        }
+        function _lpTokenize(raw) {
+            return String(raw == null ? '' : raw).split('\n').map(function (ln) {
+                var h = ln.match(/^(#{1,6})(\s+)([\s\S]*)$/);
+                if (h) return '<span class="md-syn">' + _lpEscHtml(h[1] + h[2]) + '</span><span class="lp-h lp-h' + h[1].length + '">' + _lpTokenizeInline(h[3]) + '</span>';
+                var li = ln.match(/^(\s*)([-*+]|\d+\.)(\s+)([\s\S]*)$/);
+                if (li) return _lpEscHtml(li[1]) + '<span class="md-syn">' + _lpEscHtml(li[2] + li[3]) + '</span>' + _lpTokenizeInline(li[4]);
+                var bq = ln.match(/^(\s*>\s?)([\s\S]*)$/);
+                if (bq) return '<span class="md-syn">' + _lpEscHtml(bq[1]) + '</span>' + _lpTokenizeInline(bq[2]);
+                return _lpTokenizeInline(ln);
+            }).join('\n');
+        }
+        // contenteditable → 원본 텍스트(개행 보존). Enter 로 생긴 <div>/<br> 도 \n 으로 복원.
+        function _lpExtractText(el) {
+            var out = '';
+            (function walk(node) {
+                for (var c = node.firstChild; c; c = c.nextSibling) {
+                    if (c.nodeType === 3) out += c.nodeValue;
+                    else if (c.nodeName === 'BR') out += '\n';
+                    else if (/^(DIV|P|LI)$/.test(c.nodeName)) { if (out && out.charAt(out.length - 1) !== '\n') out += '\n'; walk(c); }
+                    else walk(c);
+                }
+            })(el);
+            return out;
+        }
+        function _lpPlaceCaretEnd(el) {
+            try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } catch (e) {}
+        }
+        // 블록 클릭 → 인플레이스 라이브 편집 (본문 스타일 유지 + 회색 마커). 위키링크/버튼 등은 제외.
         function _lpEnterEdit(idx) {
             var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return;
-            // [r234] 잠금/Vault 문서는 편집 차단 (소스 textarea 의 readOnly 가드를 라이브에서도 동일 적용)
             var _d = currentData.docs ? currentData.docs.find(function (d) { return d.id === activeDocId; }) : null;
             if (_d && (_d.isLocked || (_d.meta && _d.meta.vault))) { if (typeof showToast === 'function') showToast('🔒 잠긴 문서 — 편집하려면 잠금 해제/승인이 필요합니다', 'alert'); return; }
-            var b = host._lpBlocks[idx]; if (!b) return;
+            if (_lpEditingSection) _lpCommitSection();
             if (_lpEditingIdx != null && _lpEditingIdx !== idx) _lpCommitEdit();
-            var row = host.querySelector('[data-idx="' + idx + '"]'); if (!row) return;
-            var ta = document.createElement('textarea');
-            ta.className = 'lp-edit'; ta.value = b.text || ''; ta.setAttribute('data-idx', idx);
+            var b = host._lpBlocks[idx]; if (!b) return;
+            var row = host.querySelector('.lp-row[data-idx="' + idx + '"], .lp-blank[data-idx="' + idx + '"]'); if (!row) return;
             row.className = 'lp-row';
             row.innerHTML = '<div class="lp-gutter">' + ((b.ln || 0) + 1) + '</div>';
-            var wrap = document.createElement('div'); wrap.className = 'lp-content'; wrap.appendChild(ta); row.appendChild(wrap);
+            var ed = document.createElement('div');
+            ed.className = 'lp-content lp-live-edit'; ed.setAttribute('contenteditable', 'true'); ed.setAttribute('data-idx', idx);
+            ed.innerHTML = _lpTokenize(b.text || '');
+            row.appendChild(ed);
             _lpEditingIdx = idx;
-            function autosize() { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
-            autosize(); ta.addEventListener('input', autosize);
-            ta.addEventListener('blur', _lpCommitEdit);
-            ta.addEventListener('keydown', function (e) {
+            ed.addEventListener('blur', _lpCommitEdit);
+            ed.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') { e.preventDefault(); _lpCancelEdit(); }
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ta.blur(); }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ed.blur(); }
             });
-            ta.focus();
-            try { ta.selectionStart = ta.selectionEnd = ta.value.length; } catch (e) {}
+            ed.focus(); _lpPlaceCaretEnd(ed);
         }
         function _lpCommitEdit() {
             var host = document.getElementById('doc-livepreview'); if (!host || _lpEditingIdx == null) return;
-            var idx = _lpEditingIdx;
-            var ta = host.querySelector('textarea.lp-edit[data-idx="' + idx + '"]'); if (!ta) { _lpEditingIdx = null; return; }
+            var idx = _lpEditingIdx; _lpEditingIdx = null;
+            var ed = host.querySelector('.lp-live-edit[data-idx="' + idx + '"]'); if (!ed) return;
             var blocks = host._lpBlocks || [];
-            if (blocks[idx]) blocks[idx].text = ta.value;
-            _lpEditingIdx = null;
+            if (blocks[idx]) blocks[idx].text = _lpExtractText(ed);
             var content = blocks.map(function (x) { return x.text; }).join('\n');
             _lpCommit(content);
             renderLivePreview();
         }
-        function _lpCancelEdit() { _lpEditingIdx = null; renderLivePreview(); }
+        function _lpCancelEdit() { _lpEditingIdx = null; _lpEditingSection = null; renderLivePreview(); }
+        // [r237 B2] 헤딩 [편집] → 그 헤딩 이하 섹션 전체를 일괄 소스(textarea)로 편집
+        function _lpEditSection(headIdx) {
+            var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return;
+            var _d = currentData.docs ? currentData.docs.find(function (d) { return d.id === activeDocId; }) : null;
+            if (_d && (_d.isLocked || (_d.meta && _d.meta.vault))) { if (typeof showToast === 'function') showToast('🔒 잠긴 문서 — 편집 불가', 'alert'); return; }
+            if (_lpEditingIdx != null) _lpCommitEdit();
+            if (_lpEditingSection) _lpCommitSection();
+            var blocks = host._lpBlocks; var head = blocks[headIdx]; if (!head) return;
+            var hm = head.text.match(/^(#{1,6})\s/); var L = hm ? hm[1].length : 6;
+            var end = blocks.length;
+            for (var i = headIdx + 1; i < blocks.length; i++) { var bb = blocks[i]; if (bb.blank) continue; var mm = bb.text.match(/^(#{1,6})\s/); if (mm && mm[1].length <= L) { end = i; break; } }
+            var sectionText = blocks.slice(headIdx, end).map(function (b) { return b.text; }).join('\n');
+            _lpEditingSection = { start: headIdx, end: end };
+            var headRow = host.querySelector('[data-idx="' + headIdx + '"]'); if (!headRow) { _lpEditingSection = null; return; }
+            headRow.className = 'lp-row';
+            headRow.innerHTML = '<div class="lp-gutter"></div>';
+            var ta = document.createElement('textarea'); ta.className = 'lp-edit'; ta.setAttribute('data-sec', '1'); ta.value = sectionText;
+            var wrap = document.createElement('div'); wrap.className = 'lp-content'; wrap.appendChild(ta); headRow.appendChild(wrap);
+            for (var j = headIdx + 1; j < end; j++) { var r = host.querySelector('[data-idx="' + j + '"]'); if (r) r.style.display = 'none'; }
+            function autosize() { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
+            autosize(); ta.addEventListener('input', autosize);
+            ta.addEventListener('blur', _lpCommitSection);
+            ta.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); _lpEditingSection = null; renderLivePreview(); } if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ta.blur(); } });
+            ta.focus(); try { ta.selectionStart = ta.selectionEnd = 0; } catch (e) {}
+        }
+        function _lpCommitSection() {
+            var host = document.getElementById('doc-livepreview'); if (!host || !_lpEditingSection) return;
+            var sec = _lpEditingSection; _lpEditingSection = null;
+            var ta = host.querySelector('textarea.lp-edit[data-sec]'); if (!ta) return;
+            var blocks = host._lpBlocks || [];
+            var newBlocks = _lpSplitBlocks(ta.value);
+            Array.prototype.splice.apply(blocks, [sec.start, sec.end - sec.start].concat(newBlocks));
+            var content = blocks.map(function (x) { return x.text; }).join('\n');
+            _lpCommit(content);
+            renderLivePreview();
+        }
         // 라이브 편집 → 저장 파이프라인(소스 textarea 동기화 + autosave)
         function _lpCommit(newContent) {
             var ta = document.getElementById('doc-editor-textarea'); if (ta) ta.value = newContent;
@@ -25890,11 +25975,13 @@ ${intrLog}
         //   클릭이 먼저 도달하도록(위키링크 캡처 핸들러가 링크는 먼저 가로채 네비게이션 유지).
         document.addEventListener('click', function (e) {
             if (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'live') return;
-            var host = document.getElementById('doc-livepreview');
-            if (!host || !host.contains(e.target)) return;
-            if (e.target.closest('a, .wikilink, .md-code-embed, input, button, .tda-html-mount, iframe, summary')) return;
-            if (e.target.closest('textarea.lp-edit')) return;
-            var row = e.target.closest('.lp-row, .lp-blank'); if (!row) return;
+            var host = document.getElementById('doc-livepreview'); if (!host) return;
+            // blur 커밋으로 DOM 이 갱신됐을 수 있어 좌표로 대상 재해석(다른 블록 한 번에 전환). 실패 시 e.target.
+            var tgt = document.elementFromPoint(e.clientX, e.clientY);
+            if (!tgt || !host.contains(tgt)) tgt = e.target;
+            if (!tgt || !host.contains(tgt)) return;
+            if (tgt.closest('a, .wikilink, .md-code-embed, input, button, .tda-html-mount, iframe, summary, .lp-toc, .lp-live-edit, textarea.lp-edit')) return;
+            var row = tgt.closest('.lp-row, .lp-blank'); if (!row) return;
             var idx = parseInt(row.getAttribute('data-idx'), 10);
             if (!isNaN(idx)) _lpEnterEdit(idx);
         }, true);
@@ -31425,7 +31512,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r236';
+    var _RFS_FRONT_REV = 'r237';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
