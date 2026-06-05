@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r247"
+SERVER_REVISION = "r249"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -1040,15 +1040,18 @@ async def refinery_apply_work(req: RefineryApplyWorkRequest):
         user_id=req.user_id, project_id=req.project_id,
         stages=req.stages, sprints=req.sprints,  # [r247]
     )
+    # [r249] STAGE/스프린트 id 는 전용 컬럼이 없으므로 허용된 generated_tree(jsonb)에 stash
+    #   (신규 컬럼은 미마이그레이션 DB 에서 PostgREST 거부를 유발 → generated_tree 재사용이 안전).
+    _gt = dict(s.get("generated_tree") or {})
+    _gt["generated_stage_ids"] = (_gt.get("generated_stage_ids") or []) + [x["id"] for x in result.get("stages_created", [])]
+    _gt["generated_sprint_ids"] = (_gt.get("generated_sprint_ids") or []) + [x["id"] for x in result.get("sprints_created", [])]
     _rfs.update_session(
         req.session_id,
         {
             "generated_wbs_ids": (s.get("generated_wbs_ids") or []) + [w["id"] for w in result["wbs_created"]],
             "generated_task_ids": (s.get("generated_task_ids") or []) + [t["id"] for t in result["tasks_created"]],
             "generated_issue_ids": (s.get("generated_issue_ids") or []) + [i["id"] for i in result["issues_created"]],
-            # [r247] STAGE/스프린트 생성 이력
-            "generated_stage_ids": (s.get("generated_stage_ids") or []) + [x["id"] for x in result.get("stages_created", [])],
-            "generated_sprint_ids": (s.get("generated_sprint_ids") or []) + [x["id"] for x in result.get("sprints_created", [])],
+            "generated_tree": _gt,  # [r249] STAGE/스프린트 이력 포함
         },
         user_id=req.user_id, action="work_applied",
         detail=(

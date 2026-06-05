@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r247';
+        var _AHUB_FRONT_REV = 'r249';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31708,7 +31708,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r247';
+    var _RFS_FRONT_REV = 'r249';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -34333,7 +34333,8 @@ ${intrLog}
         html += '<div style="flex:0 0 380px;max-width:42%;">';
         // 요약 칩
         html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;">';
-        [['📚 vault', (s.vault_doc_ids || []).length], ['🌲 노드', (s.nodes || []).length], ['🎯 STAGE', (s.generated_stage_ids || []).length], ['🏃 스프린트', (s.generated_sprint_ids || []).length], ['📄 문서', docIds.length], ['🏗 WBS', wbsIds.length], ['✅ 태스크', taskIds.length], ['⚠ 이슈', issueIds.length]].forEach(function (c) {
+        var _gtIds = s.generated_tree || {};  // [r249] STAGE/스프린트 id 는 generated_tree 에 stash
+        [['📚 vault', (s.vault_doc_ids || []).length], ['🌲 노드', (s.nodes || []).length], ['🎯 STAGE', (_gtIds.generated_stage_ids || []).length], ['🏃 스프린트', (_gtIds.generated_sprint_ids || []).length], ['📄 문서', docIds.length], ['🏗 WBS', wbsIds.length], ['✅ 태스크', taskIds.length], ['⚠ 이슈', issueIds.length]].forEach(function (c) {
             html += '<span style="background:var(--c-card);border:1px solid var(--c-border);border-radius:20px;padding:3px 10px;font-weight:700;">' + c[0] + ' ' + c[1] + '</span>';
         });
         html += '</div>';
