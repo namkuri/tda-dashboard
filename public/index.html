@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r258';
+        var _AHUB_FRONT_REV = 'r259';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31749,7 +31749,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r258';
+    var _RFS_FRONT_REV = 'r259';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -34112,8 +34112,14 @@ ${intrLog}
         html += '<button onclick="rfsStreamView(\'tree\')" style="border:0;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;background:' + (_rfsState.streamView === 'tree' ? 'var(--c-accent);color:#fff' : 'transparent;color:var(--c-text2)') + ';">트리</button>';
         html += '</span>';
         html += '</div>';
-        // 진행 로그
-        html += '<div id="rfs-st-prog" style="' + (running ? '' : 'display:none;') + 'padding:10px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:12px;"><div id="rfs-st-stage" style="font-weight:700;color:var(--c-accent);font-size:12.5px;">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '') + '</div><div id="rfs-st-log" style="font-family:ui-monospace,monospace;font-size:10px;max-height:120px;overflow-y:auto;margin-top:6px;background:var(--c-paper);padding:5px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((_rfsState.streamLog || []).join('\n')) + '</div></div>';
+        // [r259] 진행 위젯 — 단계 인디케이터 + 실시간 로그 + 경과시간
+        html += '<div id="rfs-st-prog" style="' + (running ? '' : 'display:none;') + 'padding:10px 12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:12px;">';
+        html += '<div id="rfs-st-steps" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;">'
+            + [['tasks', '① 공정 Task'], ['order', '② 의존·스프린트'], ['stages', '③ STAGE'], ['wbs', '④ WBS']].map(function (p) {
+                return '<span data-phase="' + p[0] + '" style="padding:2px 9px;border-radius:20px;border:1px solid var(--c-border);background:var(--c-paper);color:var(--c-text3);">' + p[1] + '</span>';
+            }).join('') + '</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;"><div id="rfs-st-stage" style="font-weight:700;color:var(--c-accent);font-size:12.5px;flex:1;min-width:0;">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '') + '</div><span id="rfs-st-elapsed" style="font-size:11px;color:var(--c-text3);font-variant-numeric:tabular-nums;"></span></div>';
+        html += '<div id="rfs-st-log" style="font-family:ui-monospace,monospace;font-size:10px;max-height:120px;overflow-y:auto;margin-top:6px;background:var(--c-paper);padding:5px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((_rfsState.streamLog || []).join('\n')) + '</div></div>';
 
         if (st && !running) {
             // 액션 바
@@ -34352,6 +34358,21 @@ ${intrLog}
         rfsRenderStreamStep();
         function _log(m) { _rfsState.streamLog.push(m); if (_rfsState.streamLog.length > 240) _rfsState.streamLog = _rfsState.streamLog.slice(-240); var l = document.getElementById('rfs-st-log'); if (l) { l.textContent = _rfsState.streamLog.join('\n'); l.scrollTop = l.scrollHeight; } }
         function _stage(m) { var e = document.getElementById('rfs-st-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
+        var _phaseOrder = ['tasks', 'order', 'stages', 'wbs'];
+        function _markPhase(ph, done) {
+            var steps = document.querySelectorAll('#rfs-st-steps span[data-phase]');
+            var idx = _phaseOrder.indexOf(ph);
+            steps.forEach(function (s) {
+                var si = _phaseOrder.indexOf(s.getAttribute('data-phase'));
+                var active = (si === idx && !done), passed = (si < idx) || (si === idx && done);
+                s.style.background = active ? 'var(--c-accent)' : (passed ? 'var(--c-accent-soft)' : 'var(--c-paper)');
+                s.style.color = active ? '#fff' : (passed ? 'var(--c-accent)' : 'var(--c-text3)');
+                s.style.borderColor = (active || passed) ? 'var(--c-accent)' : 'var(--c-border)';
+                s.style.fontWeight = active ? '800' : '400';
+            });
+        }
+        var _t0 = Date.now();
+        var _tick = setInterval(function () { var e = document.getElementById('rfs-st-elapsed'); if (e) e.textContent = '⏱ ' + Math.floor((Date.now() - _t0) / 1000) + 's'; if (!_rfsState.streamRunning) clearInterval(_tick); }, 500);
         try {
             var res = await fetch(url + '/refinery/derive-stream', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -34375,14 +34396,14 @@ ${intrLog}
                     var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
                     try {
                         var ev = JSON.parse(data);
-                        if (ev.event === 'phase') { _stage(ev.message); _log('▶ ' + ev.message); }
+                        if (ev.event === 'phase') { _stage(ev.message); _log('▶ ' + ev.message); _markPhase(ev.phase); }
                         else if (ev.event === 'task_proposed') { _log('  + Task: ' + (ev.task && ev.task.title)); }
-                        else if (ev.event === 'tasks_done') { acc.tasks = ev.tasks || []; _log('① Task ' + acc.tasks.length); }
+                        else if (ev.event === 'tasks_done') { acc.tasks = ev.tasks || []; _log('① Task ' + acc.tasks.length); _markPhase('tasks', true); }
                         else if (ev.event === 'order_done') { acc.tasks = ev.tasks || acc.tasks; _log('② 정렬 (레벨 ' + (ev.levels || 0) + ')'); }
-                        else if (ev.event === 'sprints_done') { acc.sprints = ev.sprints || []; _log('② Sprint ' + acc.sprints.length + ' (용량 ' + ev.capacity_hours + 'h)'); }
+                        else if (ev.event === 'sprints_done') { acc.sprints = ev.sprints || []; _log('② Sprint ' + acc.sprints.length + ' (용량 ' + ev.capacity_hours + 'h)'); _markPhase('order', true); }
                         else if (ev.event === 'stage_proposed') { _log('  + STAGE: ' + (ev.stage && ev.stage.name)); }
-                        else if (ev.event === 'stages_done') { acc.stages = ev.stages || []; _log('③ STAGE ' + acc.stages.length); }
-                        else if (ev.event === 'wbs_done') { acc.wbs = ev.wbs || []; _log('④ WBS ' + acc.wbs.length); }
+                        else if (ev.event === 'stages_done') { acc.stages = ev.stages || []; _log('③ STAGE ' + acc.stages.length); _markPhase('stages', true); }
+                        else if (ev.event === 'wbs_done') { acc.wbs = ev.wbs || []; _log('④ WBS ' + acc.wbs.length); _markPhase('wbs', true); }
                         else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'error') { _log('❌ ' + ev.message); showToast('도출 실패: ' + ev.message, 'alert'); }
                         else if (ev.event === 'done') {
