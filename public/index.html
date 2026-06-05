@@ -32913,9 +32913,13 @@ ${intrLog}
             html += '<button class="aihub-gpu-btn" onclick="rfsRunDecompose()">🤖 대신 LLM으로 분해</button>';
             html += '</div></div>';
         }
-        if (nodeCount && !dc.running) {
-            html += '<div style="padding:12px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
-            html += '✓ 노드 ' + nodeCount + '개 확정됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">도출(Stream)로 →</button>';
+        if (nodeCount && !dc.running && !(st && (st.nodes || []).length)) {
+            // [r257] 확정 노드 — 재방문 시에도 구조를 펼쳐 볼 수 있게
+            var _ld = (_rfsState.current && _rfsState.current.last_decompose) || {};
+            var _method = _ld.method === 'mindmap' ? '🧠 마인드맵' : (_ld.method === 'logic' ? '🔍 로직' : '🤖 LLM');
+            html += '<div style="padding:12px 14px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);margin-bottom:12px;">';
+            html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-weight:700;">✓ 노드 ' + nodeCount + '개 확정</span><span style="font-size:11px;color:var(--c-text2);">' + _method + (_ld.cross_links ? ' · 개념관계 ' + _ld.cross_links : '') + '</span><button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:auto;">도출(Stream)로 →</button></div>';
+            html += '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12px;color:var(--c-text2);font-weight:700;">📂 확정된 구조 보기</summary><div style="margin-top:6px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:8px;">' + rfsStructureTreeHtml(_rfsState.current.nodes || []) + '</div></details>';
             html += '</div>';
         } else if (!dc.running && (_rfsState.current && _rfsState.current.last_decompose) && (_rfsState.current.last_decompose.leaf_count === 0)) {
             // [r228] 직전 분해가 0개였음 — 진단 표시
@@ -34019,29 +34023,33 @@ ${intrLog}
     function _rfsStreamCss() {
         if (document.getElementById('rfs-stream-css')) return;
         var st = document.createElement('style'); st.id = 'rfs-stream-css';
+        // [r257] 다크/라이트 웜 테마 적응 — 하드코딩 라이트색 제거, --c-* 변수 사용
         st.textContent =
-            '.rfs-st-flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;align-items:start}'
+            '.rfs-st-flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;align-items:start;position:relative}'
             + '.rfs-st-axis{display:flex;gap:7px;align-items:center;font-size:11px;color:var(--c-text3);margin:2px 0 8px;flex-wrap:wrap}'
-            + '.rfs-st-col{background:var(--c-card2,#fbf7ef);border:1px solid var(--c-border);border-radius:10px;padding:7px;min-height:120px}'
-            + '.rfs-st-col.wikicol{background:#f3eef4;border-color:#e3d6e6}'
+            + '.rfs-st-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:6;overflow:visible}'
+            + '.rfs-st-col{background:var(--c-sidebar-bg);border:1px solid var(--c-border);border-radius:10px;padding:7px;min-height:120px}'
+            + '.rfs-st-col.wikicol{background:color-mix(in srgb,var(--c-accent) 7%,var(--c-sidebar-bg));border-color:color-mix(in srgb,var(--c-accent) 28%,var(--c-border))}'
             + '.rfs-st-h{font-size:11.5px;font-weight:800;color:var(--c-text2);padding:3px 5px 7px;display:flex;gap:5px;align-items:center}'
             + '.rfs-st-h .n{margin-left:auto;font-weight:400;color:var(--c-text3)}'
-            + '.rfs-st-card{position:relative;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:7px 8px 7px 22px;margin-bottom:6px;cursor:pointer;font-size:12px;transition:opacity .12s,box-shadow .12s,border-color .12s}'
-            + '.rfs-st-card.wikic{background:#fbf6fb;border-color:#e6d8e8}'
-            + '.rfs-st-card .ck{position:absolute;left:6px;top:8px;margin:0}'
-            + '.rfs-st-card .ttl{font-weight:700;line-height:1.3}'
+            + '.rfs-st-card{position:relative;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:7px 8px 7px 22px;margin-bottom:6px;cursor:pointer;font-size:12px;color:var(--c-text);transition:opacity .12s,box-shadow .12s,border-color .12s}'
+            + '.rfs-st-card.cat{background:color-mix(in srgb,var(--c-accent) 6%,var(--c-card));font-weight:700}'
+            + '.rfs-st-card.wikic{background:color-mix(in srgb,var(--c-accent) 5%,var(--c-card));border-color:color-mix(in srgb,var(--c-accent) 22%,var(--c-border))}'
+            + '.rfs-st-card .ck{position:absolute;left:6px;top:8px;margin:0;accent-color:var(--c-accent)}'
+            + '.rfs-st-card .ttl{font-weight:700;line-height:1.3;color:var(--c-text)}'
             + '.rfs-st-card .mini{font-size:10px;color:var(--c-text3);margin-top:2px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}'
-            + '.rfs-st-flow.focusing .rfs-st-card:not(.hot){opacity:.26}'
-            + '.rfs-st-card.hot{border-color:var(--c-accent);box-shadow:0 0 0 2px rgba(201,100,66,.22)}'
-            + '.rfs-st-card.wikic.hot{border-color:#8a5f72;box-shadow:0 0 0 2px rgba(138,95,114,.22)}'
-            + '.rfs-st-tag{font-size:9.5px;padding:1px 6px;border-radius:10px;background:#e9eef0;color:#3c5a66;border:1px solid #cfdde2}'
-            + '.rfs-st-org{font-size:9.5px;color:var(--c-accent);background:var(--c-soft,#f1e6dd);border-radius:5px;padding:1px 5px}'
-            + '.rfs-st-dep{font-size:9.5px;color:#a85c3e}'
-            + '.rfs-st-tl{margin-top:5px;background:var(--c-card);border:1px solid var(--c-border);border-radius:7px;padding:5px}'
+            + '.rfs-st-flow.focusing .rfs-st-card:not(.hot){opacity:.22}'
+            + '.rfs-st-card.hot{border-color:var(--c-accent);box-shadow:0 0 0 2px var(--c-accent),0 2px 10px rgba(0,0,0,.18);z-index:7}'
+            + '.rfs-st-card.hot2{border-color:color-mix(in srgb,var(--c-accent) 55%,var(--c-border));box-shadow:0 0 0 1px color-mix(in srgb,var(--c-accent) 50%,transparent)}'
+            + '.rfs-st-card.hot3{border-color:color-mix(in srgb,var(--c-accent) 32%,var(--c-border))}'
+            + '.rfs-st-tag{font-size:9.5px;padding:1px 6px;border-radius:10px;background:var(--c-accent-soft);color:var(--c-accent);border:1px solid transparent;white-space:nowrap}'
+            + '.rfs-st-org{font-size:9.5px;color:var(--c-accent);background:var(--c-accent-soft);border-radius:5px;padding:1px 5px}'
+            + '.rfs-st-dep{font-size:9.5px;color:var(--c-accent);opacity:.85}'
+            + '.rfs-st-tl{margin-top:5px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:7px;padding:5px}'
             + '.rfs-st-tlrow{display:flex;align-items:center;gap:4px;margin:3px 0;font-size:9.5px}'
-            + '.rfs-st-tlrow .lab{width:62px;color:var(--c-text2);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-            + '.rfs-st-track{position:relative;flex:1;height:13px;background:#efe7d6;border-radius:4px}'
-            + '.rfs-st-bar{position:absolute;height:13px;border-radius:4px;background:var(--c-accent);opacity:.85}';
+            + '.rfs-st-tlrow .lab{width:64px;color:var(--c-text2);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+            + '.rfs-st-track{position:relative;flex:1;height:13px;background:var(--c-border);border-radius:4px}'
+            + '.rfs-st-bar{position:absolute;height:13px;border-radius:4px;background:var(--c-accent);opacity:.9;display:flex;align-items:center;padding:0 4px;color:#fff;font-size:8px;white-space:nowrap;overflow:hidden}';
         document.head.appendChild(st);
     }
 
@@ -34075,6 +34083,8 @@ ${intrLog}
             var w = taskWbs[t.id]; add(t.id, w); add(w, sp);
         });
         wiki.forEach(function (wk) { (wk.origin_node_ids || wk.node_ids || []).forEach(function (nid) { add(wk.id, nid); add(nid, wk.id); }); });
+        // [r257] 키워드 폴더 계층 — 폴더는 다른 열과 연결 안 되므로 자식(파일/폴더)을 강조
+        nodes.forEach(function (n) { if (n.parent_id) { add(n.parent_id, n.id); add(n.id, n.parent_id); } });
         return rel;
     }
 
@@ -34143,7 +34153,9 @@ ${intrLog}
         var nodeWiki = {}; wiki.forEach(function (wk) { (wk.origin_node_ids || wk.node_ids || []).forEach(function (nid) { (nodeWiki[nid] = nodeWiki[nid] || []).push(wk.id); }); });
         var nodeTasks = {}; tasks.forEach(function (t) { (nodeTasks[t.node_id] = nodeTasks[t.node_id] || []).push(t.id); });
 
-        var h = '<div class="rfs-st-axis"><b style="color:#8a5f72;">📚 위키=정의축</b><span>◂</span><b style="color:var(--c-accent);">🌲 키워드(허브)</b><span>▸</span><b style="color:#9a6a3a;">작업·시간: Task→Sprint→STAGE→WBS</b></div>';
+        // 자식 노드 매핑(폴더→자식 강조용)
+        var nodeKids = {}; nodes.forEach(function (n) { if (n.parent_id) (nodeKids[n.parent_id] = nodeKids[n.parent_id] || []).push(n.id); });
+        var h = '<div class="rfs-st-axis"><b style="color:var(--c-accent);opacity:.85;">📚 위키=정의축</b><span>◂</span><b style="color:var(--c-accent);">🌲 키워드(허브)</b><span>▸</span><b style="color:var(--c-text2);">작업·시간: Task→Sprint→STAGE→WBS</b></div>';
         h += '<div class="rfs-st-flow">';
         // 0 위키
         h += '<div class="rfs-st-col wikicol"><div class="rfs-st-h">📚 위키 (정의) <span class="n">' + wiki.length + '</span></div>';
@@ -34152,12 +34164,18 @@ ${intrLog}
             h += _rfsStreamCard('wiki', wk.id, '<div class="ttl">📄 ' + _annEsc(wk.title) + '</div>' + ((wk.outline || []).length ? '<div class="mini">목차 ' + wk.outline.length + '</div>' : ''), { wiki: true, nocheck: true, link: (wk.origin_node_ids || wk.node_ids || []) });
         });
         h += '</div>';
-        // 1 키워드
+        // 1 키워드 — 계층 들여쓰기(폴더>자식), 폴더는 자식 강조
         h += '<div class="rfs-st-col"><div class="rfs-st-h">🌲 키워드 <span class="n">' + nodes.length + '</span></div>';
-        nodes.forEach(function (n) {
+        var byParent = {}; nodes.forEach(function (n) { var p = n.parent_id || '__root'; (byParent[p] = byParent[p] || []).push(n); });
+        function renderNode(n, depth) {
             var isCat = n.kind === 'category';
-            h += _rfsStreamCard('node', n.id, '<div class="ttl">' + (isCat ? '📁 ' : '') + _annEsc(n.title) + '</div>', { nocheck: true, link: (nodeTasks[n.id] || []).concat(nodeWiki[n.id] || []) });
-        });
+            // 폴더 → 자식 노드 강조 / 잎 → Task·위키 강조
+            var link = isCat ? (nodeKids[n.id] || []) : (nodeTasks[n.id] || []).concat(nodeWiki[n.id] || []);
+            var pad = 'style="margin-left:' + (depth * 13) + 'px;' + (depth ? 'border-left:2px solid color-mix(in srgb,var(--c-accent) 22%,var(--c-border));' : '') + '"';
+            h += '<div class="rfs-st-card' + (isCat ? ' cat' : '') + '" data-id="' + _annEsc(n.id) + '" data-link="' + _annEsc(link.join(' ')) + '" ' + pad + '><div class="ttl">' + (isCat ? '📁 ' : '• ') + _annEsc(n.title) + '</div></div>';
+            (byParent[n.id] || []).forEach(function (c) { renderNode(c, depth + 1); });
+        }
+        (byParent['__root'] || []).forEach(function (n) { renderNode(n, 0); });
         h += '</div>';
         // 2 Task
         h += '<div class="rfs-st-col"><div class="rfs-st-h">✅ Task <span class="n">' + tasks.length + '</span></div>';
@@ -34198,7 +34216,8 @@ ${intrLog}
                 tl = '<div class="rfs-st-tl">' + segs.map(function (sg) {
                     var l = sg.start ? ((new Date(sg.start) - new Date(t0)) / span * 100) : 0;
                     var wd = (sg.start && sg.due) ? Math.max(8, (new Date(sg.due) - new Date(sg.start)) / span * 100) : 20;
-                    return '<div class="rfs-st-tlrow"><span class="lab">' + _annEsc(sg.id) + '</span><div class="rfs-st-track"><div class="rfs-st-bar" style="left:' + l + '%;width:' + wd + '%;"></div></div></div>';
+                    var lbl = sg.label || sg.id;
+                    return '<div class="rfs-st-tlrow"><span class="lab" title="' + _annEsc(lbl) + '">' + _annEsc(lbl) + '</span><div class="rfs-st-track"><div class="rfs-st-bar" style="left:' + l + '%;width:' + wd + '%;" title="' + _annEsc((sg.start || '') + '~' + (sg.due || '')) + '">' + _annEsc((sg.start || '').slice(5)) + '</div></div></div>';
                 }).join('') + '</div>';
             }
             h += _rfsStreamCard('wbs', w.id, '<div class="ttl">🏗 ' + _annEsc(w.title) + '</div><div class="mini">예상 ' + ((w.links || {})._estimated_days || 0) + 'd · 막대 ' + segs.length + '</div>' + tl,
@@ -34221,7 +34240,7 @@ ${intrLog}
             h += '<details open style="border:1px solid var(--c-border);border-radius:9px;background:var(--c-card);margin-bottom:8px;padding:4px;">';
             h += '<summary style="cursor:pointer;font-weight:700;font-size:13px;padding:7px 9px;list-style:none;">🎯 ' + _annEsc(stg.name) + ' <span style="font-size:10px;color:#fff;background:var(--c-accent);border-radius:10px;padding:1px 7px;">' + _annEsc(stg.type) + '</span> <span style="font-size:11px;color:var(--c-text3);font-weight:400;">Sprint ' + sps.length + '</span></summary>';
             sps.forEach(function (sp) {
-                h += '<details style="margin:6px 6px 6px 16px;background:var(--c-card2,#fbf7ef);border:1px solid var(--c-border);border-radius:8px;padding:3px;">';
+                h += '<details style="margin:6px 6px 6px 16px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:8px;padding:3px;">';
                 h += '<summary style="cursor:pointer;font-weight:700;font-size:12px;padding:6px 8px;list-style:none;">🏃 ' + _annEsc(sp.week_label || ('Sprint ' + sp.seq)) + ' <span style="font-size:10px;color:var(--c-text3);font-weight:400;">' + Math.round(sp.hours || 0) + 'h</span></summary>';
                 (sp.task_ids || []).forEach(function (tid) {
                     var t = taskById[tid]; if (!t) return;
@@ -34237,22 +34256,65 @@ ${intrLog}
         return h;
     }
 
+    // [r257] 연관도(BFS 거리) 강조 + 스플라인 연결선 — 직접/간접에 따라 색/굵기 차등
     function _rfsStreamBindHighlight() {
         var rel = _rfsStreamRelations();
         var flow = document.querySelector('#rfs-main .rfs-st-flow'); if (!flow) return;
         var cards = [].slice.call(flow.querySelectorAll('.rfs-st-card'));
+        var byId = {}; cards.forEach(function (c) { byId[c.dataset.id] = c; });
+        // SVG 오버레이(연결선)
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'rfs-st-svg'); flow.appendChild(svg);
+        function bfs(startId, maxd) {
+            var dist = {}; dist[startId] = 0; var q = [startId];
+            while (q.length) {
+                var cur = q.shift(); if (dist[cur] >= maxd) continue;
+                (rel[cur] || []).forEach(function (nx) { if (dist[nx] === undefined) { dist[nx] = dist[cur] + 1; q.push(nx); } });
+            }
+            return dist;
+        }
+        function clearFx() {
+            flow.classList.remove('focusing');
+            cards.forEach(function (c) { c.classList.remove('hot', 'hot2', 'hot3'); });
+            while (svg.firstChild) svg.removeChild(svg.firstChild);
+        }
+        function draw(startId, dist) {
+            var fr = flow.getBoundingClientRect();
+            var a = byId[startId]; if (!a) return;
+            var ar = a.getBoundingClientRect();
+            var ax = ar.left - fr.left + ar.width / 2, ay = ar.top - fr.top + ar.height / 2;
+            // 거리 1~2 까지만 선(과밀 방지). 가까울수록 굵고 진하게.
+            Object.keys(dist).forEach(function (id) {
+                var d = dist[id]; if (d < 1 || d > 2) return;
+                var b = byId[id]; if (!b) return;
+                var br = b.getBoundingClientRect();
+                var bx = br.left - fr.left + br.width / 2, by = br.top - fr.top + br.height / 2;
+                var mx = (ax + bx) / 2;
+                var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', 'M' + ax + ',' + ay + ' C' + mx + ',' + ay + ' ' + mx + ',' + by + ' ' + bx + ',' + by);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'var(--c-accent)');
+                path.setAttribute('stroke-width', d === 1 ? '2.4' : '1.2');
+                path.setAttribute('stroke-opacity', d === 1 ? '0.9' : '0.42');
+                if (d === 2) path.setAttribute('stroke-dasharray', '4 3');
+                path.setAttribute('stroke-linecap', 'round');
+                svg.appendChild(path);
+            });
+        }
         cards.forEach(function (card) {
             card.addEventListener('mouseenter', function () {
-                var ids = [card.dataset.id].concat((card.dataset.link || '').split(' ').filter(Boolean));
-                // 한 홉 + 관계도 확장(키워드 hub 양축)
-                (rel[card.dataset.id] || []).forEach(function (x) { if (ids.indexOf(x) < 0) ids.push(x); });
+                var dist = bfs(card.dataset.id, 3);
                 flow.classList.add('focusing');
-                cards.forEach(function (c) { c.classList.toggle('hot', ids.indexOf(c.dataset.id) >= 0); });
+                cards.forEach(function (c) {
+                    var d = dist[c.dataset.id];
+                    c.classList.toggle('hot', d === 0 || d === 1);
+                    c.classList.toggle('hot2', d === 2);
+                    c.classList.toggle('hot3', d === 3);
+                });
+                while (svg.firstChild) svg.removeChild(svg.firstChild);
+                draw(card.dataset.id, dist);
             });
-            card.addEventListener('mouseleave', function () {
-                flow.classList.remove('focusing');
-                cards.forEach(function (c) { c.classList.remove('hot'); });
-            });
+            card.addEventListener('mouseleave', clearFx);
         });
     }
 
