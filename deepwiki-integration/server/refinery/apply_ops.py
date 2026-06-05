@@ -16,6 +16,7 @@ from typing import List, Dict, Any, Optional
 from supabase_store import get_store
 from ._author_guard import require_author, history_entry
 from .linker import extract_user_sections, reinject_user_sections
+from .wbsize import compute_sprint_window  # [r253] 스프린트 날짜 계산
 
 
 def _doc_id() -> str:
@@ -417,6 +418,170 @@ def apply_work(
         "wbs_created": created_wbs,
         "tasks_created": created_tasks,
         "issues_created": created_issues,
+        "warnings": warnings,
+    }
+
+
+def _guarded_insert(store, table: str, row: Dict[str, Any], optional_cols: set, warnings: List[str], label: str) -> bool:
+    """[r253] write 가드 — 신규 컬럼 미생성 환경에서도 안전. 실패 시 optional 컬럼 제거 후 재시도."""
+    try:
+        store.client.table(table).insert(row).execute()
+        return True
+    except Exception:
+        slim = {k: v for k, v in row.items() if k not in optional_cols}
+        try:
+            store.client.table(table).insert(slim).execute()
+            warnings.append(f"{label}: 선택 컬럼 미생성 추정 → 일부 제외 저장({'/'.join(sorted(optional_cols))}). 마이그레이션 SQL 실행 권장")
+            return True
+        except Exception as e2:
+            warnings.append(f"{label} 생성 실패: {e2}")
+            return False
+
+
+def apply_stream(
+    *,
+    session: Dict[str, Any],
+    stages: List[Dict[str, Any]],
+    sprints: List[Dict[str, Any]],
+    tasks: List[Dict[str, Any]],
+    wbs: List[Dict[str, Any]],
+    user_id: str,
+    project_id: Optional[str] = None,
+    stream_id: Optional[str] = None,
+    start_date: str = "2026-01-05",
+    sprint_weeks: int = 2,
+    default_cat_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """[r253] 도출 Stream(STAGE/Sprint/Task/WBS) 채택분을 실제 테이블에 생성.
+
+    제안 id → 실제 id 리매핑(의존·세그먼트 참조 보존), 신규 컬럼은 write 가드.
+    선택 채택: 넘어온 항목만 생성(프론트가 필터). 빈 배열이면 그 종류는 건너뜀.
+    """
+    require_author(user_id, "Stream 생성")
+    store = get_store()
+    now = _iso()
+    sid_session = session.get("id")
+    stream_id = stream_id or f"stream_{_now_ms()}"
+    warnings: List[str] = []
+
+    # ── 0. id/seq 매핑 사전 발급
+    stage_map = {st.get("id"): _stage_id() for st in stages}          # 제안 stage id → 실제
+    sprint_seq_map = {s.get("seq"): _sprint_id() for s in sprints}    # seq → 실제 sprint id
+    task_map = {t.get("id"): _task_id() for t in tasks}              # 제안 task id → 실제
+    wbs_map = {w.get("id"): _wbs_id() for w in wbs}                  # 제안 wbs id → 실제
+    # seq → 소속 stage(실제 id)
+    seq_to_stage = {}
+    for st in stages:
+        for sq in (st.get("sprint_seqs") or []):
+            seq_to_stage[int(sq)] = stage_map.get(st.get("id"))
+    # task 제안 id → 소속 sprint seq
+    task_seq = {}
+    for s in sprints:
+        for tid in (s.get("task_ids") or []):
+            task_seq[tid] = s.get("seq")
+
+    created = {"stages": [], "sprints": [], "tasks": [], "wbs": []}
+
+    # ── 1. STAGE → product_stages
+    for st in stages:
+        new_id = stage_map[st.get("id")]
+        row = {
+            "id": new_id, "project_id": project_id,
+            "name": st.get("name") or "STAGE", "type": st.get("type") or "MVP",
+            "goal": st.get("goal") or "", "lifecycle": st.get("lifecycle") or "build",
+            "tags": st.get("tags") or [], "tag_meta": st.get("tag_meta") or {},
+            "status": "active", "sort_order": _now_ms(),
+            "stream_id": stream_id,
+            "created_by": user_id, "created_at": now, "updated_at": now,
+        }
+        if _guarded_insert(store, "product_stages", row, {"stream_id"}, warnings, f"STAGE({st.get('name')})"):
+            created["stages"].append({"id": new_id, "name": st.get("name")})
+
+    # ── 2. Sprint → sprints (날짜·STAGE 연결·seq)
+    for s in sprints:
+        seq = s.get("seq")
+        new_id = sprint_seq_map[seq]
+        win = compute_sprint_window(seq, start_date, sprint_weeks)
+        row = {
+            "id": new_id, "project_id": project_id,
+            "week_label": s.get("week_label") or f"Sprint {seq}",
+            "goal": s.get("goal") or "", "status": "planning",
+            "intrusion_count": 0, "intrusion_log": [], "carryover_from_previous": [],
+            "milestone_criteria": [], "start_date": win["start"], "end_date": win["due"],
+            "closed_at": None, "history": [], "participants": [],
+            "stage_id": seq_to_stage.get(seq), "seq": seq, "stream_id": stream_id,
+        }
+        if _guarded_insert(store, "sprints", row, {"stage_id", "seq", "stream_id"}, warnings, f"Sprint({seq})"):
+            created["sprints"].append({"id": new_id, "seq": seq})
+
+    # ── 3. Task → tasks (공정태그·출처노드·의존·스프린트 연결)
+    for t in tasks:
+        new_id = task_map[t.get("id")]
+        seq = task_seq.get(t.get("id"))
+        deps_new = [task_map.get(d) for d in (t.get("depends_on") or []) if task_map.get(d)]
+        row = {
+            "id": new_id, "project_id": project_id,
+            "title": t.get("title") or "작업", "description": t.get("desc") or t.get("description") or "",
+            "details": "", "status": "pending", "zone": "shelf",
+            "priority": "p2",
+            "sprint_id": sprint_seq_map.get(seq), "cat_id": default_cat_id,
+            "due_date": None, "assignees": [], "linked_doc_ids": [],
+            "process_tag": t.get("process_tag") or "", "origin_node_id": t.get("node_id"),
+            "depends_on": deps_new, "stream_id": stream_id,
+            "created_by": user_id, "updated_at": now,
+        }
+        if _guarded_insert(store, "tasks", row, {"process_tag", "origin_node_id", "depends_on", "stream_id"}, warnings, f"Task({t.get('title')})"):
+            created["tasks"].append({"id": new_id, "title": t.get("title")})
+
+    # ── 4. WBS → wbs_nodes (세그먼트 sprint/task/deps 실제 id 리매핑)
+    for w in wbs:
+        new_id = wbs_map[w.get("id")]
+        links = dict(w.get("links") or {})
+        segs = []
+        for seg in (links.get("_segments") or []):
+            seg_id = seg.get("id")
+            seq = None
+            if isinstance(seg_id, str) and seg_id.startswith("seg_"):
+                try:
+                    seq = int(seg_id.split("_")[1])
+                except Exception:
+                    seq = None
+            seg_sprint = [sprint_seq_map[seq]] if seq in sprint_seq_map else []
+            seg_tasks = [task_map.get(x) for x in (seg.get("taskIds") or []) if task_map.get(x)]
+            seg_deps = []
+            for d in (seg.get("deps") or []):
+                nn = wbs_map.get(d.get("n"), d.get("n"))
+                seg_deps.append({"n": nn, "s": d.get("s")})
+            segs.append({
+                "id": seg_id, "start": seg.get("start"), "due": seg.get("due"),
+                "sprintIds": seg_sprint, "taskIds": seg_tasks, "issueIds": [],
+                "deps": seg_deps, "color": None,
+            })
+        new_links = {
+            "_segments": segs,
+            "taskIds": [task_map.get(x) for x in (links.get("taskIds") or []) if task_map.get(x)],
+            "sprintIds": [sprint_seq_map[sq] for sq in (w.get("stage_seq_ref") or []) if sq in sprint_seq_map],
+            "_estimated_days": links.get("_estimated_days"),
+            "node_ids": links.get("node_ids") or [],
+            "_stage_id": stage_map.get(links.get("_stage_id"), links.get("_stage_id")),
+            "_source_session": sid_session,
+        }
+        parent = wbs_map.get(w.get("parent_id"), w.get("parent_id"))
+        row = {
+            "id": new_id, "project_id": project_id, "parent_id": parent,
+            "title": w.get("title") or "WBS", "description": w.get("description") or "",
+            "status": "todo", "progress": 0, "links": new_links,
+            "attachments": [], "assignees": [], "owner_user_id": user_id,
+            "created_by": user_id, "sort_order": _now_ms(),
+            "stream_id": stream_id, "created_at": now, "updated_at": now,
+        }
+        if _guarded_insert(store, "wbs_nodes", row, {"stream_id"}, warnings, f"WBS({w.get('title')})"):
+            created["wbs"].append({"id": new_id, "title": w.get("title")})
+
+    return {
+        "stream_id": stream_id,
+        "stages_created": created["stages"], "sprints_created": created["sprints"],
+        "tasks_created": created["tasks"], "wbs_created": created["wbs"],
         "warnings": warnings,
     }
 

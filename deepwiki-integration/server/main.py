@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r249"
+SERVER_REVISION = "r253"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -684,10 +684,13 @@ try:
     )
     from refinery.linker import link_files as _rfs_link
     from refinery.work_proposer import propose_work as _rfs_propose
-    from refinery.apply_ops import apply_tree as _rfs_apply_tree, apply_work as _rfs_apply_work
+    from refinery.apply_ops import apply_tree as _rfs_apply_tree, apply_work as _rfs_apply_work, apply_stream as _rfs_apply_stream
     from refinery.structure import analyze_structure as _rfs_analyze  # [r246] 로직 우선 분해
     from refinery.intake import propose_intake as _rfs_intake  # [r247] 들여오기 추천
     from refinery.wiki_compose import compose_wiki_body as _rfs_wiki_body  # [r247] 위키 본문 작성
+    from refinery.pipeline import derive_stream as _rfs_derive_stream  # [r253] 도출 파이프라인
+    from refinery.from_mindmap import branches_to_nodes as _rfs_mm_to_nodes  # [r253] 마인드맵→노드
+    from refinery.context import build_project_context as _rfs_build_ctx  # [r253] 프로젝트 컨텍스트
 except Exception as _rfs_imp_err:
     import traceback as _rfs_tb
     _REFINERY_OK = False
@@ -707,6 +710,7 @@ except Exception as _rfs_imp_err:
     _rfs_link = _rfs_propose = _rfs_apply_tree = _rfs_apply_work = _rfs_unavailable
     _rfs_analyze = _rfs_unavailable
     _rfs_intake = _rfs_wiki_body = _rfs_unavailable
+    _rfs_derive_stream = _rfs_apply_stream = _rfs_mm_to_nodes = _rfs_build_ctx = _rfs_unavailable
 
 
 def _refinery_guard():
@@ -838,6 +842,38 @@ class RefineryComposeWikiBodyRequest(BaseModel):
     nodes: List[Dict[str, Any]] = []
     vault_docs: List[Dict[str, Any]] = []
     model: Optional[str] = None
+
+
+class RefineryDeriveStreamRequest(BaseModel):
+    """[r253] 도출 파이프라인(B~E) — 키워드 노드 → Task/Sprint/STAGE/WBS(SSE)."""
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    nodes: List[Dict[str, Any]] = []
+    cross_links: List[Dict[str, Any]] = []
+    pm_tax: List[Dict[str, Any]] = []          # 프론트 PM_TAX(공정태그)
+    project_state: Dict[str, Any] = {}         # {stages,wbs,sprints,categories} — 컨텍스트
+    capacity_hours: float = 80.0
+    strict: bool = False
+    rule: str = "auto"
+    start_date: str = "2026-01-05"
+    sprint_weeks: int = 2
+    model: Optional[str] = None
+
+
+class RefineryApplyStreamRequest(BaseModel):
+    """[r253] 도출 Stream 채택분 → 실제 테이블 생성."""
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    stream_id: Optional[str] = None
+    stages: List[Dict[str, Any]] = []
+    sprints: List[Dict[str, Any]] = []
+    tasks: List[Dict[str, Any]] = []
+    wbs: List[Dict[str, Any]] = []
+    start_date: str = "2026-01-05"
+    sprint_weeks: int = 2
+    default_cat_id: Optional[str] = None
 
 
 @app.get("/refinery/sessions")
@@ -1092,6 +1128,62 @@ async def refinery_compose_wiki_body(req: RefineryComposeWikiBodyRequest):
         session=s, user_id=req.user_id, model=req.model,
     )
     return _sse_indexer(gen, busy_kind="refinery_wiki_body")
+
+
+@app.post("/refinery/derive-stream")
+async def refinery_derive_stream(req: RefineryDeriveStreamRequest):
+    """[r253] 도출 파이프라인 — 키워드 노드 → Task→Sprint→STAGE→WBS (SSE)."""
+    require_author(req.user_id, "도출 파이프라인")
+    if not _REFINERY_OK:
+        raise HTTPException(503, f"연구 정련소 모듈 미로드: {_REFINERY_ERR}")
+    if _busy_active():
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    ctx = _rfs_build_ctx({**(req.project_state or {}), "pm_tax": req.pm_tax})
+    gen = _rfs_derive_stream(
+        nodes=req.nodes, cross_links=req.cross_links, pm_tax=req.pm_tax, context=ctx,
+        capacity_hours=req.capacity_hours, strict=req.strict, rule=req.rule,
+        start_date=req.start_date, sprint_weeks=req.sprint_weeks, model=req.model,
+    )
+    return _sse_indexer(gen, busy_kind="refinery_derive_stream")
+
+
+@app.post("/refinery/apply-stream")
+async def refinery_apply_stream(req: RefineryApplyStreamRequest):
+    """[r253] 도출 Stream 채택분 → 실제 STAGE/Sprint/Task/WBS 생성."""
+    require_author(req.user_id, "Stream 생성")
+    s = _rfs.get_session(req.session_id)
+    if not s:
+        raise HTTPException(404, "세션 없음")
+    result = _rfs_apply_stream(
+        session=s, stages=req.stages, sprints=req.sprints, tasks=req.tasks, wbs=req.wbs,
+        user_id=req.user_id, project_id=req.project_id, stream_id=req.stream_id,
+        start_date=req.start_date, sprint_weeks=req.sprint_weeks, default_cat_id=req.default_cat_id,
+    )
+    # 세션 이력에 생성 id 누적(generated_tree 에 stash — r249 패턴)
+    _gt = dict(s.get("generated_tree") or {})
+    _gt["stream_id"] = result.get("stream_id")
+    _gt["generated_stage_ids"] = (_gt.get("generated_stage_ids") or []) + [x["id"] for x in result.get("stages_created", [])]
+    _gt["generated_sprint_ids"] = (_gt.get("generated_sprint_ids") or []) + [x["id"] for x in result.get("sprints_created", [])]
+    try:
+        _rfs.update_session(
+            req.session_id,
+            {
+                "generated_wbs_ids": (s.get("generated_wbs_ids") or []) + [w["id"] for w in result.get("wbs_created", [])],
+                "generated_task_ids": (s.get("generated_task_ids") or []) + [t["id"] for t in result.get("tasks_created", [])],
+                "generated_tree": _gt,
+            },
+            user_id=req.user_id, action="stream_applied",
+            detail=(
+                f"STAGE {len(result.get('stages_created', []))} · Sprint {len(result.get('sprints_created', []))} · "
+                f"Task {len(result.get('tasks_created', []))} · WBS {len(result.get('wbs_created', []))}"
+            ),
+        )
+    except Exception as e:
+        result.setdefault("warnings", []).append(f"세션 이력 갱신 실패(생성은 완료): {e}")
+    return result
 
 
 @app.get("/refinery/schema-sql")

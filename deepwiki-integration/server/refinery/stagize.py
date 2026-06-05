@@ -122,6 +122,20 @@ async def stagize(
         rb = group_sprints_by_rule(sprints, tasks, rule if rule != "auto" else "all_one")
         groups = [{"name": "", "type": "MVP", "lifecycle": "build", "goal": "", "sprint_seqs": g} for g in rb]
 
+    # [r253] 전체 커버리지 보장 — LLM 이 누락한 스프린트가 STAGE/WBS 에서 고아되지 않게
+    all_seqs = sorted(int(s.get("seq")) for s in sprints if s.get("seq") is not None)
+    covered = set()
+    for g in groups:
+        covered |= {int(x) for x in (g.get("sprint_seqs") or []) if str(x).strip().isdigit()}
+    missing = [sq for sq in all_seqs if sq not in covered]
+    if missing:
+        if groups:
+            last = groups[-1]
+            last["sprint_seqs"] = sorted(set([int(x) for x in (last.get("sprint_seqs") or []) if str(x).strip().isdigit()] + missing))
+            yield {"event": "warn", "message": f"미배정 스프린트 {len(missing)}개 → 마지막 STAGE 에 편입"}
+        else:
+            groups = [{"name": "", "type": "MVP", "lifecycle": "build", "goal": "", "sprint_seqs": all_seqs}]
+
     stages_out: List[Dict[str, Any]] = []
     for idx, g in enumerate(groups):
         seqs = [int(x) for x in (g.get("sprint_seqs") or []) if str(x).strip().isdigit()]
