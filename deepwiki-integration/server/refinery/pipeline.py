@@ -12,6 +12,7 @@ from .order import infer_deps_from_cross_links, topo_order
 from .sprintize import pack_sprints
 from .stagize import stagize
 from .wbsize import build_wbs
+from .wiki_structure import derive_wiki_structure
 
 
 async def derive_stream(
@@ -25,9 +26,11 @@ async def derive_stream(
     rule: str = "auto",
     start_date: str = "2026-01-05",
     sprint_weeks: int = 2,
+    wiki_tax: Optional[List[Dict[str, Any]]] = None,
+    with_wiki: bool = True,
     model: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
-    """전체 도출 파이프라인(SSE)."""
+    """전체 도출 파이프라인(SSE). with_wiki=True 면 위키 구조까지 연속 도출."""
     # ── B. 공정태그 Task 도출
     yield {"event": "phase", "phase": "tasks", "message": "① 공정태그 Task 도출"}
     tasks: List[Dict[str, Any]] = []
@@ -74,8 +77,19 @@ async def derive_stream(
     wbs = build_wbs(stages=stages, sprints=sprints, tasks=tasks, start_date=start_date, sprint_weeks=sprint_weeks)
     yield {"event": "wbs_done", "wbs": wbs, "count": len(wbs)}
 
+    # ── F. 위키 구조 (연속 도출 — 확인·체크용). [r263]
+    wiki_docs: List[Dict[str, Any]] = []
+    if with_wiki:
+        yield {"event": "phase", "phase": "wiki", "message": "⑤ 위키 구조 도출(연속)"}
+        async for ev in derive_wiki_structure(nodes=nodes, wiki_tax=wiki_tax, context=context, model=model):
+            if ev.get("event") == "done":
+                wiki_docs = ev.get("docs") or []
+            elif ev.get("event") in ("stage", "doc_proposed", "warn"):
+                yield {**ev, "phase": "wiki"}
+        yield {"event": "wiki_done", "wiki": wiki_docs, "count": len(wiki_docs)}
+
     yield {
         "event": "done",
-        "tasks": tasks, "sprints": sprints, "stages": stages, "wbs": wbs,
-        "summary": f"Task {len(tasks)} · Sprint {len(sprints)} · STAGE {len(stages)} · WBS {len(wbs)}",
+        "tasks": tasks, "sprints": sprints, "stages": stages, "wbs": wbs, "wiki": wiki_docs,
+        "summary": f"Task {len(tasks)} · Sprint {len(sprints)} · STAGE {len(stages)} · WBS {len(wbs)} · 위키 {len(wiki_docs)}",
     }

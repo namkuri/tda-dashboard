@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r262';
+        var _AHUB_FRONT_REV = 'r263';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31749,7 +31749,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r262';
+    var _RFS_FRONT_REV = 'r263';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -34115,7 +34115,7 @@ ${intrLog}
         // [r259] 진행 위젯 — 단계 인디케이터 + 실시간 로그 + 경과시간
         html += '<div id="rfs-st-prog" style="' + (running ? '' : 'display:none;') + 'padding:10px 12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:12px;">';
         html += '<div id="rfs-st-steps" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;">'
-            + [['tasks', '① 공정 Task'], ['order', '② 의존·스프린트'], ['stages', '③ STAGE'], ['wbs', '④ WBS']].map(function (p) {
+            + [['tasks', '① 공정 Task'], ['order', '② 의존·스프린트'], ['stages', '③ STAGE'], ['wbs', '④ WBS'], ['wiki', '⑤ 위키 구조']].map(function (p) {
                 return '<span data-phase="' + p[0] + '" style="padding:2px 9px;border-radius:20px;border:1px solid var(--c-border);background:var(--c-paper);color:var(--c-text3);">' + p[1] + '</span>';
             }).join('') + '</div>';
         html += '<div style="display:flex;align-items:center;gap:8px;"><div id="rfs-st-stage" style="font-weight:700;color:var(--c-accent);font-size:12.5px;flex:1;min-width:0;">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '') + '</div><span id="rfs-st-elapsed" style="font-size:11px;color:var(--c-text3);font-variant-numeric:tabular-nums;"></span></div>';
@@ -34358,7 +34358,7 @@ ${intrLog}
         rfsRenderStreamStep();
         function _log(m) { _rfsState.streamLog.push(m); if (_rfsState.streamLog.length > 240) _rfsState.streamLog = _rfsState.streamLog.slice(-240); var l = document.getElementById('rfs-st-log'); if (l) { l.textContent = _rfsState.streamLog.join('\n'); l.scrollTop = l.scrollHeight; } }
         function _stage(m) { var e = document.getElementById('rfs-st-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
-        var _phaseOrder = ['tasks', 'order', 'stages', 'wbs'];
+        var _phaseOrder = ['tasks', 'order', 'stages', 'wbs', 'wiki'];
         function _markPhase(ph, done) {
             var steps = document.querySelectorAll('#rfs-st-steps span[data-phase]');
             var idx = _phaseOrder.indexOf(ph);
@@ -34379,8 +34379,8 @@ ${intrLog}
                 body: JSON.stringify({
                     session_id: cur.id, user_id: rfsCurrentUser(), project_id: activeProjectId,
                     nodes: cur.nodes || [], cross_links: cur.cross_links || _rfsState.streamCrossLinks || [],
-                    pm_tax: _rfsPmTax(), project_state: _rfsProjState(),
-                    capacity_hours: cfg.capacity_hours, sprint_weeks: cfg.sprint_weeks, rule: cfg.rule, strict: !!cfg.strict, model: model,
+                    pm_tax: _rfsPmTax(), wiki_tax: (typeof WIKI_TAX !== 'undefined' ? WIKI_TAX : []), project_state: _rfsProjState(),
+                    capacity_hours: cfg.capacity_hours, sprint_weeks: cfg.sprint_weeks, rule: cfg.rule, strict: !!cfg.strict, with_wiki: true, model: model,
                 }),
             });
             if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0, 120)); }
@@ -34404,12 +34404,16 @@ ${intrLog}
                         else if (ev.event === 'stage_proposed') { _log('  + STAGE: ' + (ev.stage && ev.stage.name)); }
                         else if (ev.event === 'stages_done') { acc.stages = ev.stages || []; _log('③ STAGE ' + acc.stages.length); _markPhase('stages', true); }
                         else if (ev.event === 'wbs_done') { acc.wbs = ev.wbs || []; _log('④ WBS ' + acc.wbs.length); _markPhase('wbs', true); }
+                        else if (ev.event === 'doc_proposed') { _log('  + 위키: ' + (ev.doc && ev.doc.title)); }
+                        else if (ev.event === 'wiki_done') { _rfsState.wikiPlan = { docs: ev.wiki || [] }; _rfsState.wikiPlanSel = null; _log('⑤ 위키 ' + (ev.wiki || []).length); _markPhase('wiki', true); }
                         else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'error') { _log('❌ ' + ev.message); showToast('도출 실패: ' + ev.message, 'alert'); }
                         else if (ev.event === 'done') {
                             acc.tasks = ev.tasks || acc.tasks; acc.sprints = ev.sprints || acc.sprints;
                             acc.stages = ev.stages || acc.stages; acc.wbs = ev.wbs || acc.wbs;
-                            _rfsState.stream = acc; _log('✅ ' + (ev.summary || ''));
+                            _rfsState.stream = acc;
+                            if (ev.wiki && ev.wiki.length) { _rfsState.wikiPlan = { docs: ev.wiki }; }
+                            _log('✅ ' + (ev.summary || ''));
                         }
                     } catch (e) {}
                 }

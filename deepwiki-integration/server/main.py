@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r262"
+SERVER_REVISION = "r263"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -860,12 +860,14 @@ class RefineryDeriveStreamRequest(BaseModel):
     nodes: List[Dict[str, Any]] = []
     cross_links: List[Dict[str, Any]] = []
     pm_tax: List[Dict[str, Any]] = []          # 프론트 PM_TAX(공정태그)
+    wiki_tax: List[Dict[str, Any]] = []        # [r263] 프론트 WIKI_TAX — 연속 위키 도출
     project_state: Dict[str, Any] = {}         # {stages,wbs,sprints,categories} — 컨텍스트
     capacity_hours: float = 80.0
     strict: bool = False
     rule: str = "auto"
     start_date: str = "2026-01-05"
     sprint_weeks: int = 2
+    with_wiki: bool = True
     model: Optional[str] = None
 
 
@@ -1172,7 +1174,8 @@ async def refinery_derive_stream(req: RefineryDeriveStreamRequest):
     gen = _rfs_derive_stream(
         nodes=req.nodes, cross_links=req.cross_links, pm_tax=req.pm_tax, context=ctx,
         capacity_hours=req.capacity_hours, strict=req.strict, rule=req.rule,
-        start_date=req.start_date, sprint_weeks=req.sprint_weeks, model=req.model,
+        start_date=req.start_date, sprint_weeks=req.sprint_weeks,
+        wiki_tax=req.wiki_tax, with_wiki=req.with_wiki, model=req.model,
     )
     return _sse_indexer(gen, busy_kind="refinery_derive_stream")
 
