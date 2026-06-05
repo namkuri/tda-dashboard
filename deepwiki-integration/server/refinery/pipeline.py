@@ -7,6 +7,7 @@
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 from .derive_tasks import derive_tasks
+from .deps import infer_tech_deps
 from .order import infer_deps_from_cross_links, topo_order
 from .sprintize import pack_sprints
 from .stagize import stagize
@@ -37,9 +38,18 @@ async def derive_stream(
             yield {**ev, "phase": "tasks"}
     yield {"event": "tasks_done", "tasks": tasks, "count": len(tasks)}
 
-    # ── C. 의존 → 순서 + Sprint 분할 (순수 로직)
-    yield {"event": "phase", "phase": "order", "message": "② 의존도 정렬 + 스프린트 분할"}
+    # ── C. 의존 → 순서 + Sprint 분할
+    yield {"event": "phase", "phase": "order", "message": "② 기술 의존도 추론 + 스프린트 분할"}
+    # [r260] 기술 의존도(LLM) — Task 간 선후관계 직접 추론 후 cross_links 보강
+    tech_edges = 0
+    async for ev in infer_tech_deps(tasks=tasks, model=model):
+        if ev.get("event") == "done":
+            tech_edges = ev.get("edges", 0)
+        elif ev.get("event") in ("stage", "warn"):
+            yield {**ev, "phase": "order"}
     infer_deps_from_cross_links(tasks, cross_links or [])
+    if tech_edges:
+        yield {"event": "stage", "phase": "order", "message": f"기술 의존 {tech_edges}건 반영"}
     ordered = topo_order(tasks)
     tasks = ordered["tasks"]
     if ordered.get("cycles"):
