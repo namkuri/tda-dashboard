@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r245';
+        var _AHUB_FRONT_REV = 'r246';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31704,7 +31704,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r245';
+    var _RFS_FRONT_REV = 'r246';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31776,6 +31776,11 @@ ${intrLog}
             if (res.status === 404) { show('⚠ 백엔드에 <b>/meetings</b> 라우트 없음 — 백엔드 git pull + 재시작 필요', 'rgba(245,158,11,.2)', '#92400e'); return; }
             var j = await res.json();
             if (!j.ok) { show('⚠ 회의록 모듈 미로드 — ' + _annEsc(j.error || '') + ' (백엔드 재시작 필요)', 'rgba(245,158,11,.2)', '#92400e'); return; }
+            // [r246] 리비전 불일치 — 구버전 백엔드면 가져오기 응답이 옛 SSE 라 JSON 파싱 실패함
+            if (j.revision && typeof _RFS_FRONT_REV !== 'undefined' && j.revision !== _RFS_FRONT_REV) {
+                show('⚠ 백엔드 <b>' + _annEsc(j.revision) + '</b> / 프론트 <b>' + _RFS_FRONT_REV + '</b> 불일치 — 서버에서 <code>git pull</code> 후 <b>백엔드(run_dev.bat) 재시작</b> 필요(가져오기가 동작하지 않음).', 'rgba(245,158,11,.22)', '#92400e');
+                return;
+            }
             var stt = j.stt || {};
             if (!stt.faster_whisper || !stt.ffmpeg) { show('⚠ STT 준비 안 됨 — ' + _annEsc(stt.error || 'faster-whisper/ffmpeg 설치 필요') + '. 서버에 <code>pip install faster-whisper</code> + <code>ffmpeg</code> 설치 후 재시작', 'rgba(245,158,11,.2)', '#92400e'); return; }
             banner.style.display = 'none';
@@ -31872,8 +31877,8 @@ ${intrLog}
                 var uj = await ur.json(); uploadToken = uj.upload_token;
                 log('  ↳ 업로드 완료');
             }
-            // [r244] 백그라운드 작업 시작 — 즉시 반환. 창 닫아도 끝까지 처리됨.
-            stage('백그라운드 처리 시작…');
+            // [r246] 백엔드에 처리 시작 요청 — 즉시 반환 기대. 응답이 옛 SSE(text/event-stream)면 구버전 백엔드.
+            log('▶ 백엔드에 처리 시작 요청'); stage('백엔드에 처리 시작 요청…');
             var res = await fetch(url + '/meetings/import', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({user_id: rfsCurrentUser(), project_id: activeProjectId || null, title: title.trim(),
@@ -31883,16 +31888,30 @@ ${intrLog}
             if (res.status === 503) { var e5 = await res.text(); throw new Error('회의록 모듈 미로드: ' + e5.slice(0, 120)); }
             if (res.status === 409) { throw new Error('이미 처리 중인 작업이 있습니다. 끝난 뒤 다시 시도하세요.'); }
             if (!res.ok) { var et = await res.text(); throw new Error('HTTP ' + res.status + ' ' + et.slice(0, 150)); }
-            var d = await res.json();
+            // [r246] 응답 형식 점검 — 구버전 백엔드(SSE)면 JSON 파싱 깨짐. 명확히 안내.
+            var _ct = (res.headers.get('content-type') || '').toLowerCase();
+            if (_ct.indexOf('event-stream') >= 0 || _ct.indexOf('application/json') < 0) {
+                throw new Error('백엔드가 구버전입니다 — 서버에서 git pull 후 백엔드(run_dev.bat) 재시작이 필요합니다. (응답 형식: ' + _ct + ')');
+            }
+            var d;
+            try { d = await res.json(); }
+            catch (jerr) { throw new Error('백엔드 응답이 JSON 이 아닙니다 — 백엔드가 구버전일 가능성이 큽니다. git pull 후 백엔드 재시작 필요.'); }
+            if (!d || !d.id) { throw new Error('백엔드 응답에 세션 ID 가 없습니다. 백엔드 버전 확인 필요.'); }
             _mtgState.importing = false;
-            log('✅ 시작됨 — 세션에서 진행상황이 자동 갱신됩니다(창 닫아도 처리 계속).');
+            stage('✅ 시작됨');
+            log('✅ 백그라운드 처리 시작 — 세션에서 진행상황이 자동 갱신됩니다(창 닫아도 처리 계속).');
             showToast('🎙 백그라운드 처리 시작 — 진행상황은 세션에서 확인', 'success');
             await mtgLoadSessions();
             mtgOpenSession(d.id);   // 폴링으로 진행상황 자동 표시
         } catch (e) {
+            // [r246] 에러 시 UI 완전 복원 — 스피너/스테이지/버튼 모두
             _mtgState.importing = false;
-            if (btn) { btn.disabled = false; btn.textContent = '가져오기 시작'; }
-            log('❌ ' + (e.message || e)); showToast('시작 실패: ' + (e.message || e), 'alert');
+            if (btn) { btn.disabled = false; btn.textContent = '가져오기 시작'; btn.innerHTML = '가져오기 시작'; }
+            if (stageEl) stageEl.innerHTML = '<span style="color:#b53236;">❌ 실패</span>';
+            log('❌ ' + (e.message || e));
+            showToast('시작 실패: ' + (e.message || e), 'alert');
+            // 백엔드 health 도 다시 체크해 배너가 사용자에게 원인을 안내
+            try { mtgHealthCheck(); } catch (he) {}
         }
     }
     async function mtgOpenSession(id, _isPoll) {
