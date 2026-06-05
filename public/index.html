@@ -1787,7 +1787,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .lp-meta .md-fm-summary { display:flex; align-items:center; }
         .lp-meta-edit { margin-left:auto; font-size:10.5px; font-weight:700; color:var(--c-accent); border:1px solid var(--c-border); border-radius:5px; padding:1px 7px; cursor:pointer; }
         .lp-meta-edit:hover { background:var(--c-accent); color:#fff; }
-        .lp-meta .md-fm-body { cursor:text; }
+        .lp-meta .md-fm-body { cursor:default; }
+        .lp-meta .md-fm-val[data-fm-key] { cursor:pointer; border-radius:4px; padding:0 3px; }
+        .lp-meta .md-fm-val[data-fm-key]:hover { background:rgba(127,127,127,.12); }
+        .lp-meta-field-input { width:100%; box-sizing:border-box; font:inherit; font-size:12.5px; padding:1px 5px; border:1px solid var(--c-accent); border-radius:5px; background:var(--c-paper); color:var(--c-text); outline:none; }
         /* [r238 #6] 프론트매터 값 pill */
         .md-fm-pills { display:inline-flex; flex-wrap:wrap; gap:5px; }
         .md-fm-pill { display:inline-block; font-size:11.5px; padding:1px 9px; border-radius:11px; background:var(--c-card); border:1px solid var(--c-border); color:var(--c-text2); text-decoration:none; }
@@ -8371,8 +8374,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (!titlePart && hashPart) {
                     // 현재 문서 내부 점프
                     anchor = '<a class="wikilink wikilink-doc" data-wl-type="hash"' + hashAttr + ' title="이 문서의 헤더로 이동">🔗 ' + _sprintEsc(disp) + '</a>';
-                } else if (docHit) anchor = '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(docHit.id) + '" data-wl-title="' + _sprintEsc(titlePart) + '"' + hashAttr + '>📄 ' + _sprintEsc(disp) + '</a>';
-                else if (taskHit) anchor = '<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="' + _sprintEsc(taskHit.id) + '" data-wl-title="' + _sprintEsc(titlePart) + '">🗂 ' + _sprintEsc(disp) + '</a>';
+                } else if (docHit) anchor = '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(docHit.id) + '" data-wl-title="' + _sprintEsc(titlePart) + '"' + hashAttr + '>' + _sprintEsc(disp) + '</a>';  // [r239 #1] 이모지 제거
+                else if (taskHit) anchor = '<a class="wikilink wikilink-task" data-wl-type="task" data-wl-id="' + _sprintEsc(taskHit.id) + '" data-wl-title="' + _sprintEsc(titlePart) + '">' + _sprintEsc(disp) + '</a>';
                 else anchor = '<a class="wikilink wikilink-unresolved" data-wl-type="new" data-wl-title="' + _sprintEsc(titlePart) + '"' + hashAttr + ' title="클릭하여 같은 이름으로 새 문서 생성">' + _sprintEsc(disp) + '</a>';
                 var ph = '⌂TBL' + (_tableStoreIdx++) + '⌂';
                 inlineTableStore[ph] = anchor; _tableStore[ph] = anchor; return ph;
@@ -8403,10 +8406,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     var dead = '<a class="wikilink wikilink-code" data-wl-type="code" data-wl-id="' + _sprintEsc(id) + '" title="삭제된 코드 인용">🔖 (삭제된 인용)</a>';
                     inlineTableStore[ph] = dead; _tableStore[ph] = dead; return ph;
                 }
-                var label = type === 'task' ? getTaskLabel(id) : getDocLabel(id);
-                var icon = type === 'task' ? '🗂' : '📄';
+                // [r239 #1] 문서 바로가기 링크에서 이모지 제거 — 제목만
+                var _wlt;
+                if (type === 'task') { _wlt = (currentData.tasks || []).find(function (t) { return t.id === id; }); }
+                else { _wlt = (currentData.docs || []).find(function (x) { return x.id === id; }); }
+                var label = _wlt ? (_wlt.title || '제목 없음') : (type === 'task' ? '(삭제된 카드)' : '(삭제된 문서)');
                 var anchor = '<a class="wikilink wikilink-' + type + '" data-wl-type="' + type +
-                             '" data-wl-id="' + _sprintEsc(id) + '">' + icon + ' ' + _sprintEsc(label) + '</a>';
+                             '" data-wl-id="' + _sprintEsc(id) + '">' + _sprintEsc(label) + '</a>';
                 inlineTableStore[ph] = anchor;
                 _tableStore[ph] = anchor;
                 return ph; // 인라인이므로 줄바꿈 래핑 안 함
@@ -8428,16 +8434,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 });
                 // 각주 섹션 — (vault:파일명?find=) 링크를 실제 문서로 해석해 클릭 가능한 위키링크로 [r235 #5]
                 var sec = '<div class="md-footnotes"><div class="md-fn-title">각주</div><ol class="md-fn-list">';
+                function _fnFind(q) { if (!q) return ''; var fm = q.match(/find=([^&]*)/); if (!fm) return ''; var ftxt = fm[1]; try { ftxt = decodeURIComponent(ftxt.replace(/&amp;/g, '&')); } catch (e) {} return ' data-wl-find="' + _sprintEsc(ftxt) + '"'; }
                 ids.forEach(function (id) {
                     var sl = _wlSlug(id) || ('fn' + num[id]);
+                    // (1) [텍스트](vault:대상?find=) 마크다운 링크 형식 — [r239 #1] 이모지 제거
                     var safe = _sprintEsc(defs[id]).replace(/\[([^\]]*)\]\(vault:([^)?\s]+)(?:\?([^)]*))?\)/g, function (_x, txt, target, q) {
                         var hit = (typeof _vaultResolve === 'function') ? _vaultResolve(target) : null;
-                        var findAttr = '';
-                        if (q) { var fm = q.match(/find=([^&]*)/); if (fm) { var ftxt = fm[1]; try { ftxt = decodeURIComponent(ftxt.replace(/&amp;/g, '&')); } catch (e) {} findAttr = ' data-wl-find="' + _sprintEsc(ftxt) + '"'; } }
                         var label = (txt && txt.trim()) ? txt : (hit ? (hit.title || '원본') : '원본');
-                        if (hit) return '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(hit.id) + '"' + findAttr + '>📄 ' + label + '</a>';
-                        return '<span class="md-fn-src" title="원본 문서를 찾지 못함">📄 ' + label + '</span>';
+                        if (hit) return '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(hit.id) + '"' + _fnFind(q) + '>' + label + '</a>';
+                        return '<span class="md-fn-src" title="원본 문서를 찾지 못함">' + label + '</span>';
                     });
+                    // (2) [r239 #4] bare 형식 — "[VAULT] name.html?find=" / "name.html?find=" 도 문서로 연결
+                    if (!/data-wl-/.test(safe)) {
+                        safe = safe.replace(/(?:\[VAULT\]\s*)?([^\s\]]+\.(?:html?|md|txt))(\?find=([^\s)]*))?/i, function (_m, fname, _q2, find) {
+                            var hit = (typeof _vaultResolve === 'function') ? _vaultResolve(fname) : null;
+                            if (!hit) return _m;
+                            return '<a class="wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(hit.id) + '"' + _fnFind(find ? ('find=' + find) : '') + '>' + _sprintEsc(hit.title || '원본') + '</a>';
+                        });
+                    }
                     sec += '<li id="fn-' + sl + '">' + safe + ' <a class="md-fn-back" href="#fnref-' + sl + '" title="본문으로">↩</a></li>';
                 });
                 sec += '</ol></div>';
@@ -8518,7 +8532,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             String(fmText == null ? '' : fmText).split(/\r?\n/).forEach(function (ln) {
                 if (!ln.trim()) return;
                 var kv = ln.match(/^([A-Za-z0-9_\-]+)\s*:\s*([\s\S]*)$/);
-                if (kv) rows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(kv[1]) + '</span><span class="md-fm-val">' + _fmValueHtml(kv[1], kv[2]) + '</span></div>';
+                if (kv) rows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(kv[1]) + '</span><span class="md-fm-val" data-fm-key="' + _sprintEsc(kv[1]) + '">' + _fmValueHtml(kv[1], kv[2]) + '</span></div>';
                 else rows += '<div class="md-fm-row"><span class="md-fm-val">' + _sprintEsc(ln.trim()) + '</span></div>';
             });
             return rows;
@@ -10891,7 +10905,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r238';
+        var _AHUB_FRONT_REV = 'r239';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -25871,7 +25885,7 @@ ${intrLog}
             var metaHtml = '';
             if (metaIdx >= 0) {
                 var fmM = blocks[metaIdx].text.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
-                metaHtml = '<details class="lp-meta md-frontmatter" open data-idx="' + metaIdx + '"><summary class="md-fm-summary">속성 (메타데이터)<span class="lp-meta-edit" onclick="event.stopPropagation();_lpEditMeta(' + metaIdx + ')" title="메타데이터 편집">✎ 편집</span></summary><div class="md-fm-body" onclick="_lpEditMeta(' + metaIdx + ')">' + _fmRenderRows(fmM ? fmM[1] : '') + '</div></details>';
+                metaHtml = '<details class="lp-meta md-frontmatter" open data-idx="' + metaIdx + '"><summary class="md-fm-summary">속성 (메타데이터)<span class="lp-meta-edit" onclick="event.stopPropagation();_lpEditMeta(' + metaIdx + ')" title="전체 소스로 편집">✎ 소스</span></summary><div class="md-fm-body" onclick="_lpMetaBodyClick(event,' + metaIdx + ')">' + _fmRenderRows(fmM ? fmM[1] : '') + '</div></details>';
             }
             var frag = '';
             var n = 0;   // [r235 #2] 연속 번호(생략 없음). 메타는 위에서 별도 렌더(제외)
@@ -25903,6 +25917,34 @@ ${intrLog}
             ta.addEventListener('blur', _lpCommitSection);
             ta.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); _lpEditingSection = null; renderLivePreview(); } if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ta.blur(); } });
             ta.focus(); try { ta.selectionStart = ta.selectionEnd = ta.value.length; } catch (e) {}
+        }
+        // [r239 #2] 메타 패널 본문 클릭 — 링크면 네비, 값이면 그 필드만 인플레이스 편집
+        function _lpMetaBodyClick(ev, idx) {
+            if (ev.target.closest('a')) return;                 // pill 링크는 네비게이션
+            var valEl = ev.target.closest('.md-fm-val'); if (!valEl) return;
+            var key = valEl.getAttribute('data-fm-key'); if (key == null) return;
+            _lpEditMetaField(valEl, idx, key);
+        }
+        function _lpEditMetaField(valEl, idx, key) {
+            var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return;
+            var _d = currentData.docs ? currentData.docs.find(function (d) { return d.id === activeDocId; }) : null;
+            if (_d && (_d.isLocked || (_d.meta && _d.meta.vault))) { if (typeof showToast === 'function') showToast('🔒 잠긴 문서 — 편집 불가', 'alert'); return; }
+            var b = host._lpBlocks[idx]; if (!b) return;
+            var lines = b.text.split('\n'); var lineIdx = -1, raw = '';
+            for (var i = 0; i < lines.length; i++) { var m = lines[i].match(/^([A-Za-z0-9_\-]+)\s*:\s*([\s\S]*)$/); if (m && m[1] === key) { lineIdx = i; raw = m[2]; break; } }
+            if (lineIdx < 0) return;
+            var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'lp-meta-field-input'; inp.value = raw;
+            valEl.innerHTML = ''; valEl.appendChild(inp); inp.focus(); try { inp.select(); } catch (e) {}
+            var done = false;
+            function commit() {
+                if (done) return; done = true;
+                lines[lineIdx] = key + ': ' + inp.value;
+                b.text = lines.join('\n');
+                var content = host._lpBlocks.map(function (x) { return x.text; }).join('\n');
+                _lpCommit(content); renderLivePreview();
+            }
+            inp.addEventListener('blur', commit);
+            inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } if (e.key === 'Escape') { e.preventDefault(); done = true; renderLivePreview(); } });
         }
         // [r236 B1] 라이브 본문 내 헤딩으로 스크롤
         function _lpScrollToHeading(slug) {
@@ -31573,7 +31615,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r238';
+    var _RFS_FRONT_REV = 'r239';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -32235,20 +32277,21 @@ ${intrLog}
         html += '<h2 style="margin:0 0 8px;font-size:18px;">② 분류 — Classify (' + classifiedCount + '/' + leafs.length + ')</h2>';
         html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">노드별 4분면 결정. AI 추천(점선)으로 일괄 시작 추천.</div>';
         html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">';
-        // [r233 #1] 일괄 수동 분류 — 현재 필터에 보이는 노드를 한 번에 지정 (AI 추천 좌측 배치)
-        html += '<span style="font-size:11px;color:var(--c-text3);">일괄:</span>';
-        [['canon','✅','확정'],['hyp','🧪','가설'],['later','📋','백로그'],['cut','❌','폐기']].forEach(function (c) {
-            html += '<button class="aihub-gpu-btn" onclick="rfsBulkClassify(\'' + c[0] + '\')" title="필터에 보이는 노드를 모두 ' + c[2] + '로">' + c[1] + ' ' + c[2] + '</button>';
-        });
-        html += '<span style="width:1px;height:20px;background:var(--c-border);margin:0 2px;"></span>';
-        html += '<button class="aihub-gpu-btn primary" onclick="rfsRunClassifySuggest()">🤖 AI 추천</button>';
+        // 왼쪽: 추천 적용 / 유사 노드 / 필터
         html += '<button class="aihub-gpu-btn" onclick="rfsApplyAllSuggestions()">추천 일괄 적용</button>';
         html += '<button class="aihub-gpu-btn" onclick="rfsRunSimilarNodes()">🔍 유사 노드 탐지</button>';
         html += '<select id="rfs-classify-filter" onchange="rfsRenderClassifyStep()" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
         html += '<option value="all">전체</option><option value="unclassified">미분류만</option><option value="canon">✅ 확정</option><option value="hyp">🧪 가설</option><option value="later">📋 백로그</option><option value="cut">❌ 폐기</option>';
         html += '</select>';
+        // [r239 #5] 오른쪽 클러스터: AI 추천(왼쪽) + 일괄 수동 분류(우측)
+        html += '<button class="aihub-gpu-btn primary" style="margin-left:auto;" onclick="rfsRunClassifySuggest()">🤖 AI 추천</button>';
+        html += '<span style="width:1px;height:20px;background:var(--c-border);margin:0 2px;"></span>';
+        html += '<span style="font-size:11px;color:var(--c-text3);">일괄:</span>';
+        [['canon','✅','확정'],['hyp','🧪','가설'],['later','📋','백로그'],['cut','❌','폐기']].forEach(function (c) {
+            html += '<button class="aihub-gpu-btn" onclick="rfsBulkClassify(\'' + c[0] + '\')" title="필터에 보이는 노드를 모두 ' + c[2] + '로">' + c[1] + ' ' + c[2] + '</button>';
+        });
         if (classifiedCount === leafs.length && classifiedCount > 0) {
-            html += '<button class="aihub-gpu-btn primary" onclick="rfsGoStep(5)" style="margin-left:auto;">결재로 →</button>';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsGoStep(5)">결재로 →</button>';
         }
         html += '</div>';
         var filterVal = (document.getElementById('rfs-classify-filter') || {}).value || 'all';

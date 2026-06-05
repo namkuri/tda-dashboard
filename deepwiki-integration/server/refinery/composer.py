@@ -125,30 +125,23 @@ def build_tree_skeleton(
     return {"root": root, "files": files}
 
 
-_SYSTEM_BODY = """당신은 정련된 노드 메타와 vault 발췌를 받아 마크다운 파일 본문을 작성하는 도구입니다.
+_SYSTEM_BODY = """당신은 정련된 노드 메타와 vault 발췌를 받아, 충실하고 읽을 가치가 있는 마크다운 문서를 작성하는 도구입니다.
 
-[엄격 규칙]
-1. 노드 메타와 vault 발췌(source_refs) **만** 근거. 일반 지식 금지.
-2. 다른 파일 언급 시 **옵시디언 링크** `[[파일명]]` 사용. 평문 X.
-3. vault 인용 시 각주 `[^N]`. 본문 끝에 `[^N]: [원본 §X](vault:vault_xxx?find=...)` 형식.
-4. 파일 상단에 YAML frontmatter (---) 필수:
-```
----
-title: "..."
-category: canon|hyp|later|cut|overview
-node_ids: [...]
-ai_confidence: 0~100
-created_by: "..."
-updated_by: "..."
-created_at: "..."
-updated_at: "..."
-tags: [...]
-review: "..."
-session: "..."
----
-```
-5. 출력은 마크다운 한 덩어리. 다른 텍스트 없음.
-6. 한장정의서면 3블록 강제: 📖 소개 / 📑 목차 / 🎯 결론.
+[근거 규칙]
+1. 사실·주장은 노드 메타와 vault 발췌(source_refs)에 근거한다. 근거에 없는 외부 사실을 날조하지 않는다.
+   단, 주어진 근거를 연결·해설·구조화·재진술하는 서술은 적극 권장한다(요약만 하지 말 것).
+2. 다른 파일 언급 시 **옵시디언 링크** `[[파일명]]` 사용(평문 X).
+3. vault 인용 시 각주 `[^N]`, 본문 끝에 `[^N]: [원본 §X](vault:vault_xxx?find=핵심어)` 형식. vault_xxx 는 주어진 발췌의 ID.
+
+[내용 충실도 — 매우 중요]
+- 한 줄 요약으로 끝내지 말 것. 각 개념을 (1) 정의/핵심 (2) 왜 중요한가/배경 (3) 구성요소·동작 원리 (4) 다른 노드와의 관계 (5) 함의·적용 의 흐름으로 깊이 있게 풀어쓴다.
+- 일반 문서: `##` 섹션 3개 이상, 각 섹션 2~5문단 또는 구조화된 리스트/표/단계. 포함 노드가 여러 개면 각 노드를 `##`/`###` 소제목으로 다루고, 노드 간 관계를 별도 단락으로 잇는다.
+- 가능한 한 구체적으로. vault 발췌의 표현·수치·예시를 적극 인용(각주)한다.
+
+[형식]
+4. 파일 상단 YAML frontmatter(---) 필수: title / category(canon|hyp|later|cut|overview) / node_ids / ai_confidence(0~100) / created_by / updated_by / created_at / updated_at / tags / review / session.
+5. 출력은 마크다운 한 덩어리만. 다른 설명 텍스트 없음.
+6. 한장정의서면 3블록 강제 — 📖 소개(문서 전체를 조망하는 2~3문단), 📑 목차(각 [[링크]] + 한 줄 설명), 🎯 결론(종합·시사점). 각 블록을 충실히 채운다.
 """
 
 
@@ -167,10 +160,12 @@ async def compose_file_body(
     vault_refs = []
     for n in nodes:
         for r in (n.get("source_refs") or []):
-            vault_refs.append(f"- {r.get('vault_title')}: \"{(r.get('span_text') or '')[:120]}\"")
-    vault_block = "\n".join(vault_refs[:12]) if vault_refs else "(없음)"
+            # [r239 #3] 발췌 길이 확대(120→400) + vault ID 노출(각주 링크용)
+            vid = r.get("vault_id") or r.get("doc_id") or ""
+            vault_refs.append(f"- [{r.get('vault_title')}] (id:{vid}): \"{(r.get('span_text') or '')[:400]}\"")
+    vault_block = "\n".join(vault_refs[:20]) if vault_refs else "(없음)"
     node_listing = "\n".join(
-        f"- {n['title']} ({n.get('kind','concept')}): {(n.get('summary') or '')[:200]}"
+        f"- {n['title']} ({n.get('kind','concept')}, 신뢰도 {n.get('ai_confidence', '-')}): {(n.get('summary') or '')[:600]}"
         for n in nodes
     )
     overview_extras = ""
@@ -202,7 +197,7 @@ frontmatter + 본문 한 덩어리로. 다른 출력 없음.
                 {"role": "user", "content": user_prompt},
             ],
             model=model,
-            temperature=0.4,
+            temperature=0.5,
         ):
             buf += delta
     except Exception as e:
