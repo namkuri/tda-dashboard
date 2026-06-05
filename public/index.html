@@ -31677,6 +31677,10 @@ ${intrLog}
             running: false, abort: null, stage: '', percent: 0, log: [],
             startedAt: 0, stageTimer: null,
         },
+        structure: null,      // [r246] 로직 분석 결과(미채택 미리보기) {nodes, section_count, leaf_count, has_headings}
+        intake: null,         // [r246] 들여오기 추천 {sections:[{node_id, title, targets:{wbs,sprint,task,stage,wiki}}]}
+        intakeRunning: false, // [r246] 추천 진행 중
+        wikiPlan: null,       // [r246] 위키 구조(목차) 추천 {docs:[{title, outline:[...]}]}
     };
 
     var RFS_STEPS = [
@@ -32594,6 +32598,10 @@ ${intrLog}
             _rfsState.suggestions = {};
             _rfsState.proposedWork = null;
             _rfsState.selectedFiles = {};
+            _rfsState.structure = null;        // [r246] 로직 분석 미리보기 리셋
+            _rfsState._analyzing = false;
+            _rfsState.intake = null; _rfsState.intakeRunning = false;
+            _rfsState.wikiPlan = null;
         }
         _rfsState._activeSessionId = sid;
         _rfsState.current = s;
@@ -32789,15 +32797,33 @@ ${intrLog}
     }
 
     // ── 분해 단계
+    // [r246] 로직 구조 트리 미리보기 HTML (카테고리 > 키워드 계층)
+    function rfsStructureTreeHtml(nodes) {
+        var byParent = {};
+        (nodes || []).forEach(function (n) { var p = n.parent_id || '__root'; (byParent[p] = byParent[p] || []).push(n); });
+        function render(key, depth) {
+            var kids = byParent[key] || []; var h = '';
+            kids.forEach(function (n) {
+                var isCat = n.kind === 'category';
+                h += '<div style="padding:2px 0 2px ' + (depth * 16 + 4) + 'px;font-size:' + (isCat ? '13px;font-weight:700;color:var(--c-text);' : '12px;color:var(--c-text2);') + '">'
+                    + (isCat ? '📁 ' : '• ') + _annEsc(n.title) + '</div>';
+                h += render(n.id, depth + 1);
+            });
+            return h;
+        }
+        return '<div style="max-height:340px;overflow-y:auto;padding:6px 4px;">' + render('__root', 0) + '</div>';
+    }
+
     function rfsRenderDecomposeStep() {
         var main = document.getElementById('rfs-main'); if (!main) return;
         var nodeCount = (_rfsState.current.nodes || []).length;
         var dc = _rfsState.decompose;
+        var st = _rfsState.structure;   // [r246] 로직 분석 결과(미채택 미리보기)
         var html = '<div style="max-width:1000px;margin:0 auto;">';
-        html += '<h2 style="margin:0 0 8px;font-size:18px;">① 분해 — Decompose</h2>';
-        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">vault ' + _rfsState.vaultDocs.length + '개를 청크 분할 → LLM 노드 추출 → 전역 dedup → 카테고리 트리</div>';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">① 분해 — 문서 구조화</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">먼저 <b>로직</b>(md 헤더 목차 + 섹션별 키워드 빈도)으로 즉시 구조화합니다. 결과가 마음에 안 들면 <b>🤖 LLM으로 분해</b>하세요.</div>';
         html += '<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
-        html += '<label style="font-size:12px;">모델: <select id="rfs-decompose-model" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
+        html += '<label style="font-size:12px;">LLM 모델: <select id="rfs-decompose-model" style="padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);">';
         html += '<option value="">기본 (qwen2.5-coder:14b 추천)</option>';
         html += '<option value="qwen2.5-coder:14b">qwen2.5-coder:14b (속도)</option>';
         html += '<option value="qwen2.5-coder:32b">qwen2.5-coder:32b (품질)</option>';
@@ -32805,9 +32831,12 @@ ${intrLog}
         html += '</select></label>';
         if (dc.running) {
             html += '<button class="aihub-gpu-btn" onclick="rfsStopDecompose()" style="border-color:#d2393d;color:#d2393d;">■ 중단</button>';
-            html += '<span style="font-size:11.5px;color:var(--c-accent);font-weight:700;">⟳ 분해 진행 중…</span>';
+            html += '<span style="font-size:11.5px;color:var(--c-accent);font-weight:700;">⟳ LLM 분해 진행 중…</span>';
+        } else if (_rfsState._analyzing) {
+            html += '<button class="aihub-gpu-btn primary" disabled style="opacity:.7;"><span class="rfs-dc-spinner"></span> 로직 분석 중…</button>';
         } else {
-            html += '<button class="aihub-gpu-btn primary" onclick="rfsRunDecompose()">' + (nodeCount ? '🔄 재분해' : '분해 시작') + '</button>';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsRunAnalyze()">' + ((st || nodeCount) ? '🔄 로직 재분석' : '🔍 로직 구조 분석') + '</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsRunDecompose()">🤖 LLM으로 분해' + (nodeCount ? ' (재분해)' : '') + '</button>';
         }
         html += '</div>';
         // 진행 위젯 — running 이거나 직전 로그 있으면 표시 (상태 보존)
@@ -32824,9 +32853,19 @@ ${intrLog}
         html += '</div>';
         html += '<div id="rfs-prog-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:120px;overflow-y:auto;color:var(--c-text2);background:var(--c-paper);padding:6px 8px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((dc.log||[]).join('\n')) + '</div>';
         html += '</div>';
+        // [r246] 로직 구조 미리보기 + 채택
+        if (st && (st.nodes || []).length && !dc.running) {
+            html += '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);padding:12px 14px;margin-bottom:12px;">';
+            html += '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">🔍 로직 구조 — ' + (st.section_count || 0) + ' 섹션 · 키워드 ' + (st.leaf_count || 0) + ' · ' + (st.has_headings ? 'md 헤더 기반' : '키워드 기반') + '</div>';
+            html += rfsStructureTreeHtml(st.nodes);
+            html += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsAdoptStructure()">✓ 이 구조로 진행 →</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsRunDecompose()">🤖 대신 LLM으로 분해</button>';
+            html += '</div></div>';
+        }
         if (nodeCount && !dc.running) {
             html += '<div style="padding:12px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
-            html += '✓ 노드 ' + nodeCount + '개 추출됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">분류로 →</button>';
+            html += '✓ 노드 ' + nodeCount + '개 확정됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">분류로 →</button>';
             html += '</div>';
         } else if (!dc.running && (_rfsState.current && _rfsState.current.last_decompose) && (_rfsState.current.last_decompose.leaf_count === 0)) {
             // [r228] 직전 분해가 0개였음 — 진단 표시
@@ -32979,6 +33018,53 @@ ${intrLog}
             dc.running = false; dc.abort = null; _rfsDcStopTicker();
             if (_rfsState.step === 3) rfsRenderDecomposeStep();
         }
+    }
+
+    // [r246] 로직 구조 분석 — LLM 없이 즉시(md 헤더 목차 + 섹션별 키워드 빈도)
+    async function rfsRunAnalyze() {
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        if (!_rfsState.vaultDocs.length) { showToast('vault 가 비어있습니다 — 먼저 ② Vault 추가', 'alert'); return; }
+        if (_rfsState._analyzing) return;
+        _rfsState._analyzing = true; rfsRenderDecomposeStep();
+        try {
+            var res = await fetch(url + '/refinery/analyze-structure', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    session_id: _rfsState.current.id, project_id: activeProjectId,
+                    user_id: rfsCurrentUser(), vault_docs: _rfsState.vaultDocs,
+                }),
+            });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0, 120)); }
+            if (!res.ok) { var et = await res.text(); throw new Error('HTTP ' + res.status + ' ' + et.slice(0, 120)); }
+            var result = await res.json();
+            _rfsState.structure = result;
+            if (!(result.nodes || []).length) showToast('로직 구조가 비었습니다 — 본문이 없거나 너무 짧습니다. 🤖 LLM으로 분해를 시도하세요.', 'alert');
+            else showToast('🔍 로직 구조 ' + (result.section_count||0) + '섹션 · 키워드 ' + (result.leaf_count||0) + '개', 'success');
+        } catch (e) {
+            showToast('구조 분석 실패: ' + (e.message || e), 'alert');
+        } finally {
+            _rfsState._analyzing = false;
+            if (_rfsState.step === 3) rfsRenderDecomposeStep();
+        }
+    }
+
+    // [r246] 로직 구조 채택 → 세션 노드로 확정하고 다음 단계로
+    async function rfsAdoptStructure() {
+        var st = _rfsState.structure;
+        if (!st || !(st.nodes || []).length) { showToast('채택할 구조가 없습니다', 'alert'); return; }
+        var nodes = st.nodes;
+        _rfsState.current.nodes = nodes;
+        _rfsState.nodes = nodes;
+        _rfsState.current.last_decompose = {
+            node_count: nodes.length,
+            leaf_count: st.leaf_count || 0,
+            method: 'logic', has_headings: !!st.has_headings,
+            at: new Date().toISOString(),
+        };
+        var saved = await rfsPatchSession({nodes: nodes, status: 'classifying', last_decompose: _rfsState.current.last_decompose}, 'analyzed', '로직 ' + nodes.length + '노드');
+        if (!saved) showToast('⚠ DB 저장 실패 — 메모리로 진행. 새로고침 전 작업 완료 권장.', 'alert');
+        _rfsState.structure = null;
+        rfsGoStep(4);
     }
 
     // [r225/r229] 진행 위젯 부분 갱신 — 전체 리렌더 없이 (애니메이션 보존) + 단계별 경과초

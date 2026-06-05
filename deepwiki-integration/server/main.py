@@ -685,6 +685,7 @@ try:
     from refinery.linker import link_files as _rfs_link
     from refinery.work_proposer import propose_work as _rfs_propose
     from refinery.apply_ops import apply_tree as _rfs_apply_tree, apply_work as _rfs_apply_work
+    from refinery.structure import analyze_structure as _rfs_analyze  # [r246] 로직 우선 분해
 except Exception as _rfs_imp_err:
     import traceback as _rfs_tb
     _REFINERY_OK = False
@@ -702,6 +703,7 @@ except Exception as _rfs_imp_err:
     _rfs_decompose = _rfs_classify = _rfs_similar = _rfs_unavailable
     _rfs_build_tree = _rfs_compose_body = _rfs_compose_vault_list = _rfs_compose_changelog = _rfs_unavailable
     _rfs_link = _rfs_propose = _rfs_apply_tree = _rfs_apply_work = _rfs_unavailable
+    _rfs_analyze = _rfs_unavailable
 
 
 def _refinery_guard():
@@ -849,6 +851,16 @@ async def refinery_delete_session(sid: str, user_id: str):
     require_author(user_id, "세션 삭제")
     ok = _rfs.delete_session(sid, user_id=user_id)
     return {"deleted": ok}
+
+
+@app.post("/refinery/analyze-structure")
+async def refinery_analyze_structure(req: RefineryDecomposeRequest):
+    """[r246] 로직 우선 분해 — LLM 없이 md 헤더 목차 + 섹션별 키워드 빈도로 즉시 구조화."""
+    require_author(req.user_id, "구조 분석")
+    if not _REFINERY_OK:
+        raise HTTPException(503, f"연구 정련소 모듈 미로드: {_REFINERY_ERR}")
+    result = _rfs_analyze(req.vault_docs)
+    return result
 
 
 @app.post("/refinery/decompose")
