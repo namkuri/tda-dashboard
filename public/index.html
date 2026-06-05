@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r244';
+        var _AHUB_FRONT_REV = 'r245';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31704,7 +31704,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r244';
+    var _RFS_FRONT_REV = 'r245';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -31820,7 +31820,7 @@ ${intrLog}
         var main = document.getElementById('mtg-main'); if (!main) return;
         var h = '<div style="max-width:680px;margin:0 auto;">';
         h += '<h2 style="margin:0 0 6px;font-size:18px;">+ Craig 녹음 가져오기</h2>';
-        h += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:16px;">Craig 봇이 DM으로 준 <b>녹음 링크</b>(또는 ID+key)를 붙여넣으세요. 화자별 멀티트랙을 받아 자동 텍스트화합니다.</div>';
+        h += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:16px;">Craig 봇이 DM으로 준 <b>녹음 링크</b>(또는 ID+key)를 붙여넣으세요. 화자별 멀티트랙을 받아 자동 텍스트화합니다. <b style="color:var(--c-accent);">백그라운드로 처리되어 시작 후 창을 닫아도 됩니다</b> — 진행상황은 회의 세션에서 자동 갱신됩니다.</div>';
         h += '<div style="display:flex;flex-direction:column;gap:10px;">';
         h += '<label style="font-size:12px;font-weight:700;">회의 제목<input id="mtg-f-title" type="text" placeholder="예: 2026 W23 기획 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
         h += '<label style="font-size:12px;font-weight:700;">Craig 녹음 링크 또는 ID<input id="mtg-f-id" type="text" placeholder="https://craig.chat/rec/XXXX?key=YYYY  또는  XXXX" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
@@ -31855,12 +31855,13 @@ ${intrLog}
         var files = (fileInput && fileInput.files && fileInput.files.length) ? fileInput.files : null;
         if (!cid.trim() && !durl.trim() && !files) { showToast('녹음 링크/ID, 직접 URL, 또는 파일 업로드 중 하나를 입력하세요', 'alert'); return; }
         _mtgState.importing = true;
-        var btn = document.getElementById('mtg-import-btn'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="rfs-dc-spinner"></span> 진행 중…'; }
+        var btn = document.getElementById('mtg-import-btn'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="rfs-dc-spinner"></span> 시작 중…'; }
         var prog = document.getElementById('mtg-import-progress'); if (prog) prog.style.display = 'block';
         var stageEl = document.getElementById('mtg-import-stage'), logEl = document.getElementById('mtg-import-log');
         function stage(m) { if (stageEl) stageEl.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
         function log(m) { if (logEl) { logEl.textContent += (logEl.textContent ? '\n' : '') + m; logEl.scrollTop = logEl.scrollHeight; } }
         try {
+            // [r244] 파일 업로드(있으면) → 토큰
             var uploadToken = null;
             if (files) {
                 stage('파일 업로드 중… (' + files.length + '개)'); log('▶ 파일 업로드 ' + files.length + '개');
@@ -31871,6 +31872,8 @@ ${intrLog}
                 var uj = await ur.json(); uploadToken = uj.upload_token;
                 log('  ↳ 업로드 완료');
             }
+            // [r244] 백그라운드 작업 시작 — 즉시 반환. 창 닫아도 끝까지 처리됨.
+            stage('백그라운드 처리 시작…');
             var res = await fetch(url + '/meetings/import', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({user_id: rfsCurrentUser(), project_id: activeProjectId || null, title: title.trim(),
@@ -31878,34 +31881,18 @@ ${intrLog}
                     upload_token: uploadToken, whisper_model: wmodel, language: lang})
             });
             if (res.status === 503) { var e5 = await res.text(); throw new Error('회의록 모듈 미로드: ' + e5.slice(0, 120)); }
-            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
-            var reader = res.body.getReader(), dec = new TextDecoder(), buf = '', doneId = null;
-            while (true) {
-                var ch = await reader.read(); if (ch.done) break;
-                buf += dec.decode(ch.value, {stream: true});
-                var lines = buf.split('\n'); buf = lines.pop() || '';
-                for (var i = 0; i < lines.length; i++) {
-                    var line = lines[i]; if (!line.startsWith('data:')) continue;
-                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
-                    try {
-                        var ev = JSON.parse(data);
-                        if (ev.event === 'stage') { stage(ev.message); log('▶ ' + ev.message); }
-                        else if (ev.event === 'downloaded') log('  ↳ 트랙 ' + ev.count + '개 다운로드');
-                        else if (ev.event === 'track_start') { stage('STT ' + ev.i + '/' + ev.total + ' — ' + ev.speaker); }
-                        else if (ev.event === 'track_done') log('  ✓ ' + ev.speaker + ' (' + ev.segs + '문장)');
-                        else if (ev.event === 'transcribed') log('  📝 대화 ' + ev.segments + '세그먼트 · ' + _mtgFmtDur(ev.duration_sec));
-                        else if (ev.event === 'done') { doneId = ev.id; log('✅ 회의록 완료'); }
-                        else if (ev.event === 'error') { log('❌ ' + ev.message); showToast('가져오기 실패: ' + ev.message, 'alert'); }
-                    } catch (e) {}
-                }
-            }
+            if (res.status === 409) { throw new Error('이미 처리 중인 작업이 있습니다. 끝난 뒤 다시 시도하세요.'); }
+            if (!res.ok) { var et = await res.text(); throw new Error('HTTP ' + res.status + ' ' + et.slice(0, 150)); }
+            var d = await res.json();
             _mtgState.importing = false;
+            log('✅ 시작됨 — 세션에서 진행상황이 자동 갱신됩니다(창 닫아도 처리 계속).');
+            showToast('🎙 백그라운드 처리 시작 — 진행상황은 세션에서 확인', 'success');
             await mtgLoadSessions();
-            if (doneId) mtgOpenSession(doneId); else mtgRenderList();
+            mtgOpenSession(d.id);   // 폴링으로 진행상황 자동 표시
         } catch (e) {
             _mtgState.importing = false;
             if (btn) { btn.disabled = false; btn.textContent = '가져오기 시작'; }
-            log('❌ ' + (e.message || e)); showToast('가져오기 실패: ' + (e.message || e), 'alert');
+            log('❌ ' + (e.message || e)); showToast('시작 실패: ' + (e.message || e), 'alert');
         }
     }
     async function mtgOpenSession(id, _isPoll) {

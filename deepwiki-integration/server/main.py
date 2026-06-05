@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r244"
+SERVER_REVISION = "r245"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -1110,95 +1110,110 @@ async def meetings_delete(sid: str):
     return {"ok": _mtg_store.delete_session(sid)}
 
 
+# [r244] 백그라운드 회의 처리 작업 추적(GC 방지 + 동시 1건 제한)
+_MEET_TASKS: set = set()        # 처리 중 session id
+_MEET_TASK_REFS: set = set()    # asyncio.Task 참조 보존
+
+
+async def _meet_run_job(p: dict, sid: str):
+    """백그라운드: 다운로드/업로드 → 화자별 STT(증분 저장) → 요약 → ready.
+
+    SSE 와 무관하게 독립 실행되어 클라이언트가 창을 닫아도 끝까지 진행된다.
+    진행상황은 meeting_sessions.status + segments 증분으로 기록(프론트가 폴링).
+    """
+    import os as _os, tempfile as _tmp, shutil as _sh
+    loop = asyncio.get_event_loop()
+    upload_token = p.get("upload_token")
+    if upload_token:
+        workdir = _os.path.join(_tmp.gettempdir(), "mtg_uploads", upload_token)
+    else:
+        workdir = _tmp.mkdtemp(prefix="mtg_")
+
+    async def _upd(patch):
+        await loop.run_in_executor(None, lambda: _mtg_store.update_session(sid, patch))
+
+    try:
+        _busy_set(running=True, kind="meeting_import", started_at=time.time(), stage="prepare", message="회의 처리 시작")
+        # 1) 오디오 확보
+        if upload_token:
+            if not _os.path.isdir(workdir):
+                await _upd({"status": "error", "summary": {"error": "업로드 파일을 찾지 못함(토큰 만료). 다시 업로드하세요."}})
+                return
+        else:
+            await _upd({"status": "importing"})
+            _busy_set(running=True, kind="meeting_import", stage="download", message="Craig 녹음 다운로드")
+            if p.get("craig_url"):
+                await loop.run_in_executor(None, lambda: _mtg_craig.download_url(p["craig_url"], workdir))
+            else:
+                await loop.run_in_executor(None, lambda: _mtg_craig.download_recording(p.get("craig_id"), p.get("key"), workdir))
+        # 2) 트랙
+        tracks = await loop.run_in_executor(None, lambda: _mtg_tr.list_tracks(workdir))
+        if not tracks:
+            await _upd({"status": "error", "summary": {"error": "오디오 트랙을 찾지 못함(다운로드/업로드 형식 확인)"}})
+            return
+        await _upd({"status": "transcribing"})
+        # 3) 화자별 STT(증분 저장 — 폴링이 자라는 대화내역을 보여줌)
+        all_segs, participants = [], []
+        for i, tk in enumerate(tracks):
+            _busy_set(running=True, kind="meeting_import", stage="stt", current=i + 1, total=len(tracks),
+                      category=tk["speaker"], message=f"STT {i + 1}/{len(tracks)} — {tk['speaker']}")
+            segs = await loop.run_in_executor(
+                None, lambda pa=tk["path"], sp=tk["speaker"]: _mtg_tr.transcribe_track(
+                    pa, sp, p.get("whisper_model", "medium"), p.get("language", "ko")))
+            all_segs.extend(segs)
+            participants.append({"name": tk["speaker"], "track": _os.path.basename(tk["path"])})
+            merged = _mtg_tr.merge_segments(all_segs)
+            await _upd({"status": "transcribing", "segments": merged,
+                        "transcript_text": _mtg_tr.segments_to_text(merged), "participants": participants})
+        merged = _mtg_tr.merge_segments(all_segs)
+        dur = int(max([s["t"] + s["dur"] for s in merged], default=0))
+        await _upd({"status": "summarizing", "segments": merged, "transcript_text": _mtg_tr.segments_to_text(merged),
+                    "participants": participants, "duration_sec": dur, "model": p.get("whisper_model")})
+        # 4) 요약
+        _busy_set(running=True, kind="meeting_import", stage="summarize", message="회의록 요약(LLM)")
+        summary = await _mtg_sum.summarize(merged, title=p.get("title", ""), model=p.get("model"))
+        await _upd({"status": "ready", "summary": summary})
+    except Exception as e:
+        import traceback as _tb
+        _tb.print_exc()
+        try:
+            await _upd({"status": "error", "summary": {"error": str(e)[:400]}})
+        except Exception:
+            pass
+    finally:
+        _busy_clear()
+        try:
+            _sh.rmtree(workdir, ignore_errors=True)
+        except Exception:
+            pass
+        _MEET_TASKS.discard(sid)
+
+
 @app.post("/meetings/import")
 async def meetings_import(req: MeetingImportRequest):
-    """Craig 녹음 → STT → 회의록 요약 → 저장 (SSE 진행 스트림)."""
+    """Craig 녹음/업로드 → STT → 회의록 요약을 **백그라운드**로 시작. 즉시 {id} 반환.
+
+    실제 처리는 _meet_run_job 이 독립적으로 수행 → 창을 닫아도 끝까지 진행.
+    진행상황은 GET /meetings/sessions/{id} 폴링으로 확인.
+    """
     _meet_guard()
     if not (req.user_id or "").strip():
         raise HTTPException(422, "user_id(작성자) 필요")
-    if _busy_active():
-        async def busy_gen():
-            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM/STT 작업 중 — 잠시 후 재시도'}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
-        return StreamingResponse(busy_gen(), media_type="text/event-stream")
-
-    async def gen():
-        import os as _os, tempfile as _tmp, shutil as _sh
-        loop = asyncio.get_event_loop()
-        # [r243] 업로드 토큰이면 그 폴더 사용, 아니면 임시 폴더에 다운로드
-        if req.upload_token:
-            workdir = _os.path.join(_tmp.gettempdir(), "mtg_uploads", req.upload_token)
-        else:
-            workdir = _tmp.mkdtemp(prefix="mtg_")
-        sess = None
-        try:
-            av = _mtg_tr.is_available()
-            if not av.get("faster_whisper") or not av.get("ffmpeg"):
-                yield {"event": "error", "message": "STT 준비 안 됨 — " + (av.get("error") or "faster-whisper/ffmpeg 설치 필요")}
-                return
-            yield {"event": "stage", "message": "세션 생성"}
-            sess = await loop.run_in_executor(None, lambda: _mtg_store.create_session(
-                project_id=req.project_id, title=req.title or "회의", user_id=req.user_id, craig_id=req.craig_id))
-            yield {"event": "session", "id": sess["id"]}
-
-            if req.upload_token:
-                if not _os.path.isdir(workdir):
-                    yield {"event": "error", "message": "업로드 파일을 찾지 못함(토큰 만료). 다시 업로드하세요."}
-                    return
-                yield {"event": "stage", "message": "업로드한 오디오 사용"}
-                yield {"event": "downloaded", "count": len(_mtg_tr.list_tracks(workdir))}
-            else:
-                yield {"event": "stage", "message": "Craig 녹음 다운로드"}
-                if req.craig_url:
-                    dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_url(req.craig_url, workdir))
-                else:
-                    dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_recording(req.craig_id, req.key, workdir))
-                yield {"event": "downloaded", "count": dl.get("count")}
-
-            tracks = await loop.run_in_executor(None, lambda: _mtg_tr.list_tracks(workdir))
-            if not tracks:
-                yield {"event": "error", "message": "오디오 트랙을 찾지 못함(다운로드 형식 확인)"}
-                return
-            yield {"event": "stage", "message": f"트랙 {len(tracks)}개 화자별 STT"}
-            all_segs = []
-            participants = []
-            for i, tk in enumerate(tracks):
-                yield {"event": "track_start", "i": i + 1, "total": len(tracks), "speaker": tk["speaker"]}
-                segs = await loop.run_in_executor(
-                    None, lambda p=tk["path"], sp=tk["speaker"]: _mtg_tr.transcribe_track(p, sp, req.whisper_model, req.language))
-                all_segs.extend(segs)
-                participants.append({"name": tk["speaker"], "track": _os.path.basename(tk["path"])})
-                yield {"event": "track_done", "i": i + 1, "speaker": tk["speaker"], "segs": len(segs)}
-
-            merged = _mtg_tr.merge_segments(all_segs)
-            text = _mtg_tr.segments_to_text(merged)
-            dur = int(max([s["t"] + s["dur"] for s in merged], default=0))
-            await loop.run_in_executor(None, lambda: _mtg_store.update_session(sess["id"], {
-                "status": "summarizing", "segments": merged, "transcript_text": text,
-                "participants": participants, "duration_sec": dur, "model": req.whisper_model}))
-            yield {"event": "transcribed", "segments": len(merged), "duration_sec": dur}
-
-            yield {"event": "stage", "message": "회의록 요약(LLM)"}
-            summary = await _mtg_sum.summarize(merged, title=req.title, model=req.model)
-            await loop.run_in_executor(None, lambda: _mtg_store.update_session(sess["id"], {"status": "ready", "summary": summary}))
-            yield {"event": "done", "id": sess["id"], "summary": summary,
-                   "participants": participants, "segments_count": len(merged), "duration_sec": dur}
-        except Exception as e:
-            import traceback as _tb
-            _tb.print_exc()
-            if sess:
-                try:
-                    _mtg_store.update_session(sess["id"], {"status": "error"})
-                except Exception:
-                    pass
-            yield {"event": "error", "message": str(e)}
-        finally:
-            try:
-                _sh.rmtree(workdir, ignore_errors=True)
-            except Exception:
-                pass
-
-    return _sse_indexer(gen(), busy_kind="meeting_import")
+    if not (req.craig_id or req.craig_url or req.upload_token):
+        raise HTTPException(422, "녹음 ID/URL 또는 업로드 파일이 필요합니다")
+    av = _mtg_tr.is_available()
+    if not av.get("faster_whisper") or not av.get("ffmpeg"):
+        raise HTTPException(400, "STT 준비 안 됨 — " + (av.get("error") or "faster-whisper/ffmpeg 설치 필요"))
+    if _MEET_TASKS or _busy_active():
+        raise HTTPException(409, "이미 처리 중인 작업이 있습니다 — 끝난 뒤 다시 시도하세요.")
+    sess = _mtg_store.create_session(project_id=req.project_id, title=req.title or "회의",
+                                     user_id=req.user_id, craig_id=req.craig_id)
+    sid = sess["id"]
+    _MEET_TASKS.add(sid)
+    task = asyncio.create_task(_meet_run_job(req.model_dump(), sid))
+    _MEET_TASK_REFS.add(task)
+    task.add_done_callback(lambda t: _MEET_TASK_REFS.discard(t))
+    return {"id": sid, "status": "importing"}
 
 
 @app.post("/meetings/sessions/{sid}/summarize")
