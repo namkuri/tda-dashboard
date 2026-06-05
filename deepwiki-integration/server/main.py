@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r255"
+SERVER_REVISION = "r256"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -691,6 +691,7 @@ try:
     from refinery.pipeline import derive_stream as _rfs_derive_stream  # [r253] 도출 파이프라인
     from refinery.from_mindmap import branches_to_nodes as _rfs_mm_to_nodes  # [r253] 마인드맵→노드
     from refinery.context import build_project_context as _rfs_build_ctx  # [r253] 프로젝트 컨텍스트
+    from refinery.wiki_structure import derive_wiki_structure as _rfs_derive_wiki  # [r256] 위키 표준분류 구조
 except Exception as _rfs_imp_err:
     import traceback as _rfs_tb
     _REFINERY_OK = False
@@ -711,6 +712,7 @@ except Exception as _rfs_imp_err:
     _rfs_analyze = _rfs_unavailable
     _rfs_intake = _rfs_wiki_body = _rfs_unavailable
     _rfs_derive_stream = _rfs_apply_stream = _rfs_mm_to_nodes = _rfs_build_ctx = _rfs_unavailable
+    _rfs_derive_wiki = _rfs_unavailable
 
 
 def _refinery_guard():
@@ -874,6 +876,17 @@ class RefineryApplyStreamRequest(BaseModel):
     start_date: str = "2026-01-05"
     sprint_weeks: int = 2
     default_cat_id: Optional[str] = None
+
+
+class RefineryDeriveWikiRequest(BaseModel):
+    """[r256] 위키 표준분류(WIKI_TAX) 구조 도출(SSE)."""
+    session_id: str
+    user_id: str
+    project_id: Optional[str] = None
+    nodes: List[Dict[str, Any]] = []
+    wiki_tax: List[Dict[str, Any]] = []
+    project_state: Dict[str, Any] = {}
+    model: Optional[str] = None
 
 
 @app.get("/refinery/sessions")
@@ -1231,6 +1244,22 @@ async def refinery_decompose_mindmap(req: RefineryDecomposeRequest):
             "summary": f"노드 {len(conv['nodes'])} · 개념관계 {len(conv['cross_links'])}",
         }
     return _sse_indexer(gen(), busy_kind="refinery_decompose_mindmap")
+
+
+@app.post("/refinery/derive-wiki")
+async def refinery_derive_wiki(req: RefineryDeriveWikiRequest):
+    """[r256] ⑤ 위키 구조 — 분해 노드 → WIKI_TAX 표준분류 매핑 문서 구조(목차) SSE."""
+    require_author(req.user_id, "위키 구조 도출")
+    if not _REFINERY_OK:
+        raise HTTPException(503, f"연구 정련소 모듈 미로드: {_REFINERY_ERR}")
+    if _busy_active():
+        async def busy_gen():
+            yield f"data: {json.dumps({'event': 'error', 'message': '다른 LLM 작업 중'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(busy_gen(), media_type="text/event-stream")
+    ctx = _rfs_build_ctx(req.project_state or {})
+    gen = _rfs_derive_wiki(nodes=req.nodes, wiki_tax=req.wiki_tax, context=ctx, model=req.model)
+    return _sse_indexer(gen, busy_kind="refinery_derive_wiki")
 
 
 @app.get("/refinery/schema-sql")

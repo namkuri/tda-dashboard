@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r255';
+        var _AHUB_FRONT_REV = 'r256';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31690,6 +31690,40 @@ ${intrLog}
         streamCfg: { capacity_hours: 80, sprint_weeks: 2, rule: 'auto', strict: false },
     };
 
+    // [r256] 위키 표준 분류체계(결정 #5) — 게임요소 Well-Defined 계층. PM_TAX 패턴 {i,p,v,s,l}.
+    //   실사용 시 LLM 이 분해 노드를 이 분류에 매핑 → 필요한 가지만 폴더·문서로 생성.
+    var WIKI_TAX = [
+        { i: '1', p: null, v: 1, s: '시스템', l: '게임 시스템' },
+        { i: '1.1', p: '1', v: 2, s: '전투', l: '전투 시스템' },
+        { i: '1.2', p: '1', v: 2, s: '성장/경제', l: '성장·경제 시스템' },
+        { i: '1.3', p: '1', v: 2, s: '진행/세이브', l: '진행·세이브' },
+        { i: '1.4', p: '1', v: 2, s: 'UI/UX 흐름', l: 'UI/UX 흐름' },
+        { i: '2', p: null, v: 1, s: '세계관', l: '세계관' },
+        { i: '2.1', p: '2', v: 2, s: '로어/역사', l: '로어·역사' },
+        { i: '2.2', p: '2', v: 2, s: '지역/맵', l: '지역·맵' },
+        { i: '2.3', p: '2', v: 2, s: '세력/진영', l: '세력·진영' },
+        { i: '3', p: null, v: 1, s: '캐릭터', l: '캐릭터' },
+        { i: '3.1', p: '3', v: 2, s: '플레이어블', l: '플레이어블 캐릭터' },
+        { i: '3.2', p: '3', v: 2, s: 'NPC', l: 'NPC' },
+        { i: '3.3', p: '3', v: 2, s: '적/보스', l: '적·보스' },
+        { i: '4', p: null, v: 1, s: '콘텐츠', l: '콘텐츠' },
+        { i: '4.1', p: '4', v: 2, s: '퀘스트/시나리오', l: '퀘스트·시나리오' },
+        { i: '4.2', p: '4', v: 2, s: '아이템/장비', l: '아이템·장비' },
+        { i: '4.3', p: '4', v: 2, s: '스킬/어빌리티', l: '스킬·어빌리티' },
+        { i: '5', p: null, v: 1, s: '레벨/스테이지', l: '레벨·스테이지' },
+        { i: '5.1', p: '5', v: 2, s: '구조', l: '레벨 구조' },
+        { i: '5.2', p: '5', v: 2, s: '기믹', l: '기믹' },
+        { i: '5.3', p: '5', v: 2, s: '난이도', l: '난이도' },
+        { i: '6', p: null, v: 1, s: '밸런스/수치', l: '밸런스·수치' },
+        { i: '6.1', p: '6', v: 2, s: '전투수치', l: '전투 수치' },
+        { i: '6.2', p: '6', v: 2, s: '경제수치', l: '경제 수치' },
+        { i: '6.3', p: '6', v: 2, s: '확률/드랍', l: '확률·드랍' },
+        { i: '7', p: null, v: 1, s: '연출/사운드', l: '연출·사운드' },
+        { i: '7.1', p: '7', v: 2, s: 'VFX', l: 'VFX' },
+        { i: '7.2', p: '7', v: 2, s: 'BGM/SFX', l: 'BGM·SFX' },
+        { i: '7.3', p: '7', v: 2, s: '컷신', l: '컷신' },
+    ];
+
     // [r248] 흐름 재설계 — 분류/결재/정의서/위키적용/작업제안 → 들여오기추천 + 위키구조 + 위키본문.
     //   (구 단계 렌더 함수는 본문에 남아있으나 흐름에서 분리됨 = 비활성)
     var RFS_STEPS = [
@@ -31715,7 +31749,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r255';
+    var _RFS_FRONT_REV = 'r256';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -32616,6 +32650,7 @@ ${intrLog}
             _rfsState.wikiPlan = null;
             _rfsState.stream = null; _rfsState.streamRunning = false;  // [r254]
             _rfsState.streamSel = null; _rfsState.streamLog = [];
+            _rfsState.wikiPlanRunning = false; _rfsState.wikiPlanSel = null;  // [r256]
         }
         _rfsState._activeSessionId = sid;
         _rfsState.current = s;
@@ -34563,26 +34598,39 @@ ${intrLog}
     function _rfsWikiPlanOn(id) { var s = _rfsWikiPlanSel(); return s[id] !== false; }
     function rfsToggleWikiPlan(id, on) { _rfsWikiPlanSel()[id] = !!on; }
 
+    function _rfsWikiTaxName(id) {
+        var t = (typeof WIKI_TAX !== 'undefined' ? WIKI_TAX : []).find(function (x) { return String(x.i) === String(id); });
+        return t ? (t.s || t.l || id) : id;
+    }
     function rfsRenderWikiPlanStep() {
         var main = document.getElementById('rfs-main'); if (!main) return;
         var plan = _rfsState.wikiPlan || { docs: [] };
         var docs = plan.docs || [];
+        var running = _rfsState.wikiPlanRunning;
+        var nodes = (_rfsState.current && _rfsState.current.nodes) || [];
         var html = '<div style="max-width:1000px;margin:0 auto;">';
-        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑤ 위키 구조 — 목차 먼저 정하기</h2>';
-        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">위키 본문은 분량이 많아, 먼저 <b>문서 구조(목차)</b>를 정하고 채택한 문서만 ⑥단계에서 본문을 작성합니다.</div>';
-        if (!docs.length) {
-            html += '<div style="padding:24px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">추천된 위키 구조가 없습니다. ④ 들여오기 추천에서 <b>📚 위키 문서 구조</b>를 받아 오세요. <div style="margin-top:10px;"><button class="aihub-gpu-btn" onclick="rfsGoStep(4)">← 들여오기 추천</button></div></div>';
-        } else {
-            html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
-            html += '<button class="aihub-gpu-btn primary" onclick="rfsAdoptWikiPlan()">✓ 채택한 구조로 본문 작성 →</button>';
-            html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(4)">← 들여오기 추천</button>';
-            html += '</div>';
+        html += '<h2 style="margin:0 0 8px;font-size:18px;">⑤ 위키 구조 — 표준 분류로 목차 먼저</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:12px;">위키는 작업·순서가 아니라 <b>분류체계(WIKI_TAX)에 따라 잘 정의된 게임요소</b>입니다. 분해 키워드를 표준 분류에 매핑해 <b>필요한 가지만</b> 문서 구조(목차)로 만들고, 채택한 문서만 ⑥에서 본문 작성.</div>';
+        // 컨트롤
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">';
+        html += '<label style="font-size:11.5px;">LLM <select id="rfs-wiki-model" style="padding:3px 6px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);"><option value="">기본</option>' + (typeof _rfsGeminiModelOptions === 'function' ? _rfsGeminiModelOptions() : '') + '</select></label>';
+        if (running) html += '<button class="aihub-gpu-btn" disabled style="opacity:.6;"><span class="rfs-dc-spinner"></span> 구조 도출 중…</button>';
+        else html += '<button class="aihub-gpu-btn primary" onclick="rfsRunDeriveWiki()">' + (docs.length ? '🔄 위키 구조 재도출' : '📚 위키 구조 도출') + '</button>';
+        if (docs.length && !running) html += '<button class="aihub-gpu-btn primary" onclick="rfsAdoptWikiPlan()">✓ 채택한 구조로 본문 →</button>';
+        html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(4)" style="margin-left:auto;">← 도출(Stream)</button>';
+        html += '</div>';
+        html += '<div id="rfs-wiki-prog" style="' + (running ? '' : 'display:none;') + 'padding:10px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:12px;"><div id="rfs-wiki-stage" style="font-weight:700;color:var(--c-accent);font-size:12.5px;">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '') + '</div></div>';
+        if (!docs.length && !running) {
+            html += '<div style="padding:22px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">분해 키워드 <b>' + nodes.length + '개</b>를 표준 분류로 매핑합니다. <b>📚 위키 구조 도출</b>을 눌러 시작하세요.</div>';
+        } else if (docs.length) {
             html += '<div style="display:flex;flex-direction:column;gap:10px;">';
             docs.forEach(function (d) {
+                var nodeNames = (d.origin_node_ids || []).map(function (nid) { return (nodes.find(function (x) { return x.id === nid; }) || {}).title; }).filter(Boolean);
                 html += '<div style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:12px;">';
                 html += '<div style="display:flex;align-items:flex-start;gap:8px;"><input type="checkbox" ' + (_rfsWikiPlanOn(d.id) ? 'checked' : '') + ' onchange="rfsToggleWikiPlan(\'' + d.id + '\',this.checked)" style="margin-top:3px;">';
-                html += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">📄 ' + _annEsc(d.title) + '</div>';
+                html += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">📄 ' + _annEsc(d.title) + (d.wiki_tax ? ' <span style="font-size:10px;background:#efe2f0;color:#6a4b75;border:1px solid #ddc9df;border-radius:10px;padding:1px 7px;">' + _annEsc(d.wiki_tax) + ' ' + _annEsc(_rfsWikiTaxName(d.wiki_tax)) + '</span>' : '') + '</div>';
                 if (d.summary) html += '<div style="font-size:11.5px;color:var(--c-text2);margin-top:3px;">' + _annEsc(d.summary) + '</div>';
+                if (nodeNames.length) html += '<div style="font-size:10.5px;color:var(--c-accent);margin-top:3px;">⟵ ' + _annEsc(nodeNames.join(', ')) + '</div>';
                 if ((d.outline || []).length) {
                     html += '<ol style="margin:8px 0 0;padding-left:20px;font-size:12px;color:var(--c-text2);">';
                     d.outline.forEach(function (o) { html += '<li>' + _annEsc(o) + '</li>'; });
@@ -34594,6 +34642,44 @@ ${intrLog}
         }
         html += '</div>';
         main.innerHTML = html;
+    }
+
+    async function rfsRunDeriveWiki() {
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        var cur = _rfsState.current; if (!cur || !(cur.nodes || []).length) { showToast('먼저 ③ 분해에서 노드를 확정하세요', 'alert'); return; }
+        if (_rfsState.wikiPlanRunning) return;
+        var modelSel = document.getElementById('rfs-wiki-model'); var model = (modelSel && modelSel.value) || null;
+        _rfsState.wikiPlanRunning = true; rfsRenderWikiPlanStep();
+        function _stage(m) { var e = document.getElementById('rfs-wiki-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
+        try {
+            var res = await fetch(url + '/refinery/derive-wiki', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: cur.id, user_id: rfsCurrentUser(), project_id: activeProjectId,
+                    nodes: cur.nodes || [], wiki_tax: (typeof WIKI_TAX !== 'undefined' ? WIKI_TAX : []),
+                    project_state: (typeof _rfsProjState === 'function' ? _rfsProjState() : {}), model: model,
+                }),
+            });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0, 120)); }
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = ''; var done = null;
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, { stream: true });
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try { var ev = JSON.parse(data); if (ev.event === 'stage') _stage(ev.message); else if (ev.event === 'done') done = ev; else if (ev.event === 'error') showToast('위키 구조 실패: ' + ev.message, 'alert'); } catch (e) {}
+                }
+            }
+            if (done) { _rfsState.wikiPlan = { docs: done.docs || [] }; _rfsState.wikiPlanSel = null; showToast('📚 위키 문서 구조 ' + ((done.docs || []).length) + '개', (done.docs || []).length ? 'success' : 'alert'); }
+        } catch (e) {
+            showToast('위키 구조 실패: ' + (e.message || e), 'alert');
+        } finally {
+            _rfsState.wikiPlanRunning = false;
+            if (_rfsState.step === 5) rfsRenderWikiPlanStep();
+        }
     }
 
     function rfsAdoptWikiPlan() {
