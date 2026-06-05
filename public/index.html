@@ -25753,6 +25753,9 @@ ${intrLog}
         // 블록 클릭 → 원본 편집 (위키링크/이미지/임베드 클릭은 제외)
         function _lpEnterEdit(idx) {
             var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return;
+            // [r234] 잠금/Vault 문서는 편집 차단 (소스 textarea 의 readOnly 가드를 라이브에서도 동일 적용)
+            var _d = currentData.docs ? currentData.docs.find(function (d) { return d.id === activeDocId; }) : null;
+            if (_d && (_d.isLocked || (_d.meta && _d.meta.vault))) { if (typeof showToast === 'function') showToast('🔒 잠긴 문서 — 편집하려면 잠금 해제/승인이 필요합니다', 'alert'); return; }
             var b = host._lpBlocks[idx]; if (!b) return;
             if (_lpEditingIdx != null && _lpEditingIdx !== idx) _lpCommitEdit();
             var row = host.querySelector('[data-idx="' + idx + '"]'); if (!row) return;
