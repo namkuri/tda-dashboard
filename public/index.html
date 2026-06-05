@@ -2505,7 +2505,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* ============================================================
            [UX] 공용 다이얼로그 (브라우저 prompt/confirm 대체) — 웜 테마
            ============================================================ */
-        #ui-dialog-overlay { position: fixed; inset: 0; z-index: 900; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); padding: 20px; }
+        #ui-dialog-overlay { position: fixed; inset: 0; z-index: 100090; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); padding: 20px; }
         #ui-dialog-overlay.open { display: flex; }
         .ui-dialog { width: 420px; max-width: 100%; background: var(--c-card); color: var(--c-text); border: 1px solid var(--c-border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); padding: 22px 22px 18px; animation: uiDialogIn .16s cubic-bezier(0.2,0,0.2,1); }
         @keyframes uiDialogIn { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
@@ -4135,6 +4135,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </button>
             <!-- [r78] 대시보드를 운영 그룹 위로 독립 배치 -->
             <button class="cs-nav cs-standalone active" data-nav="dashboard" id="cs-nav-dashboard" onclick="switchView('dashboard')" title="대시보드 (커스터마이즈 가능한 카테고리 프리뷰)" style="margin-bottom:6px;"><span class="cs-ico">🏠</span><span class="cs-label" style="font-weight:700;">대시보드</span></button>
+            <!-- [r244] Stage 워크스페이스 — Stage 운영 진입 시에만 동적 표시(최상단 대분류) -->
+            <div id="cs-stage-group" class="cs-group" data-grp="stage" style="display:none;"></div>
             <div class="cs-group" data-grp="ops">
                 <button class="cs-grp-head" onclick="toggleNavGroup('ops')" title="접기/펴기"><span class="cs-grp-caret">▾</span><span class="cs-label">운영</span></button>
                 <div class="cs-grp-items" data-grp="ops">
@@ -4143,6 +4145,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
                     <button class="cs-nav" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
+                    <!-- [r244] 프로덕트 관리 — 운영 그룹, 프로젝트 위키 아래 -->
+                    <button class="cs-nav" data-nav="product" id="cs-nav-product" onclick="switchView('product')" title="프로덕트 관리 — MVP/PoC 등 Stage 정의, 생애주기, 게임개발 직무체계 태그·담당자·산출물"><span class="cs-ico">🚀</span><span class="cs-label">프로덕트 관리</span></button>
                     <!-- [r81 #2] 이슈 트래커 -->
                     <button class="cs-nav" data-nav="issues" id="cs-nav-issues" onclick="switchView('issues')" title="이슈 트래커 (등록·담당자·우선순위·납기·상태)"><span class="cs-ico">🐛</span><span class="cs-label">이슈 트래커</span></button>
                     <button class="cs-nav" data-nav="calendar" id="cs-nav-calendar" onclick="switchView('calendar')" title="캘린더 (개인·팀·프로젝트 일정)"><span class="cs-ico">📅</span><span class="cs-label">캘린더</span></button>
@@ -4159,8 +4163,6 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="personal" id="cs-nav-personal" onclick="switchView('personal')" title="개인 문서"><span class="cs-ico">🔒</span><span class="cs-label">개인 문서</span></button>
                     <!-- [r242] 회의록 자동작성 — Discord 음성(Craig) → STT → 회의록 -->
                     <button class="cs-nav" data-nav="meetings" id="cs-nav-meetings" onclick="switchView('meetings')" title="회의록 자동작성 — Discord 음성(Craig 녹음)을 자동 텍스트화·요약"><span class="cs-ico">🎙</span><span class="cs-label">회의록 자동작성</span></button>
-                    <!-- [r243] 프로덕트 관리 — Stage·생애주기·직무체계 태그 -->
-                    <button class="cs-nav" data-nav="product" id="cs-nav-product" onclick="switchView('product')" title="프로덕트 관리 — MVP/PoC 등 Stage 정의, 생애주기, 게임개발 직무체계 태그·담당자·산출물"><span class="cs-ico">🚀</span><span class="cs-label">프로덕트 관리</span></button>
                     <button class="cs-nav" data-nav="graph" id="cs-nav-graph" onclick="switchView('graph')" title="그래프"><span class="cs-ico">📈</span><span class="cs-label">그래프</span></button>
                     <!-- [r112] 진짜 Deep Wiki — 유니티 Git 레포 LLM 자동 분석 + 기획 일치도 보고서 (DeepWiki-Open 모사). 자동 생성기는 r113~r116에 단계적 구축 -->
                     <button class="cs-nav" data-nav="deepwikiPages" id="cs-nav-deepwiki-pages" onclick="switchView('deepwikiPages')" title="Deep Wiki — 유니티 Git 레포를 LLM이 자동 분석한 위키 페이지 (1차) + 기획 일치도 보고서 (2차)"><span class="cs-ico">📘</span><span class="cs-label">Deep Wiki</span></button>
@@ -16197,6 +16199,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             var _csPm = document.getElementById('cs-nav-product'); if (_csPm) _csPm.classList.toggle('active', viewName === 'product');
             var _pmVw = document.getElementById('product-view'); if (_pmVw) { _pmVw.classList.toggle('hidden', viewName !== 'product'); _pmVw.style.display = (viewName === 'product') ? 'flex' : 'none'; }
             if (viewName === 'product' && typeof pmOpen === 'function') setTimeout(pmOpen, 30);
+            if (viewName !== 'product' && typeof pmHideStageWS === 'function') pmHideStageWS();   // [r244] Stage 사이드바는 운영 뷰에서만
             if (viewName === 'aiHub' && typeof aihubRender === 'function') aihubRender();
             // [r208] AI Hub 진입 시 마지막 동기화 시각 갱신
             if (viewName === 'aiHub' && typeof ahubRefreshIdxBadge === 'function') setTimeout(ahubRefreshIdxBadge, 30);
@@ -18908,6 +18911,7 @@ return data;
             const hasChildrenSet = new Set();
             const projDocs = currentData.docs.filter(d => {
                 if (d.projectId !== activeProjectId) return false;
+                if (d.meta && d.meta.stageId) return false; // [r244] Stage 전용 문서는 일반 트리에서 제외
                 if ((d.kind || 'wiki') !== currentDocKind) return false;
                 if (currentDocKind === 'personal') {
                     var owner = (d.meta && d.meta.owner) || null;
@@ -21125,7 +21129,8 @@ addEventListener("resize",sendPos);
             }
             document.querySelectorAll('#claude-sidebar .cs-group').forEach(function (grp) {
                 var g = grp.getAttribute('data-grp'); var box = grp.querySelector('.cs-grp-items'); if (!box) return;
-                if (collapsed[g]) grp.classList.add('collapsed');
+                // [r244] '도구' 그룹은 저장된 설정이 없으면 기본 접힘
+                if (collapsed[g] || (g === 'tools' && typeof collapsed.tools === 'undefined')) grp.classList.add('collapsed');
                 if (Array.isArray(order[g])) order[g].forEach(function (nv) { var el = box.querySelector('.cs-nav[data-nav="' + nv + '"]'); if (el) box.appendChild(el); });
                 if (typeof Sortable !== 'undefined' && !box._navSortable) {
                     box._navSortable = new Sortable(box, { group: 'nav-' + g, animation: 150, draggable: '.cs-nav', ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', onEnd: _saveNavOrder });
@@ -32084,6 +32089,7 @@ ${intrLog}
 
     function pmOpen() {
         _pmState.current = null;
+        if (typeof pmHideStageWS === 'function') pmHideStageWS();
         var t = document.getElementById('pm-title'); if (t) t.textContent = '';
         Promise.all([pmLoad(), pmLoadTax()]).then(pmRenderList);
     }
@@ -32220,6 +32226,7 @@ ${intrLog}
     function _pmPill(n, sel) { return '<span class="pm-pill' + (sel ? (' sel lv' + n.v) : '') + '" onclick="pmToggleTag(\'' + n.i + '\')" title="' + _annEsc(n.l) + '">' + _annEsc(n.s) + '</span>'; }
     function pmRenderEditor() {
         var main = document.getElementById('pm-main'); var st = _pmState.current; if (!main || !st) return;
+        if (typeof pmHideStageWS === 'function') pmHideStageWS();   // 정의 단계에선 Stage 사이드바 숨김
         var t = document.getElementById('pm-title'); if (t) t.textContent = '— ' + st.name;
         var sel = st.tags || [];
         var mems = _pmMembers();
@@ -32343,6 +32350,7 @@ ${intrLog}
         h += '</div>';
         h += '</div>';
         main.innerHTML = h;
+        pmShowStageWS(st, 'home');   // [r244] Stage 워크스페이스 사이드바
     }
     function pmDelivOpen(type, id) { if (type === 'doc') { if (typeof navToDoc === 'function') navToDoc(id); } else { if (typeof navToTask === 'function') navToTask(id); } }
     async function pmDelivCreateDoc(tagId, di) {
@@ -32431,6 +32439,171 @@ ${intrLog}
         while (changed) { changed = false; (_pmState.customTax || []).forEach(function (n) { if (!rm[n.i] && rm[n.p]) { rm[n.i] = 1; changed = true; } }); }
         _pmState.customTax = _pmState.customTax.filter(function (n) { return !rm[n.i]; });
         dbSaveTax(); pmTaxEditor();
+    }
+
+    // ── [r244] Stage 워크스페이스 — Stage 운영 중에만 사이드바 최상단에 표시. Stage 전용 자료(문서/위키/드라이브/에셋).
+    function pmShowStageWS(stage, area) {
+        if (!stage) return;
+        _pmState.wsStage = stage; _pmState.wsArea = area || _pmState.wsArea || 'home';
+        var g = document.getElementById('cs-stage-group'); if (!g) return;
+        var items = [{a: 'home', ic: '🏠', l: 'Stage 홈'}, {a: 'doc', ic: '📄', l: '문서'}, {a: 'wiki', ic: '📘', l: '스테이지 위키'}, {a: 'drive', ic: '🗂️', l: '드라이브'}, {a: 'asset', ic: '🎮', l: '에셋 매니저'}];
+        var h = '<button class="cs-grp-head" style="cursor:default;"><span class="cs-grp-caret" style="visibility:hidden;">▾</span><span class="cs-label" style="font-weight:800;color:var(--c-accent);">🚀 ' + _annEsc(stage.name) + ' Stage</span></button><div class="cs-grp-items">';
+        items.forEach(function (it) { h += '<button class="cs-nav' + (_pmState.wsArea === it.a ? ' active' : '') + '" onclick="pmStageGo(\'' + it.a + '\')"><span class="cs-ico">' + it.ic + '</span><span class="cs-label">' + it.l + '</span></button>'; });
+        h += '</div>';
+        g.innerHTML = h; g.style.display = '';
+    }
+    function pmHideStageWS() { _pmState.wsStage = null; var g = document.getElementById('cs-stage-group'); if (g) { g.style.display = 'none'; g.innerHTML = ''; } }
+    function pmStageGo(area) {
+        if (!_pmState.wsStage) return;
+        _pmState.current = _pmState.wsStage; _pmState.wsArea = area;
+        pmShowStageWS(_pmState.wsStage, area);
+        if (area === 'home') { pmRenderOps(); return; }
+        pmRenderStageArea(area);
+    }
+    function _pmStageItems(area) { var st = _pmState.wsStage; if (!st) return []; return (currentData.docs || []).filter(function (d) { return d.meta && d.meta.stageId === st.id && (d.meta.stageArea || 'doc') === area; }); }
+    function pmRenderStageArea(area) {
+        var st = _pmState.wsStage; if (!st) return;
+        var t = document.getElementById('pm-title'); if (t) t.textContent = '— ' + st.name + ' / ' + ({doc: '문서', wiki: '스테이지 위키', drive: '드라이브', asset: '에셋'}[area] || '');
+        if (area === 'doc' || area === 'wiki') return pmRenderStageDocs(area);
+        if (area === 'drive') return pmRenderStageDrive();
+        if (area === 'asset') return pmRenderStageAssets();
+    }
+    function _pmStageHeader(title, btnLabel, btnFn) {
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><span style="font-size:17px;font-weight:800;flex:1;">' + title + '</span>'
+            + (btnLabel ? '<button class="aihub-gpu-btn primary" style="font-size:12px;" onclick="' + btnFn + '">' + btnLabel + '</button>' : '')
+            + '<button class="aihub-gpu-btn" style="font-size:12px;" onclick="pmStageGo(\'home\')">← Stage 홈</button></div>';
+    }
+    // 문서 / 스테이지 위키 (Stage 전용 wiki_docs)
+    function pmRenderStageDocs(area) {
+        var main = document.getElementById('pm-main'); var st = _pmState.wsStage; if (!main || !st) return;
+        var label = area === 'wiki' ? '스테이지 위키' : '문서';
+        var docs = _pmStageItems(area);
+        var h = '<div style="max-width:1000px;margin:0 auto;">';
+        h += _pmStageHeader('📘 ' + label + ' <span style="font-size:12px;font-weight:400;color:var(--c-text3);">' + docs.length + '건 · 이 Stage 전용</span>', '+ 새 ' + label, "pmNewStageDocArea('" + area + "')");
+        if (!docs.length) { h += '<div style="padding:26px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">' + label + '가 없습니다. <b>+ 새 ' + label + '</b>로 추가하세요.</div>'; }
+        else { h += '<div style="display:flex;flex-direction:column;gap:6px;">' + docs.map(function (d) { return '<div class="rfs-done-item" style="border:1px solid var(--c-border);background:var(--c-card);padding:10px 12px;" onclick="pmOpenStageDoc(\'' + d.id + '\')"><span>' + (d.emoji || '📄') + '</span><span style="flex:1;font-weight:600;">' + _annEsc(d.title) + '</span><span style="color:var(--c-text3);font-size:10.5px;">' + (d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : '') + ' · 편집 ↗</span></div>'; }).join('') + '</div>'; }
+        h += '</div>';
+        main.innerHTML = h;
+    }
+    async function pmNewStageDocArea(area) {
+        if (!currentUser) { showToast('로그인이 필요합니다', 'alert'); return; }
+        var st = _pmState.wsStage; var label = area === 'wiki' ? '스테이지 위키' : '문서';
+        var name = await uiPrompt({title: '새 ' + label, message: '제목', placeholder: '예: ' + (area === 'wiki' ? '시스템 설계' : st.name + ' 메모')});
+        if (!name || !name.trim()) return;
+        var did = 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        var doc = {id: did, projectId: activeProjectId, parentId: null, title: name.trim(), emoji: area === 'wiki' ? '📘' : '📄',
+            content: '# ' + name.trim() + '\n\n', kind: 'wiki', createdAt: Date.now(), updatedAt: Date.now(),
+            meta: {stageId: st.id, stageArea: area, tags: ['stage']}, sortOrder: Date.now(), createdBy: currentUser.id, updatedBy: currentUser.id, _contentLoaded: true};
+        if (!Array.isArray(currentData.docs)) currentData.docs = [];
+        currentData.docs.push(doc); if (typeof dbUpsertDoc === 'function') await dbUpsertDoc(doc);
+        pmOpenStageDoc(did);
+    }
+    // Stage 문서 인라인 편집(워크스페이스 유지 — 본 편집기로 나가지 않음)
+    function pmOpenStageDoc(id) {
+        var main = document.getElementById('pm-main'); var st = _pmState.wsStage; if (!main) return;
+        var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) { showToast('문서 없음', 'alert'); return; }
+        var area = (d.meta && d.meta.stageArea) || 'doc';
+        var rendered = ''; try { rendered = DOMPurify.sanitize(parseMarkdownWithTables(d.content || ''), (typeof domPurifyConfig !== 'undefined' ? domPurifyConfig : undefined)); } catch (e) { rendered = _annEsc(d.content || ''); }
+        var h = '<div style="max-width:1000px;margin:0 auto;">';
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><input class="pm-input" style="flex:1;font-size:15px;font-weight:700;" value="' + _annEsc(d.title) + '" onchange="pmStageDocSetTitle(\'' + id + '\',this.value)"><span id="pm-doc-save" style="font-size:11px;color:var(--c-text3);">저장됨</span>';
+        h += '<button class="aihub-gpu-btn" style="font-size:11px;border-color:#d2393d;color:#d2393d;" onclick="pmStageDocDelete(\'' + id + '\')">🗑</button>';
+        h += '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="pmStageGo(\'' + area + '\')">← 목록</button></div>';
+        h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+        h += '<textarea id="pm-doc-ta" class="pm-input" style="min-height:60vh;font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.6;" oninput="pmStageDocInput(\'' + id + '\')" placeholder="# 마크다운…">' + _annEsc(d.content || '') + '</textarea>';
+        h += '<div id="pm-doc-prev" class="markdown-body" style="min-height:60vh;border:1px solid var(--c-border);border-radius:8px;padding:14px 16px;overflow-y:auto;font-size:13px;line-height:1.7;">' + rendered + '</div>';
+        h += '</div></div>';
+        main.innerHTML = h;
+        pmShowStageWS(st, area);
+    }
+    var _pmDocTimer = null;
+    function pmStageDocInput(id) {
+        var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return;
+        var ta = document.getElementById('pm-doc-ta'); if (ta) d.content = ta.value; d._contentLoaded = true; d.updatedAt = Date.now();
+        var ind = document.getElementById('pm-doc-save'); if (ind) ind.textContent = '저장 중…';
+        clearTimeout(_pmDocTimer); _pmDocTimer = setTimeout(function () {
+            if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d);
+            var pv = document.getElementById('pm-doc-prev'); if (pv) { try { pv.innerHTML = DOMPurify.sanitize(parseMarkdownWithTables(d.content || ''), (typeof domPurifyConfig !== 'undefined' ? domPurifyConfig : undefined)); } catch (e) {} }
+            var i2 = document.getElementById('pm-doc-save'); if (i2) i2.textContent = '저장됨';
+        }, 800);
+    }
+    function pmStageDocSetTitle(id, v) { var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return; d.title = v; d.updatedAt = Date.now(); if (typeof dbUpsertDoc === 'function') dbUpsertDoc(d); }
+    async function pmStageDocDelete(id) {
+        var ok = await uiConfirm({title: '삭제', message: '이 문서를 삭제할까요?', confirmText: '삭제', danger: true}); if (!ok) return;
+        var d = (currentData.docs || []).find(function (x) { return x.id === id; }); var area = (d && d.meta && d.meta.stageArea) || 'doc';
+        currentData.docs = (currentData.docs || []).filter(function (x) { return x.id !== id; });
+        if (supabaseClient) { try { await supabaseClient.from('wiki_docs').delete().eq('id', id); } catch (e) {} }
+        pmStageGo(area);
+    }
+    // 드라이브 (Stage 전용 링크/파일 — 공용 드라이브의 프로젝트/스테이지 폴더 연계)
+    function pmRenderStageDrive() {
+        var main = document.getElementById('pm-main'); var st = _pmState.wsStage; if (!main || !st) return;
+        var items = _pmStageItems('drive');
+        var proj = (currentData.projects || []).find(function (p) { return p.id === activeProjectId; });
+        var folderPath = ((proj && proj.name) || '프로젝트') + ' / ' + st.name;
+        var h = '<div style="max-width:1000px;margin:0 auto;">';
+        h += _pmStageHeader('🗂️ 드라이브 <span style="font-size:12px;font-weight:400;color:var(--c-text3);">' + items.length + '개</span>', '+ 자료 링크', 'pmAddStageDrive()');
+        h += '<div style="font-size:11.5px;color:var(--c-text3);background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:8px 12px;margin-bottom:12px;">📁 파일은 공용 드라이브의 <b>' + _annEsc(folderPath) + '</b> 폴더에 보관하세요. <button class="aihub-gpu-btn" style="font-size:10.5px;padding:1px 8px;" onclick="switchView(\'drive\')">공용 드라이브 열기</button></div>';
+        if (!items.length) { h += '<div style="padding:26px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">등록된 자료가 없습니다. <b>+ 자료 링크</b>로 추가하세요.</div>'; }
+        else { h += '<div style="display:flex;flex-direction:column;gap:6px;">' + items.map(function (d) { var url = (d.meta && d.meta.driveUrl) || ''; return '<div style="display:flex;gap:8px;align-items:center;border:1px solid var(--c-border);background:var(--c-card);border-radius:8px;padding:9px 12px;"><span>🔗</span><span style="flex:1;font-weight:600;">' + _annEsc(d.title) + '</span>' + (url ? '<a href="' + _annEsc(url) + '" target="_blank" rel="noopener" class="aihub-gpu-btn" style="font-size:10.5px;padding:2px 8px;text-decoration:none;">열기 ↗</a>' : '') + '<button class="aihub-gpu-btn" style="font-size:10.5px;padding:2px 7px;" onclick="pmStageDocDelete(\'' + d.id + '\')">✕</button></div>'; }).join('') + '</div>'; }
+        h += '</div>';
+        main.innerHTML = h;
+    }
+    async function pmAddStageDrive() {
+        if (!currentUser) { showToast('로그인이 필요합니다', 'alert'); return; }
+        var st = _pmState.wsStage;
+        var name = await uiPrompt({title: '자료 링크', message: '이름', placeholder: '예: 기획서 v2'}); if (!name || !name.trim()) return;
+        var url = await uiPrompt({title: '자료 링크', message: 'URL (드라이브/문서 링크)', placeholder: 'https://…'}) || '';
+        var did = 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        var doc = {id: did, projectId: activeProjectId, parentId: null, title: name.trim(), emoji: '🔗', content: '', kind: 'wiki',
+            createdAt: Date.now(), updatedAt: Date.now(), meta: {stageId: st.id, stageArea: 'drive', driveUrl: url.trim(), tags: ['stage']}, sortOrder: Date.now(), createdBy: currentUser.id};
+        if (!Array.isArray(currentData.docs)) currentData.docs = [];
+        currentData.docs.push(doc); if (typeof dbUpsertDoc === 'function') await dbUpsertDoc(doc);
+        pmStageGo('drive');
+    }
+    // 에셋 매니저 (Stage 전용)
+    function pmRenderStageAssets() {
+        var main = document.getElementById('pm-main'); var st = _pmState.wsStage; if (!main || !st) return;
+        var items = _pmStageItems('asset');
+        var h = '<div style="max-width:1000px;margin:0 auto;">';
+        h += _pmStageHeader('🎮 에셋 매니저 <span style="font-size:12px;font-weight:400;color:var(--c-text3);">' + items.length + '개 · 이 Stage 전용</span>', '+ 에셋', 'pmAddStageAsset()');
+        if (!items.length) { h += '<div style="padding:26px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">에셋이 없습니다. <b>+ 에셋</b>으로 추가하세요.</div>'; }
+        else {
+            h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">';
+            items.forEach(function (d) {
+                var m = d.meta || {}; var stc = ({planned: '#8a8378', wip: '#b8852a', review: '#2a7ab8', done: '#2a4a30'})[m.assetStatus] || '#8a8378';
+                h += '<div style="border:1px solid var(--c-border);background:var(--c-card);border-radius:9px;padding:11px 12px;">'
+                    + '<div style="display:flex;align-items:center;gap:6px;"><span style="font-weight:700;flex:1;">' + _annEsc(d.title) + '</span><span style="font-size:9.5px;padding:1px 6px;border-radius:9px;background:' + stc + ';color:#fff;">' + (m.assetStatus || 'planned') + '</span></div>'
+                    + '<div style="font-size:11px;color:var(--c-text3);margin-top:4px;">' + _annEsc(m.assetKind || '에셋') + (m.assignee ? (' · 👤 ' + _annEsc(_pmMemName(m.assignee))) : '') + '</div>'
+                    + '<div style="display:flex;gap:5px;margin-top:8px;">'
+                    + (m.assetLink ? '<a href="' + _annEsc(m.assetLink) + '" target="_blank" rel="noopener" class="aihub-gpu-btn" style="font-size:10px;padding:2px 7px;text-decoration:none;">열기 ↗</a>' : '')
+                    + '<button class="aihub-gpu-btn" style="font-size:10px;padding:2px 7px;" onclick="pmEditStageAsset(\'' + d.id + '\')">편집</button>'
+                    + '<button class="aihub-gpu-btn" style="font-size:10px;padding:2px 7px;" onclick="pmStageDocDelete(\'' + d.id + '\')">✕</button></div></div>';
+            });
+            h += '</div>';
+        }
+        h += '</div>';
+        main.innerHTML = h;
+    }
+    async function pmAddStageAsset() {
+        if (!currentUser) { showToast('로그인이 필요합니다', 'alert'); return; }
+        var st = _pmState.wsStage;
+        var name = await uiPrompt({title: '새 에셋', message: '에셋 이름', placeholder: '예: 주인공 모델'}); if (!name || !name.trim()) return;
+        var kind = await uiPrompt({title: '새 에셋', message: '종류', placeholder: '예: 3D 모델 / UI / SFX'}) || '에셋';
+        var did = 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        var doc = {id: did, projectId: activeProjectId, parentId: null, title: name.trim(), emoji: '🎮', content: '', kind: 'wiki',
+            createdAt: Date.now(), updatedAt: Date.now(), meta: {stageId: st.id, stageArea: 'asset', assetKind: kind.trim(), assetStatus: 'planned', assetLink: '', tags: ['stage']}, sortOrder: Date.now(), createdBy: currentUser.id};
+        if (!Array.isArray(currentData.docs)) currentData.docs = [];
+        currentData.docs.push(doc); if (typeof dbUpsertDoc === 'function') await dbUpsertDoc(doc);
+        pmStageGo('asset');
+    }
+    async function pmEditStageAsset(id) {
+        var d = (currentData.docs || []).find(function (x) { return x.id === id; }); if (!d) return; var m = d.meta || (d.meta = {});
+        var status = await uiPrompt({title: '에셋 상태', message: 'planned / wip / review / done', placeholder: m.assetStatus || 'planned'}); if (status === null) return;
+        var link = await uiPrompt({title: '에셋 링크', message: 'URL(선택)', placeholder: m.assetLink || 'https://…'});
+        if (status && status.trim()) m.assetStatus = status.trim();
+        if (link !== null) m.assetLink = (link || '').trim();
+        d.updatedAt = Date.now(); if (typeof dbUpsertDoc === 'function') await dbUpsertDoc(d);
+        pmStageGo('asset');
     }
 
     function _rfsLog(msg) {
