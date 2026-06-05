@@ -31681,6 +31681,13 @@ ${intrLog}
         intake: null,         // [r246] 들여오기 추천 {sections:[{node_id, title, targets:{wbs,sprint,task,stage,wiki}}]}
         intakeRunning: false, // [r246] 추천 진행 중
         wikiPlan: null,       // [r246] 위키 구조(목차) 추천 {docs:[{title, outline:[...]}]}
+        // [r254] 도출 Stream — 키워드→Task→Sprint→STAGE→WBS (+위키 좌측 축)
+        stream: null,         // {tasks,sprints,stages,wbs}
+        streamRunning: false,
+        streamView: 'flow',   // 'flow'(6열) | 'tree'
+        streamSel: null,      // {tasks:{},sprints:{},stages:{},wbs:{}}
+        streamLog: [],
+        streamCfg: { capacity_hours: 80, sprint_weeks: 2, rule: 'auto', strict: false },
     };
 
     // [r248] 흐름 재설계 — 분류/결재/정의서/위키적용/작업제안 → 들여오기추천 + 위키구조 + 위키본문.
@@ -31689,7 +31696,7 @@ ${intrLog}
         { num: 1, label: '세션 생성', section: 'list' },
         { num: 2, label: 'Vault 추가', section: 'vault' },
         { num: 3, label: '분해', section: 'decompose' },
-        { num: 4, label: '들여오기 추천', section: 'intake' },
+        { num: 4, label: '도출(Stream)', section: 'stream' },
         { num: 5, label: '위키 구조', section: 'wiki_plan' },
         { num: 6, label: '위키 본문', section: 'wiki_body' },
         { num: 7, label: '완료', section: 'done' },
@@ -32511,7 +32518,8 @@ ${intrLog}
             case 'list': rfsRenderSessionList(); break;
             case 'vault': rfsRenderVaultStep(); break;
             case 'decompose': rfsRenderDecomposeStep(); break;
-            case 'intake': rfsRenderIntakeStep(); break;          // [r248] ④ 들여오기 추천
+            case 'stream': rfsRenderStreamStep(); break;          // [r254] ④ 도출 Stream
+            case 'intake': rfsRenderIntakeStep(); break;          // [r248] (구) 들여오기 추천 — 비활성
             case 'wiki_plan': rfsRenderWikiPlanStep(); break;     // [r248] ⑤ 위키 구조
             case 'wiki_body': rfsRenderWikiBodyStep(); break;     // [r248] ⑥ 위키 본문
             case 'done': rfsRenderDoneStep(); break;
@@ -32606,6 +32614,8 @@ ${intrLog}
             _rfsState._analyzing = false;
             _rfsState.intake = null; _rfsState.intakeRunning = false;
             _rfsState.wikiPlan = null;
+            _rfsState.stream = null; _rfsState.streamRunning = false;  // [r254]
+            _rfsState.streamSel = null; _rfsState.streamLog = [];
         }
         _rfsState._activeSessionId = sid;
         _rfsState.current = s;
@@ -32869,7 +32879,7 @@ ${intrLog}
         }
         if (nodeCount && !dc.running) {
             html += '<div style="padding:12px;border:1px solid var(--c-accent);border-radius:8px;background:var(--c-accent-soft);">';
-            html += '✓ 노드 ' + nodeCount + '개 확정됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">들여오기 추천으로 →</button>';
+            html += '✓ 노드 ' + nodeCount + '개 확정됨. <button class="aihub-gpu-btn primary" onclick="rfsGoStep(4)" style="margin-left:10px;">도출(Stream)로 →</button>';
             html += '</div>';
         } else if (!dc.running && (_rfsState.current && _rfsState.current.last_decompose) && (_rfsState.current.last_decompose.leaf_count === 0)) {
             // [r228] 직전 분해가 0개였음 — 진단 표시
@@ -33921,6 +33931,375 @@ ${intrLog}
             if (genBtn) genBtn.innerHTML = prev;
             showToast('생성 실패: ' + (e.message || e), 'alert');
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // [r254] ④ 도출 Stream — 키워드→Task→Sprint→STAGE→WBS (+위키 좌측 정의축)
+    //   bottom-up 인과 도출(계획서). 6열 흐름/트리 토글 + 계보 강조 + 채택→생성.
+    // ════════════════════════════════════════════════════════════════
+    function _rfsStreamCss() {
+        if (document.getElementById('rfs-stream-css')) return;
+        var st = document.createElement('style'); st.id = 'rfs-stream-css';
+        st.textContent =
+            '.rfs-st-flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;align-items:start}'
+            + '.rfs-st-axis{display:flex;gap:7px;align-items:center;font-size:11px;color:var(--c-text3);margin:2px 0 8px;flex-wrap:wrap}'
+            + '.rfs-st-col{background:var(--c-card2,#fbf7ef);border:1px solid var(--c-border);border-radius:10px;padding:7px;min-height:120px}'
+            + '.rfs-st-col.wikicol{background:#f3eef4;border-color:#e3d6e6}'
+            + '.rfs-st-h{font-size:11.5px;font-weight:800;color:var(--c-text2);padding:3px 5px 7px;display:flex;gap:5px;align-items:center}'
+            + '.rfs-st-h .n{margin-left:auto;font-weight:400;color:var(--c-text3)}'
+            + '.rfs-st-card{position:relative;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:7px 8px 7px 22px;margin-bottom:6px;cursor:pointer;font-size:12px;transition:opacity .12s,box-shadow .12s,border-color .12s}'
+            + '.rfs-st-card.wikic{background:#fbf6fb;border-color:#e6d8e8}'
+            + '.rfs-st-card .ck{position:absolute;left:6px;top:8px;margin:0}'
+            + '.rfs-st-card .ttl{font-weight:700;line-height:1.3}'
+            + '.rfs-st-card .mini{font-size:10px;color:var(--c-text3);margin-top:2px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}'
+            + '.rfs-st-flow.focusing .rfs-st-card:not(.hot){opacity:.26}'
+            + '.rfs-st-card.hot{border-color:var(--c-accent);box-shadow:0 0 0 2px rgba(201,100,66,.22)}'
+            + '.rfs-st-card.wikic.hot{border-color:#8a5f72;box-shadow:0 0 0 2px rgba(138,95,114,.22)}'
+            + '.rfs-st-tag{font-size:9.5px;padding:1px 6px;border-radius:10px;background:#e9eef0;color:#3c5a66;border:1px solid #cfdde2}'
+            + '.rfs-st-org{font-size:9.5px;color:var(--c-accent);background:var(--c-soft,#f1e6dd);border-radius:5px;padding:1px 5px}'
+            + '.rfs-st-dep{font-size:9.5px;color:#a85c3e}'
+            + '.rfs-st-tl{margin-top:5px;background:var(--c-card);border:1px solid var(--c-border);border-radius:7px;padding:5px}'
+            + '.rfs-st-tlrow{display:flex;align-items:center;gap:4px;margin:3px 0;font-size:9.5px}'
+            + '.rfs-st-tlrow .lab{width:62px;color:var(--c-text2);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+            + '.rfs-st-track{position:relative;flex:1;height:13px;background:#efe7d6;border-radius:4px}'
+            + '.rfs-st-bar{position:absolute;height:13px;border-radius:4px;background:var(--c-accent);opacity:.85}';
+        document.head.appendChild(st);
+    }
+
+    function _rfsPmTax() { return (typeof PM_TAX !== 'undefined' && PM_TAX) ? PM_TAX : []; }
+    function _rfsTagName(id) {
+        var t = _rfsPmTax().find(function (x) { return String(x.i) === String(id); });
+        return t ? (t.s || t.l || id) : id;
+    }
+    function _rfsStreamSel() {
+        if (!_rfsState.streamSel) _rfsState.streamSel = { tasks: {}, sprints: {}, stages: {}, wbs: {} };
+        return _rfsState.streamSel;
+    }
+    function _rfsStOn(kind, id) { var s = _rfsStreamSel()[kind] || {}; return s[id] !== false; }
+    function rfsStToggle(kind, id, on) { var s = _rfsStreamSel(); (s[kind] = s[kind] || {})[id] = !!on; }
+
+    // 도출 관계도(계보) — id → 연결된 id 배열
+    function _rfsStreamRelations() {
+        var s = _rfsState.stream || {}; var nodes = (_rfsState.current && _rfsState.current.nodes) || [];
+        var tasks = s.tasks || [], sprints = s.sprints || [], stages = s.stages || [], wbs = s.wbs || [];
+        var wiki = (_rfsState.wikiPlan && _rfsState.wikiPlan.docs) || [];
+        var rel = {};
+        function add(a, b) { if (!a || !b) return; (rel[a] = rel[a] || []); if (rel[a].indexOf(b) < 0) rel[a].push(b); }
+        var seqStage = {}; stages.forEach(function (st) { (st.sprint_seqs || []).forEach(function (sq) { seqStage[sq] = st.id; }); });
+        var taskSprint = {}, taskSeq = {};
+        sprints.forEach(function (sp) { (sp.task_ids || []).forEach(function (tid) { taskSprint[tid] = sp.id; taskSeq[tid] = sp.seq; }); });
+        var taskWbs = {}; wbs.forEach(function (w) { ((w.links || {}).taskIds || []).forEach(function (tid) { taskWbs[tid] = w.id; }); });
+        tasks.forEach(function (t) {
+            add(t.id, t.node_id); add(t.node_id, t.id);
+            var sp = taskSprint[t.id]; add(t.id, sp); add(sp, t.id);
+            var stg = seqStage[taskSeq[t.id]]; add(t.id, stg); add(sp, stg); add(stg, sp);
+            var w = taskWbs[t.id]; add(t.id, w); add(w, sp);
+        });
+        wiki.forEach(function (wk) { (wk.origin_node_ids || wk.node_ids || []).forEach(function (nid) { add(wk.id, nid); add(nid, wk.id); }); });
+        return rel;
+    }
+
+    function rfsRenderStreamStep() {
+        var main = document.getElementById('rfs-main'); if (!main) return;
+        _rfsStreamCss();
+        var st = _rfsState.stream; var running = _rfsState.streamRunning; var cfg = _rfsState.streamCfg;
+        var nodes = (_rfsState.current && _rfsState.current.nodes) || [];
+        var html = '<div style="max-width:1280px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 6px;font-size:18px;">④ 도출 — 키워드에서 작업·시간 흐름으로</h2>';
+        html += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:12px;">분해 키워드를 <b>공정태그 Task → 의존순서 → 스프린트 → STAGE → WBS·타임라인</b>으로 bottom-up 도출합니다. 좌측 <b>위키</b>는 정의·분류 축(⑤에서 구조 채택).</div>';
+        // 컨트롤
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;background:var(--c-card);border:1px solid var(--c-border);border-radius:9px;padding:8px 10px;">';
+        html += '<label style="font-size:11.5px;">스프린트 <input id="rfs-st-weeks" type="number" min="1" max="6" value="' + cfg.sprint_weeks + '" style="width:42px;padding:2px 4px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);"> 주</label>';
+        html += '<label style="font-size:11.5px;">가용 <input id="rfs-st-cap" type="number" min="4" max="200" value="' + cfg.capacity_hours + '" style="width:50px;padding:2px 4px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);"> h/스프린트</label>';
+        html += '<label style="font-size:11.5px;">STAGE 묶음 <select id="rfs-st-rule" style="padding:3px 6px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);">'
+            + ['auto:LLM 자율', 'by_process:공정 전환마다', 'by_count:2:2스프린트마다', 'all_one:전체 1개'].map(function (o) { var v = o.split(':').slice(0, o.split(':').length - 1).join(':'); var lb = o.split(':').slice(-1)[0]; return '<option value="' + v + '"' + (cfg.rule === v ? ' selected' : '') + '>' + lb + '</option>'; }).join('')
+            + '</select></label>';
+        html += '<label style="font-size:11.5px;">LLM <select id="rfs-st-model" style="padding:3px 6px;border:1px solid var(--c-border);border-radius:5px;background:var(--c-paper);"><option value="">기본</option>' + (typeof _rfsGeminiModelOptions === 'function' ? _rfsGeminiModelOptions() : '') + '</select></label>';
+        if (running) html += '<button class="aihub-gpu-btn" disabled style="opacity:.6;"><span class="rfs-dc-spinner"></span> 도출 중…</button>';
+        else html += '<button class="aihub-gpu-btn primary" onclick="rfsRunDeriveStream()">' + (st ? '🔄 재도출' : '✨ 도출 시작') + '</button>';
+        // 뷰 토글
+        html += '<span style="margin-left:auto;display:inline-flex;border:1px solid var(--c-border);border-radius:7px;overflow:hidden;">';
+        html += '<button onclick="rfsStreamView(\'flow\')" style="border:0;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;background:' + (_rfsState.streamView === 'flow' ? 'var(--c-accent);color:#fff' : 'transparent;color:var(--c-text2)') + ';">흐름</button>';
+        html += '<button onclick="rfsStreamView(\'tree\')" style="border:0;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;background:' + (_rfsState.streamView === 'tree' ? 'var(--c-accent);color:#fff' : 'transparent;color:var(--c-text2)') + ';">트리</button>';
+        html += '</span>';
+        html += '</div>';
+        // 진행 로그
+        html += '<div id="rfs-st-prog" style="' + (running ? '' : 'display:none;') + 'padding:10px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:12px;"><div id="rfs-st-stage" style="font-weight:700;color:var(--c-accent);font-size:12.5px;">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '') + '</div><div id="rfs-st-log" style="font-family:ui-monospace,monospace;font-size:10px;max-height:120px;overflow-y:auto;margin-top:6px;background:var(--c-paper);padding:5px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((_rfsState.streamLog || []).join('\n')) + '</div></div>';
+
+        if (st && !running) {
+            // 액션 바
+            var cnt = (st.stages || []).length + (st.sprints || []).length + (st.tasks || []).length + (st.wbs || []).length;
+            html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">';
+            html += '<button class="aihub-gpu-btn primary" onclick="rfsApplyStream()">⊕ 선택 항목 프로젝트에 생성</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsStreamSelectAll(true)">전체 선택</button>';
+            html += '<button class="aihub-gpu-btn" onclick="rfsStreamSelectAll(false)">전체 해제</button>';
+            html += '<span style="font-size:11px;color:var(--c-text3);">Task ' + (st.tasks || []).length + ' · Sprint ' + (st.sprints || []).length + ' · STAGE ' + (st.stages || []).length + ' · WBS ' + (st.wbs || []).length + '</span>';
+            html += '<button class="aihub-gpu-btn" style="margin-left:auto;" onclick="rfsGoStep(5)">위키 구조로 →</button>';
+            html += '</div>';
+            html += (_rfsState.streamView === 'tree') ? _rfsStreamTreeHtml() : _rfsStreamFlowHtml(nodes);
+        } else if (!running) {
+            html += '<div style="padding:26px;border:1px dashed var(--c-border);border-radius:10px;text-align:center;color:var(--c-text3);">분해 키워드 <b>' + nodes.length + '개</b> 준비됨. <b>✨ 도출 시작</b>으로 작업·시간 흐름을 만들어 보세요.' + (nodes.length ? '' : '<div style="margin-top:8px;"><button class="aihub-gpu-btn" onclick="rfsGoStep(3)">← 분해</button></div>') + '</div>';
+        }
+        html += '</div>';
+        main.innerHTML = html;
+        if (st && !running && _rfsState.streamView === 'flow') _rfsStreamBindHighlight();
+        var le = document.getElementById('rfs-st-log'); if (le) le.scrollTop = le.scrollHeight;
+    }
+
+    function _rfsStreamCard(kind, id, inner, opts) {
+        opts = opts || {};
+        var link = (opts.link || []).filter(Boolean).join(' ');
+        var chk = opts.nocheck ? '' : '<input class="ck" type="checkbox" ' + (_rfsStOn(kind, id) ? 'checked' : '') + ' onchange="rfsStToggle(\'' + kind + '\',\'' + id + '\',this.checked)">';
+        return '<div class="rfs-st-card' + (opts.wiki ? ' wikic' : '') + '" data-id="' + _annEsc(id) + '" data-link="' + _annEsc(link) + '">' + chk + inner + '</div>';
+    }
+
+    function _rfsStreamFlowHtml(nodes) {
+        var s = _rfsState.stream || {};
+        var tasks = s.tasks || [], sprints = s.sprints || [], stages = s.stages || [], wbs = s.wbs || [];
+        var wiki = (_rfsState.wikiPlan && _rfsState.wikiPlan.docs) || [];
+        // 보조 매핑
+        var seqStage = {}; stages.forEach(function (st) { (st.sprint_seqs || []).forEach(function (sq) { seqStage[sq] = st.id; }); });
+        var taskSprintId = {}, taskSeq = {}; sprints.forEach(function (sp) { (sp.task_ids || []).forEach(function (tid) { taskSprintId[tid] = sp.id; taskSeq[tid] = sp.seq; }); });
+        var taskWbs = {}; wbs.forEach(function (w) { ((w.links || {}).taskIds || []).forEach(function (tid) { taskWbs[tid] = w.id; }); });
+        var nodeWiki = {}; wiki.forEach(function (wk) { (wk.origin_node_ids || wk.node_ids || []).forEach(function (nid) { (nodeWiki[nid] = nodeWiki[nid] || []).push(wk.id); }); });
+        var nodeTasks = {}; tasks.forEach(function (t) { (nodeTasks[t.node_id] = nodeTasks[t.node_id] || []).push(t.id); });
+
+        var h = '<div class="rfs-st-axis"><b style="color:#8a5f72;">📚 위키=정의축</b><span>◂</span><b style="color:var(--c-accent);">🌲 키워드(허브)</b><span>▸</span><b style="color:#9a6a3a;">작업·시간: Task→Sprint→STAGE→WBS</b></div>';
+        h += '<div class="rfs-st-flow">';
+        // 0 위키
+        h += '<div class="rfs-st-col wikicol"><div class="rfs-st-h">📚 위키 (정의) <span class="n">' + wiki.length + '</span></div>';
+        if (!wiki.length) h += '<div style="font-size:10.5px;color:var(--c-text3);padding:4px;">위키 구조는 <b>⑤</b>에서 도출·채택합니다. 채택 후 여기서 키워드↔위키 계보가 보입니다.</div>';
+        wiki.forEach(function (wk) {
+            h += _rfsStreamCard('wiki', wk.id, '<div class="ttl">📄 ' + _annEsc(wk.title) + '</div>' + ((wk.outline || []).length ? '<div class="mini">목차 ' + wk.outline.length + '</div>' : ''), { wiki: true, nocheck: true, link: (wk.origin_node_ids || wk.node_ids || []) });
+        });
+        h += '</div>';
+        // 1 키워드
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">🌲 키워드 <span class="n">' + nodes.length + '</span></div>';
+        nodes.forEach(function (n) {
+            var isCat = n.kind === 'category';
+            h += _rfsStreamCard('node', n.id, '<div class="ttl">' + (isCat ? '📁 ' : '') + _annEsc(n.title) + '</div>', { nocheck: true, link: (nodeTasks[n.id] || []).concat(nodeWiki[n.id] || []) });
+        });
+        h += '</div>';
+        // 2 Task
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">✅ Task <span class="n">' + tasks.length + '</span></div>';
+        tasks.forEach(function (t) {
+            var dep = (t.depends_on || []).length ? '<span class="rfs-st-dep">의존 ' + t.depends_on.length + '</span>' : '';
+            var tag = t.process_tag ? '<span class="rfs-st-tag">' + _annEsc(t.process_tag) + ' ' + _annEsc(_rfsTagName(t.process_tag)) + '</span>' : '<span style="font-size:9.5px;color:#b0651f;">공정?</span>';
+            var nodeT = (nodes.find(function (x) { return x.id === t.node_id; }) || {}).title || '';
+            h += _rfsStreamCard('tasks', t.id, '<div class="ttl">' + _annEsc(t.title) + '</div><div class="mini">' + tag + (nodeT ? '<span class="rfs-st-org">⟵ ' + _annEsc(nodeT) + '</span>' : '') + '<span>' + (t.est_hours || 0) + 'h</span>' + dep + '</div>',
+                { link: [t.node_id, taskSprintId[t.id], seqStage[taskSeq[t.id]], taskWbs[t.id]] });
+        });
+        h += '</div>';
+        // 3 Sprint
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">🏃 Sprint <span class="n">' + sprints.length + '</span></div>';
+        sprints.forEach(function (sp) {
+            h += _rfsStreamCard('sprints', sp.id, '<div class="ttl">🏃 ' + _annEsc(sp.week_label || ('Sprint ' + sp.seq)) + '</div><div class="mini">Task ' + (sp.task_ids || []).length + ' · ' + Math.round(sp.hours || 0) + 'h' + (sp.goal ? '' : '') + '</div>' + (sp.goal ? '<div class="mini" style="color:var(--c-text2);">' + _annEsc(sp.goal) + '</div>' : ''),
+                { link: (sp.task_ids || []).concat([seqStage[sp.seq]]) });
+        });
+        h += '</div>';
+        // 4 STAGE
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">🎯 STAGE <span class="n">' + stages.length + '</span></div>';
+        stages.forEach(function (stg) {
+            var tags = (stg.tags || []).map(function (tg) { return '<span class="rfs-st-tag">' + _annEsc(tg) + '</span>'; }).join('');
+            var spIds = sprints.filter(function (sp) { return (stg.sprint_seqs || []).indexOf(sp.seq) >= 0; }).map(function (sp) { return sp.id; });
+            h += _rfsStreamCard('stages', stg.id, '<div class="ttl">🎯 ' + _annEsc(stg.name) + '</div><div class="mini"><span class="rfs-st-tag" style="background:var(--c-accent);color:#fff;border:0;">' + _annEsc(stg.type) + '</span><span class="rfs-st-tag" style="background:#bd8a3e;color:#fff;border:0;">' + _annEsc(stg.lifecycle) + '</span></div><div class="mini">공정 ' + tags + '</div>' + (stg.goal ? '<div class="mini" style="color:var(--c-text2);">' + _annEsc(stg.goal) + '</div>' : ''),
+                { link: spIds });
+        });
+        h += '</div>';
+        // 5 WBS + 타임라인
+        h += '<div class="rfs-st-col"><div class="rfs-st-h">🏗 WBS+타임라인 <span class="n">' + wbs.length + '</span></div>';
+        wbs.forEach(function (w) {
+            var segs = (w.links || {})._segments || [];
+            var spIds = sprints.filter(function (sp) { return ((w.links || {}).taskIds || []).some(function (tid) { return (sp.task_ids || []).indexOf(tid) >= 0; }); }).map(function (sp) { return sp.id; });
+            var tl = '';
+            if (segs.length) {
+                var alld = segs.map(function (sg) { return sg.start; }).concat(segs.map(function (sg) { return sg.due; })).filter(Boolean).sort();
+                var t0 = alld[0], t1 = alld[alld.length - 1];
+                var span = Math.max(1, (new Date(t1) - new Date(t0)) || 1);
+                tl = '<div class="rfs-st-tl">' + segs.map(function (sg) {
+                    var l = sg.start ? ((new Date(sg.start) - new Date(t0)) / span * 100) : 0;
+                    var wd = (sg.start && sg.due) ? Math.max(8, (new Date(sg.due) - new Date(sg.start)) / span * 100) : 20;
+                    return '<div class="rfs-st-tlrow"><span class="lab">' + _annEsc(sg.id) + '</span><div class="rfs-st-track"><div class="rfs-st-bar" style="left:' + l + '%;width:' + wd + '%;"></div></div></div>';
+                }).join('') + '</div>';
+            }
+            h += _rfsStreamCard('wbs', w.id, '<div class="ttl">🏗 ' + _annEsc(w.title) + '</div><div class="mini">예상 ' + ((w.links || {})._estimated_days || 0) + 'd · 막대 ' + segs.length + '</div>' + tl,
+                { link: spIds });
+        });
+        h += '</div>';
+        h += '</div>';
+        return h;
+    }
+
+    function _rfsStreamTreeHtml() {
+        var s = _rfsState.stream || {};
+        var tasks = s.tasks || [], sprints = s.sprints || [], stages = s.stages || [];
+        var nodes = (_rfsState.current && _rfsState.current.nodes) || [];
+        var taskById = {}; tasks.forEach(function (t) { taskById[t.id] = t; });
+        var nodeById = {}; nodes.forEach(function (n) { nodeById[n.id] = n; });
+        var h = '<div class="tree" style="max-width:880px;">';
+        stages.forEach(function (stg) {
+            var sps = sprints.filter(function (sp) { return (stg.sprint_seqs || []).indexOf(sp.seq) >= 0; });
+            h += '<details open style="border:1px solid var(--c-border);border-radius:9px;background:var(--c-card);margin-bottom:8px;padding:4px;">';
+            h += '<summary style="cursor:pointer;font-weight:700;font-size:13px;padding:7px 9px;list-style:none;">🎯 ' + _annEsc(stg.name) + ' <span style="font-size:10px;color:#fff;background:var(--c-accent);border-radius:10px;padding:1px 7px;">' + _annEsc(stg.type) + '</span> <span style="font-size:11px;color:var(--c-text3);font-weight:400;">Sprint ' + sps.length + '</span></summary>';
+            sps.forEach(function (sp) {
+                h += '<details style="margin:6px 6px 6px 16px;background:var(--c-card2,#fbf7ef);border:1px solid var(--c-border);border-radius:8px;padding:3px;">';
+                h += '<summary style="cursor:pointer;font-weight:700;font-size:12px;padding:6px 8px;list-style:none;">🏃 ' + _annEsc(sp.week_label || ('Sprint ' + sp.seq)) + ' <span style="font-size:10px;color:var(--c-text3);font-weight:400;">' + Math.round(sp.hours || 0) + 'h</span></summary>';
+                (sp.task_ids || []).forEach(function (tid) {
+                    var t = taskById[tid]; if (!t) return;
+                    var nodeT = (nodeById[t.node_id] || {}).title || '';
+                    h += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px 5px 26px;font-size:12px;border-top:1px dashed var(--c-border);">✅ ' + _annEsc(t.title) + (t.process_tag ? ' <span class="rfs-st-tag">' + _annEsc(t.process_tag) + '</span>' : '') + (nodeT ? ' <span class="rfs-st-org">⟵ ' + _annEsc(nodeT) + '</span>' : '') + ' <span style="color:var(--c-text3);font-size:10px;margin-left:auto;">' + (t.est_hours || 0) + 'h</span></div>';
+                });
+                h += '</details>';
+            });
+            h += '</details>';
+        });
+        if (!stages.length) h += '<div style="color:var(--c-text3);font-size:12px;">도출 결과가 없습니다.</div>';
+        h += '</div>';
+        return h;
+    }
+
+    function _rfsStreamBindHighlight() {
+        var rel = _rfsStreamRelations();
+        var flow = document.querySelector('#rfs-main .rfs-st-flow'); if (!flow) return;
+        var cards = [].slice.call(flow.querySelectorAll('.rfs-st-card'));
+        cards.forEach(function (card) {
+            card.addEventListener('mouseenter', function () {
+                var ids = [card.dataset.id].concat((card.dataset.link || '').split(' ').filter(Boolean));
+                // 한 홉 + 관계도 확장(키워드 hub 양축)
+                (rel[card.dataset.id] || []).forEach(function (x) { if (ids.indexOf(x) < 0) ids.push(x); });
+                flow.classList.add('focusing');
+                cards.forEach(function (c) { c.classList.toggle('hot', ids.indexOf(c.dataset.id) >= 0); });
+            });
+            card.addEventListener('mouseleave', function () {
+                flow.classList.remove('focusing');
+                cards.forEach(function (c) { c.classList.remove('hot'); });
+            });
+        });
+    }
+
+    function rfsStreamView(v) { _rfsState.streamView = v; if (_rfsState.step === 4) rfsRenderStreamStep(); }
+    function rfsStreamSelectAll(on) {
+        var s = _rfsState.stream; if (!s) return; var sel = _rfsStreamSel();
+        ['tasks', 'sprints', 'stages', 'wbs'].forEach(function (k) { sel[k] = sel[k] || {}; (s[k] || []).forEach(function (x) { sel[k][x.id] = !!on; }); });
+        rfsRenderStreamStep();
+    }
+    function _rfsStreamReadCfg() {
+        var cfg = _rfsState.streamCfg;
+        var w = document.getElementById('rfs-st-weeks'), c = document.getElementById('rfs-st-cap'), r = document.getElementById('rfs-st-rule');
+        if (w) cfg.sprint_weeks = Math.max(1, parseInt(w.value) || 2);
+        if (c) cfg.capacity_hours = Math.max(4, parseInt(c.value) || 80);
+        if (r) cfg.rule = r.value || 'auto';
+        return cfg;
+    }
+    function _rfsProjState() {
+        function proj(key) { return (currentData[key] || []).filter(function (n) { return (n.projectId || 'default') === activeProjectId; }); }
+        return {
+            stages: (currentData.productStages || []).map(function (s) { return { name: s.name, type: s.type, lifecycle: s.lifecycle, tags: s.tags || [] }; }),
+            wbs: proj('wbsNodes').map(function (w) { return { title: w.title }; }),
+            sprints: proj('sprints').map(function (s) { return { week_label: s.weekLabel, status: s.status }; }),
+            categories: proj('categories').map(function (c) { return { title: c.title }; }),
+        };
+    }
+
+    async function rfsRunDeriveStream() {
+        var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
+        var cur = _rfsState.current; if (!cur || !(cur.nodes || []).length) { showToast('먼저 ③ 분해에서 노드를 확정하세요', 'alert'); return; }
+        if (_rfsState.streamRunning) { showToast('이미 도출 중', 'alert'); return; }
+        var cfg = _rfsStreamReadCfg();
+        var modelSel = document.getElementById('rfs-st-model'); var model = (modelSel && modelSel.value) || null;
+        _rfsState.streamRunning = true; _rfsState.streamLog = []; _rfsState.streamSel = null;
+        rfsRenderStreamStep();
+        function _log(m) { _rfsState.streamLog.push(m); if (_rfsState.streamLog.length > 240) _rfsState.streamLog = _rfsState.streamLog.slice(-240); var l = document.getElementById('rfs-st-log'); if (l) { l.textContent = _rfsState.streamLog.join('\n'); l.scrollTop = l.scrollHeight; } }
+        function _stage(m) { var e = document.getElementById('rfs-st-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
+        try {
+            var res = await fetch(url + '/refinery/derive-stream', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: cur.id, user_id: rfsCurrentUser(), project_id: activeProjectId,
+                    nodes: cur.nodes || [], cross_links: cur.cross_links || _rfsState.streamCrossLinks || [],
+                    pm_tax: _rfsPmTax(), project_state: _rfsProjState(),
+                    capacity_hours: cfg.capacity_hours, sprint_weeks: cfg.sprint_weeks, rule: cfg.rule, strict: !!cfg.strict, model: model,
+                }),
+            });
+            if (res.status === 503) { var e503 = await res.text(); throw new Error('정련소 모듈 미로드: ' + e503.slice(0, 120)); }
+            if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+            var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = '';
+            var acc = { tasks: [], sprints: [], stages: [], wbs: [] };
+            while (true) {
+                var ch = await reader.read(); if (ch.done) break;
+                buf += dec.decode(ch.value, { stream: true });
+                var lines = buf.split('\n'); buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]; if (!line.startsWith('data:')) continue;
+                    var data = line.slice(5).trim(); if (!data || data === '[DONE]') continue;
+                    try {
+                        var ev = JSON.parse(data);
+                        if (ev.event === 'phase') { _stage(ev.message); _log('▶ ' + ev.message); }
+                        else if (ev.event === 'task_proposed') { _log('  + Task: ' + (ev.task && ev.task.title)); }
+                        else if (ev.event === 'tasks_done') { acc.tasks = ev.tasks || []; _log('① Task ' + acc.tasks.length); }
+                        else if (ev.event === 'order_done') { acc.tasks = ev.tasks || acc.tasks; _log('② 정렬 (레벨 ' + (ev.levels || 0) + ')'); }
+                        else if (ev.event === 'sprints_done') { acc.sprints = ev.sprints || []; _log('② Sprint ' + acc.sprints.length + ' (용량 ' + ev.capacity_hours + 'h)'); }
+                        else if (ev.event === 'stage_proposed') { _log('  + STAGE: ' + (ev.stage && ev.stage.name)); }
+                        else if (ev.event === 'stages_done') { acc.stages = ev.stages || []; _log('③ STAGE ' + acc.stages.length); }
+                        else if (ev.event === 'wbs_done') { acc.wbs = ev.wbs || []; _log('④ WBS ' + acc.wbs.length); }
+                        else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
+                        else if (ev.event === 'error') { _log('❌ ' + ev.message); showToast('도출 실패: ' + ev.message, 'alert'); }
+                        else if (ev.event === 'done') {
+                            acc.tasks = ev.tasks || acc.tasks; acc.sprints = ev.sprints || acc.sprints;
+                            acc.stages = ev.stages || acc.stages; acc.wbs = ev.wbs || acc.wbs;
+                            _rfsState.stream = acc; _log('✅ ' + (ev.summary || ''));
+                        }
+                    } catch (e) {}
+                }
+            }
+            _rfsState.streamRunning = false;
+            if (_rfsState.step === 4) rfsRenderStreamStep();
+        } catch (e) {
+            _rfsState.streamRunning = false; _log('❌ ' + (e.message || e));
+            showToast('도출 실패: ' + (e.message || e), 'alert');
+            if (_rfsState.step === 4) rfsRenderStreamStep();
+        }
+    }
+
+    async function rfsApplyStream() {
+        var url = rfsBackEnd(); if (!url) return;
+        var s = _rfsState.stream; if (!s) { showToast('먼저 도출하세요', 'alert'); return; }
+        if (_rfsState._applyingStream) return;
+        var pick = function (k) { return (s[k] || []).filter(function (x) { return _rfsStOn(k, x.id); }); };
+        var stages = pick('stages'), sprints = pick('sprints'), tasks = pick('tasks'), wbs = pick('wbs');
+        if (!stages.length && !sprints.length && !tasks.length && !wbs.length) { showToast('선택된 항목이 없습니다', 'alert'); return; }
+        var ok = await uiConfirm({ title: 'Stream 생성', message: 'STAGE ' + stages.length + ' · Sprint ' + sprints.length + ' · Task ' + tasks.length + ' · WBS ' + wbs.length + ' 을(를) 프로젝트에 생성합니다.\n(STAGE→프로덕트 관리, Sprint→스프린트, Task→칸반, WBS→타임라인)', confirmText: '생성' });
+        if (!ok) return;
+        _rfsState._applyingStream = true;
+        var btns = document.querySelectorAll('#rfs-main button'); btns.forEach(function (b) { b.disabled = true; });
+        var cfg = _rfsState.streamCfg;
+        try {
+            var res = await fetch(url + '/refinery/apply-stream', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId,
+                    stages: stages, sprints: sprints, tasks: tasks, wbs: wbs,
+                    start_date: _rfsStreamStartDate(), sprint_weeks: cfg.sprint_weeks,
+                }),
+            });
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 200)); }
+            var data = await res.json();
+            var warn = (data.warnings && data.warnings.length) ? (' · ⚠ ' + data.warnings.length) : '';
+            if (data.warnings && data.warnings.length) console.warn('[rfs] apply-stream 경고', data.warnings);
+            showToast('✓ 생성 — STAGE ' + (data.stages_created || []).length + ', Sprint ' + (data.sprints_created || []).length + ', Task ' + (data.tasks_created || []).length + ', WBS ' + (data.wbs_created || []).length + warn, 'success');
+            _rfsState._applyingStream = false;
+            if (typeof initSupabase === 'function') { try { await initSupabase(); } catch (e) {} }
+            rfsGoStep(5);
+        } catch (e) {
+            _rfsState._applyingStream = false;
+            btns.forEach(function (b) { b.disabled = false; });
+            showToast('생성 실패: ' + (e.message || e), 'alert');
+        }
+    }
+    function _rfsStreamStartDate() {
+        var d = new Date(); var day = d.getDay(); var diff = (day === 0 ? 1 : 8 - day);  // 다음 주 월요일
+        d.setDate(d.getDate() + diff);
+        return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
     }
 
     // ════════════════════════════════════════════════════════════════
