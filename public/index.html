@@ -1759,9 +1759,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .editor-mode-live    #split-divider   { display:none !important; }
         .editor-mode-live    #preview-area    { display:none !important; }
         .editor-mode-live    #doc-livepreview { display:block !important; }
-        #doc-livepreview { padding:16px 20px; line-height:1.7; }
-        .lp-row { display:flex; align-items:baseline; }   /* [r235 #3] 번호를 본문 첫 줄 baseline 에 정렬 */
-        .lp-gutter { flex:0 0 auto; width:34px; text-align:right; padding-right:10px; color:#9a958a; font-size:12px; font-family:ui-monospace,monospace; user-select:none; opacity:.55; }
+        #doc-livepreview { padding:14px 18px 14px 6px; line-height:1.7; }   /* [r238 #5] 좌측 여백 축소 */
+        .lp-row { display:flex; align-items:baseline; position:relative; }   /* [r235 #3] 번호 baseline 정렬 / [r237] 섹션버튼 기준 */
+        .lp-gutter { flex:0 0 auto; width:26px; text-align:right; padding-right:8px; color:#9a958a; font-size:12px; font-family:ui-monospace,monospace; user-select:none; opacity:.5; }   /* [r238 #5] 폭 축소 */
         #doc-livepreview:not(.lp-lines) .lp-gutter { display:none; }
         .lp-content { flex:1; min-width:0; cursor:text; border-radius:4px; padding:1px 4px; }
         .lp-content:hover { background:rgba(127,127,127,.06); }
@@ -1770,14 +1770,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .lp-content.lp-empty { color:var(--c-text3); font-style:italic; opacity:.5; min-height:1.2em; }
         .lp-blank { height:6px; }
         .lp-edit { width:100%; box-sizing:border-box; border:1px solid var(--c-accent); border-radius:6px; padding:7px 9px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; line-height:1.65; background:var(--c-paper); color:var(--c-text); resize:none; outline:none; }
-        /* [r236 B1] 프로젝트 위키 목차(TOC) */
-        .lp-toc { border:1px solid var(--c-border); border-radius:8px; background:var(--c-paper); padding:10px 16px 12px; margin:0 0 18px; display:inline-block; min-width:240px; max-width:100%; }
-        .lp-toc-title { font-weight:800; font-size:13px; margin-bottom:7px; color:var(--c-text2); }
+        /* [r236 B1 / r238 #3·#4] 프로젝트 위키 목차(TOC) — 접이식, 좌측정렬 박스 */
+        .lp-toc { border:1px solid var(--c-border); border-radius:8px; background:var(--c-paper); padding:8px 16px 10px; margin:0 0 16px; display:inline-block; min-width:220px; max-width:100%; vertical-align:top; }
+        .lp-toc-title { font-weight:800; font-size:13px; color:var(--c-text2); cursor:pointer; list-style:none; user-select:none; }
+        .lp-toc-title::-webkit-details-marker { display:none; }
+        .lp-toc-title::before { content:'▸ '; font-size:11px; }
+        .lp-toc[open] > .lp-toc-title::before { content:'▾ '; }
+        .lp-toc[open] > .lp-toc-title { margin-bottom:7px; }
         .lp-toc-list { list-style:none; margin:0; padding:0; font-size:12.5px; line-height:1.5; }
         .lp-toc-list li { padding:2px 0; }
         .lp-toc-list a { color:var(--c-accent); text-decoration:none; cursor:pointer; }
         .lp-toc-list a:hover { text-decoration:underline; }
         .lp-toc-l1 { font-weight:700; } .lp-toc-l3 { padding-left:14px; } .lp-toc-l4 { padding-left:28px; } .lp-toc-l5,.lp-toc-l6 { padding-left:42px; }
+        /* [r238 #4·#7] 라이브 메타 패널 — 풀폭 좌측정렬 + 편집 버튼 */
+        .lp-meta { display:block; margin:0 0 16px; }
+        .lp-meta .md-fm-summary { display:flex; align-items:center; }
+        .lp-meta-edit { margin-left:auto; font-size:10.5px; font-weight:700; color:var(--c-accent); border:1px solid var(--c-border); border-radius:5px; padding:1px 7px; cursor:pointer; }
+        .lp-meta-edit:hover { background:var(--c-accent); color:#fff; }
+        .lp-meta .md-fm-body { cursor:text; }
+        /* [r238 #6] 프론트매터 값 pill */
+        .md-fm-pills { display:inline-flex; flex-wrap:wrap; gap:5px; }
+        .md-fm-pill { display:inline-block; font-size:11.5px; padding:1px 9px; border-radius:11px; background:var(--c-card); border:1px solid var(--c-border); color:var(--c-text2); text-decoration:none; }
+        a.md-fm-pill { color:var(--c-accent); cursor:pointer; } a.md-fm-pill:hover { background:var(--c-accent); color:#fff; }
         /* [r237 A1] 인플레이스 라이브 편집 — 본문 스타일 유지, md 특수기호는 회색 노출 */
         .lp-live-edit { outline:none; white-space:pre-wrap; word-break:break-word; border-radius:5px; box-shadow:0 0 0 1px var(--c-accent) inset; padding:2px 6px; min-height:1.4em; caret-color:var(--c-accent); }
         .lp-live-edit .md-syn { color:var(--c-text3); opacity:.6; }
@@ -1786,8 +1800,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .lp-live-edit .lp-h { font-weight:700; }
         .lp-live-edit .lp-h1 { font-size:1.7em; } .lp-live-edit .lp-h2 { font-size:1.4em; } .lp-live-edit .lp-h3 { font-size:1.2em; }
         .lp-live-edit .lp-h4 { font-size:1.05em; } .lp-live-edit .lp-h5, .lp-live-edit .lp-h6 { font-size:1em; }
-        /* [r237 B2] 헤딩 섹션 편집 버튼 (MediaWiki 식) */
-        .lp-sec-edit { opacity:0; margin-left:8px; font-size:10.5px; font-weight:700; color:var(--c-accent); background:var(--c-card); border:1px solid var(--c-border); border-radius:5px; padding:1px 7px; cursor:pointer; vertical-align:middle; transition:opacity .12s; }
+        /* [r237 B2 / r238 #1] 헤딩 섹션 편집 버튼 — 헤딩 우측 끝에 정렬 */
+        .lp-sec-edit { opacity:0; position:absolute; right:10px; top:3px; font-size:10.5px; font-weight:700; color:var(--c-accent); background:var(--c-card); border:1px solid var(--c-border); border-radius:5px; padding:1px 8px; cursor:pointer; transition:opacity .12s; z-index:2; }
         .lp-row:hover .lp-sec-edit { opacity:.85; }
         .lp-sec-edit:hover { opacity:1 !important; background:var(--c-accent); color:#fff; }
         /* tab active state */
@@ -8255,26 +8269,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             //   기존엔 굵은 글씨 + [[]] 링크로 잘못 렌더됐다. 속성 패널로 분리해 본문과 구분.
             var _fmM = text.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
             if (_fmM && /^[A-Za-z_][\w\-]*\s*:/.test(_fmM[1].trim())) {
-                var _fmRows = '';
-                _fmM[1].split(/\r?\n/).forEach(function (ln) {
-                    if (!ln.trim()) return;
-                    var kv = ln.match(/^([A-Za-z0-9_\-]+)\s*:\s*([\s\S]*)$/);
-                    if (kv) {
-                        var _fk = kv[1], _fv = kv[2];
-                        // [r235 #4] 작성자/수정자 uuid → 이름
-                        if (/^(created_by|updated_by|owner|author|by|assignee)$/i.test(_fk)) {
-                            var _rid = _fv.replace(/^["']|["']$/g, '').trim();
-                            var _nm = (typeof _uidToName === 'function') ? _uidToName(_rid) : _rid;
-                            if (_nm && _nm !== _rid) {
-                                _fmRows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(_fk) + '</span><span class="md-fm-val" title="' + _sprintEsc(_rid) + '">' + _sprintEsc(_nm) + '</span></div>';
-                                return;
-                            }
-                        }
-                        _fmRows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(_fk) + '</span><span class="md-fm-val">' + _sprintEsc(_fv) + '</span></div>';
-                    }
-                    else _fmRows += '<div class="md-fm-row"><span class="md-fm-val">' + _sprintEsc(ln.trim()) + '</span></div>';
-                });
-                var _fmHtml = '<details class="md-frontmatter"><summary class="md-fm-summary">속성 (메타데이터)</summary><div class="md-fm-body">' + _fmRows + '</div></details>';
+                var _fmHtml = '<details class="md-frontmatter"><summary class="md-fm-summary">속성 (메타데이터)</summary><div class="md-fm-body">' + _fmRenderRows(_fmM[1]) + '</div></details>';
                 var _fmPh = '⌂TBL' + (_tableStoreIdx++) + '⌂';
                 inlineTableStore[_fmPh] = _fmHtml; _tableStore[_fmPh] = _fmHtml;
                 text = _fmPh + '\n\n' + text.slice(_fmM[0].length);
@@ -8490,6 +8485,43 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (u) return u.displayName || u.name || u.email || id;
             if (typeof currentUser !== 'undefined' && currentUser && currentUser.id === id) return currentUser.displayName || currentUser.name || currentUser.email || id;
             return id;
+        }
+        // [r238 #6] 프론트매터 값 렌더 — 배열/[[링크]] 는 pill, 작성자 uuid 는 이름.
+        function _fmPill(item) {
+            item = String(item == null ? '' : item).trim().replace(/^["']|["']$/g, '').trim();
+            if (!item) return '';
+            var wl = item.match(/^\[\[([^\]]+)\]\]$/);
+            if (wl) {
+                var t = wl[1].trim();
+                var hit = (typeof currentData !== 'undefined' && currentData.docs || []).find(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind !== 'diagram' && !(d.meta && d.meta.isFolder) && _wlNorm(d.title) === _wlNorm(t); });
+                if (hit) return '<a class="md-fm-pill wikilink wikilink-doc" data-wl-type="doc" data-wl-id="' + _sprintEsc(hit.id) + '" data-wl-title="' + _sprintEsc(t) + '">' + _sprintEsc(t) + '</a>';
+                return '<a class="md-fm-pill wikilink wikilink-unresolved" data-wl-type="new" data-wl-title="' + _sprintEsc(t) + '">' + _sprintEsc(t) + '</a>';
+            }
+            return '<span class="md-fm-pill">' + _sprintEsc(item) + '</span>';
+        }
+        function _fmValueHtml(key, v) {
+            v = String(v == null ? '' : v).trim();
+            if (/^(created_by|updated_by|owner|author|by|assignee)$/i.test(key)) {
+                var id = v.replace(/^["']|["']$/g, '').trim(); var nm = _uidToName(id);
+                return '<span title="' + _sprintEsc(id) + '">' + _sprintEsc(nm) + '</span>';
+            }
+            if (/^\[[\s\S]*\]$/.test(v)) {   // 배열 → pill 들
+                var inner = v.slice(1, -1);
+                var arr = inner.split(/,(?![^\[]*\]\])/).map(function (x) { return x.trim(); }).filter(Boolean);
+                if (arr.length) return '<span class="md-fm-pills">' + arr.map(_fmPill).join('') + '</span>';
+            }
+            if (/^\[\[[^\]]+\]\]$/.test(v)) return _fmPill(v);   // 단일 [[링크]]
+            return _sprintEsc(v.replace(/^["']|["']$/g, ''));
+        }
+        function _fmRenderRows(fmText) {
+            var rows = '';
+            String(fmText == null ? '' : fmText).split(/\r?\n/).forEach(function (ln) {
+                if (!ln.trim()) return;
+                var kv = ln.match(/^([A-Za-z0-9_\-]+)\s*:\s*([\s\S]*)$/);
+                if (kv) rows += '<div class="md-fm-row"><span class="md-fm-key">' + _sprintEsc(kv[1]) + '</span><span class="md-fm-val">' + _fmValueHtml(kv[1], kv[2]) + '</span></div>';
+                else rows += '<div class="md-fm-row"><span class="md-fm-val">' + _sprintEsc(ln.trim()) + '</span></div>';
+            });
+            return rows;
         }
         // [r233 #5] 위키링크 제목 정규화 — 정의서 링크([[루프 비선형화]])와 실제 문서 제목
         //   ('0.루프_비선형화', '[VAULT] x.html' 등) 의 표기 차이를 흡수해 매칭 성공률을 높임.
@@ -10859,7 +10891,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r237';
+        var _AHUB_FRONT_REV = 'r238';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -25816,9 +25848,12 @@ ${intrLog}
             }
             var blocks = _lpSplitBlocks(content);
             host._lpBlocks = blocks;
-            // [r236 B1] 프로젝트 위키(canon)/문서(wiki) 맨 위 목차(TOC) — md 헤딩 기준
-            var tocHtml = '';
             var docKind = (doc && doc.kind) || '';
+            // [r238] 메타(프론트매터) 블록 — 첫 비어있지 않은 블록이 프론트매터면 분리
+            var metaIdx = -1;
+            for (var mi = 0; mi < blocks.length; mi++) { if (blocks[mi].blank) continue; if (/^﻿?\s*---\s*\r?\n[A-Za-z_][\w\-]*\s*:/.test(blocks[mi].text)) metaIdx = mi; break; }
+            // [r236 B1 / r238 #3] 접이식 목차(TOC) — md 헤딩 기준
+            var tocHtml = '';
             if (docKind === 'canon' || docKind === 'wiki') {
                 var headings = [];
                 blocks.forEach(function (b) {
@@ -25827,22 +25862,47 @@ ${intrLog}
                     if (hm) headings.push({ level: hm[1].length, text: hm[2].trim(), slug: _wlSlug(hm[2].trim()) });
                 });
                 if (headings.length >= 2) {
-                    tocHtml = '<div class="lp-toc"><div class="lp-toc-title">📑 목차</div><ul class="lp-toc-list">';
+                    tocHtml = '<details class="lp-toc" open><summary class="lp-toc-title">📑 목차</summary><ul class="lp-toc-list">';
                     headings.forEach(function (h) { tocHtml += '<li class="lp-toc-l' + h.level + '"><a onclick="_lpScrollToHeading(\'' + h.slug + '\')">' + _annEsc(h.text) + '</a></li>'; });
-                    tocHtml += '</ul></div>';
+                    tocHtml += '</ul></details>';
                 }
             }
+            // [r238 #4/#6/#7] 메타 패널 — 풀폭(좌측정렬), pill, 클릭 편집
+            var metaHtml = '';
+            if (metaIdx >= 0) {
+                var fmM = blocks[metaIdx].text.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
+                metaHtml = '<details class="lp-meta md-frontmatter" open data-idx="' + metaIdx + '"><summary class="md-fm-summary">속성 (메타데이터)<span class="lp-meta-edit" onclick="event.stopPropagation();_lpEditMeta(' + metaIdx + ')" title="메타데이터 편집">✎ 편집</span></summary><div class="md-fm-body" onclick="_lpEditMeta(' + metaIdx + ')">' + _fmRenderRows(fmM ? fmM[1] : '') + '</div></details>';
+            }
             var frag = '';
-            var n = 0, metaSkipped = false;   // [r235 #2] 연속 번호(생략 없음), 메타데이터 블록은 제외
+            var n = 0;   // [r235 #2] 연속 번호(생략 없음). 메타는 위에서 별도 렌더(제외)
             blocks.forEach(function (b, idx) {
+                if (idx === metaIdx) return;
                 if (b.blank) { frag += '<div class="lp-blank" data-idx="' + idx + '"></div>'; return; }
-                var isMeta = !metaSkipped && /^﻿?\s*---\s*\r?\n[A-Za-z_][\w\-]*\s*:/.test(b.text);
-                if (isMeta) metaSkipped = true;
-                var num = isMeta ? '' : (++n);
-                var secBtn = /^#{1,6}\s/.test(b.text) ? '<button class="lp-sec-edit" onclick="_lpEditSection(' + idx + ')" title="이 섹션 전체를 소스로 편집">✎ 편집</button>' : '';  // [r237 B2]
-                frag += '<div class="lp-row' + (isMeta ? ' lp-meta-row' : '') + '" data-idx="' + idx + '"><div class="lp-gutter">' + num + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + secBtn + '</div></div>';
+                var num = ++n;
+                var isHead = /^#{1,6}\s/.test(b.text);
+                var secBtn = isHead ? '<button class="lp-sec-edit" onclick="_lpEditSection(' + idx + ')" title="이 섹션 전체를 소스로 편집">✎ 편집</button>' : '';  // [r237 B2]
+                frag += '<div class="lp-row" data-idx="' + idx + '"><div class="lp-gutter">' + num + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + secBtn + '</div></div>';
             });
-            host.innerHTML = tocHtml + frag;
+            host.innerHTML = tocHtml + metaHtml + frag;
+        }
+        // [r238 #7] 메타데이터(프론트매터) 소스 직접 편집
+        function _lpEditMeta(idx) {
+            var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return;
+            var _d = currentData.docs ? currentData.docs.find(function (d) { return d.id === activeDocId; }) : null;
+            if (_d && (_d.isLocked || (_d.meta && _d.meta.vault))) { if (typeof showToast === 'function') showToast('🔒 잠긴 문서 — 편집 불가', 'alert'); return; }
+            if (_lpEditingIdx != null) _lpCommitEdit();
+            if (_lpEditingSection) _lpCommitSection();
+            var b = host._lpBlocks[idx]; if (!b) return;
+            var metaEl = host.querySelector('.lp-meta[data-idx="' + idx + '"]'); if (!metaEl) return;
+            _lpEditingSection = { start: idx, end: idx + 1 };
+            var holder = document.createElement('div'); holder.className = 'lp-meta-edit-holder';
+            var ta = document.createElement('textarea'); ta.className = 'lp-edit'; ta.setAttribute('data-sec', '1'); ta.value = b.text;
+            holder.appendChild(ta); metaEl.replaceWith(holder);
+            function autosize() { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
+            autosize(); ta.addEventListener('input', autosize);
+            ta.addEventListener('blur', _lpCommitSection);
+            ta.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); _lpEditingSection = null; renderLivePreview(); } if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ta.blur(); } });
+            ta.focus(); try { ta.selectionStart = ta.selectionEnd = ta.value.length; } catch (e) {}
         }
         // [r236 B1] 라이브 본문 내 헤딩으로 스크롤
         function _lpScrollToHeading(slug) {
@@ -25901,8 +25961,9 @@ ${intrLog}
             if (_lpEditingIdx != null && _lpEditingIdx !== idx) _lpCommitEdit();
             var b = host._lpBlocks[idx]; if (!b) return;
             var row = host.querySelector('.lp-row[data-idx="' + idx + '"], .lp-blank[data-idx="' + idx + '"]'); if (!row) return;
+            var curNum = ((row.querySelector('.lp-gutter') || {}).textContent) || '';   // [r238 #2] 표시 중인 연속 번호 유지
             row.className = 'lp-row';
-            row.innerHTML = '<div class="lp-gutter">' + ((b.ln || 0) + 1) + '</div>';
+            row.innerHTML = '<div class="lp-gutter">' + curNum + '</div>';
             var ed = document.createElement('div');
             ed.className = 'lp-content lp-live-edit'; ed.setAttribute('contenteditable', 'true'); ed.setAttribute('data-idx', idx);
             ed.innerHTML = _lpTokenize(b.text || '');
@@ -25980,7 +26041,7 @@ ${intrLog}
             var tgt = document.elementFromPoint(e.clientX, e.clientY);
             if (!tgt || !host.contains(tgt)) tgt = e.target;
             if (!tgt || !host.contains(tgt)) return;
-            if (tgt.closest('a, .wikilink, .md-code-embed, input, button, .tda-html-mount, iframe, summary, .lp-toc, .lp-live-edit, textarea.lp-edit')) return;
+            if (tgt.closest('a, .wikilink, .md-code-embed, input, button, .tda-html-mount, iframe, summary, .lp-toc, .lp-meta, .lp-live-edit, textarea.lp-edit')) return;
             var row = tgt.closest('.lp-row, .lp-blank'); if (!row) return;
             var idx = parseInt(row.getAttribute('data-idx'), 10);
             if (!isNaN(idx)) _lpEnterEdit(idx);
@@ -31512,7 +31573,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r237';
+    var _RFS_FRONT_REV = 'r238';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
