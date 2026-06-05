@@ -4,7 +4,7 @@ import json
 import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
@@ -1029,6 +1029,7 @@ class MeetingImportRequest(BaseModel):
     title: str = ""
     craig_id: Optional[str] = None      # 녹음 ID 또는 rec 링크
     craig_url: Optional[str] = None     # 직접 다운로드 URL(폴백)
+    upload_token: Optional[str] = None  # [r243] 파일 업로드 폴백(/meetings/upload 가 준 토큰)
     key: Optional[str] = None
     whisper_model: str = "medium"       # tiny|base|small|medium|large-v3
     language: str = "ko"
@@ -1053,6 +1054,39 @@ async def meetings_health():
 @app.get("/meetings/schema-sql")
 async def meetings_schema_sql():
     return {"sql": (_mtg_store.SCHEMA_SQL if _MEET_OK else "-- 회의록 모듈 미로드")}
+
+
+@app.post("/meetings/upload")
+async def meetings_upload(files: List[UploadFile] = File(...)):
+    """[r243] Craig multi-track zip(또는 오디오 파일)을 업로드 → import 에서 쓸 토큰 반환.
+
+    Craig 자동 다운로드가 안 될 때의 확실한 폴백. zip 은 자동 압축해제.
+    """
+    _meet_guard()
+    import os as _os, tempfile as _tmp, time as _t, zipfile as _zip
+    token = f"up_{int(_t.time() * 1000)}_{int.from_bytes(_os.urandom(2), 'big')}"
+    updir = _os.path.join(_tmp.gettempdir(), "mtg_uploads", token)
+    _os.makedirs(updir, exist_ok=True)
+    saved = []
+    for f in files:
+        name = _os.path.basename(f.filename or "track")
+        if not name:
+            continue
+        dst = _os.path.join(updir, name)
+        with open(dst, "wb") as out:
+            while True:
+                chunk = await f.read(1 << 20)
+                if not chunk:
+                    break
+                out.write(chunk)
+        saved.append(name)
+        if name.lower().endswith(".zip"):
+            try:
+                with _zip.ZipFile(dst) as z:
+                    z.extractall(updir)
+            except Exception:
+                pass
+    return {"upload_token": token, "files": saved}
 
 
 @app.get("/meetings/sessions")
@@ -1091,7 +1125,11 @@ async def meetings_import(req: MeetingImportRequest):
     async def gen():
         import os as _os, tempfile as _tmp, shutil as _sh
         loop = asyncio.get_event_loop()
-        workdir = _tmp.mkdtemp(prefix="mtg_")
+        # [r243] 업로드 토큰이면 그 폴더 사용, 아니면 임시 폴더에 다운로드
+        if req.upload_token:
+            workdir = _os.path.join(_tmp.gettempdir(), "mtg_uploads", req.upload_token)
+        else:
+            workdir = _tmp.mkdtemp(prefix="mtg_")
         sess = None
         try:
             av = _mtg_tr.is_available()
@@ -1103,12 +1141,19 @@ async def meetings_import(req: MeetingImportRequest):
                 project_id=req.project_id, title=req.title or "회의", user_id=req.user_id, craig_id=req.craig_id))
             yield {"event": "session", "id": sess["id"]}
 
-            yield {"event": "stage", "message": "Craig 녹음 다운로드"}
-            if req.craig_url:
-                dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_url(req.craig_url, workdir))
+            if req.upload_token:
+                if not _os.path.isdir(workdir):
+                    yield {"event": "error", "message": "업로드 파일을 찾지 못함(토큰 만료). 다시 업로드하세요."}
+                    return
+                yield {"event": "stage", "message": "업로드한 오디오 사용"}
+                yield {"event": "downloaded", "count": len(_mtg_tr.list_tracks(workdir))}
             else:
-                dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_recording(req.craig_id, req.key, workdir))
-            yield {"event": "downloaded", "count": dl.get("count")}
+                yield {"event": "stage", "message": "Craig 녹음 다운로드"}
+                if req.craig_url:
+                    dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_url(req.craig_url, workdir))
+                else:
+                    dl = await loop.run_in_executor(None, lambda: _mtg_craig.download_recording(req.craig_id, req.key, workdir))
+                yield {"event": "downloaded", "count": dl.get("count")}
 
             tracks = await loop.run_in_executor(None, lambda: _mtg_tr.list_tracks(workdir))
             if not tracks:

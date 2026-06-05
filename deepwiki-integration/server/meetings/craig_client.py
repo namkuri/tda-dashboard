@@ -35,15 +35,30 @@ def parse_rec(id_or_url: str, key: Optional[str] = None) -> Tuple[str, str]:
     return s, (key or "")
 
 
-def _dl_candidates(base: str, rid: str, key: str) -> List[str]:
-    """녹음 멀티트랙 다운로드 후보 URL(서버에서 검증·조정)."""
-    return [
-        f"{base}/api/recording/{rid}/cook?key={key}&format=flac&container=zip",
-        f"{base}/api/recording/{rid}.zip?key={key}&format=flac",
-        f"{base}/api/recording/{rid}?key={key}&format=flac&container=zip",
-        f"{base}/dl/{rid}?key={key}&format=flac&container=zip",
-        f"{base}/rec/{rid}/cook?key={key}&format=flac&container=zip",
-    ]
+def _consume(cli, base: str, r, out_dir: str) -> int:
+    """응답이 zip/오디오면 추출, JSON(다운로드 경로)이면 따라가 추출. 추출 트랙 수(0=실패)."""
+    if r.status_code != 200:
+        return 0
+    ct = (r.headers.get("content-type") or "").lower()
+    body = r.content
+    if _looks_binary_archive(body):
+        return _extract(body, out_dir)
+    if "json" in ct:
+        try:
+            j = r.json()
+        except Exception:
+            return 0
+        data = j.get("data") if isinstance(j.get("data"), dict) else {}
+        fpath = j.get("file") or j.get("download") or j.get("url") or data.get("file") or data.get("download")
+        if fpath:
+            durl = fpath if str(fpath).startswith("http") else (base + "/dl/" + str(fpath).lstrip("/").split("/")[-1])
+            try:
+                r2 = cli.get(durl)
+                if r2.status_code == 200 and _looks_binary_archive(r2.content):
+                    return _extract(r2.content, out_dir)
+            except Exception:
+                return 0
+    return 0
 
 
 def _looks_binary_archive(content: bytes) -> bool:
@@ -80,30 +95,46 @@ def _extract(content: bytes, out_dir: str) -> int:
 
 
 def download_recording(id_or_url: str, key: Optional[str], out_dir: str,
-                       timeout: float = 600.0) -> dict:
-    """Craig 녹음 다운로드 → out_dir 에 트랙 추출. {tried, ok, count}."""
+                       timeout: float = 1200.0) -> dict:
+    """Craig 녹음 다운로드 → out_dir 에 멀티트랙 추출. {tried, ok, count}.
+
+    실제 Craig API: POST /api/recording/{id}/cook?key={key}  (JSON {format, container}).
+    cook 이 zip 을 스트리밍하거나 다운로드 경로(JSON)를 주면 따라가 추출한다.
+    """
     rid, k = parse_rec(id_or_url, key)
     if not rid:
         raise ValueError("녹음 ID 를 해석하지 못했습니다(링크/ID 확인).")
+    body = {"format": "flac", "container": "zip", "dynaudnorm": False}
     tried: List[str] = []
     last_err = None
     with httpx.Client(follow_redirects=True, timeout=timeout) as cli:
         for base in _CRAIG_BASES:
-            for url in _dl_candidates(base, rid, k):
-                tried.append(url)
-                try:
-                    r = cli.get(url)
-                    if r.status_code == 200 and _looks_binary_archive(r.content):
-                        n = _extract(r.content, out_dir)
-                        if n > 0:
-                            return {"tried": tried, "ok": True, "count": n, "url": url}
-                    else:
-                        last_err = f"HTTP {r.status_code} ({(r.headers.get('content-type') or '')[:40]})"
-                except Exception as e:
-                    last_err = str(e)
+            cook = f"{base}/api/recording/{rid}/cook?key={k}"
+            # 1) POST cook (정식 경로)
+            tried.append("POST " + cook)
+            try:
+                r = cli.post(cook, json=body)
+                n = _consume(cli, base, r, out_dir)
+                if n > 0:
+                    return {"tried": tried, "ok": True, "count": n, "url": "POST " + cook}
+                last_err = f"POST cook HTTP {r.status_code} ({(r.headers.get('content-type') or '')[:40]})"
+            except Exception as e:
+                last_err = str(e)
+            # 2) GET cook (구버전/스트리밍형 대비)
+            gurl = cook + "&format=flac&container=zip"
+            tried.append("GET " + gurl)
+            try:
+                r = cli.get(gurl)
+                n = _consume(cli, base, r, out_dir)
+                if n > 0:
+                    return {"tried": tried, "ok": True, "count": n, "url": "GET " + gurl}
+                last_err = f"GET cook HTTP {r.status_code}"
+            except Exception as e:
+                last_err = str(e)
     raise RuntimeError(
-        "Craig 자동 다운로드 실패 — 엔드포인트를 서버에서 조정하거나 파일을 직접 업로드하세요. "
-        f"마지막 오류: {last_err}. 시도 URL: {tried[:3]} …"
+        "Craig 자동 다운로드 실패 — 녹음 ID/key 가 맞는지, 녹음이 만료(자동삭제)되지 않았는지 확인하세요. "
+        "안 되면 Craig 페이지에서 multi-track zip 을 받아 '파일 업로드'로 올리세요. "
+        f"마지막 오류: {last_err}. 시도: {tried}"
     )
 
 
