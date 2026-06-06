@@ -172,6 +172,9 @@ def apply_tree(
             "category": f.get("category"),
             "tags": ["refinery", f.get("category", ""), *(["overview"] if f.get("is_overview") else [])],
         }
+        # [r269] 파일이 가져온 풍부한 메타(파생 vault·tags·세션 추적) 병합 — 재관리/추적용
+        if isinstance(f.get("meta"), dict):
+            meta_base.update(f["meta"])
         if target_kind == "personal":
             meta_base["owner"] = user_id
             meta_base["visibility"] = visibility

@@ -66,6 +66,24 @@ async def compose_wiki_body(
     # [r265] 옵시디언 링크 후보 — 다른 위키 문서 제목 + 원본 vault 제목
     all_doc_titles = [(d.get("title") or "").strip() for d in (docs or []) if d.get("title")]
     vault_titles = [(v.get("title") or "").strip() for v in (vault_docs or []) if v.get("title")]
+    # [r269] 노드 id → 파생 vault 출처 매핑(메타데이터용)
+    node_by_id = {n.get("id"): n for n in (nodes or [])}
+
+    def _vault_sources(doc):
+        seen, out = set(), []
+        for nid in (doc.get("origin_node_ids") or doc.get("node_ids") or []):
+            n = node_by_id.get(nid)
+            if not n:
+                continue
+            for r in (n.get("source_refs") or []):
+                vid = r.get("vault_id") or r.get("doc_id")
+                vt = r.get("vault_title")
+                key = vid or vt
+                if key and key not in seen:
+                    seen.add(key)
+                    out.append({"id": vid, "title": vt})
+        return out[:12]
+
     yield {"event": "stage", "message": f"위키 본문 작성 시작 — 문서 {total}개"}
 
     for idx, doc in enumerate(docs or []):
@@ -118,6 +136,26 @@ async def compose_wiki_body(
                 foot_parts.append("- 원본 자료: " + " ".join(f"[[{t}]]" for t in srcs))
             if foot_parts:
                 body = body + "\n\n## 관련 문서\n" + "\n".join(foot_parts) + "\n"
+        # [r269] 메타데이터 — 파생 vault 출처 + tags + 정련소 세션 추적(재관리용)
+        vsrc = _vault_sources(doc)
+        wtax = doc.get("wiki_tax") or ""
+        tags = list(dict.fromkeys(["refinery", "wiki"] + ([wtax] if wtax else []) + (doc.get("folder_path") or [])[:3]))
+        meta = {
+            "refineryManaged": True,
+            "refinerySessionId": session.get("id"),
+            "refinerySessionTitle": session.get("title"),
+            "streamId": (session.get("generated_tree") or {}).get("stream_id"),
+            "wikiTax": wtax,
+            "folderPath": doc.get("folder_path") or [],
+            "vaultSources": vsrc,                                   # [{id,title}] 파생 원본
+            "vaultSourceIds": [v.get("id") for v in vsrc if v.get("id")],
+            "originNodeIds": doc.get("origin_node_ids") or doc.get("node_ids") or [],
+            "tags": tags,
+            "generatedAt": _iso(),
+            "docKind": "wiki",
+        }
+        # frontmatter 보강 — body 맨 앞 frontmatter 뒤(또는 없으면 생성)에 메타 주입
+        body = _inject_frontmatter(body, title, user_id, vsrc, tags, session.get("id"))
         # [r258] 폴더 계층(folder_path) 반영 — 깊은 위키 폴더 구조로 생성
         folders = [_slug(str(x)) for x in (doc.get("folder_path") or []) if str(x).strip()]
         path = "/".join([root] + folders + [_slug(title)]) + ".md"
@@ -127,11 +165,38 @@ async def compose_wiki_body(
             "target_kind": "canon",
             "category": "canon",
             "node_ids": doc.get("node_ids") or doc.get("origin_node_ids") or [],
+            "folder_path": doc.get("folder_path") or [],            # [r269] 매핑 UI 용
+            "wiki_tax": wtax,
+            "meta": meta,                                          # [r269] wiki_docs.meta 로 저장
         }
         files.append(f)
         yield {"event": "doc_done", "index": idx + 1, "total": total, "title": title, "path": f["path"]}
 
     yield {"event": "done", "files": files, "summary": f"문서 {len(files)}개 본문 작성 완료"}
+
+
+def _iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _inject_frontmatter(body: str, title: str, user_id: str, vsrc, tags, session_id) -> str:
+    """본문 frontmatter 에 파생 vault·tags·세션 메타를 보강(없으면 생성)."""
+    src_line = ", ".join(f"[[{v.get('title')}]]" for v in (vsrc or []) if v.get("title"))
+    add = (
+        f"source_vault: \"{src_line}\"\n"
+        f"tags: [{', '.join(tags or [])}]\n"
+        f"refinery_session: \"{session_id}\"\n"
+        f"refinery_managed: true\n"
+    )
+    b = body.lstrip()
+    if b.startswith("---"):
+        # 기존 frontmatter 의 닫는 --- 앞에 삽입
+        end = b.find("\n---", 3)
+        if end > 0:
+            return b[:end] + "\n" + add.rstrip("\n") + b[end:]
+    # frontmatter 없음 → 생성
+    return f"---\ntitle: \"{title}\"\ncategory: canon\ncreated_by: \"{user_id}\"\n{add}---\n\n" + body
 
 
 _uid_counter = [0]
