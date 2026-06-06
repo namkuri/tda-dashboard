@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r267"
+SERVER_REVISION = "r268"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model

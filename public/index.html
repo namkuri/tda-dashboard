@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r267';
+        var _AHUB_FRONT_REV = 'r268';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31749,7 +31749,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r267';
+    var _RFS_FRONT_REV = 'r268';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -34165,28 +34165,55 @@ ${intrLog}
         var link = (opts.link || []).filter(Boolean).join(' ');
         var chk = opts.nocheck ? '' : '<input class="ck" type="checkbox" ' + (_rfsStOn(kind, id) ? 'checked' : '') + ' onchange="rfsStToggle(\'' + kind + '\',\'' + id + '\',this.checked)">';
         var del = opts.nodelete ? '' : '<button class="rfs-st-del" title="삭제" onclick="event.stopPropagation();rfsStreamDelete(\'' + kind + '\',\'' + id + '\')">×</button>';
-        return '<div class="rfs-st-card' + (opts.wiki ? ' wikic' : '') + '" data-id="' + _annEsc(id) + '" data-link="' + _annEsc(link) + '">' + chk + del + inner + '</div>';
+        // [r268] 계층 들여쓰기(위키 폴더 등) — 깊이별 좌측 마진 + 경계선
+        var pad = opts.indent ? ' style="margin-left:' + (opts.indent * 12) + 'px;border-left:2px solid color-mix(in srgb,var(--c-accent) 22%,var(--c-border));"' : '';
+        return '<div class="rfs-st-card' + (opts.wiki ? ' wikic' : '') + '" data-id="' + _annEsc(id) + '" data-link="' + _annEsc(link) + '"' + pad + '>' + chk + del + inner + '</div>';
     }
 
-    // [r264] 실시간 라이브 스켈레톤 — 도출 중 항목이 박스로 채워지는 애니메이션
+    // [r264] 실시간 라이브 스켈레톤 — 도출 중 항목이 박스로 채워지는 애니메이션 (+ [r268] 실시간 스플라인)
     function _rfsStreamLiveSkeleton() {
         var cols = [['wiki', '📚 위키'], ['node', '🌲 키워드'], ['tasks', '✅ Task'], ['sprints', '🏃 Sprint'], ['stages', '🎯 STAGE'], ['wbs', '🏗 WBS']];
-        var h = '<div class="rfs-st-axis" style="margin-top:6px;"><b style="color:var(--c-accent);">실시간 도출</b><span style="color:var(--c-text3);"> — 항목이 채워집니다</span></div>';
+        var h = '<div class="rfs-st-axis" style="margin-top:6px;"><b style="color:var(--c-accent);">실시간 도출</b><span style="color:var(--c-text3);"> — 항목·연결이 실시간으로 그려집니다</span></div>';
         h += '<div class="rfs-st-flow rfs-st-live" style="margin-bottom:12px;">';
+        h += '<svg class="rfs-st-svg rfs-st-live-svg"></svg>';
         cols.forEach(function (c) {
             h += '<div class="rfs-st-col' + (c[0] === 'wiki' ? ' wikicol' : '') + '"><div class="rfs-st-h">' + c[1] + ' <span class="n" data-livecount="' + c[0] + '">0</span></div><div data-livecol="' + c[0] + '"></div></div>';
         });
         return h + '</div>';
     }
-    function _rfsStLiveAppend(colKey, inner, wiki) {
+    function _rfsStLiveAppend(colKey, id, inner, opts) {
+        opts = opts || {};
         var col = document.querySelector('.rfs-st-live [data-livecol="' + colKey + '"]'); if (!col) return;
-        var d = document.createElement('div'); d.className = 'rfs-st-card rfs-st-pop' + (wiki ? ' wikic' : ''); d.style.paddingLeft = '8px'; d.innerHTML = inner;
+        var d = document.createElement('div'); d.className = 'rfs-st-card rfs-st-pop' + (opts.wiki ? ' wikic' : ''); d.style.paddingLeft = '8px';
+        if (id != null) d.setAttribute('data-id', id);
+        if (opts.indent) d.style.marginLeft = (opts.indent * 12) + 'px';
+        d.innerHTML = inner;
         col.appendChild(d);
         var cnt = document.querySelector('.rfs-st-live [data-livecount="' + colKey + '"]'); if (cnt) cnt.textContent = col.children.length;
+        if (opts.links && opts.links.length) { setTimeout(function () { (opts.links || []).forEach(function (lid) { _rfsStLiveSpline(lid, id); }); }, 460); }
+    }
+    function _rfsStLiveSpline(fromId, toId) {
+        if (fromId == null || toId == null) return;
+        var flow = document.querySelector('.rfs-st-live'); if (!flow) return;
+        var svg = flow.querySelector('.rfs-st-live-svg'); if (!svg) return;
+        function esc(x) { return (window.CSS && CSS.escape) ? CSS.escape(String(x)) : String(x); }
+        var a = flow.querySelector('[data-id="' + esc(fromId) + '"]'); var b = flow.querySelector('[data-id="' + esc(toId) + '"]');
+        if (!a || !b) return;
+        var fr = flow.getBoundingClientRect(), ar = a.getBoundingClientRect(), br = b.getBoundingClientRect();
+        var leftToRight = ar.left <= br.left;
+        var ax = ar.left - fr.left + (leftToRight ? ar.width : 0), ay = ar.top - fr.top + ar.height / 2;
+        var bx = br.left - fr.left + (leftToRight ? 0 : br.width), by = br.top - fr.top + br.height / 2;
+        var mx = (ax + bx) / 2;
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M' + ax + ',' + ay + ' C' + mx + ',' + ay + ' ' + mx + ',' + by + ' ' + bx + ',' + by);
+        path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--c-accent)'); path.setAttribute('stroke-width', '1.4');
+        path.setAttribute('stroke-opacity', '0'); path.setAttribute('stroke-linecap', 'round'); path.style.transition = 'stroke-opacity .45s';
+        svg.appendChild(path);
+        requestAnimationFrame(function () { path.setAttribute('stroke-opacity', '0.4'); });
     }
     function _rfsStLivePrefillNodes() {
         var nodes = (_rfsState.current && _rfsState.current.nodes) || [];
-        nodes.slice(0, 60).forEach(function (n) { _rfsStLiveAppend('node', '<div class="ttl">' + (n.kind === 'category' ? '📁 ' : '• ') + _annEsc(n.title) + '</div>', false); });
+        nodes.slice(0, 80).forEach(function (n) { _rfsStLiveAppend('node', n.id, '<div class="ttl">' + (n.kind === 'category' ? '📁 ' : '• ') + _annEsc(n.title) + '</div>', { indent: (n.level || 0) }); });
     }
 
     function _rfsStreamFlowHtml(nodes) {
@@ -34207,9 +34234,20 @@ ${intrLog}
         // 0 위키
         h += '<div class="rfs-st-col wikicol"><div class="rfs-st-h">📚 위키 (정의) <button class="rfs-st-add" onclick="rfsStreamAdjustDialog(\'wiki\')" title="재도출">🔄</button><button class="rfs-st-add" onclick="rfsStreamAddItem(\'wiki\')">+ 추가</button><span class="n">' + wiki.length + '</span></div>';
         if (!wiki.length) h += '<div style="font-size:10.5px;color:var(--c-text3);padding:4px;">위키 구조는 <b>⑤</b>에서 도출·채택합니다. 채택 후 여기서 키워드↔위키 계보가 보입니다.</div>';
-        wiki.forEach(function (wk) {
-            h += _rfsStreamCard('wiki', wk.id, '<div class="ttl">📄 ' + _annEsc(wk.title) + '</div>' + ((wk.outline || []).length ? '<div class="mini">목차 ' + wk.outline.length + '</div>' : ''), { wiki: true, nocheck: true, link: (wk.origin_node_ids || wk.node_ids || []) });
-        });
+        else {
+            // [r268] 폴더 계층 트리 — folder_path 로 폴더 라벨 + 들여쓴 문서 카드
+            var wroot = { folders: {}, docs: [], order: [] };
+            wiki.forEach(function (wk) { var path = wk.folder_path || []; var cur = wroot; path.forEach(function (seg) { if (!cur.folders[seg]) { cur.folders[seg] = { folders: {}, docs: [], order: [] }; cur.order.push(seg); } cur = cur.folders[seg]; }); cur.docs.push(wk); });
+            (function renderWF(node, depth) {
+                node.order.forEach(function (name) {
+                    h += '<div style="margin:4px 0 1px ' + (depth * 12) + 'px;font-size:10.5px;font-weight:800;color:var(--c-text2);display:flex;align-items:center;gap:3px;">📁 ' + _annEsc(name) + '</div>';
+                    renderWF(node.folders[name], depth + 1);
+                });
+                node.docs.forEach(function (wk) {
+                    h += _rfsStreamCard('wiki', wk.id, '<div class="ttl">📄 ' + _annEsc(wk.title) + '</div>' + ((wk.outline || []).length ? '<div class="mini">목차 ' + wk.outline.length + '</div>' : ''), { wiki: true, nocheck: true, link: (wk.origin_node_ids || wk.node_ids || []), indent: depth });
+                });
+            })(wroot, 0);
+        }
         h += '</div>';
         // 1 키워드 — 계층 들여쓰기(폴더>자식), 폴더는 자식 강조
         h += '<div class="rfs-st-col"><div class="rfs-st-h">🌲 키워드 <span class="n">' + nodes.length + '</span></div>';
@@ -34438,14 +34476,14 @@ ${intrLog}
                     try {
                         var ev = JSON.parse(data);
                         if (ev.event === 'phase') { _stage(ev.message); _log('▶ ' + ev.message); _markPhase(ev.phase); }
-                        else if (ev.event === 'task_proposed') { _log('  + Task: ' + (ev.task && ev.task.title)); var _t = ev.task || {}; _rfsStLiveAppend('tasks', '<div class="ttl">' + _annEsc(_t.title || '') + '</div><div class="mini">' + (_t.process_tag ? '<span class="rfs-st-tag">' + _annEsc(_t.process_tag) + '</span>' : '') + '<span>' + (_t.est_hours || 0) + 'h</span></div>'); }
+                        else if (ev.event === 'task_proposed') { _log('  + Task: ' + (ev.task && ev.task.title)); var _t = ev.task || {}; _rfsStLiveAppend('tasks', _t.id, '<div class="ttl">' + _annEsc(_t.title || '') + '</div><div class="mini">' + (_t.process_tag ? '<span class="rfs-st-tag">' + _annEsc(_t.process_tag) + '</span>' : '') + '<span>' + (_t.est_hours || 0) + 'h</span></div>', { links: (_t.node_id ? [_t.node_id] : []) }); }
                         else if (ev.event === 'tasks_done') { acc.tasks = ev.tasks || []; _log('① Task ' + acc.tasks.length); _markPhase('tasks', true); }
                         else if (ev.event === 'order_done') { acc.tasks = ev.tasks || acc.tasks; _log('② 정렬 (레벨 ' + (ev.levels || 0) + ')'); }
-                        else if (ev.event === 'sprints_done') { acc.sprints = ev.sprints || []; _log('② Sprint ' + acc.sprints.length + ' (용량 ' + ev.capacity_hours + 'h)'); _markPhase('order', true); (ev.sprints || []).forEach(function (sp) { _rfsStLiveAppend('sprints', '<div class="ttl">🏃 ' + _annEsc(sp.week_label || ('Sprint ' + sp.seq)) + '</div><div class="mini">Task ' + (sp.task_ids || []).length + ' · ' + Math.round(sp.hours || 0) + 'h</div>'); }); }
-                        else if (ev.event === 'stage_proposed') { _log('  + STAGE: ' + (ev.stage && ev.stage.name)); var _s = ev.stage || {}; _rfsStLiveAppend('stages', '<div class="ttl">🎯 ' + _annEsc(_s.name || '') + '</div><div class="mini"><span class="rfs-st-tag">' + _annEsc(_s.type || '') + '</span></div>'); }
+                        else if (ev.event === 'sprints_done') { acc.sprints = ev.sprints || []; _log('② Sprint ' + acc.sprints.length + ' (용량 ' + ev.capacity_hours + 'h)'); _markPhase('order', true); (ev.sprints || []).forEach(function (sp) { _rfsStLiveAppend('sprints', sp.id, '<div class="ttl">🏃 ' + _annEsc(sp.week_label || ('Sprint ' + sp.seq)) + '</div><div class="mini">Task ' + (sp.task_ids || []).length + ' · ' + Math.round(sp.hours || 0) + 'h</div>', { links: (sp.task_ids || []) }); }); }
+                        else if (ev.event === 'stage_proposed') { _log('  + STAGE: ' + (ev.stage && ev.stage.name)); var _s = ev.stage || {}; var _spid = (acc.sprints || []).filter(function (sp) { return (_s.sprint_seqs || []).indexOf(sp.seq) >= 0; }).map(function (sp) { return sp.id; }); _rfsStLiveAppend('stages', _s.id, '<div class="ttl">🎯 ' + _annEsc(_s.name || '') + '</div><div class="mini"><span class="rfs-st-tag">' + _annEsc(_s.type || '') + '</span></div>', { links: _spid }); }
                         else if (ev.event === 'stages_done') { acc.stages = ev.stages || []; _log('③ STAGE ' + acc.stages.length); _markPhase('stages', true); }
-                        else if (ev.event === 'wbs_done') { acc.wbs = ev.wbs || []; _log('④ WBS ' + acc.wbs.length); _markPhase('wbs', true); (ev.wbs || []).forEach(function (w) { _rfsStLiveAppend('wbs', '<div class="ttl">🏗 ' + _annEsc(w.title || '') + '</div><div class="mini">막대 ' + (((w.links || {})._segments) || []).length + '</div>'); }); }
-                        else if (ev.event === 'doc_proposed') { _log('  + 위키: ' + (ev.doc && ev.doc.title)); var _d = ev.doc || {}; _rfsStLiveAppend('wiki', '<div class="ttl">📄 ' + _annEsc(_d.title || '') + '</div>' + ((_d.folder_path || []).length ? '<div class="mini">' + _annEsc((_d.folder_path || []).join('/')) + '</div>' : ''), true); }
+                        else if (ev.event === 'wbs_done') { acc.wbs = ev.wbs || []; _log('④ WBS ' + acc.wbs.length); _markPhase('wbs', true); (ev.wbs || []).forEach(function (w) { _rfsStLiveAppend('wbs', w.id, '<div class="ttl">🏗 ' + _annEsc(w.title || '') + '</div><div class="mini">막대 ' + (((w.links || {})._segments) || []).length + '</div>', { links: ((w.links || {}).taskIds || []).slice(0, 6) }); }); }
+                        else if (ev.event === 'doc_proposed') { _log('  + 위키: ' + (ev.doc && ev.doc.title)); var _d = ev.doc || {}; _rfsStLiveAppend('wiki', _d.id, '<div class="ttl">📄 ' + _annEsc(_d.title || '') + '</div>' + ((_d.folder_path || []).length ? '<div class="mini">' + _annEsc((_d.folder_path || []).join('/')) + '</div>' : ''), { wiki: true, links: (_d.origin_node_ids || []) }); }
                         else if (ev.event === 'wiki_done') { _rfsState.wikiPlan = { docs: ev.wiki || [] }; _rfsState.wikiPlanSel = null; _log('⑤ 위키 ' + (ev.wiki || []).length); _markPhase('wiki', true); }
                         else if (ev.event === 'warn') { _log('⚠ ' + ev.message); }
                         else if (ev.event === 'error') { _log('❌ ' + ev.message); showToast('도출 실패: ' + ev.message, 'alert'); }
