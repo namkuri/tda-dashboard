@@ -37,7 +37,7 @@ app = FastAPI(title="TDA Deep Wiki", version="1.0.0")
 START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
-SERVER_REVISION = "r269"
+SERVER_REVISION = "r270"
 
 # [r226] Gemini 라우터 — 순환 import 방지 위해 llm_router 모듈에서 가져옴.
 from llm_router import GEMINI_CONFIG, get_llm, is_gemini_model
@@ -804,6 +804,8 @@ class RefineryFileOverride(BaseModel):
     category: Optional[str] = None
     node_ids: List[str] = []
     is_overview: bool = False
+    meta: Optional[Dict[str, Any]] = None     # [r270] 파생 vault·세션 추적 메타(보존)
+    folder_path: List[str] = []               # [r270] 매핑 UI 용
 
 
 class RefineryApplyTreeRequest(BaseModel):
@@ -812,6 +814,7 @@ class RefineryApplyTreeRequest(BaseModel):
     project_id: Optional[str] = None
     files: List[RefineryFileOverride]  # 선택된 파일만
     create_archive: bool = True
+    root: Optional[str] = None          # [r270] root 오버라이드("" = 강제 root 없이 매핑 경로 그대로)
 
 
 class RefineryProposeWorkRequest(BaseModel):
@@ -1059,6 +1062,7 @@ async def refinery_apply_tree(req: RefineryApplyTreeRequest):
         user_id=req.user_id,
         project_id=req.project_id,
         create_archive=req.create_archive,
+        root_override=req.root,
     )
     # 세션에 생성 결과 기록
     new_doc_ids = [c["id"] for c in result["created"]] + [u["id"] for u in result["updated"]]

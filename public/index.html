@@ -10962,7 +10962,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         var _ahubIdx = { running: false, kind: null, log: [] };
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
-        var _AHUB_FRONT_REV = 'r269';
+        var _AHUB_FRONT_REV = 'r270';
         var _ahubRevWarned = false;
         function _ahubCheckRev(serverRev) {
             if (!serverRev) return;
@@ -31749,7 +31749,7 @@ ${intrLog}
     }
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
-    var _RFS_FRONT_REV = 'r269';
+    var _RFS_FRONT_REV = 'r270';
     async function rfsHealthCheck() {
         var banner = document.getElementById('rfs-health-banner');
         if (!banner) return;
@@ -35013,8 +35013,113 @@ ${intrLog}
     // ════════════════════════════════════════════════════════════════
     // [r247] ⑥ 위키 본문 — 채택된 목차 따라 본문 작성 → 위키 적용
     // ════════════════════════════════════════════════════════════════
+    // ── [r270] #4 위키 본문 → 프로젝트 위키 매핑(2열: 생성 구조 ↔ 기존 위키)
+    function _rfsWikiState() {
+        _rfsState.wikiFolderTargets = _rfsState.wikiFolderTargets || {};  // {생성 top폴더: [기존 위키 폴더 경로...]}
+        _rfsState.wikiExcluded = _rfsState.wikiExcluded || {};            // {파일key: true}
+        _rfsState.wikiRenames = _rfsState.wikiRenames || {};             // {파일key: 새이름}
+        return _rfsState;
+    }
+    function _rfsFileKey(f) { return f.path; }
+    function _rfsFileTitle(f) { var t = (f.path || '').split('/').pop().replace(/\.md$/, ''); return (_rfsState.wikiRenames && _rfsState.wikiRenames[_rfsFileKey(f)]) || t; }
+    function _rfsGenTree(files) {
+        var root = { folders: {}, files: [], order: [] };
+        (files || []).forEach(function (f) { var fp = f.folder_path || []; var cur = root; fp.forEach(function (seg) { if (!cur.folders[seg]) { cur.folders[seg] = { folders: {}, files: [], order: [] }; cur.order.push(seg); } cur = cur.folders[seg]; }); cur.files.push(f); });
+        return root;
+    }
+    function _rfsWikiTopOf(f) { return (f.folder_path || [])[0] || '(루트)'; }
+    function _rfsWikiTargetOf(top) { return (_rfsState.wikiFolderTargets && _rfsState.wikiFolderTargets[top]) || []; }
+    function _rfsWikiFinalPath(f) { return _rfsWikiTargetOf(_rfsWikiTopOf(f)).concat(f.folder_path || []).concat([_rfsFileTitle(f)]).join('/') + '.md'; }
+
+    // 기존 프로젝트 위키 트리(canon) — parentId 기준
+    function _rfsExistingWikiByParent() {
+        var docs = (currentData.docs || []).filter(function (d) { return (d.projectId || 'default') === activeProjectId && d.kind === 'canon'; });
+        var byParent = {}; docs.forEach(function (d) { var p = d.parentId || '__root'; (byParent[p] = byParent[p] || []).push(d); });
+        return byParent;
+    }
+
+    // 매핑 UI HTML
+    function _rfsWikiMapHtml(files) {
+        var gen = _rfsGenTree(files);
+        var byParent = _rfsExistingWikiByParent();
+        var h = '<div style="font-size:11.5px;color:var(--c-text3);margin-bottom:8px;">생성된 폴더/파일을 <b>기존 프로젝트 위키</b>에 맵핑합니다. 좌측 폴더를 우측 폴더로 <b>드래그</b>해 위치 지정(기본=위키 루트), 파일 <b>체크 해제</b> 시 제외, <b>✎</b> 이름 변경. 항목에 호버하면 연결선이 보입니다.</div>';
+        h += '<div class="rfs-wm" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;position:relative;align-items:start;">';
+        h += '<svg class="rfs-wm-svg rfs-st-svg" style="z-index:8;"></svg>';
+        // 좌: 생성된 구조
+        h += '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card2,var(--c-sidebar-bg));padding:10px;">';
+        h += '<div style="font-weight:800;font-size:12.5px;margin-bottom:6px;color:var(--c-accent);">📦 생성된 구조</div>';
+        h += (function rg(node, depth, topName) {
+            var s = '';
+            node.order.forEach(function (name) {
+                var top = depth === 0 ? name : topName;
+                var tgt = _rfsWikiTargetOf(top);
+                var tgtLabel = tgt.length ? (' → ' + tgt.join('/')) : ' → 위키 루트';
+                s += '<div class="rfs-wm-gfolder" data-top="' + _annEsc(top) + '" draggable="' + (depth === 0) + '" ondragstart="rfsWikiDragStart(event,\'' + _annEsc(top) + '\')" style="margin:3px 0 1px ' + (depth * 13) + 'px;font-size:11px;font-weight:800;color:var(--c-text2);cursor:' + (depth === 0 ? 'grab' : 'default') + ';" title="' + (depth === 0 ? '드래그해 위치 지정' : '') + '">📁 ' + _annEsc(name) + (depth === 0 ? '<span style="font-weight:400;color:var(--c-accent);font-size:10px;">' + _annEsc(tgtLabel) + '</span>' : '') + '</div>';
+                s += rg(node.folders[name], depth + 1, top);
+            });
+            node.files.forEach(function (f) {
+                var key = _rfsFileKey(f); var ex = _rfsState.wikiExcluded[key];
+                s += '<div class="rfs-wm-gfile" data-fk="' + _annEsc(key) + '" data-top="' + _annEsc(_rfsWikiTopOf(f)) + '" style="margin:2px 0 2px ' + (depth * 13) + 'px;display:flex;align-items:center;gap:5px;font-size:12px;' + (ex ? 'opacity:.4;' : '') + '">'
+                    + '<input type="checkbox" ' + (ex ? '' : 'checked') + ' onchange="rfsWikiToggleExclude(\'' + _annEsc(key) + '\',this.checked)" style="accent-color:var(--c-accent);">'
+                    + '<span style="font-weight:700;flex:1;min-width:0;">📄 ' + _annEsc(_rfsFileTitle(f)) + '</span>'
+                    + '<button class="rfs-st-add" onclick="rfsWikiRename(\'' + _annEsc(key) + '\')" title="이름 변경" style="padding:0 5px;">✎</button></div>';
+            });
+            return s;
+        })(gen, 0, null);
+        h += '</div>';
+        // 우: 기존 프로젝트 위키
+        h += '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card2,var(--c-sidebar-bg));padding:10px;">';
+        h += '<div style="font-weight:800;font-size:12.5px;margin-bottom:6px;color:var(--c-text2);">📚 프로젝트 위키 (기존)</div>';
+        h += '<div class="rfs-wm-droproot" ondragover="rfsWikiAllowDrop(event)" ondrop="rfsWikiDrop(event,\'\')" style="font-size:11px;font-weight:800;color:var(--c-text3);padding:3px 5px;border:1px dashed var(--c-border);border-radius:6px;margin-bottom:4px;">📁 위키 루트 (여기에 놓으면 최상위)</div>';
+        h += (function rw(parent, depth, pathArr) {
+            var kids = (byParent[parent] || []).filter(function (d) { return d.meta && d.meta.isFolder; });
+            var s = '';
+            kids.forEach(function (d) {
+                var pa = pathArr.concat([d.title]);
+                s += '<div class="rfs-wm-efolder" data-path="' + _annEsc(pa.join('/')) + '" ondragover="rfsWikiAllowDrop(event)" ondrop="rfsWikiDrop(event,\'' + _annEsc(pa.join('||')) + '\')" style="margin:2px 0 1px ' + (depth * 13) + 'px;font-size:11px;font-weight:700;color:var(--c-text3);opacity:.7;padding:1px 4px;border-radius:5px;">📁 ' + _annEsc(d.title) + '</div>';
+                s += rw(d.id, depth + 1, pa);
+            });
+            // 파일(옅게)
+            (byParent[parent] || []).filter(function (d) { return !(d.meta && d.meta.isFolder); }).slice(0, 40).forEach(function (d) {
+                s += '<div style="margin:1px 0 1px ' + (depth * 13 + 10) + 'px;font-size:11px;color:var(--c-text3);opacity:.5;">📄 ' + _annEsc(d.title) + '</div>';
+            });
+            return s;
+        })('__root', 0, []);
+        h += '</div></div>';
+        return h;
+    }
+    function rfsWikiDragStart(ev, top) { ev.dataTransfer.setData('text/plain', top); ev.dataTransfer.effectAllowed = 'move'; }
+    function rfsWikiAllowDrop(ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; }
+    function rfsWikiDrop(ev, pathStr) { ev.preventDefault(); var top = ev.dataTransfer.getData('text/plain'); if (!top) return; _rfsWikiState().wikiFolderTargets[top] = pathStr ? pathStr.split('||') : []; rfsRenderWikiBodyStep(); }
+    function rfsWikiToggleExclude(key, on) { _rfsWikiState().wikiExcluded[key] = !on; rfsRenderWikiBodyStep(); }
+    async function rfsWikiRename(key) { var f = (_rfsState.wikiFiles || []).find(function (x) { return _rfsFileKey(x) === key; }); if (!f) return; var nv = await uiPrompt({ title: '문서 이름 변경', value: _rfsFileTitle(f) }); if (nv && nv.trim()) { _rfsWikiState().wikiRenames[key] = nv.trim(); rfsRenderWikiBodyStep(); } }
+    // 호버 시 좌↔우 매핑 스플라인
+    function _rfsWikiMapBind() {
+        var wrap = document.querySelector('#rfs-main .rfs-wm'); if (!wrap) return;
+        var svg = wrap.querySelector('.rfs-wm-svg'); if (!svg) return;
+        function clear() { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+        function draw(top) {
+            clear();
+            var tgt = _rfsWikiTargetOf(top);
+            var a = wrap.querySelector('.rfs-wm-gfolder[data-top="' + (window.CSS && CSS.escape ? CSS.escape(top) : top) + '"]');
+            var b = tgt.length ? wrap.querySelector('.rfs-wm-efolder[data-path="' + (window.CSS && CSS.escape ? CSS.escape(tgt.join('/')) : tgt.join('/')) + '"]') : wrap.querySelector('.rfs-wm-droproot');
+            if (!a || !b) return;
+            var fr = wrap.getBoundingClientRect(), ar = a.getBoundingClientRect(), br = b.getBoundingClientRect();
+            var ax = ar.right - fr.left, ay = ar.top - fr.top + ar.height / 2, bx = br.left - fr.left, by = br.top - fr.top + br.height / 2, mx = (ax + bx) / 2;
+            var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            p.setAttribute('d', 'M' + ax + ',' + ay + ' C' + mx + ',' + ay + ' ' + mx + ',' + by + ' ' + bx + ',' + by);
+            p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'var(--c-accent)'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-opacity', '0.7'); p.setAttribute('stroke-linecap', 'round');
+            svg.appendChild(p);
+        }
+        wrap.querySelectorAll('.rfs-wm-gfolder[data-top], .rfs-wm-gfile[data-top]').forEach(function (el) {
+            el.addEventListener('mouseenter', function () { draw(el.getAttribute('data-top')); });
+            el.addEventListener('mouseleave', clear);
+        });
+    }
+
     function rfsRenderWikiBodyStep() {
         var main = document.getElementById('rfs-main'); if (!main) return;
+        _rfsWikiState();
         var adopted = _rfsState.wikiAdopted || [];
         var running = _rfsState.wikiBodyRunning;
         var files = _rfsState.wikiFiles;
@@ -35033,14 +35138,16 @@ ${intrLog}
         html += '<button class="aihub-gpu-btn" onclick="rfsGoStep(5)">← 위키 구조</button>';
         html += '</div>';
         html += '<div id="rfs-wikibody-progress" style="' + (running ? '' : 'display:none;') + 'padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);margin-bottom:14px;"><div id="rfs-wikibody-stage" style="font-weight:700;color:var(--c-accent);">' + (running ? '<span class="rfs-dc-spinner"></span> 진행 중…' : '⏳') + '</div><div id="rfs-wikibody-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:140px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px;border-radius:6px;white-space:pre-wrap;">' + _annEsc((_rfsState._wikiBodyLog || []).join('\n')) + '</div></div>';
-        // 작성된 본문 미리보기
+        // [r270] 작성 완료 → 2열 매핑 UI(생성 구조 ↔ 기존 위키)
         if (files && files.length && !running) {
-            html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+            html += _rfsWikiMapHtml(files);
+            // 본문 미리보기(접기)
+            html += '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:var(--c-text2);font-weight:700;">📄 작성된 본문 미리보기 (' + files.length + ')</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">';
             files.forEach(function (f) {
-                html += '<details style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:10px 12px;"><summary style="cursor:pointer;font-weight:700;font-size:12.5px;">📄 ' + _annEsc(f.path) + '</summary>';
-                html += '<pre style="margin:8px 0 0;font-size:11px;white-space:pre-wrap;color:var(--c-text2);max-height:300px;overflow-y:auto;">' + _annEsc((f.body || '').slice(0, 4000)) + '</pre></details>';
+                html += '<details style="border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);padding:8px 10px;"><summary style="cursor:pointer;font-weight:700;font-size:12px;">📄 ' + _annEsc(_rfsWikiFinalPath(f)) + '</summary>';
+                html += '<pre style="margin:8px 0 0;font-size:11px;white-space:pre-wrap;color:var(--c-text2);max-height:280px;overflow-y:auto;">' + _annEsc((f.body || '').slice(0, 4000)) + '</pre></details>';
             });
-            html += '</div>';
+            html += '</div></details>';
         } else if (!running) {
             html += '<div style="display:flex;flex-direction:column;gap:6px;">';
             adopted.forEach(function (d) { html += '<div style="font-size:12px;color:var(--c-text2);">📄 ' + _annEsc(d.title) + ' <span style="color:var(--c-text3);">· 목차 ' + ((d.outline || []).length) + '</span></div>'; });
@@ -35048,6 +35155,7 @@ ${intrLog}
         }
         html += '</div>';
         main.innerHTML = html;
+        if (files && files.length && !running) _rfsWikiMapBind();
         var le = document.getElementById('rfs-wikibody-log'); if (le) le.scrollTop = le.scrollHeight;
     }
 
@@ -35058,6 +35166,7 @@ ${intrLog}
         var modelSel = document.getElementById('rfs-wikibody-model');
         var model = (modelSel && modelSel.value) || null;
         _rfsState.wikiBodyRunning = true; _rfsState._wikiBodyLog = []; _rfsState.wikiFiles = null;
+        _rfsState.wikiFolderTargets = {}; _rfsState.wikiExcluded = {}; _rfsState.wikiRenames = {};  // [r270] 매핑 리셋
         rfsRenderWikiBodyStep();
         function _log(m) { _rfsState._wikiBodyLog.push(m); if (_rfsState._wikiBodyLog.length > 200) _rfsState._wikiBodyLog = _rfsState._wikiBodyLog.slice(-200); var l = document.getElementById('rfs-wikibody-log'); if (l) { l.textContent = _rfsState._wikiBodyLog.join('\n'); l.scrollTop = l.scrollHeight; } }
         function _stage(m) { var e = document.getElementById('rfs-wikibody-stage'); if (e) e.innerHTML = '<span class="rfs-dc-spinner"></span> ' + _annEsc(m); }
@@ -35096,16 +35205,22 @@ ${intrLog}
 
     async function rfsApplyWikiBody() {
         var url = rfsBackEnd(); if (!url) return;
-        var files = _rfsState.wikiFiles; if (!files || !files.length) { showToast('먼저 본문을 작성하세요', 'alert'); return; }
+        var all = _rfsState.wikiFiles; if (!all || !all.length) { showToast('먼저 본문을 작성하세요', 'alert'); return; }
         if (_rfsState._applyingWikiBody) return;
-        var ok = await uiConfirm({ title: '위키 적용', message: '문서 ' + files.length + '개를 프로젝트 위키에 적용합니다.', confirmText: '적용' });
+        _rfsWikiState();
+        // [r270] 제외 안 된 파일만 + 매핑 경로(root 없이 기존 위키에 직접) + meta 보존
+        var files = all.filter(function (f) { return !_rfsState.wikiExcluded[_rfsFileKey(f)]; }).map(function (f) {
+            return { path: _rfsWikiFinalPath(f), body: f.body, target_kind: 'canon', category: 'canon', node_ids: f.node_ids || [], folder_path: f.folder_path || [], meta: f.meta || null };
+        });
+        if (!files.length) { showToast('적용할 문서가 없습니다(전부 제외됨)', 'alert'); return; }
+        var ok = await uiConfirm({ title: '위키 적용', message: '문서 ' + files.length + '개를 기존 프로젝트 위키에 매핑해 적용합니다.\n(강제 상위폴더 없이 지정한 위치로)', confirmText: '적용' });
         if (!ok) return;
         _rfsState._applyingWikiBody = true;
         var btns = document.querySelectorAll('#rfs-main button'); btns.forEach(function (b) { b.disabled = true; });
         try {
             var res = await fetch(url + '/refinery/apply-tree', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId, files: files, create_archive: true }),
+                body: JSON.stringify({ session_id: _rfsState.current.id, user_id: rfsCurrentUser(), project_id: activeProjectId, files: files, create_archive: true, root: '' }),
             });
             if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 200)); }
             var data = await res.json();

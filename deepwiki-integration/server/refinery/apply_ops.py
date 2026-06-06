@@ -50,6 +50,7 @@ def apply_tree(
     user_id: str,
     project_id: Optional[str] = None,
     create_archive: bool = True,
+    root_override: Optional[str] = None,  # [r270] 강제 root 대체("" 면 root 없이 path 그대로 = 기존 위키에 매핑)
 ) -> Dict[str, Any]:
     """일괄 commit. files 중 선택된 것만 commit (체크박스는 프론트가 필터링).
 
@@ -61,7 +62,10 @@ def apply_tree(
     updated = []
     warnings = []
     session_id = session.get("id")
-    root = (session.get("generated_tree") or {}).get("root") or f"🔬 {session.get('title')} 시스템 정의서"
+    if root_override is not None:
+        root = root_override  # "" 이면 path 를 그대로 폴더로(매핑 UI 가 전체 경로 지정)
+    else:
+        root = (session.get("generated_tree") or {}).get("root") or f"🔬 {session.get('title')} 시스템 정의서"
 
     # [r232] wiki_docs 실제 스키마: sort_order=int4(오버플로우 주의), updated_at=bigint(epoch ms),
     #   update_history(=history 아님) jsonb, created_at 컬럼 없음. stamp_metadata 금지.
@@ -145,13 +149,10 @@ def apply_tree(
             target_kind = "canon"
         visibility = (f.get("visibility") or "public").lower()
         body = f.get("body") or ""
-        # 폴더 경로 (마지막 '/' 이전)
-        if "/" in path:
-            folder_path = root + "/" + "/".join(path.split("/")[:-1])
-            filename = path.split("/")[-1]
-        else:
-            folder_path = root
-            filename = path
+        # 폴더 경로 (마지막 '/' 이전). [r270] root="" 면 path 그대로(매핑 경로).
+        dirpart = "/".join(path.split("/")[:-1]) if "/" in path else ""
+        filename = path.split("/")[-1] if "/" in path else path
+        folder_path = "/".join([p for p in [root, dirpart] if p])  # 빈 root 면 dirpart 만
         title = filename.replace(".md", "").lstrip()
         # 상위 폴더 보장
         parent_id = ensure_folder(target_kind, project_id, folder_path)
