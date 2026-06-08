@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r273"
+SERVER_REVISION = "r274"
 
 
 
@@ -1446,9 +1446,18 @@ async def meetings_upload(files: List[UploadFile] = File(...)):
             try:
                 with _zip.ZipFile(dst) as z:
                     z.extractall(updir)
+                _os.remove(dst)   # [r274] zip 추출 후 원본 zip 은 제거(트랙 탐지 노이즈 방지)
             except Exception:
                 pass
-    return {"upload_token": token, "files": saved}
+    # [r274] 트랙 감지 미리보기 — 사용자가 multi-track 잘 올렸는지 확인 가능
+    try:
+        if _mtg_tr:
+            tracks = _mtg_tr.list_tracks(updir)
+            return {"upload_token": token, "files": saved,
+                    "tracks_detected": [{"file": _os.path.basename(t["path"]), "speaker": t["speaker"]} for t in tracks]}
+    except Exception:
+        pass
+    return {"upload_token": token, "files": saved, "tracks_detected": []}
 
 
 @app.get("/meetings/sessions")

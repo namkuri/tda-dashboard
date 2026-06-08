@@ -10963,7 +10963,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r273';
+        var _AHUB_FRONT_REV = 'r274';
 
 
         var _ahubRevWarned = false;
@@ -31753,7 +31753,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r273';
+    var _RFS_FRONT_REV = 'r274';
 
 
     async function rfsHealthCheck() {
@@ -31879,30 +31879,111 @@ ${intrLog}
     function mtgImportDialog() {
         if (!rfsCurrentUser()) { showToast('로그인이 필요합니다', 'alert'); return; }
         _mtgStopPoll();
+        _mtgState._pickedFiles = [];   // [r274] 선택된 파일 보존(File 객체 배열)
         var main = document.getElementById('mtg-main'); if (!main) return;
         var h = '<div style="max-width:680px;margin:0 auto;">';
-        h += '<h2 style="margin:0 0 6px;font-size:18px;">+ Craig 녹음 가져오기</h2>';
-        h += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:16px;">Craig 봇이 DM으로 준 <b>녹음 링크</b>(또는 ID+key)를 붙여넣으세요. 화자별 멀티트랙을 받아 자동 텍스트화합니다. <b style="color:var(--c-accent);">백그라운드로 처리되어 시작 후 창을 닫아도 됩니다</b> — 진행상황은 회의 세션에서 자동 갱신됩니다.</div>';
+        h += '<h2 style="margin:0 0 6px;font-size:18px;">+ 회의 가져오기</h2>';
+        h += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">Discord에서 Craig로 녹음 → <b style="color:var(--c-accent);">Multi-Track(per-speaker) FLAC</b> 받아 아래에 올리세요. 화자별로 자동 텍스트화·요약합니다. 백그라운드 처리이므로 시작 후 창을 닫아도 OK.</div>';
         h += '<div style="display:flex;flex-direction:column;gap:10px;">';
         h += '<label style="font-size:12px;font-weight:700;">회의 제목<input id="mtg-f-title" type="text" placeholder="예: 2026 W23 기획 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
-        h += '<label style="font-size:12px;font-weight:700;">Craig 녹음 링크 또는 ID<input id="mtg-f-id" type="text" placeholder="https://craig.chat/rec/XXXX?key=YYYY  또는  XXXX" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
-        h += '<label style="font-size:12px;font-weight:700;">key (링크에 포함됐으면 비워두기)<input id="mtg-f-key" type="text" placeholder="(선택)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
-        h += '<details style="font-size:12px;"><summary style="cursor:pointer;color:var(--c-text2);">고급 옵션</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">';
+        // [r274] 메인 경로: 드래그앤드롭 + 다중 선택 가능한 파일 업로드
+        h += '<div>';
+        h += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🎙 오디오 파일 (필수)</div>';
+        h += '<div id="mtg-drop" style="border:2px dashed var(--c-border);border-radius:10px;padding:18px 14px;background:var(--c-paper);text-align:center;transition:.15s;cursor:pointer;" onclick="document.getElementById(\'mtg-f-files\').click()">';
+        h += '<div style="font-size:32px;">🎙</div>';
+        h += '<div style="font-size:13px;font-weight:700;margin-top:4px;">여기에 파일을 드롭하거나 <span style="color:var(--c-accent);">클릭해 선택</span></div>';
+        h += '<div style="font-size:11px;color:var(--c-text3);margin-top:4px;"><b>여러 파일을 한 번에 선택</b>(Ctrl/Shift+클릭) — 화자별로 다른 사람으로 인식됩니다.<br>지원: .flac .ogg .wav .mp3 .m4a .opus .webm / .zip(자동 해제)</div>';
+        h += '</div>';
+        h += '<input id="mtg-f-files" type="file" multiple accept=".zip,.flac,.ogg,.oga,.wav,.mp3,.m4a,.aac,.opus,.webm" style="display:none;" onchange="mtgOnFilesPicked(event)">';
+        h += '<div id="mtg-files-preview" style="margin-top:8px;"></div>';
+        h += '</div>';
+        h += '<details style="font-size:12px;"><summary style="cursor:pointer;color:var(--c-text2);">고급 옵션 — Craig URL/ID로 자동 다운로드(불안정), Whisper 모델, 언어</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:8px 10px;border:1px solid var(--c-border);border-radius:6px;">';
+        h += '<div style="font-size:11px;color:var(--c-text3);">💡 Craig 자동 다운로드는 현재 craig.chat 인증 흐름과 안 맞아 자주 실패합니다. 위 파일 업로드를 권장.</div>';
+        h += '<label style="font-size:12px;">Craig 녹음 링크/ID<input id="mtg-f-id" type="text" placeholder="https://craig.chat/rec/XXXX?key=YYYY (선택)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>';
+        h += '<label style="font-size:12px;">key (선택, 링크에 포함되면 비움)<input id="mtg-f-key" type="text" placeholder="(선택)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>';
+        h += '<label style="font-size:12px;">직접 다운로드 URL<input id="mtg-f-url" type="text" placeholder="(zip/오디오 직링크)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>';
         h += '<label style="font-size:12px;">Whisper 모델 <select id="mtg-f-model" style="margin-left:6px;padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"><option value="tiny">tiny(빠름)</option><option value="base">base</option><option value="small">small</option><option value="medium" selected>medium(권장)</option><option value="large-v3">large-v3(정확/느림)</option></select></label>';
         h += '<label style="font-size:12px;">언어 <select id="mtg-f-lang" style="margin-left:6px;padding:4px 8px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"><option value="ko" selected>한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="">자동감지</option></select></label>';
-        h += '<label style="font-size:12px;">직접 다운로드 URL(폴백)<input id="mtg-f-url" type="text" placeholder="(Craig 자동 다운로드 실패 시 zip/오디오 직링크)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>';
         h += '</div></details>';
-        // [r243] 확실한 폴백 — Craig 페이지에서 multi-track zip 받아 직접 업로드
-        h += '<div style="border:1px dashed var(--c-border);border-radius:8px;padding:10px 12px;background:var(--c-paper);">';
-        h += '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">또는 파일 업로드 <span style="color:var(--c-text3);font-weight:400;">(자동 다운로드 안 되면 권장)</span></div>';
-        h += '<div style="font-size:11px;color:var(--c-text3);margin-bottom:6px;">Craig 페이지에서 <b>multi-track</b>(FLAC/zip)으로 받은 파일을 올리세요. zip 또는 화자별 오디오 여러 개.</div>';
-        h += '<input id="mtg-f-files" type="file" multiple accept=".zip,.flac,.ogg,.oga,.wav,.mp3,.m4a,.aac,.opus,.webm" style="font-size:12px;">';
-        h += '</div>';
-        h += '<div style="display:flex;gap:8px;margin-top:6px;"><button id="mtg-import-btn" class="aihub-gpu-btn primary" onclick="mtgRunImport()">가져오기 시작</button><button class="aihub-gpu-btn" onclick="mtgOpen()">취소</button></div>';
+        h += '<div id="mtg-warn" style="display:none;padding:8px 10px;border-radius:7px;font-size:12px;"></div>';
+        h += '<div style="display:flex;gap:8px;margin-top:4px;"><button id="mtg-import-btn" class="aihub-gpu-btn primary" onclick="mtgRunImport()">가져오기 시작</button><button class="aihub-gpu-btn" onclick="mtgOpen()">취소</button></div>';
         h += '</div>';
         h += '<div id="mtg-import-progress" style="display:none;margin-top:16px;padding:12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);"><div id="mtg-import-stage" style="font-weight:700;color:var(--c-accent);"></div><div id="mtg-import-log" style="font-family:ui-monospace,monospace;font-size:10.5px;max-height:200px;overflow-y:auto;margin-top:8px;background:var(--c-paper);padding:6px 8px;border-radius:6px;white-space:pre-wrap;"></div></div>';
         h += '</div>';
         main.innerHTML = h;
+        // 드롭존 바인딩
+        var drop = document.getElementById('mtg-drop');
+        if (drop) {
+            ['dragenter', 'dragover'].forEach(function (ev) {
+                drop.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); drop.style.background = 'var(--c-accent-soft)'; drop.style.borderColor = 'var(--c-accent)'; });
+            });
+            ['dragleave', 'drop'].forEach(function (ev) {
+                drop.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); drop.style.background = 'var(--c-paper)'; drop.style.borderColor = 'var(--c-border)'; });
+            });
+            drop.addEventListener('drop', function (e) {
+                var dt = e.dataTransfer; if (!dt) return;
+                var files = []; for (var i = 0; i < dt.files.length; i++) files.push(dt.files[i]);
+                mtgAddFiles(files);
+            });
+        }
+    }
+    // [r274] 파일 선택/드롭 → 누적 + 미리보기 + 경고
+    function mtgOnFilesPicked(ev) {
+        var arr = []; for (var i = 0; i < ev.target.files.length; i++) arr.push(ev.target.files[i]);
+        mtgAddFiles(arr);
+        ev.target.value = '';   // 같은 파일 다시 고를 수 있게
+    }
+    function mtgAddFiles(files) {
+        if (!_mtgState._pickedFiles) _mtgState._pickedFiles = [];
+        var existing = {}; _mtgState._pickedFiles.forEach(function (f) { existing[f.name + ':' + f.size] = true; });
+        var ok = ['flac', 'ogg', 'oga', 'wav', 'mp3', 'm4a', 'aac', 'opus', 'webm', 'zip'];
+        files.forEach(function (f) {
+            var ext = (f.name.split('.').pop() || '').toLowerCase();
+            if (ok.indexOf(ext) < 0) return;
+            var k = f.name + ':' + f.size;
+            if (!existing[k]) { _mtgState._pickedFiles.push(f); existing[k] = true; }
+        });
+        mtgRenderFilesPreview();
+    }
+    function mtgRemoveFile(idx) {
+        if (_mtgState._pickedFiles) _mtgState._pickedFiles.splice(idx, 1);
+        mtgRenderFilesPreview();
+    }
+    function mtgClearFiles() { _mtgState._pickedFiles = []; mtgRenderFilesPreview(); }
+    function mtgRenderFilesPreview() {
+        var box = document.getElementById('mtg-files-preview'); if (!box) return;
+        var files = _mtgState._pickedFiles || [];
+        if (!files.length) { box.innerHTML = ''; var w = document.getElementById('mtg-warn'); if (w) w.style.display = 'none'; return; }
+        var totalMB = 0;
+        var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11.5px;"><b>선택된 파일 ' + files.length + '개</b><a onclick="mtgClearFiles()" style="color:var(--c-accent);cursor:pointer;">전체 지우기</a></div>';
+        html += '<div style="display:flex;flex-direction:column;gap:3px;font-size:11.5px;max-height:160px;overflow-y:auto;border:1px solid var(--c-border);border-radius:6px;padding:6px 8px;background:var(--c-paper);">';
+        files.forEach(function (f, i) {
+            var mb = f.size / 1024 / 1024; totalMB += mb;
+            var isZip = /\.zip$/i.test(f.name);
+            // Craig 형식 인식 표시 — "1-Username.flac" 패턴
+            var m = (f.name.replace(/\.[^.]+$/, '')).match(/^\d+[-_.]\s*([^_#]+?)(?:[_#]\d{4,})?$/);
+            var spk = (m && m[1]) ? m[1].replace(/_/g, ' ') : '';
+            html += '<div style="display:flex;gap:8px;align-items:center;">'
+                + '<span>' + (isZip ? '📦' : '🎵') + '</span>'
+                + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(f.name) + '</span>'
+                + (spk ? ('<span style="color:var(--c-text3);">→ 화자: <b>' + _annEsc(spk) + '</b></span>') : '')
+                + '<span style="color:var(--c-text3);">' + mb.toFixed(1) + 'MB</span>'
+                + '<a onclick="mtgRemoveFile(' + i + ')" style="color:#d2393d;cursor:pointer;">✕</a>'
+                + '</div>';
+        });
+        html += '</div>';
+        html += '<div style="margin-top:4px;font-size:10.5px;color:var(--c-text3);">합계: ' + totalMB.toFixed(1) + 'MB</div>';
+        box.innerHTML = html;
+        // 단일 오디오 1개만(zip 아님) 경고 — single-mix 일 가능성 큼
+        var w = document.getElementById('mtg-warn'); if (!w) return;
+        if (files.length === 1 && !/\.zip$/i.test(files[0].name)) {
+            w.style.display = 'block';
+            w.style.background = 'rgba(245,158,11,.14)';
+            w.style.color = '#92400e';
+            w.innerHTML = '⚠ 오디오 1개만 선택됨 — 이건 <b>single-mix(섞인 1트랙)</b>일 수 있어 화자가 한 명으로 표시됩니다. Craig에서 <b>Multi-Track(per-speaker)</b>으로 받아 <b>여러 파일을 한 번에</b>(Ctrl+클릭) 올리거나, multi-track zip 1개를 올리세요.';
+        } else {
+            w.style.display = 'none';
+        }
     }
     async function mtgRunImport() {
         var url = rfsBackEnd(); if (!url) { showToast('백엔드 URL 미설정', 'alert'); return; }
@@ -31913,9 +31994,14 @@ ${intrLog}
         var durl = (document.getElementById('mtg-f-url') || {}).value || '';
         var wmodel = (document.getElementById('mtg-f-model') || {}).value || 'medium';
         var lang = (document.getElementById('mtg-f-lang') || {}).value;
-        var fileInput = document.getElementById('mtg-f-files');
-        var files = (fileInput && fileInput.files && fileInput.files.length) ? fileInput.files : null;
-        if (!cid.trim() && !durl.trim() && !files) { showToast('녹음 링크/ID, 직접 URL, 또는 파일 업로드 중 하나를 입력하세요', 'alert'); return; }
+        // [r274] 드래그앤드롭으로 누적된 파일 목록 사용
+        var files = (_mtgState._pickedFiles && _mtgState._pickedFiles.length) ? _mtgState._pickedFiles : null;
+        if (!cid.trim() && !durl.trim() && !files) { showToast('오디오 파일을 올리거나(권장) 녹음 링크/URL 중 하나를 입력하세요', 'alert'); return; }
+        // 단일 오디오(zip 아님) 1개 → 화자 분리 안 됨 경고 + 확인
+        if (files && files.length === 1 && !/\.zip$/i.test(files[0].name)) {
+            var ok = await uiConfirm({title: '단일 트랙 확인', message: '오디오 1개만 선택됐습니다. 이게 multi-track zip 이 아니라 섞인 1개 파일이면 화자가 한 명으로 표시됩니다. 그래도 진행할까요?', confirmText: '진행', cancelText: '취소'});
+            if (!ok) return;
+        }
         _mtgState.importing = true;
         var btn = document.getElementById('mtg-import-btn'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="rfs-dc-spinner"></span> 시작 중…'; }
         var prog = document.getElementById('mtg-import-progress'); if (prog) prog.style.display = 'block';
@@ -31933,6 +32019,15 @@ ${intrLog}
                 if (!ur.ok) { var ue = await ur.text(); throw new Error('업로드 실패 HTTP ' + ur.status + ' ' + ue.slice(0, 100)); }
                 var uj = await ur.json(); uploadToken = uj.upload_token;
                 log('  ↳ 업로드 완료');
+                // [r274] 감지된 트랙(=화자) 미리 표시 — 멀티트랙 잘 됐는지 즉시 확인
+                var td = uj.tracks_detected || [];
+                if (td.length) {
+                    log('  ↳ 트랙 감지: ' + td.length + '개');
+                    td.forEach(function (t) { log('       · ' + t.file + ' → 화자: ' + t.speaker); });
+                    if (td.length === 1) log('  ⚠ 트랙이 1개입니다 — single-mix 면 화자가 한 명으로 표시됩니다.');
+                } else {
+                    log('  ⚠ 트랙을 감지하지 못함 (파일/zip 내부 확인 필요)');
+                }
             }
             // [r246] 백엔드에 처리 시작 요청 — 즉시 반환 기대. 응답이 옛 SSE(text/event-stream)면 구버전 백엔드.
             log('▶ 백엔드에 처리 시작 요청'); stage('백엔드에 처리 시작 요청…');
