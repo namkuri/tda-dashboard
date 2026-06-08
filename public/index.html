@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r284';
+        var _AHUB_FRONT_REV = 'r285';
 
 
         var _ahubRevWarned = false;
@@ -14877,6 +14877,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             '2025-01-28': '설날 연휴', '2025-01-29': '설날', '2025-01-30': '설날 연휴',
             '2025-03-01': '삼일절', '2025-03-03': '대체공휴일(삼일절)',
             '2025-05-05': '어린이날·부처님오신날', '2025-05-06': '대체공휴일',
+            '2025-06-03': '제21대 대통령 선거',          // [r285] 선거일 추가
             '2025-06-06': '현충일',
             '2025-08-15': '광복절',
             '2025-10-03': '개천절',
@@ -14889,6 +14890,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             '2026-03-01': '삼일절', '2026-03-02': '대체공휴일(삼일절)',
             '2026-05-05': '어린이날',
             '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일(부처님오신날)',
+            '2026-06-03': '제9회 전국동시지방선거',       // [r285] 선거일 추가(네이버 달력 기준)
             '2026-06-06': '현충일',
             '2026-08-15': '광복절', '2026-08-17': '대체공휴일(광복절)',
             '2026-09-24': '추석 연휴', '2026-09-25': '추석', '2026-09-26': '추석 연휴', '2026-09-28': '대체공휴일(추석)',
@@ -24703,8 +24705,14 @@ ${intrLog}
         // ===================================================================
         // [r159] 타임라인 (WBS 노드 간트, Jira 스타일)
         // ===================================================================
-        var _tlScale = 'months'; // weeks | months | quarters
-        function _tlPxPerDay() { return _tlScale === 'weeks' ? 22 : (_tlScale === 'quarters' ? 1.7 : 5.2); }
+        var _tlScale = 'months'; // days | weeks | months | quarters  [r285] days 추가
+        function _tlPxPerDay() {
+            // [r285] 일 단위 — 컬럼이 하루씩이라 px/day 가 가장 크다(요일 라벨 들어갈 공간)
+            if (_tlScale === 'days') return 64;
+            if (_tlScale === 'weeks') return 22;
+            if (_tlScale === 'quarters') return 1.7;
+            return 5.2;
+        }
         function _tlParseDate(s) { if (!s) return null; var d = new Date(s + (/T/.test(s) ? '' : 'T00:00:00')); return isNaN(d) ? null : d; }
         function _tlDayDiff(a, b) { return Math.round((b - a) / 86400000); }
         var _tlCollapsed = {};
@@ -24724,9 +24732,17 @@ ${intrLog}
         function _tlColumns(rangeStart, rangeEnd, ppd) {
             var cols = [], c = new Date(rangeStart);
             var guard = 0;
-            while (c <= rangeEnd && guard++ < 400) {
+            // [r285] 일 단위는 컬럼 수가 많아짐(~3년치 1100일) → 가드 상향. 다른 스케일은 종전.
+            var maxCols = (_tlScale === 'days') ? 1100 : 400;
+            while (c <= rangeEnd && guard++ < maxCols) {
                 var next, label;
-                if (_tlScale === 'weeks') { next = new Date(c); next.setDate(c.getDate() + 7); label = (c.getMonth() + 1) + '/' + c.getDate(); }
+                if (_tlScale === 'days') {
+                    // [r285] 일 단위 — 매일 1컬럼. 라벨은 'M/D (요일)' + 첫 날/월초는 강조.
+                    next = new Date(c); next.setDate(c.getDate() + 1);
+                    var _dow = ['일','월','화','수','목','금','토'][c.getDay()];
+                    label = (c.getMonth() + 1) + '/' + c.getDate() + ' (' + _dow + ')';
+                }
+                else if (_tlScale === 'weeks') { next = new Date(c); next.setDate(c.getDate() + 7); label = (c.getMonth() + 1) + '/' + c.getDate(); }
                 else if (_tlScale === 'quarters') { next = new Date(c.getFullYear(), c.getMonth() + 3, 1); label = (c.getFullYear() % 100) + " Q" + (Math.floor(c.getMonth() / 3) + 1); }
                 else { next = new Date(c.getFullYear(), c.getMonth() + 1, 1); label = (c.getFullYear() % 100) + '.' + (c.getMonth() + 1); }
                 var segEnd = next <= rangeEnd ? next : new Date(rangeEnd.getTime() + 86400000);
@@ -24920,7 +24936,7 @@ ${intrLog}
             host.innerHTML =
                 '<div class="tl-wrap">'
                 + '<header class="tl-head"><div><div class="tl-bc">' + _sprintEsc(projName) + ' / 타임라인</div><h2 class="wbs-title">📊 타임라인</h2></div>'
-                + '<div style="display:flex;gap:8px;align-items:center;"><div class="tl-scale" title="컬럼 위에서 마우스 휠로도 조절"><button class="' + (_tlScale === 'weeks' ? 'on' : '') + '" onclick="_tlSetScale(\'weeks\')">주</button><button class="' + (_tlScale === 'months' ? 'on' : '') + '" onclick="_tlSetScale(\'months\')">월</button><button class="' + (_tlScale === 'quarters' ? 'on' : '') + '" onclick="_tlSetScale(\'quarters\')">분기</button></div>'
+                + '<div style="display:flex;gap:8px;align-items:center;"><div class="tl-scale" title="컬럼 위에서 마우스 휠로도 조절"><button class="' + (_tlScale === 'days' ? 'on' : '') + '" onclick="_tlSetScale(\'days\')">일</button><button class="' + (_tlScale === 'weeks' ? 'on' : '') + '" onclick="_tlSetScale(\'weeks\')">주</button><button class="' + (_tlScale === 'months' ? 'on' : '') + '" onclick="_tlSetScale(\'months\')">월</button><button class="' + (_tlScale === 'quarters' ? 'on' : '') + '" onclick="_tlSetScale(\'quarters\')">분기</button></div>'
                 + '<button class="util-btn" style="background:var(--ios-fill);color:var(--c-text);border:1px solid var(--c-border);" onclick="switchView(\'wbs\')">🗂️ 작업 구조화로</button></div></header>'
                 + '<div class="tl-body">'
                 + '<div class="tl-left"><div class="tl-left-hdr">작업</div>' + leftRows + '</div>'
@@ -24944,7 +24960,7 @@ ${intrLog}
         }
         function _tlSetScale(s) { _tlScale = s; renderTimelineView(); }
         function _tlToggleCollapse(id) { _tlCollapsed[id] = !_tlCollapsed[id]; renderTimelineView(); }
-        function _tlAxisWheel(e) { e.preventDefault(); var order = ['quarters', 'months', 'weeks']; var i = order.indexOf(_tlScale); if (e.deltaY < 0) { if (i < order.length - 1) _tlScale = order[i + 1]; } else { if (i > 0) _tlScale = order[i - 1]; } renderTimelineView(); }
+        function _tlAxisWheel(e) { e.preventDefault(); var order = ['quarters', 'months', 'weeks', 'days']; var i = order.indexOf(_tlScale); if (e.deltaY < 0) { if (i < order.length - 1) _tlScale = order[i + 1]; } else { if (i > 0) _tlScale = order[i - 1]; } renderTimelineView(); }
         // [r190] 의존(링크) 화살표 — 세그먼트(막대) 단위. 클릭=선택, Del=삭제, 다른 곳 클릭=선택해제.
         var _tlSelDep = null; // 선택된 연결선 key
         function _tlDrawDeps() {
@@ -31899,7 +31915,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r284';
+    var _RFS_FRONT_REV = 'r285';
 
 
     async function rfsHealthCheck() {
