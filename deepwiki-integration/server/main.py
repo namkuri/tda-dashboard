@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r288"
+SERVER_REVISION = "r289"
 
 
 
@@ -1616,28 +1616,43 @@ async def _meet_run_job(p: dict, sid: str):
         N = len(tracks)
         conc = max(1, int(_os.environ.get("WHISPER_TRACK_CONCURRENCY", "2") or "2"))
         if conc > N: conc = N
-        sem = asyncio.Semaphore(conc)
         per_track = [None] * N
-        per_progress = [{"speaker": tk["speaker"], "sec": 0.0, "total": 0.0, "pct": 0, "done": False}
+        # [r289] state: queued | running | done | failed
+        per_progress = [{"speaker": tk["speaker"], "sec": 0.0, "total": 0.0, "pct": 0,
+                         "state": "queued", "slot": None, "elapsed": 0.0, "started_at": None}
                         for tk in tracks]
         participants = [{"name": tk["speaker"], "track": _os.path.basename(tk["path"])} for tk in tracks]
         save_lock = asyncio.Lock()
+        # [r289] 슬롯 풀 — Semaphore 가 슬롯 번호를 부여(0..conc-1). transcribe_track(slot=n)
+        #   이 슬롯별 별도 모델 인스턴스를 사용 → ctranslate2 직렬화 회피, 진짜 GPU 동시 사용.
+        free_slots = asyncio.Queue()
+        for s in range(conc):
+            free_slots.put_nowait(s)
 
         def _publish_progress():
-            done_n = sum(1 for x in per_progress if x["done"])
-            running = [x["speaker"] for x in per_progress if not x["done"] and x["sec"] > 0]
+            done_n = sum(1 for x in per_progress if x["state"] == "done")
+            failed_n = sum(1 for x in per_progress if x["state"] == "failed")
+            running = [x for x in per_progress if x["state"] == "running"]
             overall_sec = sum(x["sec"] for x in per_progress)
             overall_total = sum(x["total"] for x in per_progress)
             pct = int(min(100, overall_sec * 100 / overall_total)) if overall_total > 0 else 0
             _MEET_PROGRESS[sid] = {
                 "current": min(done_n + 1, N), "total": N,
-                "speaker": (", ".join(running[:3]) + (" 외" if len(running) > 3 else "")) or "대기",
+                "speaker": (", ".join(x["speaker"] for x in running[:3])
+                            + (" 외" if len(running) > 3 else "")) or "대기",
                 "track_sec": round(overall_sec, 1), "track_total": round(overall_total, 1),
-                "track_pct": pct, "concurrency": conc, "completed": done_n, "running_n": len(running),
+                "track_pct": pct, "concurrency": conc,
+                "completed": done_n, "failed": failed_n, "running_n": len(running),
+                # [r289] 트랙별 상세 — 프론트가 카드 UI 로 실시간 렌더
+                "tracks": [{"speaker": x["speaker"], "sec": round(x["sec"], 1),
+                            "total": round(x["total"], 1), "pct": x["pct"],
+                            "state": x["state"], "slot": x["slot"]} for x in per_progress],
             }
 
         async def _run_track(i, tk):
-            async with sem:
+            # 슬롯 점유(없으면 대기) — Semaphore 역할도 같이 함
+            slot = await free_slots.get()
+            try:
                 def _cb(processed, total, pi=i):
                     per_progress[pi]["sec"] = float(processed)
                     per_progress[pi]["total"] = float(total)
@@ -1645,17 +1660,22 @@ async def _meet_run_job(p: dict, sid: str):
                     _publish_progress()
                 _busy_set(running=True, kind="meeting_import", stage="stt",
                           current=i + 1, total=N, category=tk["speaker"],
-                          message=f"STT {i + 1}/{N} — {tk['speaker']}")
+                          message=f"STT {i + 1}/{N} — {tk['speaker']} (slot {slot})")
+                per_progress[i]["state"] = "running"
+                per_progress[i]["slot"] = slot
+                per_progress[i]["started_at"] = time.time()
                 _publish_progress()
                 try:
                     segs = await loop.run_in_executor(
-                        None, lambda pa=tk["path"], sp=tk["speaker"], cb=_cb: _mtg_tr.transcribe_track(
-                            pa, sp, p.get("whisper_model", "medium"), p.get("language", "ko"), progress_cb=cb))
+                        None, lambda pa=tk["path"], sp=tk["speaker"], cb=_cb, sl=slot: _mtg_tr.transcribe_track(
+                            pa, sp, p.get("whisper_model", "medium"), p.get("language", "ko"),
+                            progress_cb=cb, slot=sl))
+                    per_progress[i]["state"] = "done"
                 except Exception as _te:
                     print(f"[meetings] 트랙 {tk['speaker']} STT 실패: {_te}")
                     segs = []
+                    per_progress[i]["state"] = "failed"
                 per_track[i] = segs
-                per_progress[i]["done"] = True
                 _publish_progress()
                 async with save_lock:
                     cur_segs = []
@@ -1665,8 +1685,10 @@ async def _meet_run_job(p: dict, sid: str):
                     await _upd({"status": "transcribing", "segments": cur_merged,
                                 "transcript_text": _mtg_tr.segments_to_text(cur_merged),
                                 "participants": participants})
+            finally:
+                free_slots.put_nowait(slot)
 
-        print(f"[meetings] STT 동시 처리: {N} 트랙 × {conc} 병렬 (배치 파이프라인 자동)")
+        print(f"[meetings] STT 동시 처리: {N} 트랙 × {conc} 슬롯 (슬롯별 모델 인스턴스, 배치 자동)")
         await asyncio.gather(*[_run_track(i, tk) for i, tk in enumerate(tracks)])
         all_segs = []
         for r in per_track:

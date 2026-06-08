@@ -132,14 +132,16 @@ def current_device() -> str:
     return "cuda" if _cuda_ok() else "cpu"
 
 
-def _load_model(size: str = "medium", force_cpu: bool = False):
+def _load_model(size: str = "medium", force_cpu: bool = False, slot: int = 0):
     """모델 로드. GPU 가용성 사전 검증 → 안 되면 즉시 CPU/int8 폴백.
 
     [r288] num_workers 추가(CPU↔GPU 전송 병렬). GPU 이고 faster-whisper >=1.0 이면
-    BatchedInferencePipeline 으로 감싸서 GPU 활용도 ↑(5~10% → 50~90%).
-    환경변수: WHISPER_NUM_WORKERS(기본 2), WHISPER_BATCHED=0 으로 끄기 가능.
+    BatchedInferencePipeline 으로 감싸서 GPU 활용도 ↑.
+    [r289] slot — 동시 처리용 별도 인스턴스 키. ctranslate2 Whisper 는 같은 인스턴스
+    호출 시 내부 lock 으로 직렬화 → 진짜 동시 GPU 사용은 인스턴스 분리 필요.
+    슬롯별 모델은 처음 호출 시 lazy 로드 + 영구 캐시(VRAM 공간 차지).
     """
-    cache_key = (size, "cpu" if force_cpu else "auto")
+    cache_key = (size, slot, "cpu" if force_cpu else "auto")
     if cache_key in _model_cache:
         return _model_cache[cache_key]
     from faster_whisper import WhisperModel
@@ -154,19 +156,19 @@ def _load_model(size: str = "medium", force_cpu: bool = False):
     except Exception as e:
         print(f"[meetings.transcribe] {device}/{compute} num_workers={nw} 로드 실패({e}) → CPU/int8 폴백")
         m = WhisperModel(size, device="cpu", compute_type="int8")
-        cache_key = (size, "cpu")
+        cache_key = (size, slot, "cpu")
         device = "cpu"
-    # GPU 인 경우만 배치 파이프라인 사용(CPU 는 효과 적음). VRAM 같은 모델 공유.
     use_batched = _HAS_BATCHED and device != "cpu" and os.environ.get("WHISPER_BATCHED", "1") != "0"
     if use_batched:
         try:
             wrapped = _BatchedPipeline(model=m)
             bs = int(os.environ.get("WHISPER_BATCH_SIZE", "8") or "8")
-            print(f"[meetings.transcribe] BatchedInferencePipeline 활성(device={device}, num_workers={nw}, batch_size={bs}) — GPU 활용도 ↑")
+            print(f"[meetings.transcribe] [slot={slot}] BatchedInferencePipeline 활성(device={device}, num_workers={nw}, batch_size={bs}) — GPU 활용도 ↑")
             _model_cache[cache_key] = wrapped
             return wrapped
         except Exception as e:
             print(f"[meetings.transcribe] Batched 래핑 실패({e}) → 단일 모델 사용")
+    print(f"[meetings.transcribe] [slot={slot}] 단일 모델 로드(device={device}, num_workers={nw})")
     _model_cache[cache_key] = m
     return m
 
@@ -274,10 +276,12 @@ def _run_transcribe(model, wav: str, language: Optional[str], speaker: str,
 
 def transcribe_track(path: str, speaker: str, model_size: str = "medium",
                      language: Optional[str] = "ko",
-                     progress_cb=None) -> List[Dict[str, Any]]:
+                     progress_cb=None, slot: int = 0) -> List[Dict[str, Any]]:
     """트랙 1개 STT → [{t, dur, speaker, text}] (t=시작초).
 
     [r287] progress_cb(processed_sec, total_sec) — 매 segment 마다 호출.
+    [r289] slot — 동시 처리를 위해 슬롯별 별도 모델 인스턴스 사용. ctranslate2 가
+    같은 인스턴스를 직렬화하는 문제 회피 → 진짜 GPU 동시 사용.
     GPU 모델로 시도하다 cuBLAS/cuDNN 미설치(RuntimeError)면 CPU 모델로 1회 자동 재시도.
     """
     wav = None
@@ -285,16 +289,16 @@ def transcribe_track(path: str, speaker: str, model_size: str = "medium",
         wav = _to_wav(path)
         total_sec = _audio_duration_sec(wav)
         try:
-            model = _load_model(model_size)
+            model = _load_model(model_size, slot=slot)
             return _run_transcribe(model, wav, language, speaker, progress_cb, total_sec)
         except RuntimeError as e:
             if not _is_cuda_runtime_err(e):
                 raise
             print(f"[meetings.transcribe] GPU 런타임 오류({e}) → CPU 폴백으로 재시도")
             for k in list(_model_cache.keys()):
-                if k[0] == model_size and k[1] != "cpu":
+                if k[0] == model_size and k[2] != "cpu":
                     _model_cache.pop(k, None)
-            cpu_model = _load_model(model_size, force_cpu=True)
+            cpu_model = _load_model(model_size, force_cpu=True, slot=slot)
             return _run_transcribe(cpu_model, wav, language, speaker, progress_cb, total_sec)
     finally:
         if wav and os.path.exists(wav):
