@@ -17,6 +17,45 @@ _AUDIO_EXTS = (".flac", ".ogg", ".oga", ".wav", ".mp3", ".m4a", ".aac", ".opus",
 _model_cache: Dict[str, Any] = {}
 
 
+# [r284 #4] pip 로 설치한 nvidia-cublas-cu12 / nvidia-cudnn-cu12 의 DLL 을 Python 이 찾도록
+#   site-packages/nvidia/.../bin 디렉터리를 DLL 검색 경로에 추가. Windows 는 Python 3.8+ 부터
+#   os.add_dll_directory 가 표준. 이걸 안 하면 ctranslate2 가 cublas64_12.dll 을 못 찾아 GPU
+#   초기화 실패 → CPU 폴백.
+def _register_nvidia_dll_dirs():
+    import importlib
+    found = []
+    for pkg in ("nvidia.cublas", "nvidia.cudnn", "nvidia.cuda_runtime"):
+        try:
+            mod = importlib.import_module(pkg)
+            base = os.path.dirname(getattr(mod, "__file__", "") or "")
+            if not base:
+                continue
+            # Windows: bin/, Linux: lib/
+            for sub in ("bin", "lib"):
+                d = os.path.join(base, sub)
+                if os.path.isdir(d):
+                    found.append(d)
+        except Exception:
+            continue
+    if not found:
+        return
+    if hasattr(os, "add_dll_directory"):
+        for d in found:
+            try:
+                os.add_dll_directory(d)
+            except Exception:
+                pass
+    # PATH 추가(자식 프로세스/일부 라이브러리는 PATH 만 검색)
+    cur_path = os.environ.get("PATH", "")
+    add = os.pathsep.join(found)
+    if add and add not in cur_path:
+        os.environ["PATH"] = add + os.pathsep + cur_path
+    print(f"[meetings.transcribe] CUDA DLL 디렉터리 등록: {found}")
+
+
+_register_nvidia_dll_dirs()
+
+
 def is_available() -> Dict[str, Any]:
     """faster-whisper / ffmpeg / GPU 가용 여부."""
     out = {"faster_whisper": False, "ffmpeg": False, "gpu": False,
@@ -42,8 +81,12 @@ def is_available() -> Dict[str, Any]:
 def _cuda_ok() -> bool:
     """CUDA(cuBLAS/cuDNN)가 실제로 로드 가능한지 사전 확인.
 
-    ctranslate2.get_cuda_device_count() 는 드라이버만 보면 통과해도, 막상 transcribe
-    호출 시 cublas64_12.dll 이 없어 RuntimeError 가 날 수 있다 → 환경변수로 강제 가능.
+    [r284 #4] 우선순위:
+      1) WHISPER_DEVICE=cpu 이면 False
+      2) ctranslate2.get_cuda_device_count() 가 0 이면 False (디바이스 없음)
+      3) ctranslate2.get_supported_compute_types('cuda') 가 비어있지 않으면 True
+         (실제 로드 가능. nvidia-cublas-cu12 가 설치돼 있고 DLL 디렉토리가 등록됐으면 통과)
+      4) Windows ctypes.WinDLL fallback — cublas64_12.dll 직접 로드 시도
     """
     if os.environ.get("WHISPER_DEVICE", "").lower() == "cpu":
         return False
@@ -51,17 +94,24 @@ def _cuda_ok() -> bool:
         import ctranslate2
         if ctranslate2.get_cuda_device_count() <= 0:
             return False
-        # cublas 라이브러리 실제 로드 시도 (Windows 환경 가드)
+        # ctranslate2 가 실제 로드 가능한 compute type 을 알려준다 — 가장 신뢰성 있는 검사
+        try:
+            ct = ctranslate2.get_supported_compute_types("cuda")
+            if ct:
+                return True
+        except Exception:
+            pass
+        # Windows ctypes fallback
         import ctypes
-        for dll in ("cublas64_12.dll", "cublas64_11.dll"):
-            try:
-                ctypes.WinDLL(dll); return True  # 하나라도 로드되면 OK
-            except OSError:
-                continue
-        # WinDLL 자체가 안 되는 환경(=리눅스 등) 은 일단 GPU 시도 허용
-        if not hasattr(ctypes, "WinDLL"):
-            return True
-        return False
+        if hasattr(ctypes, "WinDLL"):
+            for dll in ("cublas64_12.dll", "cublas64_11.dll"):
+                try:
+                    ctypes.WinDLL(dll); return True
+                except OSError:
+                    continue
+            return False
+        # 비 Windows — 위 device_count 통과만으로 OK
+        return True
     except Exception:
         return False
 

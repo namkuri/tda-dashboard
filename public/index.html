@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r283';
+        var _AHUB_FRONT_REV = 'r284';
 
 
         var _ahubRevWarned = false;
@@ -16308,10 +16308,24 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             // [r242] 회의록 자동작성
             var _csMtg = document.getElementById('cs-nav-meetings'); if (_csMtg) _csMtg.classList.toggle('active', viewName === 'meetings');
             var _mtgVw = document.getElementById('meetings-view'); if (_mtgVw) { _mtgVw.classList.toggle('hidden', viewName !== 'meetings'); _mtgVw.style.display = (viewName === 'meetings') ? 'flex' : 'none'; }
+            // [r284 #2] meetings 진입 시 docs/kanban 등 다른 view 강제 hidden(다른 view 블록과 동일 패턴) — 좌하단에 pC/+New 등 잔존 방지
+            if (viewName === 'meetings') {
+                var _dvm = document.getElementById('docs-view'); if (_dvm) { _dvm.classList.add('hidden'); _dvm.classList.remove('flex-show'); }
+                var _kvm = document.getElementById('kanban-view'); if (_kvm) { _kvm.classList.add('hidden'); _kvm.classList.remove('block'); }
+                try { var _pbm=document.getElementById('preview-btn'),_ebm=document.getElementById('editor-btn'),_gbm=document.getElementById('gif-btn'); if(_pbm)_pbm.classList.add('hidden'); if(_ebm)_ebm.classList.add('hidden'); if(_gbm)_gbm.classList.add('hidden'); } catch(e){}
+                var _gpm = document.getElementById('gif-picker'); if (_gpm) _gpm.style.display = 'none';
+            }
             if (viewName === 'meetings' && typeof mtgOpen === 'function') setTimeout(mtgOpen, 30);
             // [r243] 프로덕트 관리
             var _csPm = document.getElementById('cs-nav-product'); if (_csPm) _csPm.classList.toggle('active', viewName === 'product');
             var _pmVw = document.getElementById('product-view'); if (_pmVw) { _pmVw.classList.toggle('hidden', viewName !== 'product'); _pmVw.style.display = (viewName === 'product') ? 'flex' : 'none'; }
+            // [r284 #2] product 도 동일하게 docs/kanban 강제 hidden
+            if (viewName === 'product') {
+                var _dvp = document.getElementById('docs-view'); if (_dvp) { _dvp.classList.add('hidden'); _dvp.classList.remove('flex-show'); }
+                var _kvp = document.getElementById('kanban-view'); if (_kvp) { _kvp.classList.add('hidden'); _kvp.classList.remove('block'); }
+                try { var _pbp=document.getElementById('preview-btn'),_ebp=document.getElementById('editor-btn'),_gbp=document.getElementById('gif-btn'); if(_pbp)_pbp.classList.add('hidden'); if(_ebp)_ebp.classList.add('hidden'); if(_gbp)_gbp.classList.add('hidden'); } catch(e){}
+                var _gpp = document.getElementById('gif-picker'); if (_gpp) _gpp.style.display = 'none';
+            }
             if (viewName === 'product' && typeof pmOpen === 'function') setTimeout(pmOpen, 30);
             if (viewName === 'aiHub' && typeof aihubRender === 'function') aihubRender();
             // [r208] AI Hub 진입 시 마지막 동기화 시각 갱신
@@ -31885,7 +31899,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r283';
+    var _RFS_FRONT_REV = 'r284';
 
 
     async function rfsHealthCheck() {
@@ -31948,6 +31962,19 @@ ${intrLog}
         return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
     function mtgToggleTimeMode() { _mtgState._timeMode = (_mtgState._timeMode === 'abs') ? 'rel' : 'abs'; mtgRenderDetail(); }
+    // [r284 #3] 회의록 메타에 들어갈 '나'의 표시 이름 — displayName/name/email-앞부분 우선, UUID 폴백 회피
+    function _mtgMyName() {
+        try {
+            if (typeof currentUser !== 'undefined' && currentUser) {
+                var n = currentUser.displayName || currentUser.name;
+                if (n && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(n)) return n;
+                if (currentUser.email) return String(currentUser.email).split('@')[0];
+            }
+        } catch (e) {}
+        var rn = (typeof rfsCurrentUserName === 'function') ? rfsCurrentUserName() : '';
+        if (rn && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rn)) return rn;
+        return '나';
+    }
     // [r283 #2] 대화내역 펼침/접힘 — 헤더 클릭(이벤트 위임)
     function mtgToggleTranscript(ev) { if (ev) ev.stopPropagation(); _mtgState._txOpen = !_mtgState._txOpen; mtgRenderDetail(); }
     async function mtgEditStartedAt(id) {
@@ -31982,33 +32009,44 @@ ${intrLog}
     async function mtgHealthCheck() {
         var banner = document.getElementById('mtg-health-banner'); if (!banner) return;
         var url = rfsBackEnd();
-        function show(html, bg, color) { banner.style.display = 'block'; banner.style.background = bg; banner.style.color = color; banner.innerHTML = html; }
-        if (!url) { show('⚙️ 백엔드 URL 미설정 — 설정 > Deep Wiki 백엔드 URL 입력 필요', 'rgba(245,158,11,.18)', '#92400e'); return; }
+        // [r284 #4] 가독성 — 웜톤 배너 + 강한 텍스트 색 + 외곽선. 다크/라이트 모두 잘 읽힘.
+        var WARN_BG = 'rgba(245,158,11,.18)', WARN_FG = '#7c3a08', WARN_BD = 'rgba(245,158,11,.55)';
+        var INFO_BG = 'rgba(245,158,11,.10)', INFO_FG = '#7c3a08', INFO_BD = 'rgba(245,158,11,.45)';
+        var ERR_BG  = 'rgba(210,57,61,.16)',  ERR_FG  = '#9a1c20', ERR_BD  = 'rgba(210,57,61,.55)';
+        function show(html, bg, color, bd) {
+            banner.style.display = 'block';
+            banner.style.background = bg;
+            banner.style.color = color;
+            banner.style.border = '1px solid ' + (bd || 'transparent');
+            banner.style.borderRadius = '8px';
+            banner.style.margin = '8px 22px 0';
+            banner.style.padding = '10px 14px';
+            banner.innerHTML = html;
+        }
+        if (!url) { show('⚙️ 백엔드 URL 미설정 — 설정 > Deep Wiki 백엔드 URL 입력 필요', WARN_BG, WARN_FG, WARN_BD); return; }
         try {
             var res = await fetch(url + '/meetings/health');
-            if (res.status === 404) { show('⚠ 백엔드에 <b>/meetings</b> 라우트 없음 — 백엔드 git pull + 재시작 필요', 'rgba(245,158,11,.2)', '#92400e'); return; }
+            if (res.status === 404) { show('⚠ 백엔드에 <b>/meetings</b> 라우트 없음 — 백엔드 git pull + 재시작 필요', WARN_BG, WARN_FG, WARN_BD); return; }
             var j = await res.json();
-            if (!j.ok) { show('⚠ 회의록 모듈 미로드 — ' + _annEsc(j.error || '') + ' (백엔드 재시작 필요)', 'rgba(245,158,11,.2)', '#92400e'); return; }
-            // [r246] 리비전 불일치 — 구버전 백엔드면 가져오기 응답이 옛 SSE 라 JSON 파싱 실패함
+            if (!j.ok) { show('⚠ 회의록 모듈 미로드 — ' + _annEsc(j.error || '') + ' (백엔드 재시작 필요)', WARN_BG, WARN_FG, WARN_BD); return; }
             if (j.revision && typeof _RFS_FRONT_REV !== 'undefined' && j.revision !== _RFS_FRONT_REV) {
-                show('⚠ 백엔드 <b>' + _annEsc(j.revision) + '</b> / 프론트 <b>' + _RFS_FRONT_REV + '</b> 불일치 — 서버에서 <code>git pull</code> 후 <b>백엔드(run_dev.bat) 재시작</b> 필요(가져오기가 동작하지 않음).', 'rgba(245,158,11,.22)', '#92400e');
+                show('⚠ 백엔드 <b>' + _annEsc(j.revision) + '</b> / 프론트 <b>' + _RFS_FRONT_REV + '</b> 불일치 — 서버에서 <code>git pull</code> 후 <b>백엔드 재시작</b> 필요.', WARN_BG, WARN_FG, WARN_BD);
                 return;
             }
             var stt = j.stt || {};
-            if (!stt.faster_whisper || !stt.ffmpeg) { show('⚠ STT 준비 안 됨 — ' + _annEsc(stt.error || 'faster-whisper/ffmpeg 설치 필요') + '. 서버에 <code>pip install faster-whisper</code> + <code>ffmpeg</code> 설치 후 재시작', 'rgba(245,158,11,.2)', '#92400e'); return; }
-            // [r277] LLM 미가용 안내 — 회의록 요약/제목 추천이 안 됨
+            if (!stt.faster_whisper || !stt.ffmpeg) { show('⚠ STT 준비 안 됨 — ' + _annEsc(stt.error || 'faster-whisper/ffmpeg 설치 필요'), WARN_BG, WARN_FG, WARN_BD); return; }
             var llm = j.llm || {};
             if (llm.llm_ready === false) {
-                show('⚠ <b>LLM 미설정</b> — 회의록 작성·제목 추천을 위해 LLM 이 필요합니다. <a onclick="switchView(\'aiHub\')" style="color:var(--c-accent);cursor:pointer;text-decoration:underline;">AI Agent 에서 Gemini 무료 키 등록</a> 또는 서버에서 Ollama(11434) 실행. (STT 는 동작 — 텍스트화는 LLM 없이 가능)', 'rgba(245,158,11,.22)', '#92400e');
+                show('⚠ <b>LLM 미설정</b> — 회의록 작성·제목 추천을 위해 LLM 이 필요합니다. <a onclick="switchView(\'aiHub\')" style="color:var(--c-accent);cursor:pointer;text-decoration:underline;font-weight:700;">AI Agent 에서 Gemini 무료 키 등록</a> 또는 서버에서 Ollama 실행.', WARN_BG, WARN_FG, WARN_BD);
                 return;
             }
-            // [r247] GPU(cuBLAS) 미가용 — 에러는 아니지만 CPU 로 느림을 안내(에러 후 자동 폴백 동작)
             if (stt.faster_whisper && stt.gpu === false) {
-                show('ℹ CPU 모드 — GPU(cuBLAS) 라이브러리가 없어 CPU 로 동작합니다(짧은 회의 OK, 긴 회의는 느림). 가속하려면: <code>pip install nvidia-cublas-cu12 nvidia-cudnn-cu12</code> 후 백엔드 재시작.' + (llm.gemini_registered ? '' : ' · LLM 설정 OK(Ollama).'), 'rgba(42,122,184,.14)', '#1a3a58');
+                // [r284 #4] CPU 모드 안내 — 가독성 좋은 웜톤
+                show('ℹ <b>CPU 모드</b> — GPU 라이브러리를 찾지 못해 CPU 로 동작 중. 설치하셨다면 <b>백엔드 완전 재시작</b>(프로세스 종료 후 다시 시작) 필요. 패키지: <code>pip install nvidia-cublas-cu12 nvidia-cudnn-cu12</code>', INFO_BG, INFO_FG, INFO_BD);
                 return;
             }
             banner.style.display = 'none';
-        } catch (e) { show('🔴 백엔드 연결 실패 — 백엔드/URL/터널 확인', 'rgba(210,57,61,.16)', '#b53236'); }
+        } catch (e) { show('🔴 백엔드 연결 실패 — 백엔드/URL/터널 확인', ERR_BG, ERR_FG, ERR_BD); }
     }
     async function mtgLoadSessions() {
         var url = rfsBackEnd(); if (!url) return;
@@ -32459,7 +32497,8 @@ ${intrLog}
         var mode = _mtgState._summaryMode || 'preview';   // 'preview' | 'source' | 'jsonsec'
         // [r280] 재요약 중 펄스
         var h = '<div class="' + (isSummarizing ? 'mtg-card-busy' : '') + '" style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);margin-bottom:14px;' + (isSummarizing ? 'box-shadow:0 0 0 2px rgba(245,158,11,.45);' : '') + '">';
-        h += '<div style="position:sticky;top:0;background:' + (isSummarizing ? 'rgba(245,158,11,.14)' : 'var(--c-card)') + ';border-bottom:1px solid var(--c-border);padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+        // [r284 #1] sticky 제거 — 회의록 본문이 길어도 헤더가 따라오지 않게(깔끔)
+        h += '<div style="background:' + (isSummarizing ? 'rgba(245,158,11,.14)' : 'var(--c-card)') + ';border-bottom:1px solid var(--c-border);padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-radius:10px 10px 0 0;">'
             + '<span style="font-weight:800;font-size:14px;flex:1;">' + (isSummarizing ? '<span class="rfs-dc-spinner"></span> 📝 회의록 재요약 중…' : '📝 회의록') + '</span>'
             + (meta.edited ? '<span style="font-size:10.5px;color:var(--c-text3);">✎ 사용자 편집됨</span>' : '<span style="font-size:10.5px;color:var(--c-text3);">🤖 AI 작성</span>')
             // 본문/소스 토글
@@ -32475,13 +32514,24 @@ ${intrLog}
                 + '⏳ <b>백그라운드</b>로 진행 중 — 5초마다 자동 새로고침. <b>이 페이지를 나가도 처리는 계속됩니다.</b></div>';
         }
         // 메타 정보 줄
-        if (meta.created_by_name || meta.updated_by_name) {
+        if (meta.created_by_name || meta.updated_by_name || meta.created_by || meta.updated_by) {
             var cAt = '', uAt = '';
             try { if (meta.created_at) cAt = new Date(meta.created_at).toLocaleString(); } catch (e) {}
             try { if (meta.updated_at) uAt = new Date(meta.updated_at).toLocaleString(); } catch (e) {}
+            // [r284 #3] 저장된 이름이 사실은 UUID 인 경우(이전 r276~r283 데이터) — _uidToName 으로 실제 표시 이름 변환
+            function _nm(name, id) {
+                var v = name || id || '';
+                // UUID 패턴이면(36자 + 하이픈 4개) 이름 조회
+                if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) && typeof _uidToName === 'function') {
+                    var nm = _uidToName(v); if (nm && nm !== v) return nm;
+                }
+                return v;
+            }
+            var cName = _nm(meta.created_by_name, meta.created_by);
+            var uName = _nm(meta.updated_by_name, meta.updated_by);
             h += '<div style="padding:6px 14px;border-bottom:1px solid var(--c-border);font-size:11px;color:var(--c-text3);background:var(--c-paper);">'
-                + (meta.created_by_name ? ('최초 작성: <b>' + _annEsc(meta.created_by_name) + '</b>' + (cAt ? (' · ' + cAt) : '')) : '')
-                + (meta.updated_by_name && (meta.updated_by !== meta.created_by || meta.updated_at !== meta.created_at) ? (' · 최종 수정: <b>' + _annEsc(meta.updated_by_name) + '</b>' + (uAt ? (' · ' + uAt) : '')) : '')
+                + (cName ? ('최초 작성: <b>' + _annEsc(cName) + '</b>' + (cAt ? (' · ' + cAt) : '')) : '')
+                + (uName && (meta.updated_by !== meta.created_by || meta.updated_at !== meta.created_at) ? (' · 최종 수정: <b>' + _annEsc(uName) + '</b>' + (uAt ? (' · ' + uAt) : '')) : '')
                 + '</div>';
         }
         // 본문/소스/구조 영역
@@ -32562,7 +32612,7 @@ ${intrLog}
         // source 모드면 textarea 값, preview 모드에서 호출되면 opts.markdown(드롭 후 자동저장) 사용
         var mdVal = (typeof opts.markdown === 'string') ? opts.markdown : (ta ? ta.value : (_mtgState.current && _mtgState.current.summary_markdown) || '');
         var url = rfsBackEnd(); if (!url) return;
-        var meName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || rfsCurrentUserName() || rfsCurrentUser() || '나';
+        var meName = _mtgMyName();
         var body = {user_id: rfsCurrentUser() || 'anon', user_name: meName, summary_markdown: mdVal || ''};
         // [r283 #1] html_embeds 갱신본 함께 전송(드래그&드롭으로 추가된 임베드)
         if (opts.html_embeds) body.html_embeds = opts.html_embeds;
@@ -32774,7 +32824,7 @@ ${intrLog}
         var inp = document.getElementById('mtg-chat-text'); if (!inp) return;
         var text = (inp.value || '').trim(); if (!text) return;
         var url = rfsBackEnd(); if (!url) return;
-        var meName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || rfsCurrentUserName() || rfsCurrentUser() || '나';
+        var meName = _mtgMyName();
         try {
             var res = await fetch(url + '/meetings/sessions/' + id + '/chat', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -32811,7 +32861,7 @@ ${intrLog}
         else if (key === 'topics') newSummary.topics = String(v).split(/\r?\n/).map(function (x) { x = x.trim(); if (!x) return null; var p = x.split('::'); return {title: (p[0] || '').trim(), summary: (p.slice(1).join('::') || '').trim()}; }).filter(Boolean);
         else if (key === 'action_items') newSummary.action_items = String(v).split(/\r?\n/).map(function (x) { x = x.trim(); if (!x) return null; var p = x.split('|').map(function (y) { return y.trim(); }); return {who: p[0] || '', what: p[1] || '', due: p[2] || ''}; }).filter(function (a) { return a.what || a.who; });
         var url = rfsBackEnd(); if (!url) return;
-        var meName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || rfsCurrentUserName() || rfsCurrentUser() || '나';
+        var meName = _mtgMyName();
         try {
             var res = await fetch(url + '/meetings/sessions/' + id + '/summary', {
                 method: 'PATCH', headers: {'Content-Type': 'application/json'},
