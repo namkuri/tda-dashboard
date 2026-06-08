@@ -3746,6 +3746,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .cal-event.dragging { opacity: .5; }
         .cal-day.drag-over { background: var(--c-accent-soft); }
         .cal-day-more { font-size: 10.5px; color: var(--c-text3); font-weight: 600; padding: 1px 4px; cursor: pointer; }
+        /* [r278] 한국 공휴일 — 셀 배경 살짝 + 빨간 휴일명 칩 + 일자 숫자 빨간색 */
+        .cal-day.cal-holiday-day { background: rgba(220, 60, 60, 0.06); }
+        .cal-day.cal-holiday-day .cal-day-num { color: #d23a3a; }
+        .cal-day.cal-holiday-day.cal-today .cal-day-num-inner { background: #d23a3a; }
+        .cal-holiday { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: rgba(220, 60, 60, 0.16); color: #c0392b; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; border-left: 2px solid #d23a3a; }
+        body.dark .cal-holiday { background: rgba(220, 60, 60, 0.22); color: #ff8a80; border-left-color: #ff5252; }
+        body.dark .cal-day.cal-holiday-day { background: rgba(220, 60, 60, 0.08); }
+        body.dark .cal-day.cal-holiday-day .cal-day-num { color: #ff8a80; }
         .cal-day-more:hover { color: var(--c-accent); }
         .cal-modal-box { background: var(--c-paper); border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,.32); width: 480px; max-width: 92vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; }
         .cal-modal-head { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--c-border); }
@@ -4470,6 +4478,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cal-mini-btn" onclick="calOpenAddCalendar()">＋ 새 캘린더</button>
                     <div class="cal-section-title" style="margin-top:18px;">⚙️ 표시</div>
                     <label class="cal-toggle-label"><input type="checkbox" id="cal-show-weekends" checked onchange="calRender()"> 주말 표시</label>
+                    <label class="cal-toggle-label"><input type="checkbox" id="cal-show-holidays" checked onchange="calRender()"> 🇰🇷 공휴일 표시</label>
                 </aside>
                 <!-- 우측: 메인 그리드 -->
                 <section class="cal-main">
@@ -10963,7 +10972,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r278';
+        var _AHUB_FRONT_REV = 'r279';
 
 
         var _ahubRevWarned = false;
@@ -14841,6 +14850,101 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         //   currentData.calEvents = [{ id, calId, title, start, end, allDay, desc, public, ownerUserId, projectId }]
         // 가시성 토글은 localStorage(per-user)에 저장.
         // ═══════════════════════════════════════════════════════════════════
+        // [r278] 한국 공휴일 데이터 (2024–2030) — 한국천문연구원 음력 환산 기준 + 정부 지정 대체공휴일.
+        //   임시공휴일(선거일 등 정부 수시 지정)은 매년 추가될 수 있으니 필요 시 여기에 보강.
+        //   키: 'YYYY-MM-DD', 값: 공휴일명.
+        var _KR_HOLIDAYS = {
+            // 2024
+            '2024-01-01': '신정',
+            '2024-02-09': '설날 연휴', '2024-02-10': '설날', '2024-02-11': '설날 연휴', '2024-02-12': '대체공휴일(설날)',
+            '2024-03-01': '삼일절',
+            '2024-04-10': '국회의원 선거일',
+            '2024-05-05': '어린이날', '2024-05-06': '대체공휴일(어린이날)',
+            '2024-05-15': '부처님오신날',
+            '2024-06-06': '현충일',
+            '2024-08-15': '광복절',
+            '2024-09-16': '추석 연휴', '2024-09-17': '추석', '2024-09-18': '추석 연휴',
+            '2024-10-01': '국군의 날(임시)',
+            '2024-10-03': '개천절',
+            '2024-10-09': '한글날',
+            '2024-12-25': '크리스마스',
+            // 2025
+            '2025-01-01': '신정',
+            '2025-01-27': '임시공휴일',
+            '2025-01-28': '설날 연휴', '2025-01-29': '설날', '2025-01-30': '설날 연휴',
+            '2025-03-01': '삼일절', '2025-03-03': '대체공휴일(삼일절)',
+            '2025-05-05': '어린이날·부처님오신날', '2025-05-06': '대체공휴일',
+            '2025-06-06': '현충일',
+            '2025-08-15': '광복절',
+            '2025-10-03': '개천절',
+            '2025-10-05': '추석 연휴', '2025-10-06': '추석', '2025-10-07': '추석 연휴', '2025-10-08': '대체공휴일(추석)',
+            '2025-10-09': '한글날',
+            '2025-12-25': '크리스마스',
+            // 2026
+            '2026-01-01': '신정',
+            '2026-02-16': '설날 연휴', '2026-02-17': '설날', '2026-02-18': '설날 연휴',
+            '2026-03-01': '삼일절', '2026-03-02': '대체공휴일(삼일절)',
+            '2026-05-05': '어린이날',
+            '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일(부처님오신날)',
+            '2026-06-06': '현충일',
+            '2026-08-15': '광복절', '2026-08-17': '대체공휴일(광복절)',
+            '2026-09-24': '추석 연휴', '2026-09-25': '추석', '2026-09-26': '추석 연휴', '2026-09-28': '대체공휴일(추석)',
+            '2026-10-03': '개천절', '2026-10-05': '대체공휴일(개천절)',
+            '2026-10-09': '한글날',
+            '2026-12-25': '크리스마스',
+            // 2027
+            '2027-01-01': '신정',
+            '2027-02-06': '설날 연휴', '2027-02-07': '설날', '2027-02-08': '설날 연휴', '2027-02-09': '대체공휴일(설날)',
+            '2027-03-01': '삼일절',
+            '2027-05-05': '어린이날',
+            '2027-05-13': '부처님오신날',
+            '2027-06-06': '현충일',
+            '2027-08-15': '광복절', '2027-08-16': '대체공휴일(광복절)',
+            '2027-09-14': '추석 연휴', '2027-09-15': '추석', '2027-09-16': '추석 연휴',
+            '2027-10-03': '개천절', '2027-10-04': '대체공휴일(개천절)',
+            '2027-10-09': '한글날', '2027-10-11': '대체공휴일(한글날)',
+            '2027-12-25': '크리스마스', '2027-12-27': '대체공휴일(크리스마스)',
+            // 2028
+            '2028-01-01': '신정', '2028-01-03': '대체공휴일(신정)',
+            '2028-01-26': '설날 연휴', '2028-01-27': '설날', '2028-01-28': '설날 연휴',
+            '2028-03-01': '삼일절',
+            '2028-05-02': '부처님오신날',
+            '2028-05-05': '어린이날',
+            '2028-06-06': '현충일',
+            '2028-08-15': '광복절',
+            '2028-10-02': '추석 연휴', '2028-10-03': '개천절·추석', '2028-10-04': '추석 연휴', '2028-10-05': '대체공휴일',
+            '2028-10-09': '한글날',
+            '2028-12-25': '크리스마스',
+            // 2029
+            '2029-01-01': '신정',
+            '2029-02-12': '설날 연휴', '2029-02-13': '설날', '2029-02-14': '설날 연휴',
+            '2029-03-01': '삼일절',
+            '2029-05-05': '어린이날', '2029-05-07': '대체공휴일(어린이날)',
+            '2029-05-20': '부처님오신날', '2029-05-21': '대체공휴일(부처님오신날)',
+            '2029-06-06': '현충일',
+            '2029-08-15': '광복절',
+            '2029-09-21': '추석 연휴', '2029-09-22': '추석', '2029-09-23': '추석 연휴', '2029-09-24': '대체공휴일(추석)',
+            '2029-10-03': '개천절',
+            '2029-10-09': '한글날',
+            '2029-12-25': '크리스마스',
+            // 2030
+            '2030-01-01': '신정',
+            '2030-02-03': '설날 연휴', '2030-02-04': '설날', '2030-02-05': '설날 연휴', '2030-02-06': '대체공휴일(설날)',
+            '2030-03-01': '삼일절',
+            '2030-05-05': '어린이날', '2030-05-06': '대체공휴일(어린이날)',
+            '2030-05-09': '부처님오신날',
+            '2030-06-06': '현충일',
+            '2030-08-15': '광복절',
+            '2030-09-11': '추석 연휴', '2030-09-12': '추석', '2030-09-13': '추석 연휴',
+            '2030-10-03': '개천절',
+            '2030-10-09': '한글날',
+            '2030-12-25': '크리스마스',
+        };
+        function _calHolidayName(key) { return _KR_HOLIDAYS[key] || null; }
+        function _calShowHolidays() {
+            var el = document.getElementById('cal-show-holidays');
+            return el ? el.checked : true;   // 기본 ON
+        }
         var calState = { year: null, month: null, view: 'month', hiddenCals: null, dragId: null };
         function _calInit() {
             var now = new Date();
@@ -14974,8 +15078,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (hideWk && (dayOfWeek === 0 || dayOfWeek === 6)) return '';
                 var key = c.year + '-' + _pad2(c.month + 1) + '-' + _pad2(c.day);
                 var isToday = (key === todayStr);
+                // [r278] 한국 공휴일
+                var holidayName = _calShowHolidays() ? _calHolidayName(key) : null;
                 var dayEvs = (byDay[key] || []).slice().sort(function (a, b) { return (a.start || '').localeCompare(b.start || ''); });
-                var maxShow = 3;
+                var maxShow = holidayName ? 2 : 3;   // 공휴일 한 줄 차지
+                var holidayHtml = holidayName ? '<div class="cal-holiday" title="' + _annEsc(holidayName) + '">🇰🇷 ' + _annEsc(holidayName) + '</div>' : '';
                 var evsHtml = dayEvs.slice(0, maxShow).map(function (ev) {
                     var cal = (currentData.calendars || []).find(function (cc) { return cc.id === ev.calId; });
                     var color = (cal && cal.color) || '#999';
@@ -14990,9 +15097,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         + _annEsc(title) + '</div>';
                 }).join('');
                 var more = dayEvs.length > maxShow ? '<div class="cal-day-more" onclick="event.stopPropagation();calShowDayDetails(\'' + key + '\')">+' + (dayEvs.length - maxShow) + ' 더보기</div>' : '';
-                return '<div class="cal-day' + (c.other ? ' cal-other-month' : '') + (isToday ? ' cal-today' : '') + '" data-date="' + key + '" onclick="calOpenAddEvent(\'' + key + '\')" ondragover="calDayDragOver(event)" ondragleave="calDayDragLeave(event)" ondrop="calDayDrop(event,\'' + key + '\')">' +
+                return '<div class="cal-day' + (c.other ? ' cal-other-month' : '') + (isToday ? ' cal-today' : '') + (holidayName ? ' cal-holiday-day' : '') + '" data-date="' + key + '" onclick="calOpenAddEvent(\'' + key + '\')" ondragover="calDayDragOver(event)" ondragleave="calDayDragLeave(event)" ondrop="calDayDrop(event,\'' + key + '\')">' +
                     '<div class="cal-day-num"><span class="cal-day-num-inner">' + c.day + '</span></div>' +
-                    '<div class="cal-day-events">' + evsHtml + more + '</div>' +
+                    '<div class="cal-day-events">' + holidayHtml + evsHtml + more + '</div>' +
                     '</div>';
             }).join('') + '</div>';
             grid.innerHTML = dowHtml + daysHtml;
@@ -15028,6 +15135,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
                 var key = d.getFullYear() + '-' + _pad2(d.getMonth() + 1) + '-' + _pad2(d.getDate());
                 var isToday = (key === todayStr);
+                // [r278] 공휴일
+                var holidayName = _calShowHolidays() ? _calHolidayName(key) : null;
+                var holidayHtml = holidayName ? '<div class="cal-holiday" title="' + _annEsc(holidayName) + '">🇰🇷 ' + _annEsc(holidayName) + '</div>' : '';
                 var dayEvs = (byDay[key] || []).slice().sort(function (a, b) { return (a.start || '').localeCompare(b.start || ''); });
                 var evsHtml = dayEvs.map(function (ev) {
                     var cal = (currentData.calendars || []).find(function (cc) { return cc.id === ev.calId; });
@@ -15042,9 +15152,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         + (ev.start && !isPriv ? '<span style="font-weight:700;font-size:10.5px;opacity:.85;">' + _calFmtTime(ev.start) + '</span> ' : '')
                         + _annEsc(title) + '</div>';
                 }).join('');
-                return '<div class="cal-day' + (isToday ? ' cal-today' : '') + '" data-date="' + key + '" onclick="calOpenAddEvent(\'' + key + '\')" ondragover="calDayDragOver(event)" ondragleave="calDayDragLeave(event)" ondrop="calDayDrop(event,\'' + key + '\')">' +
+                return '<div class="cal-day' + (isToday ? ' cal-today' : '') + (holidayName ? ' cal-holiday-day' : '') + '" data-date="' + key + '" onclick="calOpenAddEvent(\'' + key + '\')" ondragover="calDayDragOver(event)" ondragleave="calDayDragLeave(event)" ondrop="calDayDrop(event,\'' + key + '\')">' +
                     '<div class="cal-day-num"><span class="cal-day-num-inner">' + d.getDate() + '</span></div>' +
-                    '<div class="cal-day-events">' + evsHtml + '</div>' +
+                    '<div class="cal-day-events">' + holidayHtml + evsHtml + '</div>' +
                     '</div>';
             }).join('') + '</div>';
             grid.innerHTML = head + body;
@@ -31764,7 +31874,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r278';
+    var _RFS_FRONT_REV = 'r279';
 
 
     async function rfsHealthCheck() {

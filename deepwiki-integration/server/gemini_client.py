@@ -105,6 +105,8 @@ class GeminiClient:
         model: str = None,
         temperature: float = 0.3,
         num_ctx: int = 16384,  # 호환 — Gemini 는 자동 컨텍스트, 무시
+        response_format: str = None,   # [r279] 'json' 이면 application/json 강제(코드펜스 없이 JSON 그대로)
+        max_output_tokens: int = None, # [r279] 응답 토큰 상한(긴 회의록 truncation 방지)
     ) -> AsyncIterator[str]:
         """SSE 스트리밍 — ollama.chat_stream 과 동일 시그니처."""
         if not _HAS_HTTPX:
@@ -112,9 +114,14 @@ class GeminiClient:
         model = model or "gemini-2.5-flash"
         model = model.replace("models/", "")
         system_instruction, contents = self._to_contents(messages)
+        gen_cfg = {"temperature": temperature}
+        if response_format == "json":
+            gen_cfg["responseMimeType"] = "application/json"
+        if max_output_tokens:
+            gen_cfg["maxOutputTokens"] = int(max_output_tokens)
         body = {
             "contents": contents,
-            "generationConfig": {"temperature": temperature},
+            "generationConfig": gen_cfg,
         }
         if system_instruction:
             body["systemInstruction"] = system_instruction
