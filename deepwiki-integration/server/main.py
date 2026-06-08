@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r287"
+SERVER_REVISION = "r288"
 
 
 
@@ -1611,31 +1611,66 @@ async def _meet_run_job(p: dict, sid: str):
         # [r286] STT 디바이스(GPU/CPU) 확정 후 session 에 저장 — 프론트가 진행 중 배너에 표시
         _stt_dev = _mtg_tr.current_device()
         await _upd({"status": "transcribing", "stt_device": _stt_dev})
-        # 3) 화자별 STT(증분 저장 — 폴링이 자라는 대화내역을 보여줌)
-        all_segs, participants = [], []
+        # [r288] 화자별 STT — 트랙 동시 처리(N 트랙 × WHISPER_TRACK_CONCURRENCY 병렬).
+        #   같은 모델 인스턴스 공유(BatchedInferencePipeline 은 thread-safe). GPU 활용도 ↑.
         N = len(tracks)
-        for i, tk in enumerate(tracks):
-            _busy_set(running=True, kind="meeting_import", stage="stt", current=i + 1, total=N,
-                      category=tk["speaker"], message=f"STT {i + 1}/{N} — {tk['speaker']}")
-            # [r287] 트랙 내부 진행률(processed_sec / total_sec) → _MEET_PROGRESS 갱신.
-            #   GET /meetings/sessions/{id} 가 이걸 머지해서 프론트 폴링이 자동 표시.
-            _MEET_PROGRESS[sid] = {"current": i + 1, "total": N, "speaker": tk["speaker"],
-                                   "track_sec": 0.0, "track_total": 0.0, "track_pct": 0}
-            def _pcb(pi=i, sp=tk["speaker"]):
-                def _cb(processed, total):
-                    pct = int(min(100, processed * 100 / total)) if total > 0 else 0
-                    _MEET_PROGRESS[sid] = {"current": pi + 1, "total": N, "speaker": sp,
-                                           "track_sec": round(processed, 1),
-                                           "track_total": round(total, 1), "track_pct": pct}
-                return _cb
-            segs = await loop.run_in_executor(
-                None, lambda pa=tk["path"], sp=tk["speaker"], cb=_pcb(): _mtg_tr.transcribe_track(
-                    pa, sp, p.get("whisper_model", "medium"), p.get("language", "ko"), progress_cb=cb))
-            all_segs.extend(segs)
-            participants.append({"name": tk["speaker"], "track": _os.path.basename(tk["path"])})
-            merged = _mtg_tr.merge_segments(all_segs)
-            await _upd({"status": "transcribing", "segments": merged,
-                        "transcript_text": _mtg_tr.segments_to_text(merged), "participants": participants})
+        conc = max(1, int(_os.environ.get("WHISPER_TRACK_CONCURRENCY", "2") or "2"))
+        if conc > N: conc = N
+        sem = asyncio.Semaphore(conc)
+        per_track = [None] * N
+        per_progress = [{"speaker": tk["speaker"], "sec": 0.0, "total": 0.0, "pct": 0, "done": False}
+                        for tk in tracks]
+        participants = [{"name": tk["speaker"], "track": _os.path.basename(tk["path"])} for tk in tracks]
+        save_lock = asyncio.Lock()
+
+        def _publish_progress():
+            done_n = sum(1 for x in per_progress if x["done"])
+            running = [x["speaker"] for x in per_progress if not x["done"] and x["sec"] > 0]
+            overall_sec = sum(x["sec"] for x in per_progress)
+            overall_total = sum(x["total"] for x in per_progress)
+            pct = int(min(100, overall_sec * 100 / overall_total)) if overall_total > 0 else 0
+            _MEET_PROGRESS[sid] = {
+                "current": min(done_n + 1, N), "total": N,
+                "speaker": (", ".join(running[:3]) + (" 외" if len(running) > 3 else "")) or "대기",
+                "track_sec": round(overall_sec, 1), "track_total": round(overall_total, 1),
+                "track_pct": pct, "concurrency": conc, "completed": done_n, "running_n": len(running),
+            }
+
+        async def _run_track(i, tk):
+            async with sem:
+                def _cb(processed, total, pi=i):
+                    per_progress[pi]["sec"] = float(processed)
+                    per_progress[pi]["total"] = float(total)
+                    per_progress[pi]["pct"] = int(min(100, processed * 100 / total)) if total > 0 else 0
+                    _publish_progress()
+                _busy_set(running=True, kind="meeting_import", stage="stt",
+                          current=i + 1, total=N, category=tk["speaker"],
+                          message=f"STT {i + 1}/{N} — {tk['speaker']}")
+                _publish_progress()
+                try:
+                    segs = await loop.run_in_executor(
+                        None, lambda pa=tk["path"], sp=tk["speaker"], cb=_cb: _mtg_tr.transcribe_track(
+                            pa, sp, p.get("whisper_model", "medium"), p.get("language", "ko"), progress_cb=cb))
+                except Exception as _te:
+                    print(f"[meetings] 트랙 {tk['speaker']} STT 실패: {_te}")
+                    segs = []
+                per_track[i] = segs
+                per_progress[i]["done"] = True
+                _publish_progress()
+                async with save_lock:
+                    cur_segs = []
+                    for r in per_track:
+                        if r: cur_segs.extend(r)
+                    cur_merged = _mtg_tr.merge_segments(cur_segs)
+                    await _upd({"status": "transcribing", "segments": cur_merged,
+                                "transcript_text": _mtg_tr.segments_to_text(cur_merged),
+                                "participants": participants})
+
+        print(f"[meetings] STT 동시 처리: {N} 트랙 × {conc} 병렬 (배치 파이프라인 자동)")
+        await asyncio.gather(*[_run_track(i, tk) for i, tk in enumerate(tracks)])
+        all_segs = []
+        for r in per_track:
+            if r: all_segs.extend(r)
         merged = _mtg_tr.merge_segments(all_segs)
         dur = int(max([s["t"] + s["dur"] for s in merged], default=0))
         await _upd({"status": "summarizing", "segments": merged, "transcript_text": _mtg_tr.segments_to_text(merged),

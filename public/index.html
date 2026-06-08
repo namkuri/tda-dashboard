@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r287';
+        var _AHUB_FRONT_REV = 'r288';
 
 
         var _ahubRevWarned = false;
@@ -31915,7 +31915,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r287';
+    var _RFS_FRONT_REV = 'r288';
 
 
     async function rfsHealthCheck() {
@@ -32342,17 +32342,28 @@ ${intrLog}
                     + '<div style="margin-top:8px;display:flex;gap:6px;"><button class="aihub-gpu-btn primary" style="font-size:11.5px;background:#9a1c20;" onclick="mtgAbortSession(\'' + s.id + '\')">🛑 중단하고 정리</button>'
                     + '<button class="aihub-gpu-btn" style="font-size:11.5px;" onclick="mtgOpenSession(\'' + s.id + '\',true)">🔄 새로고침(작업 재개 확인)</button></div></div>';
             }
-            // [r287] 트랜스크립션 진행률 바
+            // [r287/r288] 트랜스크립션 진행률 바 — 단일/동시 모드 모두 지원
             var pgBar = '';
             var pg = s.transcribe_progress;
             if (s.status === 'transcribing' && pg && pg.total) {
                 var trackPct = pg.track_pct || 0;
-                var overallPct = Math.min(100, Math.round(((pg.current - 1) + (trackPct / 100)) / pg.total * 100));
-                var sec = pg.track_sec || 0, tot = pg.track_total || 0;
+                var overallPct, label, sec = pg.track_sec || 0, tot = pg.track_total || 0;
+                if (pg.concurrency && pg.concurrency > 1) {
+                    // [r288] 동시 처리 — sec/total 합산, pct 가 전체%
+                    overallPct = trackPct;
+                    var done = pg.completed || 0, run = pg.running_n || 0;
+                    label = '<b>완료 ' + done + '/' + pg.total + '</b>'
+                        + (run > 0 ? (' · 동시 처리 ' + run + '개: ' + _annEsc(pg.speaker || '')) : '')
+                        + (tot ? (' · ' + _mtgFmtDur(sec) + ' / ' + _mtgFmtDur(tot)) : '');
+                } else {
+                    overallPct = Math.min(100, Math.round(((pg.current - 1) + (trackPct / 100)) / pg.total * 100));
+                    label = '<b>트랙 ' + pg.current + '/' + pg.total + '</b> · ' + _annEsc(pg.speaker || '')
+                        + (tot ? (' · ' + _mtgFmtDur(sec) + ' / ' + _mtgFmtDur(tot) + ' (' + trackPct + '%)') : '');
+                }
                 pgBar = '<div style="margin-top:6px;">'
-                    + '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--c-text2);margin-bottom:3px;">'
-                    + '<span><b>트랙 ' + pg.current + '/' + pg.total + '</b> · ' + _annEsc(pg.speaker || '') + (tot ? (' · ' + _mtgFmtDur(sec) + ' / ' + _mtgFmtDur(tot) + ' (' + trackPct + '%)') : '')+ '</span>'
-                    + '<span style="font-weight:700;">전체 ' + overallPct + '%</span></div>'
+                    + '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--c-text2);margin-bottom:3px;gap:8px;">'
+                    + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + label + '</span>'
+                    + '<span style="font-weight:700;flex-shrink:0;">전체 ' + overallPct + '%</span></div>'
                     + '<div style="height:6px;background:rgba(0,0,0,.18);border-radius:999px;overflow:hidden;">'
                     + '<div style="height:100%;background:linear-gradient(90deg,#c96442,#e08868);width:' + overallPct + '%;transition:width .25s ease;"></div>'
                     + '</div></div>';
