@@ -66,17 +66,26 @@ async def summarize(segments: List[Dict[str, Any]], *, title: str = "",
         user_parts.append(f"추가 메모: {hint}")
     user_parts += ["", "[녹취록]", body, "", "위 회의록을 한국어 JSON 으로 작성하세요."]
     user = "\n".join(user_parts)
-    ollama = get_llm(model)
+    try:
+        llm = get_llm(model)
+    except Exception as e:
+        return {"tldr": "", "agenda": [], "topics": [], "decisions": [], "action_items": [],
+                "error": f"LLM 설정 필요: {e}"}
     buf = ""
     try:
-        async for delta in ollama.chat_stream(
+        async for delta in llm.chat_stream(
             messages=[{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user}],
             model=model, temperature=0.3,
         ):
             buf += delta
     except Exception as e:
-        return {"tldr": "", "agenda": [], "topics": [], "decisions": [], "action_items": [],
-                "error": f"요약 LLM 실패: {e}"}
+        msg = str(e)
+        # [r277] 흔한 연결 실패를 친절한 한국어로
+        if "11434" in msg or "ConnectError" in msg or "Connection refused" in msg or "404 Not Found" in msg:
+            err = "Ollama(11434) 미실행 — AI Agent 페이지에서 Gemini 무료 키를 등록하거나, 서버에서 ollama 를 실행하세요."
+        else:
+            err = f"요약 LLM 실패: {msg[:200]}"
+        return {"tldr": "", "agenda": [], "topics": [], "decisions": [], "action_items": [], "error": err}
     parsed = _extract_json(buf)
     if not parsed:
         return {"tldr": buf.strip()[:1500], "agenda": [], "topics": [], "decisions": [],

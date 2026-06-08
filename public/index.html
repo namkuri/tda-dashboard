@@ -10963,7 +10963,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r276';
+        var _AHUB_FRONT_REV = 'r277';
 
 
         var _ahubRevWarned = false;
@@ -31753,7 +31753,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r276';
+    var _RFS_FRONT_REV = 'r277';
 
 
     async function rfsHealthCheck() {
@@ -31862,9 +31862,15 @@ ${intrLog}
             }
             var stt = j.stt || {};
             if (!stt.faster_whisper || !stt.ffmpeg) { show('⚠ STT 준비 안 됨 — ' + _annEsc(stt.error || 'faster-whisper/ffmpeg 설치 필요') + '. 서버에 <code>pip install faster-whisper</code> + <code>ffmpeg</code> 설치 후 재시작', 'rgba(245,158,11,.2)', '#92400e'); return; }
+            // [r277] LLM 미가용 안내 — 회의록 요약/제목 추천이 안 됨
+            var llm = j.llm || {};
+            if (llm.llm_ready === false) {
+                show('⚠ <b>LLM 미설정</b> — 회의록 작성·제목 추천을 위해 LLM 이 필요합니다. <a onclick="switchView(\'aiHub\')" style="color:var(--c-accent);cursor:pointer;text-decoration:underline;">AI Agent 에서 Gemini 무료 키 등록</a> 또는 서버에서 Ollama(11434) 실행. (STT 는 동작 — 텍스트화는 LLM 없이 가능)', 'rgba(245,158,11,.22)', '#92400e');
+                return;
+            }
             // [r247] GPU(cuBLAS) 미가용 — 에러는 아니지만 CPU 로 느림을 안내(에러 후 자동 폴백 동작)
             if (stt.faster_whisper && stt.gpu === false) {
-                show('ℹ CPU 모드 — GPU(cuBLAS) 라이브러리가 없어 CPU 로 동작합니다(짧은 회의 OK, 긴 회의는 느림). 가속하려면: <code>pip install nvidia-cublas-cu12 nvidia-cudnn-cu12</code> 후 백엔드 재시작.', 'rgba(42,122,184,.14)', '#1a3a58');
+                show('ℹ CPU 모드 — GPU(cuBLAS) 라이브러리가 없어 CPU 로 동작합니다(짧은 회의 OK, 긴 회의는 느림). 가속하려면: <code>pip install nvidia-cublas-cu12 nvidia-cudnn-cu12</code> 후 백엔드 재시작.' + (llm.gemini_registered ? '' : ' · LLM 설정 OK(Ollama).'), 'rgba(42,122,184,.14)', '#1a3a58');
                 return;
             }
             banner.style.display = 'none';

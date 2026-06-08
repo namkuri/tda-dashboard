@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r276"
+SERVER_REVISION = "r277"
 
 
 
@@ -1430,7 +1430,22 @@ class MeetingExportRequest(BaseModel):
 @app.get("/meetings/health")
 async def meetings_health():
     av = _mtg_tr.is_available() if _MEET_OK else {"faster_whisper": False, "ffmpeg": False, "error": _MEET_ERR}
-    return {"ok": _MEET_OK, "revision": SERVER_REVISION, "error": _MEET_ERR, "stt": av}
+    # [r277] LLM 상태 — Ollama 연결성 + Gemini 등록 여부
+    llm_state = {"gemini_registered": False, "ollama_reachable": False}
+    try:
+        from llm_router import llm_status as _llm_status
+        llm_state.update(_llm_status())
+    except Exception:
+        pass
+    try:
+        import httpx as _hx
+        with _hx.Client(timeout=1.0) as cli:
+            r = cli.get("http://localhost:11434/api/tags")
+            llm_state["ollama_reachable"] = (r.status_code == 200)
+    except Exception:
+        llm_state["ollama_reachable"] = False
+    llm_state["llm_ready"] = bool(llm_state.get("gemini_registered") or llm_state.get("ollama_reachable"))
+    return {"ok": _MEET_OK, "revision": SERVER_REVISION, "error": _MEET_ERR, "stt": av, "llm": llm_state}
 
 
 @app.get("/meetings/schema-sql")
@@ -1739,18 +1754,28 @@ async def meetings_suggest_title(sid: str):
         "[규칙] 1) 8~20자 이내. 2) 회의의 핵심 주제·결과 위주. 3) 회의 일자/시간 같은 불필요한 정보 X.\n"
         "4) 따옴표/마침표/이모지 없이 제목 문자열만 출력. 다른 텍스트 X."
     )
-    from llm_router import get_llm
-    llm = get_llm(s.get("model"))
+    from llm_router import get_llm, llm_status
+    try:
+        llm = get_llm(None)   # [r277] auto: Gemini 키 있으면 우선, 없으면 Ollama
+    except Exception as e:
+        raise HTTPException(400, f"LLM 설정 필요 — {e}")
     buf = ""
     try:
         async for delta in llm.chat_stream(
             messages=[{"role": "system", "content": sys_p},
                       {"role": "user", "content": f"[대화내역]\n{body[:4000]}\n\n제목만:"}],
-            model=s.get("model"), temperature=0.4,
+            model=None, temperature=0.4,
         ):
             buf += delta
     except Exception as e:
-        raise HTTPException(500, f"제목 추천 실패: {e}")
+        msg = str(e)
+        # [r277] 흔한 에러를 사용자 친화적 한국어로 변환
+        if "11434" in msg or "ConnectError" in msg or "Connection refused" in msg or "404" in msg:
+            st = llm_status()
+            if st.get("gemini_registered"):
+                raise HTTPException(503, "Ollama 연결 실패. Gemini 키는 있지만 라우터가 Ollama 로 갔습니다 — 모델을 'gemini-flash-latest' 처럼 지정하거나 백엔드 재시작 후 다시 시도.")
+            raise HTTPException(503, "LLM 미가용 — Ollama(11434) 가 켜져있지 않고 Gemini 키도 없습니다. AI Agent 페이지에서 Gemini 무료 키를 등록하거나, 서버에서 ollama 를 실행하세요.")
+        raise HTTPException(500, f"제목 추천 실패: {msg[:200]}")
     # 첫 줄, 잘라내기, 따옴표/마침표 제거
     title = (buf or "").strip().split("\n")[0].strip().strip("\"'`").rstrip(".!?·~ ")
     title = title[:60] if title else ""

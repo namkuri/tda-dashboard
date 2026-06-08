@@ -28,7 +28,10 @@ def is_gemini_model(model: Optional[str]) -> bool:
 
 
 def get_llm(model: Optional[str] = None):
-    """모델명으로 Ollama / Gemini 자동 선택."""
+    """모델명으로 Ollama / Gemini 자동 선택.
+
+    [r277] model 미지정 시 Gemini 키가 있으면 Gemini 우선(Ollama 미설치 환경 대비).
+    """
     if is_gemini_model(model):
         if not HAS_GEMINI:
             raise RuntimeError("Gemini 모듈 미설치 (httpx 필요)")
@@ -36,4 +39,16 @@ def get_llm(model: Optional[str] = None):
         if not key:
             raise RuntimeError("Gemini API 키 미설정 — AI Agent 페이지에서 등록하세요")
         return get_gemini(key)
+    # 모델 미지정 + Gemini 키 등록돼 있으면 Gemini 자동 우선
+    if not model and HAS_GEMINI and GEMINI_CONFIG.get("api_key"):
+        return get_gemini(GEMINI_CONFIG["api_key"])
     return get_ollama()
+
+
+def llm_status() -> Dict[str, Any]:
+    """[r277] 현재 LLM 가용 상태 — health 응답·에러 안내용."""
+    return {
+        "gemini_registered": bool(HAS_GEMINI and GEMINI_CONFIG.get("api_key")),
+        "gemini_label": GEMINI_CONFIG.get("label"),
+        "has_gemini_module": HAS_GEMINI,
+    }
