@@ -332,6 +332,81 @@
         body.dark .markdown-body tbody tr:hover { background: #3a2e27; }
         .markdown-body img { max-width: 100%; border-radius: 8px; margin: 10px 0; border: 1px solid #e7e3d8; }
 
+        /* [r297] 회의록 본문 전용 — 클로드 HTML 스타일에 가까운 풍부한 가독성 */
+        #mtg-summary-md-view { font-size: 14.5px; line-height: 1.8; color: var(--c-text); }
+        #mtg-summary-md-view h1 {
+            font-size: 2em; font-weight: 800; letter-spacing: -.01em;
+            border-top: 4px solid var(--c-accent); border-bottom: none;
+            padding-top: 14px; margin: 0 0 12px;
+        }
+        #mtg-summary-md-view h2 {
+            font-size: 1.45em; font-weight: 800; letter-spacing: -.01em;
+            border-bottom: 2px solid var(--c-text); padding-bottom: 8px;
+            margin: 38px 0 14px; color: var(--c-text);
+        }
+        #mtg-summary-md-view h3 {
+            font-size: 1.2em; font-weight: 800; color: var(--c-accent);
+            padding-bottom: 4px; margin: 28px 0 12px;
+            border-bottom: none;
+            display: flex; align-items: center; gap: 10px;
+        }
+        #mtg-summary-md-view h3::before {
+            content: ""; display: inline-block; width: 28px; height: 3px;
+            background: var(--c-accent); border-radius: 2px;
+        }
+        #mtg-summary-md-view h4 {
+            font-size: 1em; font-weight: 700; color: var(--c-accent);
+            margin: 18px 0 6px; opacity: .85;
+        }
+        #mtg-summary-md-view p { margin: 0 0 12px; }
+        #mtg-summary-md-view strong { font-weight: 800; color: var(--c-text); }
+        #mtg-summary-md-view em { color: var(--c-text2); font-style: italic; }
+        #mtg-summary-md-view ul, #mtg-summary-md-view ol { padding-left: 22px; margin: 0 0 14px; }
+        #mtg-summary-md-view li { margin: 4px 0; line-height: 1.75; }
+        #mtg-summary-md-view li > ul, #mtg-summary-md-view li > ol { margin: 4px 0 6px; }
+        #mtg-summary-md-view li::marker { color: var(--c-accent); font-weight: 700; }
+        #mtg-summary-md-view code {
+            background: rgba(201,100,66,.10); color: var(--c-accent);
+            padding: 1px 7px; border-radius: 4px;
+            font-family: ui-monospace, SFMono-Regular, monospace; font-size: .88em;
+            font-weight: 600; border: 1px solid rgba(201,100,66,.22);
+        }
+        #mtg-summary-md-view blockquote {
+            border-left: 4px solid var(--c-accent);
+            background: rgba(201,100,66,.06);
+            padding: 12px 18px; margin: 16px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        #mtg-summary-md-view blockquote p { margin: 4px 0; }
+        #mtg-summary-md-view blockquote strong { color: var(--c-accent); }
+        #mtg-summary-md-view hr {
+            border: none; border-top: 1px solid var(--c-border);
+            margin: 24px 0;
+        }
+        #mtg-summary-md-view table {
+            margin: 14px 0; border-collapse: collapse;
+            border: 1px solid var(--c-border); border-radius: 6px;
+            overflow: hidden; width: 100%; font-size: .95em;
+        }
+        #mtg-summary-md-view th {
+            background: var(--c-text); color: var(--c-paper);
+            font-weight: 600; text-align: left;
+            padding: 9px 14px; border: none;
+        }
+        #mtg-summary-md-view td {
+            padding: 10px 14px; border-top: 1px solid var(--c-border);
+            vertical-align: top;
+        }
+        #mtg-summary-md-view tbody tr:nth-child(even) { background: rgba(0,0,0,.03); }
+        body.dark #mtg-summary-md-view tbody tr:nth-child(even) { background: rgba(255,255,255,.03); }
+        body.dark #mtg-summary-md-view code {
+            background: rgba(201,100,66,.18); color: #e08868;
+            border-color: rgba(201,100,66,.32);
+        }
+        body.dark #mtg-summary-md-view blockquote {
+            background: rgba(201,100,66,.10);
+        }
+
         .md-textarea { width: 100%; height: 100%; min-height: 80px; resize: none; background: #f5f1e9; border: 1px dashed #b4ad9e; padding: 8px; font-family: monospace; font-size: 0.85rem; outline: none; }
         
         .comments-section { background: var(--ios-fill); border-top: 0.5px solid var(--ios-sep); padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; z-index: 10; }
@@ -11029,7 +11104,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r296';
+        var _AHUB_FRONT_REV = 'r297';
 
 
         var _ahubRevWarned = false;
@@ -31971,7 +32046,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r296';
+    var _RFS_FRONT_REV = 'r297';
 
 
     async function rfsHealthCheck() {

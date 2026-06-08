@@ -343,10 +343,29 @@ def _normalize(parsed: Dict[str, Any], participants: Optional[List[Dict[str, Any
             "summary": t.get("summary") or "",
         })
     # [r295] 견고화 — LLM 이 문자열 배열을 객체로 줘도 텍스트로 강제 변환.
-    #   agenda/decisions/principles 는 문자열 배열. action_items 는 {who,what,due} 객체 배열.
+    # [r297] decisions/action what 의 {decision/how/why/근거/기한} 객체는 텍스트 평면화 대신
+    #   원본 dict 를 그대로 보존 → to_markdown 이 개조식으로 풀어 더 보기 좋게 렌더.
     agenda = [_coerce_text(a) for a in (parsed.get("agenda") or []) if a]
-    decisions = [_coerce_text(d) for d in (parsed.get("decisions") or []) if d]
     principles = [_coerce_text(pr) for pr in (parsed.get("principles") or []) if pr]
+    decisions = []
+    for d in (parsed.get("decisions") or []):
+        if not d: continue
+        if isinstance(d, dict):
+            # base + 부수 키 분리 보존 — to_markdown 이 들여쓰기로 풀어줌
+            base_keys = ("text","content","decision","title","summary","what","value","name","label","description")
+            extra_keys = ("how","why","reason","rationale","due","note","근거","방법","왜","어떻게","기한")
+            base = ""
+            for k in base_keys:
+                if d.get(k): base = _coerce_text(d[k]); break
+            if not base:
+                # 매칭 없으면 평면 텍스트로 폴백
+                decisions.append(_coerce_text(d)); continue
+            extras = {}
+            for k in extra_keys:
+                if d.get(k): extras[k] = _coerce_text(d[k])
+            decisions.append({"text": base, "extras": extras} if extras else base)
+        else:
+            decisions.append(_coerce_text(d))
     # action_items 안전화 — what/who/due 가 객체로 와도 풀어서 문자열로
     fixed_actions = []
     for a in actions:
@@ -445,28 +464,53 @@ def _partial_or_error(raw: str) -> Dict[str, Any]:
             "action_items": [], "error": "JSON 파싱 실패 — 원문에서 요약 일부만 복구"}
 
 
+def _fmt_date_kr(iso_str: str) -> str:
+    """[r297] ISO → 'YYYY-MM-DD HH:MM' 한국식. 실패 시 원문."""
+    try:
+        from datetime import datetime
+        s = iso_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return iso_str
+
+
 def to_markdown(title: str, summary: Dict[str, Any], started_at: str = "",
                 participants: Optional[List[Dict[str, Any]]] = None) -> str:
     """회의록 dict → 위키 내보내기용 마크다운.
-    [r292] 새 sections 모델(text/list/callout/tier/table) 렌더. 구 summary 도 호환.
+    [r292] 새 sections 모델(text/list/callout/tier/table) 렌더.
+    [r297] 클로드 HTML 스타일에 가까운 가독성 — 메타 표/안건 chip/개조식 결정·액션.
     """
     p = ", ".join([x.get("name", "") for x in (participants or [])])
     md = [f"# 📝 {title} 회의록", ""]
-    if started_at:
-        md.append(f"- 일시: {started_at}")
-    if p:
-        md.append(f"- 참석: {p}")
+    # [r297] kicker 한 줄 + 메타 표(클로드 HTML 의 grid 메타와 비슷한 효과)
+    md.append("> **PROJECT MEETING · MINUTES**")
     md.append("")
+    if started_at or p:
+        md.append("| 항목 | 내용 |")
+        md.append("|---|---|")
+        if started_at:
+            md.append(f"| **일시** | {_fmt_date_kr(started_at)} |")
+        if p:
+            md.append(f"| **참석** | {p} |")
+        md.append("")
     if summary.get("tldr"):
-        md += ["## 요약", summary["tldr"], ""]
+        # [r297] tldr 이 너무 길면 문장 단위 줄바꿈으로 호흡 — 가독성 ↑
+        tldr = summary["tldr"].replace("다. ", "다.\n").replace("니다. ", "니다.\n")
+        md += ["## 요약", tldr, ""]
     if summary.get("agenda"):
-        md += ["## 안건"] + [f"{i+1}. {a}" for i, a in enumerate(summary["agenda"])] + [""]
+        md.append("## 안건")
+        for i, a in enumerate(summary["agenda"]):
+            md.append(f"- **`{i+1}`** {a}")
+        md.append("")
     if summary.get("topics"):
         md.append("## 논의")
         for ti, t in enumerate(summary["topics"]):
+            md.append("---")
+            md.append("")
             md.append(f"### {ti+1:02d}. {t.get('title','')}")
             if t.get("lead"):
-                md += [f"_{t['lead']}_", ""]
+                md += [f"> _{t['lead']}_", ""]
             secs = t.get("sections") or []
             if not secs and t.get("summary"):
                 md += [t["summary"], ""]
@@ -474,13 +518,15 @@ def to_markdown(title: str, summary: Dict[str, Any], started_at: str = "",
                 kind = (s.get("kind") or "text").lower()
                 heading = s.get("heading") or ""
                 if heading:
-                    md.append(f"**◆ {heading}**")
+                    md.append(f"#### ◆ {heading}")
+                    md.append("")
                 if kind == "list":
                     for it in (s.get("items") or []):
                         md.append(f"- {it}")
                 elif kind == "callout":
                     bb = f" — _{s.get('by')}_" if s.get("by") else ""
-                    md += [f"> 💡 **핵심**{bb}", f"> {s.get('content','')}"]
+                    md += [f"> 💡 **핵심 피드백**{bb}", f"> ",
+                           "> " + s.get("content","").replace("\n", "\n> ")]
                 elif kind == "tier":
                     for it in (s.get("items") or []):
                         lbl, ttl, body = it.get("label",""), it.get("title",""), it.get("body","")
@@ -498,15 +544,32 @@ def to_markdown(title: str, summary: Dict[str, Any], started_at: str = "",
                 md.append("")
             md.append("")
     if summary.get("decisions"):
-        md += ["## 결정사항"] + [f"- {d}" for d in summary["decisions"]] + [""]
+        md.append("## ✅ 결정사항")
+        md.append("")
+        for d in summary["decisions"]:
+            if isinstance(d, dict) and d.get("text"):
+                md.append(f"- **{d['text']}**")
+                for k, v in (d.get("extras") or {}).items():
+                    md.append(f"    - _{k}_: {v}")
+            else:
+                md.append(f"- **{d}**" if isinstance(d, str) else f"- {d}")
+        md.append("")
     if summary.get("action_items"):
-        md.append("## 액션 아이템")
+        md.append("## 📋 액션 아이템")
+        md.append("")
         for a in summary["action_items"]:
-            due = (" (기한: " + a.get("due", "") + ")") if a.get("due") else ""
-            md.append(f"- [ ] **{a.get('who','')}** — {a.get('what','')}{due}")
+            who = a.get("who","")
+            what = a.get("what","")
+            due = a.get("due","")
+            due_str = f" · ⏰ `{due}`" if due else ""
+            md.append(f"- [ ] **`{who}`** — {what}{due_str}")
         md.append("")
     if summary.get("principles"):
-        md += ["## 합의된 원칙"] + [f"- ✓ {pr}" for pr in summary["principles"]] + [""]
+        md.append("## 🎯 합의된 원칙")
+        md.append("")
+        for pr in summary["principles"]:
+            md.append(f"- ✓ {pr}")
+        md.append("")
     return "\n".join(md)
 
 
