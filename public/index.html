@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r292';
+        var _AHUB_FRONT_REV = 'r293';
 
 
         var _ahubRevWarned = false;
@@ -31917,7 +31917,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r292';
+    var _RFS_FRONT_REV = 'r293';
 
 
     async function rfsHealthCheck() {
@@ -32834,34 +32834,46 @@ ${intrLog}
     }
     async function mtgResummarize(id, withHint) {
         var url = rfsBackEnd(); if (!url) return;
-        // [r292] 재요약 시 모델 선택 + 맥락 메모 — 한 다이얼로그에서 함께
+        // [r293] 모델 목록 캐시가 비어있으면 즉시 fetch — 회의 상세로 바로 진입한 경우
+        //   (상세 페이지에서는 mtgHealthCheck 가 호출 안 됨). 다이얼로그가 안 뜨고 바로
+        //   진행되던 문제 해결.
+        if (!(_mtgState._llmModels && _mtgState._llmModels.length)) {
+            try {
+                var hres = await fetch(url + '/meetings/health');
+                if (hres.ok) {
+                    var hj = await hres.json();
+                    _mtgState._llmModels = hj.models || [];
+                }
+            } catch (e) {}
+        }
         var models = _mtgState._llmModels || [];
         var chosen = null, hint = '';
-        if (models.length) {
-            var order = {best: 0, good: 1, fast: 2, local: 3};
-            var sorted = models.slice().sort(function (a, b) { var oa = order[a.tier], ob = order[b.tier]; return (oa == null ? 9 : oa) - (ob == null ? 9 : ob); });
-            var optsHtml = sorted.map(function (m, i) {
-                return '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;cursor:pointer;background:var(--c-paper);">'
-                    + '<input type="radio" name="mtg-rs-model" value="' + _annEsc(m.id) + '"' + (i === 0 ? ' checked' : '') + '>'
-                    + '<span style="flex:1;font-size:12.5px;">' + _annEsc(m.label) + '</span></label>';
-            }).join('');
-            var hintInput = withHint ? '<div style="margin-top:10px;"><label style="font-size:12px;font-weight:700;">맥락 메모 (선택)<input id="mtg-rs-hint" type="text" placeholder="예: Phase G 위키 일치도 검증 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label></div>' : '';
-            var ok = await uiConfirm({
-                title: '📝 회의록 재작성',
-                messageHtml: '<div style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto;">' + optsHtml + '</div>' + hintInput
-                    + '<div style="margin-top:8px;font-size:11px;color:var(--c-text3);">⚠ 사용자가 직접 편집한 내용은 덮어쓰기됩니다.</div>',
-                confirmText: '재작성 시작', cancelText: '취소'
-            });
-            if (!ok) return;
-            var sel = document.querySelector('input[name="mtg-rs-model"]:checked');
-            chosen = sel ? sel.value : null;
-            var hi = document.getElementById('mtg-rs-hint');
-            hint = hi ? String(hi.value || '').trim() : '';
-        } else if (withHint) {
-            var v = await uiPrompt({title: '맥락 메모', message: 'LLM 에 추가로 알려줄 회의 배경/주제(선택). 예: "Phase G 위키 일치도 검증 회의"', placeholder: '메모 (선택)'});
-            if (v == null) return;
-            hint = String(v || '').trim();
+        // [r293] models 0개 → LLM 미설정. 명확히 알리고 중단(이전엔 조용히 백엔드 에러).
+        if (!models.length) {
+            showToast('⚠ LLM 미설정 — AI Agent 페이지에서 Gemini 키 등록 또는 서버에서 Ollama 실행', 'alert');
+            return;
         }
+        // [r293] 모델이 1개라도 있으면 무조건 선택 다이얼로그(withHint 무관).
+        var order = {best: 0, good: 1, fast: 2, local: 3};
+        var sorted = models.slice().sort(function (a, b) { var oa = order[a.tier], ob = order[b.tier]; return (oa == null ? 9 : oa) - (ob == null ? 9 : ob); });
+        var optsHtml = sorted.map(function (m, i) {
+            return '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;cursor:pointer;background:var(--c-paper);">'
+                + '<input type="radio" name="mtg-rs-model" value="' + _annEsc(m.id) + '"' + (i === 0 ? ' checked' : '') + '>'
+                + '<span style="flex:1;font-size:12.5px;">' + _annEsc(m.label) + '</span></label>';
+        }).join('');
+        var hintInput = withHint ? '<div style="margin-top:10px;"><label style="font-size:12px;font-weight:700;">맥락 메모 (선택)<input id="mtg-rs-hint" type="text" placeholder="예: Phase G 위키 일치도 검증 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label></div>' : '';
+        var ok = await uiConfirm({
+            title: '📝 회의록 재작성 — 모델 선택',
+            messageHtml: '<div style="font-size:12px;color:var(--c-text2);margin-bottom:8px;">품질에 가장 큰 영향. <b>Pro</b> 권장 (Flash 는 빠르지만 디테일 부족).</div>'
+                + '<div style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto;">' + optsHtml + '</div>' + hintInput
+                + '<div style="margin-top:8px;font-size:11px;color:var(--c-text3);">⚠ 사용자가 직접 편집한 회의록 본문은 덮어쓰기됩니다.</div>',
+            confirmText: '재작성 시작', cancelText: '취소'
+        });
+        if (!ok) return;
+        var sel = document.querySelector('input[name="mtg-rs-model"]:checked');
+        chosen = sel ? sel.value : null;
+        var hi = document.getElementById('mtg-rs-hint');
+        hint = hi ? String(hi.value || '').trim() : '';
         if (_mtgState.current && _mtgState.current.id === id) {
             _mtgState.current.status = 'summarizing';
             mtgRenderDetail();
