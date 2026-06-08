@@ -10963,7 +10963,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r277';
+        var _AHUB_FRONT_REV = 'r278';
 
 
         var _ahubRevWarned = false;
@@ -25925,7 +25925,16 @@ ${intrLog}
             return blocks;
         }
         function _lpRenderBlockHtml(raw) {
-            try { return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(raw), (typeof domPurifyConfig !== 'undefined' ? domPurifyConfig : undefined)) : parseMarkdownWithTables(raw); }
+            // [r278] HTML 임베드 마커(<!--TDAHTML:id-->) → mount placeholder. updateDocPreview 와 동일 패턴.
+            //   marked/DOMPurify 가 HTML 주석을 제거하므로, 미리 placeholder div 로 변환 → 렌더 후 _buildHtmlEmbeds 가 iframe 마운트.
+            raw = String(raw == null ? '' : raw).replace(/<!--TDAHTML:([A-Za-z0-9_]+)-->/g, function (m, id) { return '\n\n<div class="tda-html-mount" data-tdahtml="' + id + '"></div>\n\n'; });
+            // DOMPurify 가 data-tdahtml 을 살리도록 ADD_ATTR 보강
+            var cfg;
+            if (typeof domPurifyConfig !== 'undefined') {
+                cfg = Object.assign({}, domPurifyConfig);
+                cfg.ADD_ATTR = (cfg.ADD_ATTR || []).concat(['data-tdahtml']);
+            }
+            try { return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(raw), cfg) : parseMarkdownWithTables(raw); }
             catch (e) { return _sprintEsc(raw); }
         }
         function renderLivePreview() {
@@ -25980,6 +25989,8 @@ ${intrLog}
                 frag += '<div class="lp-row" data-idx="' + idx + '"><div class="lp-gutter">' + num + '</div><div class="lp-content">' + _lpRenderBlockHtml(b.text) + secBtn + '</div></div>';
             });
             host.innerHTML = tocHtml + metaHtml + frag;
+            // [r278] 라이브 프리뷰에도 HTML 임베드 iframe 마운트(붙여넣은 HTML 표시)
+            if (typeof _buildHtmlEmbeds === 'function') { try { _buildHtmlEmbeds(host); } catch (e) { console.warn('[lp] embed mount', e); } }
         }
         // [r238 #7] 메타데이터(프론트매터) 소스 직접 편집
         function _lpEditMeta(idx) {
@@ -31753,7 +31764,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r277';
+    var _RFS_FRONT_REV = 'r278';
 
 
     async function rfsHealthCheck() {
