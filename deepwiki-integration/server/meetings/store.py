@@ -18,6 +18,8 @@ _ALLOWED_COLS = {
     "summary_meta",        # {created_by, created_at, updated_by, updated_at, edited(bool)}
     # [r282] 회의록 자유 마크다운 — 본문/소스 보기 기능 재사용. HTML 임베드 마커 포함 가능.
     "summary_markdown",
+    # [r283] 회의록 HTML 임베드 — {he_<id>: {html, title, mode, at, size}}. 본문의 마커가 가리키는 데이터.
+    "html_embeds",
 }
 
 
@@ -153,6 +155,8 @@ alter table meeting_sessions add column if not exists chat_messages jsonb defaul
 alter table meeting_sessions add column if not exists summary_meta jsonb;
 -- [r282] 회의록 자유 마크다운(본문/소스 보기·HTML 임베드 가능)
 alter table meeting_sessions add column if not exists summary_markdown text;
+-- [r283] 회의록 HTML 임베드 — 본문 마커 <!--TDAHTML:he_xxx--> 가 가리키는 데이터
+alter table meeting_sessions add column if not exists html_embeds jsonb default '{}'::jsonb;
 -- PostgREST 스키마 캐시 강제 갱신(alter 직후 즉시 반영)
 notify pgrst, 'reload schema';
 alter table meeting_sessions disable row level security;

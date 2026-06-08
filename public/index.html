@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r282';
+        var _AHUB_FRONT_REV = 'r283';
 
 
         var _ahubRevWarned = false;
@@ -17484,7 +17484,7 @@ return data;
             ['ai_usage_logs', "id text primary key, project_id text, user_id text, user_name text, kind text, model text, host text, gpu_host_id text, in_tokens int default 0, out_tokens int default 0, dur_ms bigint default 0, detail text, out_summary text, created_at timestamptz default now()"],
             ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"],
             // [r242] 회의록 자동작성 — Craig 녹음 → STT → LLM 회의록
-            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text, chat_messages jsonb default '[]'::jsonb, summary_meta jsonb, summary_markdown text"],
+            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text, chat_messages jsonb default '[]'::jsonb, summary_meta jsonb, summary_markdown text, html_embeds jsonb default '{}'::jsonb"],
             // [r243] 프로덕트 관리 — Stage(타입/생애주기/Goal) + 게임개발 직무체계 계층 태그
             ['product_stages', "id text primary key, project_id text, name text not null default '새 Stage', type text, goal text default '', lifecycle text, tags jsonb default '[]'::jsonb, tag_meta jsonb default '{}'::jsonb, status text default 'active', sort_order bigint, created_by text, created_at timestamptz default now(), updated_at timestamptz default now()"],
             // [r244] 프로젝트별 커스텀 직무체계(대/중/소 추가분). id=project_id, nodes=커스텀 노드 배열
@@ -19921,12 +19921,18 @@ addEventListener("resize",sendPos);
             requestAnimationFrame(function () { _tdaReflowEmbeds(false); setTimeout(function () { _tdaReflowEmbeds(true); }, 300); });
         }
         // 미리보기에서 [data-tdahtml] 마운트를 찾아 iframe(접기/펼치기 첨부 블록)으로 교체
-        function _buildHtmlEmbeds(previewEl) {
+        function _buildHtmlEmbeds(previewEl, embedsOverride) {
             if (!previewEl) return;
             var mounts = previewEl.querySelectorAll('[data-tdahtml]');
             if (!mounts.length) return;
-            var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
-            var embeds = (doc && doc.meta && doc.meta.htmlEmbeds) || {};
+            // [r283 #1] embedsOverride 가 주어지면(회의록 등 doc 컨텍스트 밖) 그걸 사용
+            var embeds;
+            if (embedsOverride && typeof embedsOverride === 'object') {
+                embeds = embedsOverride;
+            } else {
+                var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
+                embeds = (doc && doc.meta && doc.meta.htmlEmbeds) || {};
+            }
             if (!window._tdaEmbedResizeBound) {
                 window._tdaEmbedResizeBound = true;
                 window.addEventListener('message', function (e) {
@@ -20013,6 +20019,8 @@ addEventListener("resize",sendPos);
         function _openHtmlEmbedFullscreen(id) {
             var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
             var em = doc && doc.meta && doc.meta.htmlEmbeds && doc.meta.htmlEmbeds[id];
+            // [r283 #1] 회의록 컨텍스트 폴백 — _mtgState.current.html_embeds 에서 찾기
+            if (!em && typeof _mtgState !== 'undefined' && _mtgState.current && _mtgState.current.html_embeds) em = _mtgState.current.html_embeds[id];
             if (!em) { showToast('임베드를 찾을 수 없습니다.', 'alert'); return; }
             var ov = document.createElement('div'); ov.className = 'tda-embed-fs';
             var bar = document.createElement('div'); bar.className = 'tda-embed-fs-bar';
@@ -31877,7 +31885,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r282';
+    var _RFS_FRONT_REV = 'r283';
 
 
     async function rfsHealthCheck() {
@@ -31940,6 +31948,8 @@ ${intrLog}
         return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
     function mtgToggleTimeMode() { _mtgState._timeMode = (_mtgState._timeMode === 'abs') ? 'rel' : 'abs'; mtgRenderDetail(); }
+    // [r283 #2] 대화내역 펼침/접힘 — 헤더 클릭(이벤트 위임)
+    function mtgToggleTranscript(ev) { if (ev) ev.stopPropagation(); _mtgState._txOpen = !_mtgState._txOpen; mtgRenderDetail(); }
     async function mtgEditStartedAt(id) {
         var s = _mtgState.current; if (!s) return;
         var cur = s.started_at || '';
@@ -32308,10 +32318,11 @@ ${intrLog}
             h += _mtgRenderEmptySummary(s, canGen);
         }
         main.innerHTML = h;
-        // [r282] 회의록 본문 모드면 HTML 임베드(<!--TDAHTML:id-->) iframe 마운트 (문서 메뉴와 동일)
+        // [r283] 회의록 본문 모드면 HTML 임베드(<!--TDAHTML:id-->) iframe 마운트.
+        //   회의록 컨텍스트에서는 _mtgState.current.html_embeds 를 override 로 전달.
         var mview = document.getElementById('mtg-summary-md-view');
         if (mview && typeof _buildHtmlEmbeds === 'function') {
-            try { _buildHtmlEmbeds(mview); } catch (e) {}
+            try { _buildHtmlEmbeds(mview, (_mtgState.current && _mtgState.current.html_embeds) || {}); } catch (e) {}
         }
     }
 
@@ -32348,17 +32359,24 @@ ${intrLog}
         var spkList = Object.keys(spk).sort(function (a, b) { return spk[b] - spk[a]; });
 
         var maxH = compact ? '40vh' : '60vh';
+        // [r283 #2] compact(요약+대화 함께) 모드는 회의록에 집중하도록 대화내역 기본 접힘.
+        //   사용자가 헤더의 ▼/▶ 클릭 시 펼치고 _mtgState._txOpen 에 저장.
+        if (compact && typeof _mtgState._txOpen === 'undefined') _mtgState._txOpen = false;
+        if (!compact && typeof _mtgState._txOpen === 'undefined') _mtgState._txOpen = true;
+        var collapsed = compact && !_mtgState._txOpen;
         var h = '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-paper);margin-bottom:14px;">';
-        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+        h += '<div style="background:var(--c-card);' + (collapsed ? '' : 'border-bottom:1px solid var(--c-border);') + 'padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;" onclick="mtgToggleTranscript(event)">'
+            + '<span style="font-size:11px;color:var(--c-text3);width:12px;">' + (collapsed ? '▶' : '▼') + '</span>'
             + '<span style="font-weight:700;font-size:13px;">💬 대화내역</span>'
             + '<span style="color:var(--c-text3);font-size:11.5px;font-weight:400;">' + merged.length + '항목 · 음성 ' + voices.length + ' · 채팅 ' + chats.length + ' · ' + _mtgFmtDur(s.duration_sec)
-            + (startedAtStr ? (' · 시작 <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">' + _annEsc(startedAtStr) + '</a>') : (' · <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">시작 시각 설정</a>'))
+            + (startedAtStr ? (' · 시작 <a onclick="event.stopPropagation();mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">' + _annEsc(startedAtStr) + '</a>') : (' · <a onclick="event.stopPropagation();mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">시작 시각 설정</a>'))
             + '</span>'
-            + '<span style="margin-left:auto;display:flex;gap:6px;">'
+            + '<span style="margin-left:auto;display:flex;gap:6px;" onclick="event.stopPropagation()">'
             + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgAddVoiceFiles(\'' + s.id + '\')" title="추가 음성 파일 업로드">+ 음성</button>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgToggleChatInput()" title="텍스트 채팅 추가">+ 채팅</button>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgToggleTimeMode()" title="시간 표시 전환">' + timeBtn + '</button>'
             + '</span></div>';
+        if (collapsed) { h += '</div>'; return h; }
         // 참가자 칩 줄
         if (spkList.length) {
             h += '<div style="padding:6px 12px;border-bottom:1px solid var(--c-border);display:flex;flex-wrap:wrap;gap:5px;background:var(--c-paper);">';
@@ -32435,8 +32453,9 @@ ${intrLog}
     function _mtgRenderSummaryCard(s, sum, isMain) {
         var meta = s.summary_meta || {};
         var isSummarizing = (s.status === 'summarizing');
-        // 마크다운: 사용자 편집본 우선, 없으면 JSON → MD 자동 변환(첫 진입)
-        var md = (s.summary_markdown != null && s.summary_markdown !== '') ? s.summary_markdown : _mtgSummaryToMarkdown(s, sum);
+        // [r283 #3] 사용자가 명시적으로 비우면(빈 문자열) 그대로 빈 본문 — JSON 폴백 금지.
+        //   undefined/null(아직 마크다운 없는 첫 진입)일 때만 JSON 에서 자동 변환.
+        var md = (typeof s.summary_markdown === 'string') ? s.summary_markdown : _mtgSummaryToMarkdown(s, sum);
         var mode = _mtgState._summaryMode || 'preview';   // 'preview' | 'source' | 'jsonsec'
         // [r280] 재요약 중 펄스
         var h = '<div class="' + (isSummarizing ? 'mtg-card-busy' : '') + '" style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);margin-bottom:14px;' + (isSummarizing ? 'box-shadow:0 0 0 2px rgba(245,158,11,.45);' : '') + '">';
@@ -32480,11 +32499,14 @@ ${intrLog}
             return h;
         }
         if (mode === 'source') {
-            // 소스 — textarea + 저장 버튼
-            h += '<div style="padding:10px 14px;">';
+            // 소스 — textarea + 저장 버튼 + HTML 파일 드래그&드롭
+            h += '<div style="padding:10px 14px;" id="mtg-summary-md-srcwrap"'
+                + ' ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'copy\';this.style.boxShadow=\'inset 0 0 0 2px var(--c-accent)\';"'
+                + ' ondragleave="this.style.boxShadow=\'none\';"'
+                + ' ondrop="mtgOnHtmlDrop(event,\'' + s.id + '\',\'source\')">';
             h += '<textarea id="mtg-summary-md-src" style="width:100%;height:60vh;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;padding:10px 12px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);resize:vertical;">' + _annEsc(md) + '</textarea>';
             h += '<div style="margin-top:8px;display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--c-text3);">';
-            h += '<span>HTML 임베드는 본문 모드에서 카드를 만들면 마커가 삽입됩니다(문서 메뉴와 동일).</span>';
+            h += '<span>📎 HTML 파일을 이 영역에 <b>드래그&드롭</b>하면 자동으로 임베드 마커가 삽입됩니다.</span>';
             h += '<button class="aihub-gpu-btn primary" style="font-size:11px;margin-left:auto;" onclick="mtgSaveSummaryMd(\'' + s.id + '\')">💾 저장</button>';
             h += '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgSetSummaryMode(\'preview\')">취소</button>';
             h += '</div>';
@@ -32493,8 +32515,13 @@ ${intrLog}
             h += '</div></div>';
             return h;
         }
-        // preview — 라이브 마크다운 렌더 + HTML 임베드 마운트 (문서 메뉴와 동일)
-        h += '<div id="mtg-summary-md-view" class="markdown-body" style="padding:14px 18px;font-size:13.5px;line-height:1.75;cursor:text;" data-md="' + _annEsc(md) + '" onclick="mtgSetSummaryMode(\'source\')" title="클릭해 소스로 편집">';
+        // preview — 라이브 마크다운 렌더 + HTML 임베드 마운트 + 드래그&드롭 (문서 메뉴와 동일)
+        h += '<div id="mtg-summary-md-view" class="markdown-body" style="padding:14px 18px;font-size:13.5px;line-height:1.75;cursor:text;min-height:300px;" data-md="' + _annEsc(md) + '"'
+            + ' onclick="if(event.target===this||event.target.tagName===\'P\'||event.target.tagName===\'H1\'||event.target.tagName===\'H2\'||event.target.tagName===\'H3\'||event.target.tagName===\'LI\'){mtgSetSummaryMode(\'source\');}"'
+            + ' ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'copy\';this.style.boxShadow=\'inset 0 0 0 2px var(--c-accent)\';"'
+            + ' ondragleave="this.style.boxShadow=\'none\';"'
+            + ' ondrop="mtgOnHtmlDrop(event,\'' + s.id + '\',\'preview\')"'
+            + ' title="클릭해 소스로 편집 · HTML 파일을 끌어다 놓으면 임베드">';
         h += _mtgRenderMdSanitized(md);
         h += '</div>';
         if (sum.error) h += '<div style="padding:0 18px 8px;color:#b53236;font-size:11.5px;">⚠ ' + _annEsc(sum.error) + '</div>';
@@ -32522,27 +32549,70 @@ ${intrLog}
             setTimeout(function () {
                 var host = document.getElementById('mtg-summary-md-view');
                 if (host && typeof _buildHtmlEmbeds === 'function') {
-                    try { _buildHtmlEmbeds(host); } catch (e) {}
+                    try { _buildHtmlEmbeds(host, (_mtgState.current && _mtgState.current.html_embeds) || {}); } catch (e) {}
                 }
             }, 30);
         } else if (mode === 'source') {
             setTimeout(function () { var ta = document.getElementById('mtg-summary-md-src'); if (ta) ta.focus(); }, 30);
         }
     }
-    async function mtgSaveSummaryMd(id) {
-        var ta = document.getElementById('mtg-summary-md-src'); if (!ta) return;
+    async function mtgSaveSummaryMd(id, opts) {
+        opts = opts || {};
+        var ta = document.getElementById('mtg-summary-md-src');
+        // source 모드면 textarea 값, preview 모드에서 호출되면 opts.markdown(드롭 후 자동저장) 사용
+        var mdVal = (typeof opts.markdown === 'string') ? opts.markdown : (ta ? ta.value : (_mtgState.current && _mtgState.current.summary_markdown) || '');
         var url = rfsBackEnd(); if (!url) return;
         var meName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || rfsCurrentUserName() || rfsCurrentUser() || '나';
+        var body = {user_id: rfsCurrentUser() || 'anon', user_name: meName, summary_markdown: mdVal || ''};
+        // [r283 #1] html_embeds 갱신본 함께 전송(드래그&드롭으로 추가된 임베드)
+        if (opts.html_embeds) body.html_embeds = opts.html_embeds;
         try {
             var res = await fetch(url + '/meetings/sessions/' + id + '/summary-markdown', {
                 method: 'PATCH', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: rfsCurrentUser() || 'anon', user_name: meName, summary_markdown: ta.value || ''})
+                body: JSON.stringify(body)
             });
             if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 150)); }
-            showToast('✓ 회의록 저장', 'success');
-            _mtgState._summaryMode = 'preview';
+            if (!opts.silent) showToast('✓ 회의록 저장', 'success');
+            if (!opts.keepMode) _mtgState._summaryMode = 'preview';
             mtgOpenSession(id, true);
         } catch (e) { showToast('저장 실패: ' + (e.message || e), 'alert'); }
+    }
+
+    // [r283 #1] HTML 파일 드래그&드롭 → 임베드 + 마커 삽입 + 자동 저장.
+    //   from: 'source' = textarea 커서 위치 / 'preview' = 마크다운 끝에 append.
+    async function mtgOnHtmlDrop(ev, sid, from) {
+        ev.preventDefault();
+        var wrap = ev.currentTarget; if (wrap) wrap.style.boxShadow = 'none';
+        var files = Array.from((ev.dataTransfer && ev.dataTransfer.files) || []);
+        if (!files.length) return;
+        // HTML 만 허용 (이미지/기타는 우선 미지원 — 문서 메뉴 정책과 동일)
+        var htmlFiles = files.filter(function (f) { return /\.html?$/i.test(f.name) || /text\/html/i.test(f.type || ''); });
+        if (!htmlFiles.length) { showToast('HTML 파일만 임베드할 수 있습니다.', 'alert'); return; }
+        var s = _mtgState.current; if (!s || s.id !== sid) return;
+        if (!s.html_embeds) s.html_embeds = {};
+        // 현재 마크다운(소스면 textarea 우선 — 사용자 편집 중)
+        var curMd;
+        var ta = document.getElementById('mtg-summary-md-src');
+        if (ta) curMd = ta.value;
+        else curMd = (typeof s.summary_markdown === 'string') ? s.summary_markdown : _mtgSummaryToMarkdown(s, s.summary || {});
+        for (var i = 0; i < htmlFiles.length; i++) {
+            var f = htmlFiles[i];
+            var html = await f.text();
+            var id = 'he_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+            s.html_embeds[id] = {html: html, title: f.name.replace(/\.html?$/i, ''), mode: 'embed', at: Date.now(), size: html.length};
+            var marker = '<!--TDAHTML:' + id + '-->';
+            if (from === 'source' && ta) {
+                // 커서 위치에 삽입
+                var pos = ta.selectionStart || ta.value.length;
+                curMd = curMd.slice(0, pos) + '\n\n' + marker + '\n\n' + curMd.slice(pos);
+                ta.value = curMd;
+            } else {
+                curMd = (curMd ? curMd.trimEnd() + '\n\n' : '') + marker + '\n';
+            }
+        }
+        // 저장 — preview 에서 드롭하면 모드 유지, source 면 그대로 source 유지
+        await mtgSaveSummaryMd(sid, {markdown: curMd, html_embeds: s.html_embeds, silent: true, keepMode: true});
+        showToast('✓ HTML 임베드 ' + htmlFiles.length + '개 추가', 'success');
     }
     function _mtgRenderSummarySection(sid, key, label, value, kind) {
         var empty = (kind === 'text') ? !value : !(value && value.length);

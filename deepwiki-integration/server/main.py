@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r282"
+SERVER_REVISION = "r283"
 
 
 
@@ -1426,6 +1426,7 @@ class MeetingSummaryMdEditRequest(BaseModel):
     user_id: str
     user_name: Optional[str] = None
     summary_markdown: str             # [r282] 사용자가 직접 작성/편집한 회의록 마크다운(본문/소스 모드)
+    html_embeds: Optional[Dict[str, Any]] = None  # [r283] {he_xxx: {html, title, mode, at, size}}
 
 
 class MeetingExportRequest(BaseModel):
@@ -1758,8 +1759,12 @@ async def meetings_summary_md_edit(sid: str, req: MeetingSummaryMdEditRequest):
     meta["updated_by_name"] = req.user_name or req.user_id
     meta["updated_at"] = now
     meta["edited"] = True
-    _mtg_store.update_session(sid, {"summary_markdown": req.summary_markdown,
-                                    "summary_meta": meta, "status": "ready"})
+    patch = {"summary_markdown": req.summary_markdown,
+             "summary_meta": meta, "status": "ready"}
+    # [r283] html_embeds 가 함께 오면 통째로 갱신(드래그&드롭으로 추가/제거된 임베드)
+    if req.html_embeds is not None:
+        patch["html_embeds"] = req.html_embeds
+    _mtg_store.update_session(sid, patch)
     return {"ok": True, "summary_meta": meta}
 
 
