@@ -79,7 +79,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r294"
+SERVER_REVISION = "r295"
 
 
 
@@ -2030,20 +2030,31 @@ async def _meet_resummarize_job(sid: str, model: Optional[str], hint: str):
             started_at=s.get("started_at") or "", participants=s.get("participants") or [],
             hint=hint or "",
         )
-        # [r294] 사용자가 다이얼로그에서 '재작성'을 명시적으로 누른 흐름이므로 markdown 도 항상
-        #   새로 생성(이전 편집 덮어쓰기 — 다이얼로그 경고 문구와 일치). 메타도 'AI 작성'으로 리셋.
+        # [r294] markdown 항상 재생성. [r295] 사용 모델 명확 + LLM 응답 진단 통계 로그.
         md = _mtg_sum.to_markdown(s.get("title") or "회의", summary,
                                   started_at=s.get("started_at") or "",
                                   participants=s.get("participants") or [])
+        n_topics = len(summary.get("topics") or [])
+        n_sections = sum(len((t.get("sections") or [])) for t in (summary.get("topics") or []))
+        n_decisions = len(summary.get("decisions") or [])
+        n_actions = len(summary.get("action_items") or [])
+        n_principles = len(summary.get("principles") or [])
+        used_model = model or "auto"
+        print(f"[meetings] 재요약 완료 — model={used_model}, topics={n_topics}, sections={n_sections}, decisions={n_decisions}, actions={n_actions}, principles={n_principles}")
+        if summary.get("error"):
+            print(f"[meetings] ⚠ summarize 에러: {summary.get('error')}")
         prev_meta = s.get("summary_meta") or {}
         new_meta = {
             "created_by": prev_meta.get("created_by"),
             "created_by_name": prev_meta.get("created_by_name"),
             "created_at": prev_meta.get("created_at"),
             "updated_by": "ai",
-            "updated_by_name": f"🤖 AI 재작성 ({model or 'auto'})",
+            "updated_by_name": f"🤖 AI ({used_model})",
             "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
             "edited": False,
+            "model": used_model,
+            "stats": {"topics": n_topics, "sections": n_sections, "decisions": n_decisions,
+                      "actions": n_actions, "principles": n_principles},
         }
         patch = {"summary": summary, "summary_markdown": md,
                  "summary_meta": new_meta, "status": "ready"}

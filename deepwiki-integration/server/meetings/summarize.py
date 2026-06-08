@@ -5,7 +5,15 @@ from typing import List, Dict, Any, Optional
 
 from llm_router import get_llm
 
-_SYSTEM = """당신은 한국어 회의 녹취록을 받아 **편집국에 그대로 보낼 수 있는 수준의 회의록(JSON)** 으로 정리하는 시니어 에디터입니다.
+_SYSTEM = """당신은 한국어 회의 녹취록을 받아 풍부한 회의록(JSON)으로 정리하는 시니어 에디터입니다.
+
+【타입 규칙 — 절대 위반 금지】
+- agenda, decisions, principles 는 **반드시 문자열(string) 배열**. 객체 금지. 한 항목은 한 문장 또는 한 단락.
+- topics[].sections[].items 는 list/tier 일 때만 사용하며 형식은 아래 스키마 그대로.
+- action_items 만 {who, what, due} 객체.
+- 모든 문자열 안에 따옴표는 \\" 로 이스케이프.
+
+
 출력 품질의 기준점은 다음과 같습니다(실제 결과 예시):
   · 각 안건이 3~6문단(배경 → 본문 → 대안/반박 → 결정)으로 풀어 써짐
   · 핵심 인용/콜아웃이 안건당 1~2개
@@ -96,11 +104,17 @@ _SYSTEM = """당신은 한국어 회의 녹취록을 받아 **편집국에 그�
       ]
     }
   ],
-  "decisions": ["무엇을 + 어떻게 + 왜 — 1문장 1결정"],
+  "decisions": ["⚠ 반드시 문자열만. 객체 금지. 예: 'MVP 개발 순서를 ①시스템 종속성 → ②마케팅 MVP 정의 → ③배분으로 결정. 근거: 유저 경험 우선 시 리팩토링 발생.'"],
   "action_items": [{"who":"namkyu7341|ethaniya|wooheesung|모두","what":"단위 액션 (근거 한 구절)","due":""}],
-  "principles": ["합의된 원칙/가이드라인 (선택)"]
+  "principles": ["⚠ 반드시 문자열만. 예: '설명은 환경/이벤트/상호작용 세 층위로 분리한다.'"]
 }
 ```
+
+【다시 한 번 — JSON 출력 직전 자가 점검】
+1. decisions 의 모든 항목은 `"..."` 문자열인가? (객체 `{...}` 아님)
+2. principles 의 모든 항목은 문자열인가?
+3. agenda 의 모든 항목은 짧은 문자열인가?
+4. 마크다운 코드펜스 없이 순수 JSON 만 출력하는가?
 """
 
 
@@ -261,6 +275,36 @@ async def summarize(segments: List[Dict[str, Any]], *, title: str = "",
         return {"tldr": "", "agenda": [], "topics": [], "decisions": [], "action_items": [], "error": err}
 
 
+def _coerce_text(v: Any) -> str:
+    """[r295] LLM 이 문자열 배열을 객체 배열로 잘못 반환하면 텍스트로 변환.
+    예: {"decision":"X","how":"Y","why":"Z"} → "X — Y (Y: Z)" 식으로 풀어 적음.
+    """
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, (int, float, bool)):
+        return str(v)
+    if isinstance(v, dict):
+        # 우선순위: text/content/decision/title/summary/what/value
+        for k in ("text", "content", "decision", "title", "summary", "what", "value", "name", "label", "description"):
+            if v.get(k):
+                base = _coerce_text(v[k])
+                extras = []
+                for k2 in ("how", "why", "reason", "rationale", "due", "note"):
+                    if v.get(k2):
+                        extras.append(f"{k2}={_coerce_text(v[k2])}")
+                return base + ((" (" + ", ".join(extras) + ")") if extras else "")
+        # 매칭 안 되면 key=value 나열
+        try:
+            return ", ".join(f"{k}={_coerce_text(vv)}" for k, vv in v.items() if vv)
+        except Exception:
+            return ""
+    if isinstance(v, list):
+        return ", ".join(_coerce_text(x) for x in v if x)
+    return str(v)
+
+
 def _normalize(parsed: Dict[str, Any], participants: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     # [r281] 액션아이템 화자 후처리 — '나/본인/우리' 같은 모호한 호칭이 들어왔으면 그대로 두기 어렵지만,
     #   참가자 리스트에 별칭이 매핑되면 정규화. 알 수 없으면 그대로(LLM 출력 존중).
@@ -298,13 +342,67 @@ def _normalize(parsed: Dict[str, Any], participants: Optional[List[Dict[str, Any
             # 구 호환: summary 도 유지(있을 경우)
             "summary": t.get("summary") or "",
         })
+    # [r295] 견고화 — LLM 이 문자열 배열을 객체로 줘도 텍스트로 강제 변환.
+    #   agenda/decisions/principles 는 문자열 배열. action_items 는 {who,what,due} 객체 배열.
+    agenda = [_coerce_text(a) for a in (parsed.get("agenda") or []) if a]
+    decisions = [_coerce_text(d) for d in (parsed.get("decisions") or []) if d]
+    principles = [_coerce_text(pr) for pr in (parsed.get("principles") or []) if pr]
+    # action_items 안전화 — what/who/due 가 객체로 와도 풀어서 문자열로
+    fixed_actions = []
+    for a in actions:
+        if isinstance(a, dict):
+            fixed_actions.append({
+                "who": _coerce_text(a.get("who")),
+                "what": _coerce_text(a.get("what")),
+                "due": _coerce_text(a.get("due")),
+            })
+        else:
+            fixed_actions.append({"who": "", "what": _coerce_text(a), "due": ""})
+    # topics 의 sections 도 같은 처리 — kind 별로 content/items 안전화
+    fixed_topics = []
+    for t in topics:
+        secs_in = t.get("sections") or []
+        secs_out = []
+        for s in secs_in:
+            if not isinstance(s, dict):
+                secs_out.append({"kind": "text", "content": _coerce_text(s)})
+                continue
+            sk = (s.get("kind") or "text").lower()
+            ns = {"kind": sk, "heading": _coerce_text(s.get("heading"))}
+            if sk == "list":
+                ns["items"] = [_coerce_text(x) for x in (s.get("items") or []) if x]
+            elif sk == "callout":
+                ns["content"] = _coerce_text(s.get("content"))
+                ns["by"] = _coerce_text(s.get("by"))
+            elif sk == "tier":
+                ns["items"] = []
+                for it in (s.get("items") or []):
+                    if isinstance(it, dict):
+                        ns["items"].append({"label": _coerce_text(it.get("label")),
+                                            "title": _coerce_text(it.get("title")),
+                                            "body": _coerce_text(it.get("body"))})
+                    else:
+                        ns["items"].append({"label": "", "title": "", "body": _coerce_text(it)})
+            elif sk == "table":
+                ns["headers"] = [_coerce_text(h) for h in (s.get("headers") or [])]
+                ns["rows"] = [[_coerce_text(c) for c in (r or [])] for r in (s.get("rows") or [])]
+            else:
+                ns["kind"] = "text"
+                ns["content"] = _coerce_text(s.get("content"))
+            secs_out.append(ns)
+        fixed_topics.append({
+            "title": _coerce_text(t.get("title")),
+            "lead": _coerce_text(t.get("lead")),
+            "sections": secs_out,
+            "summary": _coerce_text(t.get("summary")),
+        })
     return {
-        "tldr": parsed.get("tldr") or "",
-        "agenda": parsed.get("agenda") or [],
-        "topics": topics,
-        "decisions": parsed.get("decisions") or [],
-        "action_items": actions,
-        "principles": parsed.get("principles") or [],
+        "tldr": _coerce_text(parsed.get("tldr")),
+        "agenda": agenda,
+        "topics": fixed_topics,
+        "decisions": decisions,
+        "action_items": fixed_actions,
+        "principles": principles,
     }
 
 
