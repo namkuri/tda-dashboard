@@ -201,48 +201,69 @@ def _to_wav(src: str) -> str:
     return dst
 
 
-def _run_transcribe(model, wav: str, language: Optional[str], speaker: str) -> List[Dict[str, Any]]:
-    """순회 시점에 실제 GPU 호출이 일어나므로 list() 까지 한 함수 안에서 수행."""
+def _audio_duration_sec(path: str) -> float:
+    """[r287] ffprobe 로 오디오 길이(초). 진행률 계산용 — 실패 시 0."""
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False, timeout=15,
+        )
+        return float((r.stdout or b"").decode().strip() or 0)
+    except Exception:
+        return 0.0
+
+
+def _run_transcribe(model, wav: str, language: Optional[str], speaker: str,
+                    progress_cb=None, total_sec: float = 0.0) -> List[Dict[str, Any]]:
+    """[r287] 순회 시점에 실제 GPU 호출이 일어나므로 list() 까지 한 함수 안에서 수행.
+    progress_cb(processed_sec, total_sec) 가 주어지면 매 segment 마다 호출(throttle 은 호출처 책임).
+    """
     segments, _info = model.transcribe(
         wav, language=language, vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=600),
     )
     out = []
     for s in segments:
+        end_sec = float(s.end)
         txt = (s.text or "").strip()
-        if not txt:
-            continue
-        out.append({
-            "t": round(float(s.start), 2),
-            "dur": round(float(s.end) - float(s.start), 2),
-            "speaker": speaker,
-            "text": txt,
-        })
+        if txt:
+            out.append({
+                "t": round(float(s.start), 2),
+                "dur": round(end_sec - float(s.start), 2),
+                "speaker": speaker,
+                "text": txt,
+            })
+        if progress_cb:
+            try: progress_cb(end_sec, total_sec)
+            except Exception: pass
     return out
 
 
 def transcribe_track(path: str, speaker: str, model_size: str = "medium",
-                     language: Optional[str] = "ko") -> List[Dict[str, Any]]:
+                     language: Optional[str] = "ko",
+                     progress_cb=None) -> List[Dict[str, Any]]:
     """트랙 1개 STT → [{t, dur, speaker, text}] (t=시작초).
 
+    [r287] progress_cb(processed_sec, total_sec) — 매 segment 마다 호출.
     GPU 모델로 시도하다 cuBLAS/cuDNN 미설치(RuntimeError)면 CPU 모델로 1회 자동 재시도.
     """
     wav = None
     try:
         wav = _to_wav(path)
+        total_sec = _audio_duration_sec(wav)
         try:
             model = _load_model(model_size)
-            return _run_transcribe(model, wav, language, speaker)
+            return _run_transcribe(model, wav, language, speaker, progress_cb, total_sec)
         except RuntimeError as e:
             if not _is_cuda_runtime_err(e):
                 raise
             print(f"[meetings.transcribe] GPU 런타임 오류({e}) → CPU 폴백으로 재시도")
-            # 캐시된 GPU 모델 폐기, CPU 강제 로드 후 재시도
             for k in list(_model_cache.keys()):
                 if k[0] == model_size and k[1] != "cpu":
                     _model_cache.pop(k, None)
             cpu_model = _load_model(model_size, force_cpu=True)
-            return _run_transcribe(cpu_model, wav, language, speaker)
+            return _run_transcribe(cpu_model, wav, language, speaker, progress_cb, total_sec)
     finally:
         if wav and os.path.exists(wav):
             try:

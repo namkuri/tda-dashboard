@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r286"
+SERVER_REVISION = "r287"
 
 
 
@@ -1514,7 +1514,51 @@ async def meetings_get(sid: str):
     s = _mtg_store.get_session(sid)
     if not s:
         raise HTTPException(404, "회의 세션 없음")
+    # [r287] in-memory 진행률(트랙 단위 + 트랙 내부 %) 머지 — DB 부하 없이 매 폴링에서 신선한 값
+    p = _MEET_PROGRESS.get(sid)
+    if p:
+        s["transcribe_progress"] = p
+    # [r287] 좀비 감지 — status 가 진행 중인데 _MEET_TASKS 에 작업이 없고 마지막 업데이트가
+    #   90초 이상 지났으면 stale 가능성. 프론트에 알림.
+    if s.get("status") in ("importing", "transcribing", "summarizing") and sid not in _MEET_TASKS:
+        try:
+            from datetime import datetime, timezone
+            ua = s.get("updated_at") or ""
+            if ua:
+                dt = datetime.fromisoformat(ua.replace("Z", "+00:00"))
+                age = (datetime.now(timezone.utc) - dt).total_seconds()
+                if age > 90:
+                    s["_stale"] = True
+                    s["_stale_age_sec"] = int(age)
+        except Exception:
+            pass
     return s
+
+
+# [r287] in-memory 트랙 진행률 — {sid: {current, total, speaker, track_pct, track_sec, track_total}}
+#   DB 부하 회피용. 백엔드 재시작 시 자동 휘발.
+_MEET_PROGRESS: dict = {}
+
+
+@app.post("/meetings/sessions/{sid}/abort")
+async def meetings_abort(sid: str):
+    """[r287] 사용자가 stale/진행 중 세션을 명시적으로 중단. 진행 중 task 가 있으면 취소,
+    status='error' 로 마킹해 화면이 무한 대기에서 벗어나게 한다.
+    """
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    # 진행 중 task 가 있으면 취소(있을 경우만)
+    for t in list(_MEET_TASK_REFS):
+        if getattr(t, "_meet_sid", None) == sid and not t.done():
+            try: t.cancel()
+            except Exception: pass
+    _MEET_TASKS.discard(sid)
+    _MEET_PROGRESS.pop(sid, None)
+    _mtg_store.update_session(sid, {"status": "error",
+                                    "summary": {"error": "사용자가 중단함(또는 백엔드 재시작으로 stale 정리)"}})
+    return {"ok": True}
 
 
 @app.delete("/meetings/sessions/{sid}")
@@ -1569,12 +1613,24 @@ async def _meet_run_job(p: dict, sid: str):
         await _upd({"status": "transcribing", "stt_device": _stt_dev})
         # 3) 화자별 STT(증분 저장 — 폴링이 자라는 대화내역을 보여줌)
         all_segs, participants = [], []
+        N = len(tracks)
         for i, tk in enumerate(tracks):
-            _busy_set(running=True, kind="meeting_import", stage="stt", current=i + 1, total=len(tracks),
-                      category=tk["speaker"], message=f"STT {i + 1}/{len(tracks)} — {tk['speaker']}")
+            _busy_set(running=True, kind="meeting_import", stage="stt", current=i + 1, total=N,
+                      category=tk["speaker"], message=f"STT {i + 1}/{N} — {tk['speaker']}")
+            # [r287] 트랙 내부 진행률(processed_sec / total_sec) → _MEET_PROGRESS 갱신.
+            #   GET /meetings/sessions/{id} 가 이걸 머지해서 프론트 폴링이 자동 표시.
+            _MEET_PROGRESS[sid] = {"current": i + 1, "total": N, "speaker": tk["speaker"],
+                                   "track_sec": 0.0, "track_total": 0.0, "track_pct": 0}
+            def _pcb(pi=i, sp=tk["speaker"]):
+                def _cb(processed, total):
+                    pct = int(min(100, processed * 100 / total)) if total > 0 else 0
+                    _MEET_PROGRESS[sid] = {"current": pi + 1, "total": N, "speaker": sp,
+                                           "track_sec": round(processed, 1),
+                                           "track_total": round(total, 1), "track_pct": pct}
+                return _cb
             segs = await loop.run_in_executor(
-                None, lambda pa=tk["path"], sp=tk["speaker"]: _mtg_tr.transcribe_track(
-                    pa, sp, p.get("whisper_model", "medium"), p.get("language", "ko")))
+                None, lambda pa=tk["path"], sp=tk["speaker"], cb=_pcb(): _mtg_tr.transcribe_track(
+                    pa, sp, p.get("whisper_model", "medium"), p.get("language", "ko"), progress_cb=cb))
             all_segs.extend(segs)
             participants.append({"name": tk["speaker"], "track": _os.path.basename(tk["path"])})
             merged = _mtg_tr.merge_segments(all_segs)
@@ -1608,6 +1664,7 @@ async def _meet_run_job(p: dict, sid: str):
         except Exception:
             pass
         _MEET_TASKS.discard(sid)
+        _MEET_PROGRESS.pop(sid, None)   # [r287] 진행률 메모리 정리
 
 
 @app.post("/meetings/import")
@@ -1633,6 +1690,7 @@ async def meetings_import(req: MeetingImportRequest):
     sid = sess["id"]
     _MEET_TASKS.add(sid)
     task = asyncio.create_task(_meet_run_job(req.model_dump(), sid))
+    task._meet_sid = sid   # [r287] abort 라우트가 cancel 대상 식별용
     _MEET_TASK_REFS.add(task)
     task.add_done_callback(lambda t: _MEET_TASK_REFS.discard(t))
     return {"id": sid, "status": "importing"}
@@ -1883,6 +1941,7 @@ async def meetings_resummarize(sid: str, req: MeetingSummarizeRequest):
     _mtg_store.update_session(sid, {"status": "summarizing"})
     _MEET_TASKS.add(sid)
     task = asyncio.create_task(_meet_resummarize_job(sid, req.model, req.hint or ""))
+    task._meet_sid = sid   # [r287] abort 식별
     _MEET_TASK_REFS.add(task)
     task.add_done_callback(lambda t: _MEET_TASK_REFS.discard(t))
     return {"ok": True, "status": "summarizing"}
@@ -2461,6 +2520,22 @@ async def startup():
     print("\n" + "═" * 60)
     print(" 🤖 TDA Deep Wiki 백엔드 시작")
     print("═" * 60)
+    # [r287] 좀비 회의 세션 정리 — 직전 백엔드가 비정상 종료된 상태에서 status 가
+    #   importing/transcribing/summarizing 인 세션들은 처리 주체(asyncio task)가
+    #   사라졌으므로 영원히 진행 안 됨. 모두 'error' 로 마킹해 화면을 풀어준다.
+    try:
+        sessions = _mtg_store.list_sessions() if _mtg_store else []
+        zombies = [s for s in sessions if s.get("status") in ("importing", "transcribing", "summarizing")]
+        for z in zombies:
+            try:
+                _mtg_store.update_session(z["id"], {"status": "error",
+                                                   "summary": {"error": "백엔드 재시작으로 중단됨 — 다시 시도하세요"}})
+            except Exception:
+                pass
+        if zombies:
+            print(f"  🧹 좀비 회의 세션 {len(zombies)}건 → error 로 정리(전 백엔드 재시작 흔적)")
+    except Exception as _e:
+        print(f"  ⚠ 좀비 세션 정리 스킵: {_e}")
     ollama = get_ollama()
     store = get_store()
     if await ollama.ping():

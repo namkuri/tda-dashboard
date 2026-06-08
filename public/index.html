@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r286';
+        var _AHUB_FRONT_REV = 'r287';
 
 
         var _ahubRevWarned = false;
@@ -31915,7 +31915,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r286';
+    var _RFS_FRONT_REV = 'r287';
 
 
     async function rfsHealthCheck() {
@@ -32323,7 +32323,7 @@ ${intrLog}
         // [r244] 처리 중 배너 (자동 새로고침 중)
         if (_mtgInProgress(s)) {
             var stmsg = ({importing: '오디오 준비/다운로드', transcribing: '화자별 STT', summarizing: '회의록 요약'})[s.status] || '처리';
-            // [r286] STT 진행 시 GPU/CPU 칩 — health 캐시(_mtgState._sttHealth) 또는 session.stt_device(백엔드 명시) 우선
+            // [r286] STT 진행 시 GPU/CPU 칩
             var devChip = '';
             if (s.status === 'transcribing') {
                 var dev = (s.stt_device || (_mtgState._sttHealth && _mtgState._sttHealth.device) || '').toLowerCase();
@@ -32333,10 +32333,37 @@ ${intrLog}
                     devChip = '<span title="CPU 모드(느림). nvidia-cublas-cu12/cudnn-cu12 설치 + 백엔드 완전 재시작 시 GPU" style="font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(245,158,11,.22);color:#7c3a08;border:1px solid rgba(245,158,11,.55);">🐢 CPU</span>';
                 }
             }
-            h += '<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--c-border);border-radius:8px;background:rgba(245,158,11,.14);color:#92400e;font-size:12.5px;display:flex;align-items:center;gap:8px;">'
+            // [r287] 좀비(stale) 감지 — 백엔드가 _stale=true 로 표시. 사용자에게 중단 UI 제공.
+            if (s._stale) {
+                h += '<div style="margin-bottom:12px;padding:12px 14px;border:1px solid rgba(210,57,61,.55);border-radius:8px;background:rgba(210,57,61,.14);color:#9a1c20;font-size:12.5px;">'
+                    + '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px;">⚠️</span>'
+                    + '<span style="flex:1;font-weight:800;">중단된 작업으로 보입니다 — ' + Math.floor((s._stale_age_sec || 0) / 60) + '분 ' + ((s._stale_age_sec || 0) % 60) + '초 동안 진행 없음.</span></div>'
+                    + '<div style="margin-top:6px;font-size:11.5px;color:var(--c-text2);">백엔드가 중간에 재시작됐거나, 페이지를 닫아 처리가 끊긴 상태입니다. 아래로 정리 후 다시 시도하세요.</div>'
+                    + '<div style="margin-top:8px;display:flex;gap:6px;"><button class="aihub-gpu-btn primary" style="font-size:11.5px;background:#9a1c20;" onclick="mtgAbortSession(\'' + s.id + '\')">🛑 중단하고 정리</button>'
+                    + '<button class="aihub-gpu-btn" style="font-size:11.5px;" onclick="mtgOpenSession(\'' + s.id + '\',true)">🔄 새로고침(작업 재개 확인)</button></div></div>';
+            }
+            // [r287] 트랜스크립션 진행률 바
+            var pgBar = '';
+            var pg = s.transcribe_progress;
+            if (s.status === 'transcribing' && pg && pg.total) {
+                var trackPct = pg.track_pct || 0;
+                var overallPct = Math.min(100, Math.round(((pg.current - 1) + (trackPct / 100)) / pg.total * 100));
+                var sec = pg.track_sec || 0, tot = pg.track_total || 0;
+                pgBar = '<div style="margin-top:6px;">'
+                    + '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--c-text2);margin-bottom:3px;">'
+                    + '<span><b>트랙 ' + pg.current + '/' + pg.total + '</b> · ' + _annEsc(pg.speaker || '') + (tot ? (' · ' + _mtgFmtDur(sec) + ' / ' + _mtgFmtDur(tot) + ' (' + trackPct + '%)') : '')+ '</span>'
+                    + '<span style="font-weight:700;">전체 ' + overallPct + '%</span></div>'
+                    + '<div style="height:6px;background:rgba(0,0,0,.18);border-radius:999px;overflow:hidden;">'
+                    + '<div style="height:100%;background:linear-gradient(90deg,#c96442,#e08868);width:' + overallPct + '%;transition:width .25s ease;"></div>'
+                    + '</div></div>';
+            }
+            h += '<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--c-border);border-radius:8px;background:rgba(245,158,11,.14);color:#92400e;font-size:12.5px;">'
+                + '<div style="display:flex;align-items:center;gap:8px;">'
                 + '<span class="rfs-dc-spinner"></span>' + devChip
-                + '<span style="flex:1;"><b>' + stmsg + ' 진행 중</b> — 5초마다 자동 새로고침. <b>가져오기 창</b>을 닫거나 새로고침/페이지 이탈 시 처리가 중단됩니다.' + (s.status === 'transcribing' ? ' (긴 회의·CPU면 수 분 소요, 백엔드 콘솔에 진행 표시)' : '') + '</span>'
-                + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgOpenSession(\'' + s.id + '\',true)">🔄 새로고침</button></div>';
+                + '<span style="flex:1;"><b>' + stmsg + ' 진행 중</b> — 5초마다 자동 새로고침. <b>이 페이지를 나가도 처리는 계속됩니다.</b></span>'
+                + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgOpenSession(\'' + s.id + '\',true)">🔄 새로고침</button>'
+                + '<button class="aihub-gpu-btn" style="font-size:11px;background:rgba(210,57,61,.18);color:#9a1c20;border-color:rgba(210,57,61,.45);" onclick="mtgAbortSession(\'' + s.id + '\')" title="처리 중단 — 화면이 멈춰 있으면 사용">🛑 중단</button>'
+                + '</div>' + pgBar + '</div>';
         } else if (s.status === 'error') {
             var _errMsg = (s.summary && s.summary.error) ? s.summary.error : '';
             // [r247] 자주 보는 에러는 한국어 해결 가이드로 변환
@@ -32732,6 +32759,19 @@ ${intrLog}
         return h2;
     }
     // [r280] 재요약을 백그라운드 작업으로 시작 — 즉시 반환, 페이지 이탈해도 처리 계속.
+    // [r287] 진행 중인(또는 stale) 회의 세션 중단 — status='error' 로 마킹해 화면 풀어줌
+    async function mtgAbortSession(id) {
+        var ok = await uiConfirm({title: '회의 처리 중단', message: '진행 중인 처리를 중단하고 error 상태로 표시합니다. 다시 가져오기를 시도할 수 있습니다.', confirmText: '🛑 중단', danger: true});
+        if (!ok) return;
+        var url = rfsBackEnd(); if (!url) return;
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/abort', {method: 'POST'});
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 150)); }
+            showToast('🛑 중단됨 — 다시 시도할 수 있습니다', 'success');
+            _mtgStopPoll();
+            mtgOpenSession(id, true);
+        } catch (e) { showToast('중단 실패: ' + (e.message || e), 'alert'); }
+    }
     async function mtgResummarize(id, withHint) {
         var url = rfsBackEnd(); if (!url) return;
         var hint = '';
