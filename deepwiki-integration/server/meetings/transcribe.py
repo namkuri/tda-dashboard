@@ -35,38 +35,55 @@ _cuda_block_reason = ""
 # [r284] pip 로 설치한 nvidia-cublas-cu12 / nvidia-cudnn-cu12 의 DLL 을 Python 이 찾도록
 #   site-packages/nvidia/.../bin 디렉터리를 DLL 검색 경로에 추가. Windows 는 Python 3.8+ 부터
 #   os.add_dll_directory 가 표준. 이걸 안 하면 ctranslate2 가 cublas64_12.dll 을 못 찾음.
-# [r290] main.py 가 startup() 보다 일찍 호출하도록 export. 또 ctranslate2 import 전에 실행.
+# [r290] main.py 가 startup() 보다 일찍 호출하도록 export. ctranslate2 import 전 실행.
+# [r291] nvidia-* 는 PEP 420 namespace package(__init__.py 없음) → import 실패해도
+#   디렉터리는 존재. sys.path 의 모든 site-packages 에서 nvidia/<sub>/bin|lib 를 파일시스템
+#   레벨로 직접 검색해 등록한다. 가장 신뢰성 있는 방법.
 def register_nvidia_dll_dirs() -> Dict[str, Any]:
-    """nvidia 패키지의 DLL 디렉터리를 PATH + add_dll_directory 에 등록.
-    반환: {found: [경로], packages_missing: [pkg], ok: bool}
+    """nvidia DLL 디렉터리를 PATH + add_dll_directory 에 등록(파일시스템 직접 스캔).
+    반환: {found: [경로], scanned: [base], ok: bool}
     """
-    import importlib
-    found, missing = [], []
-    for pkg in ("nvidia.cublas", "nvidia.cudnn", "nvidia.cuda_runtime"):
+    import sys
+    found, scanned = [], []
+    # 후보 base: sys.path 내 모든 디렉터리(site-packages 포함) + sysconfig purelib/platlib
+    candidates = set()
+    try:
+        import sysconfig
+        for k in ("purelib", "platlib"):
+            d = sysconfig.get_paths().get(k)
+            if d: candidates.add(d)
+    except Exception:
+        pass
+    for p in sys.path:
+        if p and os.path.isdir(p):
+            candidates.add(p)
+    for base in candidates:
+        nv = os.path.join(base, "nvidia")
+        if not os.path.isdir(nv):
+            continue
+        scanned.append(nv)
         try:
-            mod = importlib.import_module(pkg)
-            base = os.path.dirname(getattr(mod, "__file__", "") or "")
-            if not base:
-                missing.append(pkg); continue
-            sub_found = False
-            for sub in ("bin", "lib"):
-                d = os.path.join(base, sub)
-                if os.path.isdir(d):
-                    found.append(d); sub_found = True
-            if not sub_found:
-                missing.append(pkg + " (bin/lib 디렉터리 없음)")
-        except Exception as e:
-            missing.append(f"{pkg} ({type(e).__name__})")
-    if found and hasattr(os, "add_dll_directory"):
-        for d in found:
-            try: os.add_dll_directory(d)
-            except Exception: pass
+            for sub_pkg in os.listdir(nv):
+                sub_path = os.path.join(nv, sub_pkg)
+                if not os.path.isdir(sub_path):
+                    continue
+                for sub_dir in ("bin", "lib"):
+                    d = os.path.join(sub_path, sub_dir)
+                    if os.path.isdir(d) and d not in found:
+                        found.append(d)
+        except Exception:
+            continue
     if found:
+        if hasattr(os, "add_dll_directory"):
+            for d in found:
+                try: os.add_dll_directory(d)
+                except Exception: pass
         cur_path = os.environ.get("PATH", "")
         add = os.pathsep.join(found)
-        if add and add not in cur_path:
+        if add not in cur_path:
             os.environ["PATH"] = add + os.pathsep + cur_path
-    return {"found": found, "packages_missing": missing, "ok": bool(found)}
+    return {"found": found, "scanned": scanned, "ok": bool(found),
+            "packages_missing": [] if found else ["nvidia/* 디렉터리를 찾지 못함"]}
 
 
 def _register_nvidia_dll_dirs():

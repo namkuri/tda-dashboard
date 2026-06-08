@@ -1,23 +1,43 @@
 """FastAPI 엔트리포인트 — /health, /chat, /index/*."""
-# [r290] CUDA DLL 디렉터리는 다른 어떤 import 보다도 먼저 등록 — ctranslate2 가 다른 모듈
+# [r290/r291] CUDA DLL 디렉터리는 다른 어떤 import 보다도 먼저 등록 — ctranslate2 가
 #   체인을 통해 import 되기 전에 PATH 에 nvidia/.../bin 이 있어야 cuBLAS 로드 가능.
+#   nvidia-* 는 PEP 420 namespace package(__init__.py 없음) → import 실패 → 파일시스템
+#   직접 스캔(sys.path 의 site-packages 모두)이 가장 신뢰성 있음.
 def _early_register_cuda_dlls():
-    import os, importlib
-    for pkg in ("nvidia.cublas", "nvidia.cudnn", "nvidia.cuda_runtime"):
+    import os, sys
+    candidates = set(p for p in sys.path if p and os.path.isdir(p))
+    try:
+        import sysconfig
+        for k in ("purelib", "platlib"):
+            d = sysconfig.get_paths().get(k)
+            if d: candidates.add(d)
+    except Exception:
+        pass
+    found = []
+    for base in candidates:
+        nv = os.path.join(base, "nvidia")
+        if not os.path.isdir(nv):
+            continue
         try:
-            mod = importlib.import_module(pkg)
-            base = os.path.dirname(getattr(mod, "__file__", "") or "")
-            for sub in ("bin", "lib"):
-                d = os.path.join(base, sub) if base else ""
-                if d and os.path.isdir(d):
-                    if hasattr(os, "add_dll_directory"):
-                        try: os.add_dll_directory(d)
-                        except Exception: pass
-                    cur = os.environ.get("PATH", "")
-                    if d not in cur:
-                        os.environ["PATH"] = d + os.pathsep + cur
+            for sub_pkg in os.listdir(nv):
+                sp = os.path.join(nv, sub_pkg)
+                if not os.path.isdir(sp): continue
+                for sub_dir in ("bin", "lib"):
+                    d = os.path.join(sp, sub_dir)
+                    if os.path.isdir(d) and d not in found:
+                        found.append(d)
         except Exception:
-            pass
+            continue
+    if found:
+        if hasattr(os, "add_dll_directory"):
+            for d in found:
+                try: os.add_dll_directory(d)
+                except Exception: pass
+        cur = os.environ.get("PATH", "")
+        os.environ["PATH"] = os.pathsep.join(found) + os.pathsep + cur
+        print(f"[main] early CUDA DLL 등록: {len(found)}개 디렉터리")
+    else:
+        print(f"[main] ⚠ nvidia/* 디렉터리를 sys.path 의 어디서도 못 찾음 — GPU STT 불가")
 _early_register_cuda_dlls()
 
 import asyncio
@@ -59,7 +79,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r290"
+SERVER_REVISION = "r291"
 
 
 
