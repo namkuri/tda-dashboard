@@ -4689,6 +4689,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         @keyframes rfsDcGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(201,91,75,.35); } 50% { box-shadow: 0 0 0 5px rgba(201,91,75,0); } }
         .rfs-dc-spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--c-accent); border-top-color: transparent; border-radius: 50%; animation: rfsDcSpin .7s linear infinite; }
         @keyframes rfsDcSpin { to { transform: rotate(360deg); } }
+        /* [r280] 회의록 재요약 중 카드 펄스 — 노란 광채로 사용자가 진행 중임을 인지 */
+        @keyframes mtgCardPulse { 0%,100% { box-shadow: 0 0 0 2px rgba(245,158,11,.35), 0 0 0 4px rgba(245,158,11,0); } 50% { box-shadow: 0 0 0 2px rgba(245,158,11,.55), 0 0 16px 4px rgba(245,158,11,.25); } }
+        .mtg-card-busy { animation: mtgCardPulse 1.6s ease-in-out infinite; }
         /* [r233 #3] 위키 적용 후 대상 사이드바 탭 하이라이트 펄스 */
         @keyframes rfsNavFlash { 0%,100% { box-shadow: none; } 18% { box-shadow: 0 0 0 2px var(--c-accent), 0 0 14px 2px rgba(201,91,75,.55); } }
         .rfs-nav-flash { animation: rfsNavFlash .85s ease-in-out 2; border-radius: 8px; position: relative; z-index: 1; }
@@ -10972,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r279';
+        var _AHUB_FRONT_REV = 'r280';
 
 
         var _ahubRevWarned = false;
@@ -31874,7 +31877,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r279';
+    var _RFS_FRONT_REV = 'r280';
 
 
     async function rfsHealthCheck() {
@@ -32388,13 +32391,19 @@ ${intrLog}
     // [r276] 회의록 카드 — 인플레이스 편집 + 메타(작성자/수정자/시점)
     function _mtgRenderSummaryCard(s, sum, isMain) {
         var meta = s.summary_meta || {};
+        var isSummarizing = (s.status === 'summarizing');
         var canGen = (s.segments || []).length > 0 && !_mtgInProgress(s);
-        var h = '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);margin-bottom:14px;">';
-        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:10px 14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
-            + '<span style="font-weight:800;font-size:14px;flex:1;">📝 회의록</span>'
+        // [r280] 재요약 중이면 카드 자체에 펄스 애니메이션 + 노란 띠
+        var h = '<div class="' + (isSummarizing ? 'mtg-card-busy' : '') + '" style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);margin-bottom:14px;' + (isSummarizing ? 'box-shadow:0 0 0 2px rgba(245,158,11,.45);' : '') + '">';
+        h += '<div style="position:sticky;top:0;background:' + (isSummarizing ? 'rgba(245,158,11,.14)' : 'var(--c-card)') + ';border-bottom:1px solid var(--c-border);padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+            + '<span style="font-weight:800;font-size:14px;flex:1;">' + (isSummarizing ? '<span class="rfs-dc-spinner"></span> 📝 회의록 재요약 중…' : '📝 회의록') + '</span>'
             + (meta.edited ? '<span style="font-size:10.5px;color:var(--c-text3);">✎ 사용자 편집됨</span>' : '<span style="font-size:10.5px;color:var(--c-text3);">🤖 AI 작성</span>')
-            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgResummarize(\'' + s.id + '\')" title="LLM 으로 재작성(편집한 내용은 덮어쓰기)">🔄 재요약</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;' + (isSummarizing ? 'opacity:.5;pointer-events:none;' : '') + '" ' + (isSummarizing ? '' : 'onclick="mtgResummarize(\'' + s.id + '\')" ') + 'title="LLM 으로 재작성(편집한 내용은 덮어쓰기)">' + (isSummarizing ? '⏳ 진행 중' : '🔄 재요약') + '</button>'
             + '</div>';
+        if (isSummarizing) {
+            h += '<div style="padding:8px 14px;font-size:11.5px;color:#92400e;background:rgba(245,158,11,.12);border-bottom:1px solid var(--c-border);">'
+                + '⏳ <b>백그라운드</b>로 진행 중 — 5초마다 자동 새로고침. <b>이 페이지를 나가도 처리는 계속됩니다.</b> 완료되면 자동으로 회의록이 채워집니다.</div>';
+        }
         // 메타 정보 줄
         if (meta.created_by_name || meta.updated_by_name) {
             var cAt = '', uAt = '';
@@ -32432,19 +32441,30 @@ ${intrLog}
         return h;
     }
 
-    // [r275] 빈 회의록 — 큰 생성 버튼
+    // [r275] 빈 회의록 — 큰 생성 버튼 / [r280] 진행 중이면 펄스 애니메이션 + 안내
     function _mtgRenderEmptySummary(s, canGen) {
-        var h = '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);padding:24px;text-align:center;color:var(--c-text3);margin-bottom:14px;">';
-        h += '<div style="font-size:36px;">📝</div>';
-        h += '<div style="font-weight:700;color:var(--c-text2);margin-top:6px;">회의록이 아직 작성되지 않았습니다</div>';
-        h += '<div style="font-size:11.5px;margin-top:4px;">' + (canGen ? '대화내역(음성+채팅)을 바탕으로 LLM 이 회의록을 작성합니다.' : '대화내역 처리가 끝난 뒤 시도해 주세요.') + '</div>';
-        if (canGen) {
-            h += '<button class="aihub-gpu-btn primary" style="margin-top:12px;font-size:12.5px;padding:6px 14px;" onclick="mtgResummarize(\'' + s.id + '\')">📝 회의록 생성</button>';
-            h += '<div style="margin-top:8px;font-size:10.5px;color:var(--c-text3);">맥락 메모와 함께 생성하려면 <a onclick="mtgResummarize(\'' + s.id + '\',true)" style="color:var(--c-accent);cursor:pointer;">고급</a></div>';
+        var isSummarizing = (s.status === 'summarizing');
+        if (isSummarizing) {
+            var h = '<div class="mtg-card-busy" style="border:1px solid var(--c-border);border-radius:10px;background:rgba(245,158,11,.10);box-shadow:0 0 0 2px rgba(245,158,11,.45);padding:28px 24px;text-align:center;color:#92400e;margin-bottom:14px;">';
+            h += '<div style="font-size:36px;"><span class="rfs-dc-spinner" style="vertical-align:middle;"></span> 📝</div>';
+            h += '<div style="font-weight:800;margin-top:8px;font-size:14px;">회의록 작성 중…</div>';
+            h += '<div style="font-size:12px;color:#92400e;margin-top:6px;">백그라운드로 처리되고 있어 <b>이 페이지를 나가도 끝까지 진행</b>됩니다. 5초마다 자동 새로고침되며 완료되면 자동으로 회의록이 채워집니다.</div>';
+            h += '<div style="font-size:10.5px;color:var(--c-text3);margin-top:8px;">긴 회의는 청크 분할 처리로 수 분 걸릴 수 있습니다.</div>';
+            h += '</div>';
+            return h;
         }
-        h += '</div>';
-        return h;
+        var h2 = '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);padding:24px;text-align:center;color:var(--c-text3);margin-bottom:14px;">';
+        h2 += '<div style="font-size:36px;">📝</div>';
+        h2 += '<div style="font-weight:700;color:var(--c-text2);margin-top:6px;">회의록이 아직 작성되지 않았습니다</div>';
+        h2 += '<div style="font-size:11.5px;margin-top:4px;">' + (canGen ? '대화내역(음성+채팅)을 바탕으로 LLM 이 회의록을 작성합니다.' : '대화내역 처리가 끝난 뒤 시도해 주세요.') + '</div>';
+        if (canGen) {
+            h2 += '<button class="aihub-gpu-btn primary" style="margin-top:12px;font-size:12.5px;padding:6px 14px;" onclick="mtgResummarize(\'' + s.id + '\')">📝 회의록 생성</button>';
+            h2 += '<div style="margin-top:8px;font-size:10.5px;color:var(--c-text3);">맥락 메모와 함께 생성하려면 <a onclick="mtgResummarize(\'' + s.id + '\',true)" style="color:var(--c-accent);cursor:pointer;">고급</a></div>';
+        }
+        h2 += '</div>';
+        return h2;
     }
+    // [r280] 재요약을 백그라운드 작업으로 시작 — 즉시 반환, 페이지 이탈해도 처리 계속.
     async function mtgResummarize(id, withHint) {
         var url = rfsBackEnd(); if (!url) return;
         var hint = '';
@@ -32453,13 +32473,27 @@ ${intrLog}
             if (v == null) return;   // 취소
             hint = String(v || '').trim();
         }
-        showToast('🔄 회의록 생성 중…', 'info');
+        // 즉시 UI 상태 마킹 — 사용자가 누른 순간 펄스 시작(서버 응답 전부터)
+        if (_mtgState.current && _mtgState.current.id === id) {
+            _mtgState.current.status = 'summarizing';
+            mtgRenderDetail();
+        }
+        showToast('🔄 회의록 작성 시작 — 백그라운드 처리 중(이 페이지 나가도 계속)', 'info');
         try {
             var res = await fetch(url + '/meetings/sessions/' + id + '/summarize',
                 {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({hint: hint})});
+            if (res.status === 409) { showToast('다른 작업 진행 중 — 끝난 뒤 다시 시도', 'alert'); return; }
             if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 150)); }
-            await mtgOpenSession(id, true); showToast('✓ 회의록 작성 완료', 'success');
-        } catch (e) { showToast('회의록 생성 실패: ' + (e.message || e), 'alert'); }
+            // 즉시 폴링 진입 — status='summarizing' 이라 mtgOpenSession 내부 폴링이 자동으로 5초마다 갱신
+            mtgOpenSession(id, true);
+        } catch (e) {
+            // 시작 실패 시 status 롤백
+            if (_mtgState.current && _mtgState.current.id === id) {
+                _mtgState.current.status = 'ready';
+                mtgRenderDetail();
+            }
+            showToast('회의록 시작 실패: ' + (e.message || e), 'alert');
+        }
     }
     async function mtgExportWiki(id) {
         var url = rfsBackEnd(); if (!url) return;

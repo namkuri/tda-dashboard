@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r279"
+SERVER_REVISION = "r280"
 
 
 
@@ -1784,19 +1784,59 @@ async def meetings_suggest_title(sid: str):
     return {"title": title}
 
 
+async def _meet_resummarize_job(sid: str, model: Optional[str], hint: str):
+    """[r280] 재요약 백그라운드 작업 — 페이지 이탈/창 닫기와 무관하게 끝까지 진행.
+    status='summarizing' 으로 마킹 → summarize() → status='ready' + summary 저장.
+    프론트는 폴링으로 status 변화를 감지해 UI 갱신.
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        _busy_set(running=True, kind="meeting_resummarize", started_at=time.time(),
+                  stage="summarize", message="회의록 재요약(LLM)")
+        s = await loop.run_in_executor(None, lambda: _mtg_store.get_session(sid))
+        if not s:
+            return
+        await loop.run_in_executor(None, lambda: _mtg_store.update_session(sid, {"status": "summarizing"}))
+        summary = await _mtg_sum.summarize(
+            s.get("segments") or [], title=s.get("title") or "", model=model,
+            started_at=s.get("started_at") or "", participants=s.get("participants") or [],
+            hint=hint or "",
+        )
+        await loop.run_in_executor(None, lambda: _mtg_store.update_session(sid, {"summary": summary, "status": "ready"}))
+    except Exception as e:
+        import traceback as _tb
+        _tb.print_exc()
+        try:
+            _mtg_store.update_session(sid, {"status": "error",
+                                            "summary": {"error": f"재요약 실패: {str(e)[:200]}"}})
+        except Exception:
+            pass
+    finally:
+        _busy_clear()
+        _MEET_TASKS.discard(sid)
+
+
 @app.post("/meetings/sessions/{sid}/summarize")
 async def meetings_resummarize(sid: str, req: MeetingSummarizeRequest):
+    """[r280] 재요약을 백그라운드 작업으로 시작 — 즉시 {ok, status:'summarizing'} 반환.
+    클라이언트 연결 끊겨도 끝까지 진행. 프론트는 폴링으로 결과 확인."""
     _meet_guard()
     s = _mtg_store.get_session(sid)
     if not s:
         raise HTTPException(404, "회의 세션 없음")
-    summary = await _mtg_sum.summarize(
-        s.get("segments") or [], title=s.get("title") or "", model=req.model,
-        started_at=s.get("started_at") or "", participants=s.get("participants") or [],
-        hint=req.hint or "",
-    )
-    _mtg_store.update_session(sid, {"summary": summary, "status": "ready"})
-    return {"ok": True, "summary": summary}
+    if (s.get("segments") or []) == []:
+        raise HTTPException(400, "대화내역이 비어있음 — 먼저 가져오기/STT 진행")
+    if sid in _MEET_TASKS:
+        return {"ok": True, "status": s.get("status") or "summarizing", "already": True}
+    if _busy_active():
+        raise HTTPException(409, "다른 작업 진행 중 — 끝난 뒤 다시 시도하세요.")
+    # status=summarizing 즉시 마킹(프론트 폴링이 바로 UI 반영)
+    _mtg_store.update_session(sid, {"status": "summarizing"})
+    _MEET_TASKS.add(sid)
+    task = asyncio.create_task(_meet_resummarize_job(sid, req.model, req.hint or ""))
+    _MEET_TASK_REFS.add(task)
+    task.add_done_callback(lambda t: _MEET_TASK_REFS.discard(t))
+    return {"ok": True, "status": "summarizing"}
 
 
 @app.post("/meetings/sessions/{sid}/export-wiki")
