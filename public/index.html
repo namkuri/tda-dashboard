@@ -10963,7 +10963,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r272';
+        var _AHUB_FRONT_REV = 'r273';
 
 
         var _ahubRevWarned = false;
@@ -31753,7 +31753,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r272';
+    var _RFS_FRONT_REV = 'r273';
 
 
     async function rfsHealthCheck() {
@@ -32016,6 +32016,25 @@ ${intrLog}
                 + '<div style="margin-top:8px;font-size:11px;color:var(--c-text3);">🗑로 지우고 다시 시도하세요.</div>'
                 + '</div>';
         }
+        // [r272] 참가자(화자) 패널 — 발화 수 + 이름 변경(프로젝트 멤버 매칭 제안)
+        var spk = {};
+        segs.forEach(function (g) { var n = g.speaker || '?'; spk[n] = (spk[n] || 0) + 1; });
+        var spkList = Object.keys(spk).sort(function (a, b) { return spk[b] - spk[a]; });
+        if (spkList.length) {
+            h += '<div style="margin-bottom:12px;border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);padding:10px 14px;">';
+            h += '<div style="font-weight:700;font-size:12.5px;margin-bottom:6px;">👥 참가자 <span style="color:var(--c-text3);font-weight:400;">' + spkList.length + '명 · 이름을 클릭해 변경(전체 일괄)</span></div>';
+            h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+            spkList.forEach(function (sn) {
+                var c = _mtgSpeakerColor(sn);
+                h += '<span class="mtg-spk-chip" data-spk="' + _annEsc(sn) + '" onclick="mtgRenameSpeaker(\'' + s.id + '\',\'' + _annEsc(sn).replace(/'/g, '\\x27') + '\')" '
+                    + 'style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:var(--c-paper);border:1px solid ' + c + ';color:' + c + ';font-size:11.5px;font-weight:700;cursor:pointer;" '
+                    + 'title="클릭해 이름 변경">'
+                    + '<span style="width:7px;height:7px;border-radius:50%;background:' + c + ';display:inline-block;"></span>'
+                    + _annEsc(sn) + ' <span style="color:var(--c-text3);font-weight:400;">×' + spk[sn] + '</span>'
+                    + '</span>';
+            });
+            h += '</div></div>';
+        }
         h += '<div style="display:flex;gap:14px;align-items:flex-start;">';
         // 좌: 대화내역
         h += '<div style="flex:1;min-width:0;border:1px solid var(--c-border);border-radius:10px;background:var(--c-paper);max-height:80vh;overflow-y:auto;">';
@@ -32026,7 +32045,7 @@ ${intrLog}
             var c = _mtgSpeakerColor(g.speaker); var tt = parseInt(g.t || 0, 10); var mm = Math.floor(tt / 60), ss = tt % 60;
             h += '<div style="display:flex;gap:8px;font-size:12.5px;line-height:1.5;">'
                 + '<span style="flex-shrink:0;color:var(--c-text3);font-family:ui-monospace,monospace;font-size:10.5px;width:38px;text-align:right;">' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss + '</span>'
-                + '<span style="flex-shrink:0;font-weight:700;color:' + c + ';min-width:64px;">' + _annEsc(g.speaker) + '</span>'
+                + '<span style="flex-shrink:0;font-weight:700;color:' + c + ';min-width:64px;cursor:pointer;" title="클릭해 화자 이름 변경" onclick="mtgRenameSpeaker(\'' + s.id + '\',\'' + _annEsc(g.speaker || '').replace(/'/g, '\\x27') + '\')">' + _annEsc(g.speaker) + '</span>'
                 + '<span style="flex:1;">' + _annEsc(g.text) + '</span></div>';
         });
         h += '</div></div>';
@@ -32068,6 +32087,37 @@ ${intrLog}
             if (typeof initSupabase === 'function') { try { await initSupabase(); } catch (e) {} }
             if (_mtgState.current && _mtgState.current.id === id) { _mtgState.current.wiki_doc_id = d.doc_id; mtgRenderDetail(); }
         } catch (e) { showToast('내보내기 실패: ' + (e.message || e), 'alert'); }
+    }
+    // [r272] 화자 이름 변경 — 프로젝트 멤버 후보 제시 + 직접 입력. 일괄 적용.
+    async function mtgRenameSpeaker(id, oldName) {
+        if (!oldName) return;
+        // 프로젝트 멤버 후보(displayName 우선)
+        var users = (currentData && currentData.users) || [];
+        var suggestions = users.map(function (u) { return u.displayName || u.name || u.email || u.id; }).filter(Boolean);
+        // 이미 다른 발화에 사용 중인 화자명도 후보(병합용)
+        var inUse = ((_mtgState.current && _mtgState.current.segments) || []).reduce(function (acc, g) { if (g.speaker && g.speaker !== oldName && acc.indexOf(g.speaker) < 0) acc.push(g.speaker); return acc; }, []);
+        var msg = '"' + oldName + '" 를 어떤 이름으로 바꿀까요?';
+        if (suggestions.length || inUse.length) {
+            var hints = [];
+            if (suggestions.length) hints.push('멤버: ' + suggestions.slice(0, 6).join(' · '));
+            if (inUse.length) hints.push('이미 사용 중: ' + inUse.slice(0, 6).join(' · '));
+            msg += '\n\n💡 ' + hints.join('\n');
+        }
+        var newName = await uiPrompt({title: '화자 이름 변경', message: msg, value: oldName, placeholder: '새 이름'});
+        if (newName == null) return;   // 취소
+        newName = String(newName).trim();
+        if (!newName || newName === oldName) return;
+        var url = rfsBackEnd(); if (!url) return;
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/rename-speaker', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({old: oldName, new: newName})
+            });
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 150)); }
+            var d = await res.json();
+            showToast('✓ ' + d.changed + '문장의 화자 변경: ' + oldName + ' → ' + newName, 'success');
+            mtgOpenSession(id, true);   // 폴링 없이 1회 새로고침
+        } catch (e) { showToast('화자 변경 실패: ' + (e.message || e), 'alert'); }
     }
     async function mtgDelete(id) {
         var ok = await uiConfirm({title: '회의 삭제', message: '이 회의 세션(대화내역·회의록)을 삭제할까요?', confirmText: '삭제', danger: true});

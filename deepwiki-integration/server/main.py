@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r272"
+SERVER_REVISION = "r273"
 
 
 
@@ -1576,6 +1576,37 @@ async def meetings_import(req: MeetingImportRequest):
     _MEET_TASK_REFS.add(task)
     task.add_done_callback(lambda t: _MEET_TASK_REFS.discard(t))
     return {"id": sid, "status": "importing"}
+
+
+class MeetingRenameSpeakerRequest(BaseModel):
+    old: str
+    new: str
+
+
+@app.post("/meetings/sessions/{sid}/rename-speaker")
+async def meetings_rename_speaker(sid: str, req: MeetingRenameSpeakerRequest):
+    """[r272] 화자명 일괄 변경 — segments[].speaker, participants[].name, transcript_text 동시 갱신."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    old, new = (req.old or "").strip(), (req.new or "").strip()
+    if not old or not new:
+        raise HTTPException(422, "old/new 화자명 필요")
+    if old == new:
+        return {"ok": True, "changed": 0}
+    segs = s.get("segments") or []
+    n = 0
+    for g in segs:
+        if g.get("speaker") == old:
+            g["speaker"] = new; n += 1
+    parts = s.get("participants") or []
+    for p in parts:
+        if p.get("name") == old:
+            p["name"] = new
+    new_text = _mtg_tr.segments_to_text(segs) if _mtg_tr else (s.get("transcript_text") or "")
+    _mtg_store.update_session(sid, {"segments": segs, "participants": parts, "transcript_text": new_text})
+    return {"ok": True, "changed": n}
 
 
 @app.post("/meetings/sessions/{sid}/summarize")

@@ -93,12 +93,37 @@ def _is_cuda_runtime_err(e: Exception) -> bool:
 
 
 def _speaker_from_filename(path: str) -> str:
+    """파일명 → 화자 이름. Craig 패턴 여러 형태를 우선 매칭."""
     stem = os.path.splitext(os.path.basename(path))[0]
-    # Craig: "1-Nickname" / "1_Nickname" / "Nickname_123456" 형태 정리
-    stem = re.sub(r"^\d+[-_.]\s*", "", stem)
-    stem = re.sub(r"[-_]\d{4,}$", "", stem)
-    stem = stem.replace("_", " ").strip()
-    return stem or "화자"
+    # 1) "1-Username_123456789012345678" / "1-Username#0001" (Craig multi-track 표준)
+    m = re.match(r"^\d+[-_.]\s*([^_#]+?)(?:[_#]\d{4,}.*)?$", stem)
+    if m and not _looks_like_id(m.group(1)):
+        return m.group(1).replace("_", " ").strip() or "화자"
+    # 2) "<recID>-<discordID>-<Username>" (가끔 보이는 형식)
+    parts = stem.split("-")
+    if len(parts) >= 3 and not _looks_like_id(parts[-1]):
+        return parts[-1].replace("_", " ").strip()
+    # 3) 폴백: 기존 정규화
+    s = re.sub(r"^\d+[-_.]\s*", "", stem)
+    s = re.sub(r"[-_]\d{4,}$", "", s)
+    s = s.replace("_", " ").strip()
+    # ID처럼 보이면 그대로 두고(나중에 사용자가 이름 변경), 아니면 그대로 화자명
+    return s or "화자"
+
+
+def _looks_like_id(s: str) -> bool:
+    """녹음 ID/디스코드 스노우플레이크처럼 보이면 True — 화자명으로 부적합."""
+    s = (s or "").strip()
+    if not s:
+        return True
+    if len(s) >= 16 and s.isdigit():   # Discord snowflake (17~19 digits)
+        return True
+    # 영숫자 12자 이상이고 모음 비율 낮으면 ID 의심(Craig 녹음 ID 등)
+    if len(s) >= 12 and re.fullmatch(r"[A-Za-z0-9]+", s):
+        vowels = sum(1 for c in s.lower() if c in "aeiou")
+        if vowels / len(s) < 0.2:
+            return True
+    return False
 
 
 def list_tracks(audio_dir: str) -> List[Dict[str, str]]:
