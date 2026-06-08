@@ -31855,7 +31855,8 @@ ${intrLog}
                 var parts = (s.participants || []).map(function (p) { return p.name; }).join(', ');
                 html += '<div style="border:1px solid var(--c-border);border-radius:9px;padding:12px 14px;background:var(--c-card);cursor:pointer;" onclick="mtgOpenSession(\'' + s.id + '\')">'
                     + '<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;flex:1;">🎙 ' + _annEsc(s.title) + '</span>'
-                    + '<span style="font-size:10px;padding:1px 7px;border-radius:9999px;background:' + stc + ';color:#fff;">' + st + '</span></div>'
+                    + '<span style="font-size:10px;padding:1px 7px;border-radius:9999px;background:' + stc + ';color:#fff;">' + st + '</span>'
+                    + '<button class="aihub-gpu-btn" style="font-size:11px;border-color:#d2393d;color:#d2393d;padding:2px 8px;" onclick="event.stopPropagation();mtgDelete(\'' + s.id + '\')" title="회의 삭제">🗑</button></div>'
                     + '<div style="font-size:11px;color:var(--c-text3);margin-top:6px;">' + (parts ? ('👥 ' + _annEsc(parts) + ' · ') : '') + '⏱ ' + _mtgFmtDur(s.duration_sec) + (s.created_at ? (' · ' + new Date(s.created_at).toLocaleString()) : '') + '</div>'
                     + '</div>';
             });
@@ -32214,7 +32215,8 @@ ${intrLog}
                 var ti = _pmTypeInfo(st.type); var lc = PM_LIFECYCLES.find(function (l) { return l.id === st.lifecycle; });
                 h += '<div style="border:1px solid var(--c-border);border-radius:9px;padding:12px 14px;background:var(--c-card);cursor:pointer;" onclick="pmOpenStage(\'' + st.id + '\')">'
                     + '<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;flex:1;">🚀 ' + _annEsc(st.name) + '</span>'
-                    + (ti ? '<span class="pm-pill sel" style="cursor:default;">' + _annEsc(ti.label) + '</span>' : '<span style="font-size:11px;color:var(--c-text3);">타입 미정</span>') + '</div>'
+                    + (ti ? '<span class="pm-pill sel" style="cursor:default;">' + _annEsc(ti.label) + '</span>' : '<span style="font-size:11px;color:var(--c-text3);">타입 미정</span>')
+                    + '<button class="aihub-gpu-btn" style="font-size:11px;border-color:#d2393d;color:#d2393d;padding:2px 8px;" onclick="event.stopPropagation();pmDelete(\'' + st.id + '\')" title="Stage 삭제">🗑</button></div>'
                     + '<div style="font-size:11px;color:var(--c-text3);margin-top:6px;">' + (lc ? ('🔄 ' + _annEsc(lc.label) + ' · ') : '') + '🏷 태그 ' + (st.tags || []).length + (ti ? (' · ' + _annEsc(ti.sub)) : '') + '</div>'
                     + '</div>';
             });
