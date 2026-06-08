@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r281"
+SERVER_REVISION = "r282"
 
 
 
@@ -1422,6 +1422,12 @@ class MeetingSummaryEditRequest(BaseModel):
     summary: Dict[str, Any]            # [r276] 사용자가 편집한 회의록(통째로)
 
 
+class MeetingSummaryMdEditRequest(BaseModel):
+    user_id: str
+    user_name: Optional[str] = None
+    summary_markdown: str             # [r282] 사용자가 직접 작성/편집한 회의록 마크다운(본문/소스 모드)
+
+
 class MeetingExportRequest(BaseModel):
     user_id: str
     project_id: Optional[str] = None
@@ -1581,7 +1587,10 @@ async def _meet_run_job(p: dict, sid: str):
             merged, title=p.get("title", ""), model=p.get("model"),
             started_at=p.get("started_at") or "", participants=participants,
         )
-        await _upd({"status": "ready", "summary": summary})
+        # [r282] JSON → 마크다운 동시 저장(본문/소스 보기·수동 편집·HTML 임베드 지원)
+        md = _mtg_sum.to_markdown(p.get("title", "") or "회의", summary,
+                                  started_at=p.get("started_at") or "", participants=participants)
+        await _upd({"status": "ready", "summary": summary, "summary_markdown": md})
     except Exception as e:
         import traceback as _tb
         _tb.print_exc()
@@ -1731,6 +1740,29 @@ async def meetings_summary_edit(sid: str, req: MeetingSummaryEditRequest):
     return {"ok": True, "summary_meta": meta}
 
 
+@app.patch("/meetings/sessions/{sid}/summary-markdown")
+async def meetings_summary_md_edit(sid: str, req: MeetingSummaryMdEditRequest):
+    """[r282] 회의록 마크다운 직접 편집 — 본문/소스 보기 모드. HTML 임베드 마커도 포함 가능."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    meta = dict(s.get("summary_meta") or {})
+    if not meta.get("created_by"):
+        meta["created_by"] = req.user_id
+        meta["created_by_name"] = req.user_name or req.user_id
+        meta["created_at"] = now
+    meta["updated_by"] = req.user_id
+    meta["updated_by_name"] = req.user_name or req.user_id
+    meta["updated_at"] = now
+    meta["edited"] = True
+    _mtg_store.update_session(sid, {"summary_markdown": req.summary_markdown,
+                                    "summary_meta": meta, "status": "ready"})
+    return {"ok": True, "summary_meta": meta}
+
+
 @app.post("/meetings/sessions/{sid}/suggest-title")
 async def meetings_suggest_title(sid: str):
     """[r276] LLM 으로 회의 제목 추천."""
@@ -1802,7 +1834,17 @@ async def _meet_resummarize_job(sid: str, model: Optional[str], hint: str):
             started_at=s.get("started_at") or "", participants=s.get("participants") or [],
             hint=hint or "",
         )
-        await loop.run_in_executor(None, lambda: _mtg_store.update_session(sid, {"summary": summary, "status": "ready"}))
+        # [r282] JSON → 마크다운 동시 저장. 단, 사용자가 직접 편집 중인 markdown 이 있고
+        #   summary_meta.edited 가 true 면 보존(덮어쓰기 방지). 그 외엔 새로 작성.
+        prev_meta = s.get("summary_meta") or {}
+        if prev_meta.get("edited") and s.get("summary_markdown"):
+            patch = {"summary": summary, "status": "ready"}
+        else:
+            md = _mtg_sum.to_markdown(s.get("title") or "회의", summary,
+                                      started_at=s.get("started_at") or "",
+                                      participants=s.get("participants") or [])
+            patch = {"summary": summary, "summary_markdown": md, "status": "ready"}
+        await loop.run_in_executor(None, lambda: _mtg_store.update_session(sid, patch))
     except Exception as e:
         import traceback as _tb
         _tb.print_exc()
@@ -1846,8 +1888,10 @@ async def meetings_export_wiki(sid: str, req: MeetingExportRequest):
     s = _mtg_store.get_session(sid)
     if not s:
         raise HTTPException(404, "회의 세션 없음")
-    md = _mtg_sum.to_markdown(s.get("title") or "회의", s.get("summary") or {},
-                              started_at=s.get("started_at") or "", participants=s.get("participants") or [])
+    # [r282] 사용자 편집 마크다운 우선, 없으면 JSON 에서 변환
+    md = s.get("summary_markdown") or _mtg_sum.to_markdown(
+        s.get("title") or "회의", s.get("summary") or {},
+        started_at=s.get("started_at") or "", participants=s.get("participants") or [])
     import time as _t
     doc_id = f"doc_{int(_t.time() * 1000)}_{int.from_bytes(__import__('os').urandom(2), 'big')}"
     now_ms = int(_t.time() * 1000)

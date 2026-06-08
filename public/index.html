@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r281';
+        var _AHUB_FRONT_REV = 'r282';
 
 
         var _ahubRevWarned = false;
@@ -17484,7 +17484,7 @@ return data;
             ['ai_usage_logs', "id text primary key, project_id text, user_id text, user_name text, kind text, model text, host text, gpu_host_id text, in_tokens int default 0, out_tokens int default 0, dur_ms bigint default 0, detail text, out_summary text, created_at timestamptz default now()"],
             ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"],
             // [r242] 회의록 자동작성 — Craig 녹음 → STT → LLM 회의록
-            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text, chat_messages jsonb default '[]'::jsonb, summary_meta jsonb"],
+            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text, chat_messages jsonb default '[]'::jsonb, summary_meta jsonb, summary_markdown text"],
             // [r243] 프로덕트 관리 — Stage(타입/생애주기/Goal) + 게임개발 직무체계 계층 태그
             ['product_stages', "id text primary key, project_id text, name text not null default '새 Stage', type text, goal text default '', lifecycle text, tags jsonb default '[]'::jsonb, tag_meta jsonb default '{}'::jsonb, status text default 'active', sort_order bigint, created_by text, created_at timestamptz default now(), updated_at timestamptz default now()"],
             // [r244] 프로젝트별 커스텀 직무체계(대/중/소 추가분). id=project_id, nodes=커스텀 노드 배열
@@ -31877,7 +31877,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r281';
+    var _RFS_FRONT_REV = 'r282';
 
 
     async function rfsHealthCheck() {
@@ -32308,6 +32308,11 @@ ${intrLog}
             h += _mtgRenderEmptySummary(s, canGen);
         }
         main.innerHTML = h;
+        // [r282] 회의록 본문 모드면 HTML 임베드(<!--TDAHTML:id-->) iframe 마운트 (문서 메뉴와 동일)
+        var mview = document.getElementById('mtg-summary-md-view');
+        if (mview && typeof _buildHtmlEmbeds === 'function') {
+            try { _buildHtmlEmbeds(mview); } catch (e) {}
+        }
     }
 
     // [r276] 제목 바 — 제목 클릭해 수정 + ✨ 추천 + 액션 버튼들
@@ -32388,21 +32393,67 @@ ${intrLog}
         return h;
     }
 
-    // [r276] 회의록 카드 — 인플레이스 편집 + 메타(작성자/수정자/시점)
+    // [r282] JSON 회의록 → 마크다운(프론트 변환, 백엔드 to_markdown 과 동일 구조)
+    function _mtgSummaryToMarkdown(s, sum) {
+        if (!sum) sum = {};
+        var lines = ['# 📝 ' + (s.title || '회의') + ' 회의록', ''];
+        try { if (s.started_at) lines.push('- 일시: ' + new Date(s.started_at).toLocaleString()); } catch (e) {}
+        var p = (s.participants || []).map(function (x) { return x.name; }).filter(Boolean).join(', ');
+        if (p) lines.push('- 참석: ' + p);
+        lines.push('');
+        if (sum.tldr) lines.push('## 요약', sum.tldr, '');
+        if ((sum.agenda || []).length) {
+            lines.push('## 안건');
+            sum.agenda.forEach(function (a) { lines.push('- ' + a); });
+            lines.push('');
+        }
+        if ((sum.topics || []).length) {
+            lines.push('## 논의');
+            sum.topics.forEach(function (t) {
+                lines.push('### ' + (t.title || ''));
+                if (t.summary) lines.push(t.summary);
+                lines.push('');
+            });
+        }
+        if ((sum.decisions || []).length) {
+            lines.push('## 결정사항');
+            sum.decisions.forEach(function (d) { lines.push('- ' + d); });
+            lines.push('');
+        }
+        if ((sum.action_items || []).length) {
+            lines.push('## 액션 아이템');
+            sum.action_items.forEach(function (a) {
+                var due = a.due ? (' (기한: ' + a.due + ')') : '';
+                lines.push('- [ ] **' + (a.who || '') + '** — ' + (a.what || '') + due);
+            });
+            lines.push('');
+        }
+        return lines.join('\n').trim();
+    }
+
+    // [r282] 회의록 카드 — 문서 메뉴와 동일한 본문/소스 보기 + 라이브 마크다운 + HTML 임베드
     function _mtgRenderSummaryCard(s, sum, isMain) {
         var meta = s.summary_meta || {};
         var isSummarizing = (s.status === 'summarizing');
-        var canGen = (s.segments || []).length > 0 && !_mtgInProgress(s);
-        // [r280] 재요약 중이면 카드 자체에 펄스 애니메이션 + 노란 띠
+        // 마크다운: 사용자 편집본 우선, 없으면 JSON → MD 자동 변환(첫 진입)
+        var md = (s.summary_markdown != null && s.summary_markdown !== '') ? s.summary_markdown : _mtgSummaryToMarkdown(s, sum);
+        var mode = _mtgState._summaryMode || 'preview';   // 'preview' | 'source' | 'jsonsec'
+        // [r280] 재요약 중 펄스
         var h = '<div class="' + (isSummarizing ? 'mtg-card-busy' : '') + '" style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);margin-bottom:14px;' + (isSummarizing ? 'box-shadow:0 0 0 2px rgba(245,158,11,.45);' : '') + '">';
         h += '<div style="position:sticky;top:0;background:' + (isSummarizing ? 'rgba(245,158,11,.14)' : 'var(--c-card)') + ';border-bottom:1px solid var(--c-border);padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
             + '<span style="font-weight:800;font-size:14px;flex:1;">' + (isSummarizing ? '<span class="rfs-dc-spinner"></span> 📝 회의록 재요약 중…' : '📝 회의록') + '</span>'
             + (meta.edited ? '<span style="font-size:10.5px;color:var(--c-text3);">✎ 사용자 편집됨</span>' : '<span style="font-size:10.5px;color:var(--c-text3);">🤖 AI 작성</span>')
+            // 본문/소스 토글
+            + '<span style="display:inline-flex;gap:0;border:1px solid var(--c-border);border-radius:6px;overflow:hidden;">'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;border-radius:0;border:none;' + (mode === 'preview' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="mtgSetSummaryMode(\'preview\')" title="본문(렌더 + 클릭 편집)">📖 본문</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;border-radius:0;border:none;' + (mode === 'source' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="mtgSetSummaryMode(\'source\')" title="소스 마크다운">📝 소스</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;border-radius:0;border:none;' + (mode === 'jsonsec' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="mtgSetSummaryMode(\'jsonsec\')" title="자동 생성 구조 보기(섹션별 편집)">🧩 구조</button>'
+            + '</span>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;' + (isSummarizing ? 'opacity:.5;pointer-events:none;' : '') + '" ' + (isSummarizing ? '' : 'onclick="mtgResummarize(\'' + s.id + '\')" ') + 'title="LLM 으로 재작성(편집한 내용은 덮어쓰기)">' + (isSummarizing ? '⏳ 진행 중' : '🔄 재요약') + '</button>'
             + '</div>';
         if (isSummarizing) {
             h += '<div style="padding:8px 14px;font-size:11.5px;color:#92400e;background:rgba(245,158,11,.12);border-bottom:1px solid var(--c-border);">'
-                + '⏳ <b>백그라운드</b>로 진행 중 — 5초마다 자동 새로고침. <b>이 페이지를 나가도 처리는 계속됩니다.</b> 완료되면 자동으로 회의록이 채워집니다.</div>';
+                + '⏳ <b>백그라운드</b>로 진행 중 — 5초마다 자동 새로고침. <b>이 페이지를 나가도 처리는 계속됩니다.</b></div>';
         }
         // 메타 정보 줄
         if (meta.created_by_name || meta.updated_by_name) {
@@ -32414,17 +32465,84 @@ ${intrLog}
                 + (meta.updated_by_name && (meta.updated_by !== meta.created_by || meta.updated_at !== meta.created_at) ? (' · 최종 수정: <b>' + _annEsc(meta.updated_by_name) + '</b>' + (uAt ? (' · ' + uAt) : '')) : '')
                 + '</div>';
         }
-        h += '<div style="padding:14px 18px;font-size:13px;line-height:1.7;">';
-        // 각 섹션 — 클릭하면 편집
-        h += _mtgRenderSummarySection(s.id, 'tldr', '요약', sum.tldr || '', 'text');
-        h += _mtgRenderSummarySection(s.id, 'agenda', '안건', sum.agenda || [], 'list');
-        h += _mtgRenderSummarySection(s.id, 'topics', '논의', sum.topics || [], 'topics');
-        h += _mtgRenderSummarySection(s.id, 'decisions', '결정사항', sum.decisions || [], 'list');
-        h += _mtgRenderSummarySection(s.id, 'action_items', '액션 아이템', sum.action_items || [], 'actions');
-        if (sum.error) h += '<div style="color:#b53236;font-size:11.5px;margin-top:8px;">⚠ ' + _annEsc(sum.error) + '</div>';
-        if (s.wiki_doc_id) h += '<div style="margin-top:12px;font-size:11px;color:var(--c-text3);">✓ 위키 문서로 내보냄</div>';
-        h += '</div></div>';
+        // 본문/소스/구조 영역
+        if (mode === 'jsonsec') {
+            // 기존 JSON 5섹션 편집 — 자동 생성된 구조 그대로 편집
+            h += '<div style="padding:14px 18px;font-size:13px;line-height:1.7;">';
+            h += _mtgRenderSummarySection(s.id, 'tldr', '요약', sum.tldr || '', 'text');
+            h += _mtgRenderSummarySection(s.id, 'agenda', '안건', sum.agenda || [], 'list');
+            h += _mtgRenderSummarySection(s.id, 'topics', '논의', sum.topics || [], 'topics');
+            h += _mtgRenderSummarySection(s.id, 'decisions', '결정사항', sum.decisions || [], 'list');
+            h += _mtgRenderSummarySection(s.id, 'action_items', '액션 아이템', sum.action_items || [], 'actions');
+            if (sum.error) h += '<div style="color:#b53236;font-size:11.5px;margin-top:8px;">⚠ ' + _annEsc(sum.error) + '</div>';
+            if (s.wiki_doc_id) h += '<div style="margin-top:12px;font-size:11px;color:var(--c-text3);">✓ 위키 문서로 내보냄</div>';
+            h += '</div></div>';
+            return h;
+        }
+        if (mode === 'source') {
+            // 소스 — textarea + 저장 버튼
+            h += '<div style="padding:10px 14px;">';
+            h += '<textarea id="mtg-summary-md-src" style="width:100%;height:60vh;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;padding:10px 12px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);resize:vertical;">' + _annEsc(md) + '</textarea>';
+            h += '<div style="margin-top:8px;display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--c-text3);">';
+            h += '<span>HTML 임베드는 본문 모드에서 카드를 만들면 마커가 삽입됩니다(문서 메뉴와 동일).</span>';
+            h += '<button class="aihub-gpu-btn primary" style="font-size:11px;margin-left:auto;" onclick="mtgSaveSummaryMd(\'' + s.id + '\')">💾 저장</button>';
+            h += '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgSetSummaryMode(\'preview\')">취소</button>';
+            h += '</div>';
+            if (sum.error) h += '<div style="color:#b53236;font-size:11.5px;margin-top:8px;">⚠ ' + _annEsc(sum.error) + '</div>';
+            if (s.wiki_doc_id) h += '<div style="margin-top:12px;font-size:11px;color:var(--c-text3);">✓ 위키 문서로 내보냄</div>';
+            h += '</div></div>';
+            return h;
+        }
+        // preview — 라이브 마크다운 렌더 + HTML 임베드 마운트 (문서 메뉴와 동일)
+        h += '<div id="mtg-summary-md-view" class="markdown-body" style="padding:14px 18px;font-size:13.5px;line-height:1.75;cursor:text;" data-md="' + _annEsc(md) + '" onclick="mtgSetSummaryMode(\'source\')" title="클릭해 소스로 편집">';
+        h += _mtgRenderMdSanitized(md);
+        h += '</div>';
+        if (sum.error) h += '<div style="padding:0 18px 8px;color:#b53236;font-size:11.5px;">⚠ ' + _annEsc(sum.error) + '</div>';
+        if (s.wiki_doc_id) h += '<div style="padding:0 18px 12px;font-size:11px;color:var(--c-text3);">✓ 위키 문서로 내보냄</div>';
+        h += '</div>';
         return h;
+    }
+    function _mtgRenderMdSanitized(md) {
+        try {
+            // [r278] HTML 임베드 마커 → mount placeholder (문서 메뉴와 동일 패턴)
+            var raw = String(md == null ? '' : md).replace(/<!--TDAHTML:([A-Za-z0-9_]+)-->/g, function (_m, id) { return '\n\n<div class="tda-html-mount" data-tdahtml="' + id + '"></div>\n\n'; });
+            var cfg;
+            if (typeof domPurifyConfig !== 'undefined') {
+                cfg = Object.assign({}, domPurifyConfig);
+                cfg.ADD_ATTR = (cfg.ADD_ATTR || []).concat(['data-tdahtml']);
+            }
+            return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(raw), cfg) : parseMarkdownWithTables(raw);
+        } catch (e) { return _annEsc(md); }
+    }
+    function mtgSetSummaryMode(mode) {
+        _mtgState._summaryMode = mode;
+        mtgRenderDetail();
+        // preview 모드면 HTML 임베드 마운트(문서 메뉴와 동일)
+        if (mode === 'preview') {
+            setTimeout(function () {
+                var host = document.getElementById('mtg-summary-md-view');
+                if (host && typeof _buildHtmlEmbeds === 'function') {
+                    try { _buildHtmlEmbeds(host); } catch (e) {}
+                }
+            }, 30);
+        } else if (mode === 'source') {
+            setTimeout(function () { var ta = document.getElementById('mtg-summary-md-src'); if (ta) ta.focus(); }, 30);
+        }
+    }
+    async function mtgSaveSummaryMd(id) {
+        var ta = document.getElementById('mtg-summary-md-src'); if (!ta) return;
+        var url = rfsBackEnd(); if (!url) return;
+        var meName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || rfsCurrentUserName() || rfsCurrentUser() || '나';
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/summary-markdown', {
+                method: 'PATCH', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: rfsCurrentUser() || 'anon', user_name: meName, summary_markdown: ta.value || ''})
+            });
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 150)); }
+            showToast('✓ 회의록 저장', 'success');
+            _mtgState._summaryMode = 'preview';
+            mtgOpenSession(id, true);
+        } catch (e) { showToast('저장 실패: ' + (e.message || e), 'alert'); }
     }
     function _mtgRenderSummarySection(sid, key, label, value, kind) {
         var empty = (kind === 'text') ? !value : !(value && value.length);

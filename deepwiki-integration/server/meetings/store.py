@@ -16,6 +16,8 @@ _ALLOWED_COLS = {
     # [r276] 채팅/회의록 편집 추적
     "chat_messages",       # [{at, by, byName, text}] — 텍스트 채팅(음성과 합쳐 대화내역에 표시)
     "summary_meta",        # {created_by, created_at, updated_by, updated_at, edited(bool)}
+    # [r282] 회의록 자유 마크다운 — 본문/소스 보기 기능 재사용. HTML 임베드 마커 포함 가능.
+    "summary_markdown",
 }
 
 
@@ -75,14 +77,40 @@ def create_session(*, project_id: Optional[str], title: str, user_id: str,
 
 
 def update_session(sid: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+    """[r282] 누락 컬럼(PGRST204) 자동 폴백 — 컬럼이 DB 에 아직 없으면 그것만 빼고 재시도.
+    Supabase 에서 alter table 후 PostgREST schema cache 가 갱신 안 된 경우도 동일하게 처리.
+    핵심 데이터(summary 등) 는 저장되고, 누락 컬럼은 다음 SQL 실행 후 다시 시도하면 채워짐.
+    """
+    import re as _re
     store = get_store()
     safe = _clean(patch)
     safe["updated_at"] = _iso()
-    try:
-        store.client.table(TABLE).update(safe).eq("id", sid).execute()
-    except Exception as e:
-        raise RuntimeError(f"meeting_sessions 업데이트 실패: {e}")
+    dropped = []
+    # 최대 5회까지 누락 컬럼 제거 후 재시도
+    for _ in range(5):
+        try:
+            store.client.table(TABLE).update(safe).eq("id", sid).execute()
+            if dropped:
+                print(f"[meetings.store] ⚠ 누락 컬럼 자동 제외 후 저장 성공 — DB 에 추가 필요: {dropped}")
+                print("[meetings.store] 💡 Supabase SQL Editor 에서 실행:")
+                print("    alter table meeting_sessions add column if not exists chat_messages jsonb default '[]'::jsonb;")
+                print("    alter table meeting_sessions add column if not exists summary_meta jsonb;")
+                print("    notify pgrst, 'reload schema';")
+            break
+        except Exception as e:
+            msg = str(e)
+            # PGRST204: "Could not find the 'X' column" 또는 비슷한 형태
+            m = _re.search(r"find\s+the\s+['\"]([A-Za-z0-9_]+)['\"]\s+column", msg) \
+                or _re.search(r"column\s+['\"]?([A-Za-z0-9_]+)['\"]?\s+(?:does not exist|of relation)", msg)
+            if m and m.group(1) in safe:
+                miss = m.group(1)
+                dropped.append(miss)
+                safe.pop(miss, None)
+                continue
+            raise RuntimeError(f"meeting_sessions 업데이트 실패: {e}")
     cur = get_session(sid) or {}
+    if dropped:
+        cur["_dropped_columns"] = dropped
     return cur
 
 
@@ -123,5 +151,9 @@ create index if not exists idx_meeting_sessions_project on meeting_sessions(proj
 -- [r276] 기존 테이블에 컬럼 추가(멱등)
 alter table meeting_sessions add column if not exists chat_messages jsonb default '[]'::jsonb;
 alter table meeting_sessions add column if not exists summary_meta jsonb;
+-- [r282] 회의록 자유 마크다운(본문/소스 보기·HTML 임베드 가능)
+alter table meeting_sessions add column if not exists summary_markdown text;
+-- PostgREST 스키마 캐시 강제 갱신(alter 직후 즉시 반영)
+notify pgrst, 'reload schema';
 alter table meeting_sessions disable row level security;
 """
