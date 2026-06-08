@@ -25,41 +25,58 @@ except Exception:
     _BatchedPipeline = None
     _HAS_BATCHED = False
 
+# [r290] 한 슬롯이라도 cuBLAS/cuDNN 런타임 에러 → 세션 전체 GPU 영구 차단.
+#   동시 슬롯들이 각자 GPU 시도하다 race 로 일부만 폴백되는 문제 회피.
+#   백엔드 재시작하면 다시 시도(즉 일시적 GPU 불가만 차단, 영구 설정은 아님).
+_cuda_blocked = False
+_cuda_block_reason = ""
 
-# [r284 #4] pip 로 설치한 nvidia-cublas-cu12 / nvidia-cudnn-cu12 의 DLL 을 Python 이 찾도록
+
+# [r284] pip 로 설치한 nvidia-cublas-cu12 / nvidia-cudnn-cu12 의 DLL 을 Python 이 찾도록
 #   site-packages/nvidia/.../bin 디렉터리를 DLL 검색 경로에 추가. Windows 는 Python 3.8+ 부터
-#   os.add_dll_directory 가 표준. 이걸 안 하면 ctranslate2 가 cublas64_12.dll 을 못 찾아 GPU
-#   초기화 실패 → CPU 폴백.
-def _register_nvidia_dll_dirs():
+#   os.add_dll_directory 가 표준. 이걸 안 하면 ctranslate2 가 cublas64_12.dll 을 못 찾음.
+# [r290] main.py 가 startup() 보다 일찍 호출하도록 export. 또 ctranslate2 import 전에 실행.
+def register_nvidia_dll_dirs() -> Dict[str, Any]:
+    """nvidia 패키지의 DLL 디렉터리를 PATH + add_dll_directory 에 등록.
+    반환: {found: [경로], packages_missing: [pkg], ok: bool}
+    """
     import importlib
-    found = []
+    found, missing = [], []
     for pkg in ("nvidia.cublas", "nvidia.cudnn", "nvidia.cuda_runtime"):
         try:
             mod = importlib.import_module(pkg)
             base = os.path.dirname(getattr(mod, "__file__", "") or "")
             if not base:
-                continue
-            # Windows: bin/, Linux: lib/
+                missing.append(pkg); continue
+            sub_found = False
             for sub in ("bin", "lib"):
                 d = os.path.join(base, sub)
                 if os.path.isdir(d):
-                    found.append(d)
-        except Exception:
-            continue
-    if not found:
-        return
-    if hasattr(os, "add_dll_directory"):
+                    found.append(d); sub_found = True
+            if not sub_found:
+                missing.append(pkg + " (bin/lib 디렉터리 없음)")
+        except Exception as e:
+            missing.append(f"{pkg} ({type(e).__name__})")
+    if found and hasattr(os, "add_dll_directory"):
         for d in found:
-            try:
-                os.add_dll_directory(d)
-            except Exception:
-                pass
-    # PATH 추가(자식 프로세스/일부 라이브러리는 PATH 만 검색)
-    cur_path = os.environ.get("PATH", "")
-    add = os.pathsep.join(found)
-    if add and add not in cur_path:
-        os.environ["PATH"] = add + os.pathsep + cur_path
-    print(f"[meetings.transcribe] CUDA DLL 디렉터리 등록: {found}")
+            try: os.add_dll_directory(d)
+            except Exception: pass
+    if found:
+        cur_path = os.environ.get("PATH", "")
+        add = os.pathsep.join(found)
+        if add and add not in cur_path:
+            os.environ["PATH"] = add + os.pathsep + cur_path
+    return {"found": found, "packages_missing": missing, "ok": bool(found)}
+
+
+def _register_nvidia_dll_dirs():
+    """[r284 호환] 모듈 import 시 자동 실행."""
+    info = register_nvidia_dll_dirs()
+    if info["found"]:
+        print(f"[meetings.transcribe] CUDA DLL 디렉터리 등록: {info['found']}")
+    if info["packages_missing"]:
+        print(f"[meetings.transcribe] ⚠ nvidia 패키지 미설치/불완전: {info['packages_missing']}")
+        print(f"[meetings.transcribe] 💡 GPU 가속하려면: pip install nvidia-cublas-cu12 nvidia-cudnn-cu12")
 
 
 _register_nvidia_dll_dirs()
@@ -97,6 +114,8 @@ def _cuda_ok() -> bool:
          (실제 로드 가능. nvidia-cublas-cu12 가 설치돼 있고 DLL 디렉토리가 등록됐으면 통과)
       4) Windows ctypes.WinDLL fallback — cublas64_12.dll 직접 로드 시도
     """
+    if _cuda_blocked:
+        return False
     if os.environ.get("WHISPER_DEVICE", "").lower() == "cpu":
         return False
     try:
@@ -294,9 +313,16 @@ def transcribe_track(path: str, speaker: str, model_size: str = "medium",
         except RuntimeError as e:
             if not _is_cuda_runtime_err(e):
                 raise
-            print(f"[meetings.transcribe] GPU 런타임 오류({e}) → CPU 폴백으로 재시도")
+            # [r290] 전역 차단 — 다른 슬롯도 GPU 시도하지 않게(폴백 race 회피)
+            global _cuda_blocked, _cuda_block_reason
+            if not _cuda_blocked:
+                _cuda_blocked = True
+                _cuda_block_reason = str(e)[:200]
+                print(f"[meetings.transcribe] ⚠ GPU 런타임 오류({e}) → 세션 전체 CPU 전환(다음 슬롯도 처음부터 CPU)")
+                print(f"[meetings.transcribe] 💡 해결: pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 후 백엔드 완전 재시작(taskkill /F /IM python.exe → run_dev.bat)")
+            # 모든 GPU 모델 인스턴스 캐시 정리
             for k in list(_model_cache.keys()):
-                if k[0] == model_size and k[2] != "cpu":
+                if len(k) >= 3 and k[-1] != "cpu":
                     _model_cache.pop(k, None)
             cpu_model = _load_model(model_size, force_cpu=True, slot=slot)
             return _run_transcribe(cpu_model, wav, language, speaker, progress_cb, total_sec)

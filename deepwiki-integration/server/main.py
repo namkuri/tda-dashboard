@@ -1,4 +1,25 @@
 """FastAPI 엔트리포인트 — /health, /chat, /index/*."""
+# [r290] CUDA DLL 디렉터리는 다른 어떤 import 보다도 먼저 등록 — ctranslate2 가 다른 모듈
+#   체인을 통해 import 되기 전에 PATH 에 nvidia/.../bin 이 있어야 cuBLAS 로드 가능.
+def _early_register_cuda_dlls():
+    import os, importlib
+    for pkg in ("nvidia.cublas", "nvidia.cudnn", "nvidia.cuda_runtime"):
+        try:
+            mod = importlib.import_module(pkg)
+            base = os.path.dirname(getattr(mod, "__file__", "") or "")
+            for sub in ("bin", "lib"):
+                d = os.path.join(base, sub) if base else ""
+                if d and os.path.isdir(d):
+                    if hasattr(os, "add_dll_directory"):
+                        try: os.add_dll_directory(d)
+                        except Exception: pass
+                    cur = os.environ.get("PATH", "")
+                    if d not in cur:
+                        os.environ["PATH"] = d + os.pathsep + cur
+        except Exception:
+            pass
+_early_register_cuda_dlls()
+
 import asyncio
 import json
 import time
@@ -38,7 +59,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r289"
+SERVER_REVISION = "r290"
 
 
 
@@ -1611,6 +1632,7 @@ async def _meet_run_job(p: dict, sid: str):
         # [r286] STT 디바이스(GPU/CPU) 확정 후 session 에 저장 — 프론트가 진행 중 배너에 표시
         _stt_dev = _mtg_tr.current_device()
         await _upd({"status": "transcribing", "stt_device": _stt_dev})
+        _saved_dev = _stt_dev   # [r290] 폴백 발생 시 다시 저장 비교용
         # [r288] 화자별 STT — 트랙 동시 처리(N 트랙 × WHISPER_TRACK_CONCURRENCY 병렬).
         #   같은 모델 인스턴스 공유(BatchedInferencePipeline 은 thread-safe). GPU 활용도 ↑.
         N = len(tracks)
@@ -1682,9 +1704,17 @@ async def _meet_run_job(p: dict, sid: str):
                     for r in per_track:
                         if r: cur_segs.extend(r)
                     cur_merged = _mtg_tr.merge_segments(cur_segs)
-                    await _upd({"status": "transcribing", "segments": cur_merged,
-                                "transcript_text": _mtg_tr.segments_to_text(cur_merged),
-                                "participants": participants})
+                    # [r290] GPU 폴백 발생 → device 다시 확인 + 변경됐으면 session 갱신
+                    nonlocal _saved_dev
+                    new_dev = _mtg_tr.current_device()
+                    upd = {"status": "transcribing", "segments": cur_merged,
+                           "transcript_text": _mtg_tr.segments_to_text(cur_merged),
+                           "participants": participants}
+                    if new_dev != _saved_dev:
+                        upd["stt_device"] = new_dev
+                        _saved_dev = new_dev
+                        print(f"[meetings] STT 디바이스 전환됨 → {new_dev}(이전 {_stt_dev})")
+                    await _upd(upd)
             finally:
                 free_slots.put_nowait(slot)
 
@@ -2576,6 +2606,22 @@ def _model_installed(target: str, installed: list) -> bool:
 async def startup():
     print("\n" + "═" * 60)
     print(" 🤖 TDA Deep Wiki 백엔드 시작")
+    # [r290] CUDA cuBLAS 가용성 명확 진단 — GPU STT 가속의 대표적 실패 지점
+    try:
+        from meetings import transcribe as _stt_diag
+        _diag = _stt_diag.register_nvidia_dll_dirs()
+        if _diag.get("found"):
+            print(f"  📦 nvidia DLL 경로 등록: {len(_diag['found'])}개 — {_diag['found'][:2]}{'...' if len(_diag['found'])>2 else ''}")
+        if _diag.get("packages_missing"):
+            print(f"  ⚠ nvidia 패키지 누락/불완전: {_diag['packages_missing']}")
+            print(f"      → GPU STT 가속하려면: pip install nvidia-cublas-cu12 nvidia-cudnn-cu12")
+        # 실제 GPU 사용 가능성
+        if _stt_diag._cuda_ok():
+            print(f"  🟢 STT GPU(cuBLAS) 사용 가능 — device={_stt_diag.current_device()}")
+        else:
+            print(f"  🟡 STT CPU 모드 — GPU 검증 실패(드라이버/DLL/디바이스)")
+    except Exception as _de:
+        print(f"  ⚠ STT 진단 스킵: {_de}")
     print("═" * 60)
     # [r287] 좀비 회의 세션 정리 — 직전 백엔드가 비정상 종료된 상태에서 status 가
     #   importing/transcribing/summarizing 인 세션들은 처리 주체(asyncio task)가

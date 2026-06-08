@@ -95,10 +95,19 @@ def update_session(sid: str, patch: Dict[str, Any]) -> Dict[str, Any]:
         try:
             store.client.table(TABLE).update(safe).eq("id", sid).execute()
             if dropped:
+                # [r290] 실제 누락 컬럼만 동적으로 안내 — 매번 모든 SQL 출력 X
+                col_types = {
+                    "chat_messages": "jsonb default '[]'::jsonb",
+                    "summary_meta": "jsonb",
+                    "summary_markdown": "text",
+                    "html_embeds": "jsonb default '{}'::jsonb",
+                    "stt_device": "text",
+                }
                 print(f"[meetings.store] ⚠ 누락 컬럼 자동 제외 후 저장 성공 — DB 에 추가 필요: {dropped}")
                 print("[meetings.store] 💡 Supabase SQL Editor 에서 실행:")
-                print("    alter table meeting_sessions add column if not exists chat_messages jsonb default '[]'::jsonb;")
-                print("    alter table meeting_sessions add column if not exists summary_meta jsonb;")
+                for c in dropped:
+                    t = col_types.get(c, "text")
+                    print(f"    alter table meeting_sessions add column if not exists {c} {t};")
                 print("    notify pgrst, 'reload schema';")
             break
         except Exception as e:
