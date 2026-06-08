@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r291';
+        var _AHUB_FRONT_REV = 'r292';
 
 
         var _ahubRevWarned = false;
@@ -16864,6 +16864,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var html = '';
                 if (opts.title) html += '<div class="ui-dialog-title">' + esc(opts.title) + '</div>';
                 if (opts.message) html += '<div class="ui-dialog-msg">' + esc(opts.message) + '</div>';
+                // [r292] messageHtml — 신뢰된 호출처에서 라디오/체크박스 등 폼 요소를 넣을 수 있게
+                if (opts.messageHtml) html += '<div class="ui-dialog-msg">' + opts.messageHtml + '</div>';
                 if (hasInput) {
                     if (opts.label) html += '<div class="ui-dialog-label">' + esc(opts.label) + '</div>';
                     if (multiline) html += '<textarea class="ui-dialog-textarea" id="ui-dialog-field" placeholder="' + esc(opts.placeholder||'') + '">' + esc(opts.value||'') + '</textarea>';
@@ -31915,7 +31917,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r291';
+    var _RFS_FRONT_REV = 'r292';
 
 
     async function rfsHealthCheck() {
@@ -32052,6 +32054,8 @@ ${intrLog}
             var stt = j.stt || {};
             // [r286] STT 디바이스/모델 정보 캐시 — 진행 중 배너에서 'GPU(cuda)' 또는 'CPU' 표시
             _mtgState._sttHealth = {gpu: !!stt.gpu, device: stt.device_resolved || (stt.gpu ? 'cuda' : 'cpu')};
+            // [r292] 회의록 작성 LLM 모델 목록 캐시 — 가져오기/재요약 다이얼로그 드롭다운에서 사용
+            _mtgState._llmModels = j.models || [];
             if (!stt.faster_whisper || !stt.ffmpeg) { show('⚠ STT 준비 안 됨 — ' + _annEsc(stt.error || 'faster-whisper/ffmpeg 설치 필요'), WARN_BG, WARN_FG, WARN_BD); return; }
             var llm = j.llm || {};
             if (llm.llm_ready === false) {
@@ -32124,6 +32128,20 @@ ${intrLog}
         h += '<input id="mtg-f-files" type="file" multiple accept=".zip,.flac,.ogg,.oga,.wav,.mp3,.m4a,.aac,.opus,.webm" style="display:none;" onchange="mtgOnFilesPicked(event)">';
         h += '<div id="mtg-files-preview" style="margin-top:8px;"></div>';
         h += '</div>';
+        // [r292] 회의록 작성 LLM 모델 선택 (메인 영역) — 품질에 가장 큰 영향
+        var models = _mtgState._llmModels || [];
+        if (models.length) {
+            h += '<label style="font-size:12px;font-weight:700;">📝 회의록 작성 모델 <span style="color:var(--c-text3);font-weight:400;">— 품질에 가장 큰 영향. Pro/Best 권장.</span>';
+            h += '<select id="mtg-f-llm-model" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);">';
+            // 권장(best/good) 먼저, 그 다음 fast, 그 다음 local
+            var order = {best: 0, good: 1, fast: 2, local: 3};
+            var sorted = models.slice().sort(function (a, b) { var oa = order[a.tier], ob = order[b.tier]; return (oa == null ? 9 : oa) - (ob == null ? 9 : ob); });
+            var defaultId = (sorted.find(function (m) { return m.tier === 'best'; }) || sorted.find(function (m) { return m.tier === 'good'; }) || sorted[0] || {}).id;
+            sorted.forEach(function (m) {
+                h += '<option value="' + _annEsc(m.id) + '"' + (m.id === defaultId ? ' selected' : '') + '>' + _annEsc(m.label) + '</option>';
+            });
+            h += '</select></label>';
+        }
         h += '<details style="font-size:12px;"><summary style="cursor:pointer;color:var(--c-text2);">고급 옵션 — Craig URL/ID로 자동 다운로드(불안정), Whisper 모델, 언어</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:8px 10px;border:1px solid var(--c-border);border-radius:6px;">';
         h += '<div style="font-size:11px;color:var(--c-text3);">💡 Craig 자동 다운로드는 현재 craig.chat 인증 흐름과 안 맞아 자주 실패합니다. 위 파일 업로드를 권장.</div>';
         h += '<label style="font-size:12px;">Craig 녹음 링크/ID<input id="mtg-f-id" type="text" placeholder="https://craig.chat/rec/XXXX?key=YYYY (선택)" style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>';
@@ -32265,7 +32283,9 @@ ${intrLog}
                 body: JSON.stringify({user_id: rfsCurrentUser(), project_id: activeProjectId || null, title: title.trim(),
                     craig_id: cid.trim() || null, craig_url: durl.trim() || null, key: key.trim() || null,
                     upload_token: uploadToken, whisper_model: wmodel, language: lang,
-                    started_at: startedAt || null})
+                    started_at: startedAt || null,
+                    // [r292] 회의록 작성 LLM — 사용자 선택. 안 고르면 백엔드가 기본(Gemini 우선) 사용.
+                    model: (document.getElementById('mtg-f-llm-model') || {}).value || null})
             });
             if (res.status === 503) { var e5 = await res.text(); throw new Error('회의록 모듈 미로드: ' + e5.slice(0, 120)); }
             if (res.status === 409) { throw new Error('이미 처리 중인 작업이 있습니다. 끝난 뒤 다시 시도하세요.'); }
@@ -32814,21 +32834,42 @@ ${intrLog}
     }
     async function mtgResummarize(id, withHint) {
         var url = rfsBackEnd(); if (!url) return;
-        var hint = '';
-        if (withHint) {
+        // [r292] 재요약 시 모델 선택 + 맥락 메모 — 한 다이얼로그에서 함께
+        var models = _mtgState._llmModels || [];
+        var chosen = null, hint = '';
+        if (models.length) {
+            var order = {best: 0, good: 1, fast: 2, local: 3};
+            var sorted = models.slice().sort(function (a, b) { var oa = order[a.tier], ob = order[b.tier]; return (oa == null ? 9 : oa) - (ob == null ? 9 : ob); });
+            var optsHtml = sorted.map(function (m, i) {
+                return '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;cursor:pointer;background:var(--c-paper);">'
+                    + '<input type="radio" name="mtg-rs-model" value="' + _annEsc(m.id) + '"' + (i === 0 ? ' checked' : '') + '>'
+                    + '<span style="flex:1;font-size:12.5px;">' + _annEsc(m.label) + '</span></label>';
+            }).join('');
+            var hintInput = withHint ? '<div style="margin-top:10px;"><label style="font-size:12px;font-weight:700;">맥락 메모 (선택)<input id="mtg-rs-hint" type="text" placeholder="예: Phase G 위키 일치도 검증 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label></div>' : '';
+            var ok = await uiConfirm({
+                title: '📝 회의록 재작성',
+                messageHtml: '<div style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto;">' + optsHtml + '</div>' + hintInput
+                    + '<div style="margin-top:8px;font-size:11px;color:var(--c-text3);">⚠ 사용자가 직접 편집한 내용은 덮어쓰기됩니다.</div>',
+                confirmText: '재작성 시작', cancelText: '취소'
+            });
+            if (!ok) return;
+            var sel = document.querySelector('input[name="mtg-rs-model"]:checked');
+            chosen = sel ? sel.value : null;
+            var hi = document.getElementById('mtg-rs-hint');
+            hint = hi ? String(hi.value || '').trim() : '';
+        } else if (withHint) {
             var v = await uiPrompt({title: '맥락 메모', message: 'LLM 에 추가로 알려줄 회의 배경/주제(선택). 예: "Phase G 위키 일치도 검증 회의"', placeholder: '메모 (선택)'});
-            if (v == null) return;   // 취소
+            if (v == null) return;
             hint = String(v || '').trim();
         }
-        // 즉시 UI 상태 마킹 — 사용자가 누른 순간 펄스 시작(서버 응답 전부터)
         if (_mtgState.current && _mtgState.current.id === id) {
             _mtgState.current.status = 'summarizing';
             mtgRenderDetail();
         }
-        showToast('🔄 회의록 작성 시작 — 백그라운드 처리 중(이 페이지 나가도 계속)', 'info');
+        showToast('🔄 회의록 작성 시작' + (chosen ? (' — ' + chosen) : '') + ' (백그라운드)', 'info');
         try {
             var res = await fetch(url + '/meetings/sessions/' + id + '/summarize',
-                {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({hint: hint})});
+                {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({hint: hint, model: chosen})});
             if (res.status === 409) { showToast('다른 작업 진행 중 — 끝난 뒤 다시 시도', 'alert'); return; }
             if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 150)); }
             // 즉시 폴링 진입 — status='summarizing' 이라 mtgOpenSession 내부 폴링이 자동으로 5초마다 갱신

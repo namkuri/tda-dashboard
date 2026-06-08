@@ -5,81 +5,119 @@ from typing import List, Dict, Any, Optional
 
 from llm_router import get_llm
 
-_SYSTEM = """당신은 한국어 회의 녹취록을 받아 **실무에서 그대로 회람할 수 있는 수준의 회의록(JSON)** 으로 정리하는 도구입니다.
-형식이 아니라 **내용의 구체성**이 핵심입니다. 행위(논의했다·설명했다·제시했다·정해졌다·선호했다)만 적지 말고, **무엇을·왜·어떻게·결과는 무엇** 인지를 풀어 쓰세요.
+_SYSTEM = """당신은 한국어 회의 녹취록을 받아 **편집국에 그대로 보낼 수 있는 수준의 회의록(JSON)** 으로 정리하는 시니어 에디터입니다.
+출력 품질의 기준점은 다음과 같습니다(실제 결과 예시):
+  · 각 안건이 3~6문단(배경 → 본문 → 대안/반박 → 결정)으로 풀어 써짐
+  · 핵심 인용/콜아웃이 안건당 1~2개
+  · 단계·티어·비교가 필요한 곳엔 표/티어 구조 활용
+  · 발화자 식별자를 인용으로 명시(예: "ethaniya 제안: …")
+  · 액션 아이템이 담당자·기한·근거까지 포함
+
+**얕은 한두 문장 요약은 불합격**입니다. 분량보다 **내용의 구체성**이 핵심 — 무엇을·왜·어떻게·결과 무엇 까지 풀어 쓰세요.
 
 [근거 규칙]
 1. 녹취 내용에만 근거. 추측·일반 지식 금지.
-2. STT 오인식으로 보이는 단어는 맥락에 맞게 자연스럽게 교정해 사용한다(분명한 경우만).
-3. 발화 토씨 그대로보다, 핵심 주장·근거·결론을 재구성해 적는다.
+2. STT 오인식이 분명한 단어는 맥락에 맞게 자연스럽게 교정한다.
+3. 발화 토씨가 아니라 **핵심 주장·근거·결론**을 재구성한다.
+4. 전문 용어(Envelope, Joint Agency, SDF, Dual Contouring 등)는 발화 의도대로 표기 유지 — 임의 번역·해석 금지.
 
-[메타 동사 금지 — 매우 중요]
+[메타 동사 금지 — 절대 규칙]
 "논의했다 / 설명했다 / 제시했다 / 선호했다 / 정해졌다 / 결정했다(단독) / 강조했다 / 공유했다 / 검토했다" 같은
-"뭐 했는지만 적는 표현"은 그 자체로 사용하지 말고, **실제 알맹이**(주장·근거·수치·결정 사항)를 같이 적는다.
-나쁜 예) "환경 요소에 대한 접근 방안을 제시하며, 메커니즘과 구현 방법에 대해 상세히 설명했다."
-좋은 예) "ethaniya 제안: 환경을 절차적(procedural) 생성으로 가자. 근거: 프리셋은 베타 후 다양성 확장이 어렵다.
-        namkyu7341 반박: 절차적은 NPC 결합 충돌이 잦으니 MVP까지는 프리셋 기반으로. 합의: MVP=프리셋, 베타 후 절차적 확장."
+'뭐 했는지만 적는 표현'은 그 자체로 사용 금지. **실제 알맹이**(주장·근거·수치·결정)를 같이 적는다.
+나쁜 예) "환경 요소의 접근 방안과 구현 방법에 대해 논의했다."
+좋은 예) "ethaniya 제안: 환경 설명을 ① 환경 자체(생성/외형/식생) ② 작동 방식(이벤트·붕괴) ③ 상호작용(점프·등반) 3층위로 분리.
+        근거: 현재 한 항목에 세 층위가 섞여 우선도·구현 난이도 토론이 불가능."
 
 [안건(agenda) 규칙]
-- 5~8개로 **통합/묶음**. 비슷한 주제(예: '환경 요소'+'이벤트 요소'+'MVP 계획' → 'MVP 구성과 환경 구현 방안')는 하나로.
-- 키워드 단어 1개가 아니라 **이해 가능한 어구**(예: "환경/이벤트 절차적 생성 vs 프리셋")로.
-- **중요도 순**으로 정렬(가장 큰 영향·결정이 앞).
+- 3~6개로 **통합/묶음**. 비슷한 주제는 하나로 합쳐 큰 묶음으로.
+- 단어 1개가 아니라 **이해 가능한 어구**(예: "환경 시스템 정의 — 층위 분리와 의존도 단계").
+- **중요도 순** 정렬.
 
-[논의(topics) 규칙]
+[논의(topics) 규칙 — 가장 중요]
 - agenda 와 **1:1 같은 순서·같은 제목**으로 매핑.
-- 각 항목 summary 는 3~6문장:
-  · 핵심 쟁점/문제 정의
-  · 주요 주장(누가 + 무엇을 + 왜)
-  · 반대/대안(있으면)
-  · 결정·합의 또는 미해결 사항
-- "논의됐다/제시됐다" 같은 빈 동사로 끝내지 말 것.
+- 각 항목의 sections 배열에 **여러 하위 섹션**을 담는다(배경·기술 파이프라인·정의 합의·티어 등).
+- sections[].kind 종류:
+    "text"     — 일반 단락(content 에 3~8문장)
+    "list"     — 불릿 목록(items 배열, 각 항목은 한 문장 또는 'X — 설명' 형식)
+    "callout"  — 핵심 피드백/권장 — 발화자 명시(by 필드) + content 1~3문장
+    "tier"     — 단계/난이도 비교(items 배열, 각 {label,title,body} 형식 — 예: T1 단순/선행 …)
+    "table"    — 표(headers, rows). 역할 분담·매트릭스 등에 사용
+- 분량 기준: agenda 1개당 sections 가 최소 2개, 보통 3~5개여야 한다.
+- 한 안건의 모든 section 을 합쳐도 3문장 이하라면 **부적합** — 녹취를 더 깊이 읽고 풀어쓸 것.
 
 [결정사항(decisions) 규칙]
-- 추상명사 단독("의존도 설정", "역할 분담", "테스트 방법 결정") **금지**.
+- 추상명사 단독("의존도 설정", "역할 분담") **금지**.
 - 항상 **무엇을 + 어떻게 + 왜** 포함.
-나쁜 예) "MVP 개발 순서와 의존도가 설정되었습니다."
-좋은 예) "MVP 개발 순서를 ① 인벤토리 베스트 버전 설계 → ② 종속 시스템 도출 → ③ 최소 MVP 추출 순으로 결정.
-        의존도: 하위 시스템(인벤토리·환경 프리셋)이 상위 시스템(NPC·이벤트)보다 선행."
+좋은 예) "MVP 개발 순서: ① 시스템 종속성 채우기 → ② 마케팅 MVP 정의 → ③ 종속성 복귀·배분 → ④ 내부테스트 → ⑤ 알파 → ⑥ Next Fest.
+        근거: 유저 경험 우선으로 가면 종속성 미고려로 리팩토링 발생."
 
 [액션 아이템(action_items) 규칙]
-- who 는 **회의 참가자 정확 식별자**만 사용(예: namkyu7341, ethaniya, wooheesung).
-  "나·본인·우리·남규(별칭)" 같은 모호한 호칭은 금지. 발화 맥락에서 자기 자신을 가리키면 발화자 식별자로 대체.
-- 같은 담당자의 작업은 한 줄로 묶지 말고, **명확한 단위 액션**으로 분리하되 중복은 통합.
-- "전원 모두" 동일 작업이면 who="모두" OK.
-- due 미상이면 "" (억지로 채우지 말 것).
+- who 는 **참가자 정확 식별자**만(예: namkyu7341, ethaniya, wooheesung). '나·본인·우리·별칭' 금지.
+- 같은 담당자라도 단위 액션 별로 분리하되 중복은 통합.
+- "전원 동일" 작업이면 who="모두" OK.
+- due 미상이면 "" (억지 채움 금지). 발화에 "이번 주", "수요일까지" 같은 표현이 있으면 그대로 반영.
+- what 끝에 **근거/방법**을 1구절 첨부 가능 — 예: "프로젝트 위키 자동 분류 도구 HTML 임포트 테스트 (라이브 협업 버그 동시 확인)"
+
+[원칙(principles) — 선택 필드]
+- 회의에서 합의된 **재사용 가능한 원칙/가이드라인**이 있다면 별도 추출.
+- 예: "설명은 환경/이벤트/상호작용 세 층위로 분리한다", "MVP는 독립 모듈부터, 통합은 마지막".
 
 [요약(tldr) 규칙]
-- 4~6문장 한 단락. "어떤 안건을 다뤘고, 어떤 결정·합의가 있었으며, 누가 무엇을 맡았는지" 한눈에 보이게.
-- 메타 동사 단독 금지. 결정/맡은 사람을 명시.
+- 5~8문장 한 단락. 주요 안건·핵심 결정·담당 배분을 한눈에 보이게.
+- 메타 동사 단독 금지. 결정과 담당자를 구체적으로 명시.
 
 [짧은 회의]
-- 발화가 있으면 tldr 만큼은 반드시 채움. 결정·액션이 실제로 없으면 빈 배열 OK(억지 생성 금지).
+- 발화가 있으면 tldr 만큼은 반드시 채움. 결정·액션이 실제 없으면 빈 배열 OK.
 
 [출력] 마크다운/설명 없이 JSON only:
 ```json
 {
-  "tldr": "4~6문장 핵심 요약",
-  "agenda": ["통합된 안건 1 (중요도 순)", "..."],
-  "topics": [{"title":"agenda와 동일", "summary":"3~6문장 알맹이 있는 정리"}],
-  "decisions": ["무엇을 어떻게(왜) 결정했는지 명확히 — 1문장 1결정"],
-  "action_items": [{"who":"namkyu7341|ethaniya|wooheesung|모두","what":"명확한 단위 액션","due":""}]
+  "tldr": "5~8문장 한 단락",
+  "agenda": ["통합 안건 1 (중요도 순)", "..."],
+  "topics": [
+    {
+      "title": "agenda 와 동일",
+      "lead": "1~2문장 도입 — 이 안건의 핵심을 한 줄로",
+      "sections": [
+        {"kind":"text", "heading":"배경 — Envelope 구조", "content":"3~8문장 단락"},
+        {"kind":"list", "heading":"기술 파이프라인 & 난이도",
+         "items":["계곡/다리 (저비용) — 통로 바닥 내려 …", "붕괴 (중) — 평지 무너져 …", "침수 (고) — 유체 시뮬 …"]},
+        {"kind":"callout", "heading":"핵심 피드백 — wooheesung",
+         "content":"현재 '환경' 설명에 세 층위가 섞여 있어 분리가 전제되어야 한다.", "by":"wooheesung"},
+        {"kind":"tier", "heading":"의존도에 따른 단계",
+         "items":[
+           {"label":"T1","title":"단순·선행","body":"가스·슬라임·낙석. SDF 변경 불필요."},
+           {"label":"T2","title":"중간","body":"SDF 절벽·계곡·붕괴 지형."},
+           {"label":"T3","title":"복잡·후행","body":"NPC 결합 사례. 기획이 가장 많이 필요해 맨 뒤."}
+         ]},
+        {"kind":"table", "heading":"역할 / 트랙 배분",
+         "headers":["담당","주요 트랙"],
+         "rows":[["ethaniya","서사 드리븐 (게이트/로더)"],["namkyu7341","플랫폼 — 인프라·근접 음성"],["wooheesung","AI (양 트랙 오감)"]]}
+      ]
+    }
+  ],
+  "decisions": ["무엇을 + 어떻게 + 왜 — 1문장 1결정"],
+  "action_items": [{"who":"namkyu7341|ethaniya|wooheesung|모두","what":"단위 액션 (근거 한 구절)","due":""}],
+  "principles": ["합의된 원칙/가이드라인 (선택)"]
 }
 ```
 """
 
 
 _SYSTEM_REDUCE = """당신은 회의를 N개 부분으로 나눠 정리한 부분 회의록(JSON 배열)을 받아,
-**전체 회의의 최종 회의록 JSON 1개**로 종합하는 도구입니다. 단순 합치기가 아니라 **재정리**해야 합니다.
+**전체 회의의 최종 회의록 JSON 1개**로 종합하는 시니어 에디터입니다. 단순 합치기가 아닌 **재정리**.
 
 [종합 규칙]
-1. 같은 주제는 하나의 agenda 항목으로 통합. 결과적으로 안건은 5~8개로.
-2. agenda 는 **중요도 순**(영향·결정·시간 비중이 큰 순서)으로 정렬.
-3. topics 는 agenda 와 **같은 순서·같은 제목**으로 매핑. summary 는 3~6문장(메타 동사 금지, 알맹이 위주).
-4. decisions 는 추상명사 단독 금지. 무엇을·어떻게·왜 포함. 같은 결정은 1개로 통합.
-5. action_items 의 who 는 정확한 참가자 식별자(나·본인·별칭 금지). 중복 액션 통합.
-6. tldr 은 4~6문장으로 전체 회의의 안건·결정·담당을 압축.
+1. 같은 주제는 하나의 agenda 항목으로 통합. 결과 3~6개 안건으로.
+2. agenda 는 **중요도 순**(영향·결정·시간 비중) 정렬.
+3. topics 는 agenda 와 1:1 같은 순서·같은 제목으로 매핑. 각 topic 의 sections 배열을 풍부하게:
+   배경/논의/콜아웃/티어/표 등 여러 섹션으로(메타 동사 금지, 발화자 인용 권장).
+4. decisions 는 추상명사 단독 금지. '무엇을 + 어떻게 + 왜' 포함. 같은 결정 1개로 통합.
+5. action_items: who 는 정확한 참가자 식별자(나·본인·별칭 금지). 중복 통합.
+6. principles: 회의 합의된 재사용 가능 원칙을 별도 추출.
+7. tldr 은 5~8문장으로 전체 회의의 안건·결정·담당을 압축.
 
-[출력] 시스템 프롬프트의 원본 형식과 동일한 JSON only.
+[출력] 시스템 프롬프트의 sections 모델을 그대로 따른 JSON only.
 """
 
 
@@ -92,7 +130,7 @@ def _segments_to_body(segments):
     return "\n".join(lines)
 
 
-async def _llm_json(llm, system: str, user: str, *, model=None, temperature=0.3, max_out=8000):
+async def _llm_json(llm, system: str, user: str, *, model=None, temperature=0.3, max_out=16000):
     """LLM 호출 — JSON 응답 강제(Gemini는 response_format='json'). 실패 시 raw 텍스트도 반환."""
     buf = ""
     try:
@@ -179,7 +217,7 @@ async def summarize(segments: List[Dict[str, Any]], *, title: str = "",
             # 단일 호출
             user = "\n".join(common_header + ["", "[녹취록]", chunks_text[0], "",
                                               "위 회의록을 한국어 JSON 으로 작성하세요. JSON 외 어떤 글자도 출력하지 마세요."])
-            buf = await _llm_json(llm, _SYSTEM, user, model=model, temperature=0.3, max_out=8000)
+            buf = await _llm_json(llm, _SYSTEM, user, model=model, temperature=0.3, max_out=16000)
             parsed = _extract_json(buf)
             if parsed:
                 return _normalize(parsed, participants)
@@ -208,7 +246,7 @@ async def summarize(segments: List[Dict[str, Any]], *, title: str = "",
             "", "[부분 회의록들]", merged_text, "",
             "최종 회의록 JSON 1개만 출력. 형식은 원본 시스템 프롬프트와 동일."
         ])
-        buf = await _llm_json(llm, _SYSTEM_REDUCE, user, model=model, temperature=0.3, max_out=8000)
+        buf = await _llm_json(llm, _SYSTEM_REDUCE, user, model=model, temperature=0.3, max_out=16000)
         parsed = _extract_json(buf)
         if parsed:
             return _normalize(parsed, participants)
@@ -243,12 +281,30 @@ def _normalize(parsed: Dict[str, Any], participants: Optional[List[Dict[str, Any
             return w
         actions = [{"who": _norm_who(a.get("who", "")), "what": a.get("what", ""), "due": a.get("due", "")}
                    for a in actions if (a.get("what") or "").strip()]
+    # [r292] 새 sections 모델 + principles 보존. 구 모델(topics[].summary) 도 호환.
+    raw_topics = parsed.get("topics") or []
+    topics = []
+    for t in raw_topics:
+        if not isinstance(t, dict):
+            continue
+        # 구 모델 fallback: summary 만 있으면 sections=[{kind:text,content:summary}] 로 승격
+        secs = t.get("sections") or []
+        if not secs and (t.get("summary") or "").strip():
+            secs = [{"kind": "text", "content": t.get("summary")}]
+        topics.append({
+            "title": t.get("title") or "",
+            "lead": t.get("lead") or "",
+            "sections": secs,
+            # 구 호환: summary 도 유지(있을 경우)
+            "summary": t.get("summary") or "",
+        })
     return {
         "tldr": parsed.get("tldr") or "",
         "agenda": parsed.get("agenda") or [],
-        "topics": parsed.get("topics") or [],
+        "topics": topics,
         "decisions": parsed.get("decisions") or [],
         "action_items": actions,
+        "principles": parsed.get("principles") or [],
     }
 
 
@@ -293,7 +349,9 @@ def _partial_or_error(raw: str) -> Dict[str, Any]:
 
 def to_markdown(title: str, summary: Dict[str, Any], started_at: str = "",
                 participants: Optional[List[Dict[str, Any]]] = None) -> str:
-    """회의록 dict → 위키 내보내기용 마크다운."""
+    """회의록 dict → 위키 내보내기용 마크다운.
+    [r292] 새 sections 모델(text/list/callout/tier/table) 렌더. 구 summary 도 호환.
+    """
     p = ", ".join([x.get("name", "") for x in (participants or [])])
     md = [f"# 📝 {title} 회의록", ""]
     if started_at:
@@ -304,12 +362,42 @@ def to_markdown(title: str, summary: Dict[str, Any], started_at: str = "",
     if summary.get("tldr"):
         md += ["## 요약", summary["tldr"], ""]
     if summary.get("agenda"):
-        md += ["## 안건"] + [f"- {a}" for a in summary["agenda"]] + [""]
+        md += ["## 안건"] + [f"{i+1}. {a}" for i, a in enumerate(summary["agenda"])] + [""]
     if summary.get("topics"):
         md.append("## 논의")
-        for t in summary["topics"]:
-            md.append(f"### {t.get('title','')}")
-            md.append(t.get("summary", ""))
+        for ti, t in enumerate(summary["topics"]):
+            md.append(f"### {ti+1:02d}. {t.get('title','')}")
+            if t.get("lead"):
+                md += [f"_{t['lead']}_", ""]
+            secs = t.get("sections") or []
+            if not secs and t.get("summary"):
+                md += [t["summary"], ""]
+            for s in secs:
+                kind = (s.get("kind") or "text").lower()
+                heading = s.get("heading") or ""
+                if heading:
+                    md.append(f"**◆ {heading}**")
+                if kind == "list":
+                    for it in (s.get("items") or []):
+                        md.append(f"- {it}")
+                elif kind == "callout":
+                    bb = f" — _{s.get('by')}_" if s.get("by") else ""
+                    md += [f"> 💡 **핵심**{bb}", f"> {s.get('content','')}"]
+                elif kind == "tier":
+                    for it in (s.get("items") or []):
+                        lbl, ttl, body = it.get("label",""), it.get("title",""), it.get("body","")
+                        md.append(f"- **`{lbl}` {ttl}** — {body}")
+                elif kind == "table":
+                    hdrs = s.get("headers") or []
+                    rows = s.get("rows") or []
+                    if hdrs:
+                        md.append("| " + " | ".join(hdrs) + " |")
+                        md.append("|" + "|".join(["---"] * len(hdrs)) + "|")
+                        for r in rows:
+                            md.append("| " + " | ".join([str(c) for c in r]) + " |")
+                else:  # text
+                    md.append(s.get("content", ""))
+                md.append("")
             md.append("")
     if summary.get("decisions"):
         md += ["## 결정사항"] + [f"- {d}" for d in summary["decisions"]] + [""]
@@ -319,6 +407,8 @@ def to_markdown(title: str, summary: Dict[str, Any], started_at: str = "",
             due = (" (기한: " + a.get("due", "") + ")") if a.get("due") else ""
             md.append(f"- [ ] **{a.get('who','')}** — {a.get('what','')}{due}")
         md.append("")
+    if summary.get("principles"):
+        md += ["## 합의된 원칙"] + [f"- ✓ {pr}" for pr in summary["principles"]] + [""]
     return "\n".join(md)
 
 

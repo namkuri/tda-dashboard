@@ -79,7 +79,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r291"
+SERVER_REVISION = "r292"
 
 
 
@@ -1493,7 +1493,31 @@ async def meetings_health():
     except Exception:
         llm_state["ollama_reachable"] = False
     llm_state["llm_ready"] = bool(llm_state.get("gemini_registered") or llm_state.get("ollama_reachable"))
-    return {"ok": _MEET_OK, "revision": SERVER_REVISION, "error": _MEET_ERR, "stt": av, "llm": llm_state}
+    # [r292] 회의록 작성용 가용 모델 목록 — 프론트 모델 선택 드롭다운에서 사용.
+    models = []
+    if llm_state.get("gemini_registered"):
+        models += [
+            {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro (최고 품질, 유료/한도)", "kind": "gemini", "tier": "best"},
+            {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash (권장 · 무료)", "kind": "gemini", "tier": "good"},
+            {"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite (빠름)", "kind": "gemini", "tier": "fast"},
+            {"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash (구버전)", "kind": "gemini", "tier": "good"},
+        ]
+    if llm_state.get("ollama_reachable"):
+        try:
+            import httpx as _hx
+            with _hx.Client(timeout=2.0) as cli:
+                r = cli.get("http://localhost:11434/api/tags")
+                if r.status_code == 200:
+                    for m in (r.json().get("models") or []):
+                        n = m.get("name") or ""
+                        if not n: continue
+                        # 회의록에 부적합한 임베딩 모델 제외
+                        if "embed" in n.lower(): continue
+                        models.append({"id": n, "label": f"Ollama: {n}", "kind": "ollama", "tier": "local"})
+        except Exception:
+            pass
+    return {"ok": _MEET_OK, "revision": SERVER_REVISION, "error": _MEET_ERR,
+            "stt": av, "llm": llm_state, "models": models}
 
 
 @app.get("/meetings/schema-sql")
