@@ -10963,7 +10963,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r275';
+        var _AHUB_FRONT_REV = 'r276';
 
 
         var _ahubRevWarned = false;
@@ -17371,7 +17371,7 @@ return data;
             ['ai_usage_logs', "id text primary key, project_id text, user_id text, user_name text, kind text, model text, host text, gpu_host_id text, in_tokens int default 0, out_tokens int default 0, dur_ms bigint default 0, detail text, out_summary text, created_at timestamptz default now()"],
             ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"],
             // [r242] 회의록 자동작성 — Craig 녹음 → STT → LLM 회의록
-            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text"],
+            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text, chat_messages jsonb default '[]'::jsonb, summary_meta jsonb"],
             // [r243] 프로덕트 관리 — Stage(타입/생애주기/Goal) + 게임개발 직무체계 계층 태그
             ['product_stages', "id text primary key, project_id text, name text not null default '새 Stage', type text, goal text default '', lifecycle text, tags jsonb default '[]'::jsonb, tag_meta jsonb default '{}'::jsonb, status text default 'active', sort_order bigint, created_by text, created_at timestamptz default now(), updated_at timestamptz default now()"],
             // [r244] 프로젝트별 커스텀 직무체계(대/중/소 추가분). id=project_id, nodes=커스텀 노드 배열
@@ -31753,7 +31753,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r275';
+    var _RFS_FRONT_REV = 'r276';
 
 
     async function rfsHealthCheck() {
@@ -32164,59 +32164,159 @@ ${intrLog}
             });
             h += '</div></div>';
         }
-        h += '<div style="display:flex;gap:14px;align-items:flex-start;">';
-        // 좌: 대화내역
-        h += '<div style="flex:1;min-width:0;border:1px solid var(--c-border);border-radius:10px;background:var(--c-paper);max-height:80vh;overflow-y:auto;">';
-        // [r275] 헤더 — 시작 시각 + 시간 표시 토글(상대/절대)
+        // [r276] 회의록 유무에 따라 레이아웃 결정 — 회의록 있으면 위/대화 아래, 없으면 대화 위.
+        var hasSummary = !!(sum.tldr || (sum.agenda || []).length || (sum.topics || []).length || (sum.decisions || []).length || (sum.action_items || []).length);
+        var canGen = segs.length > 0 && !_mtgInProgress(s);
+        // 헤더(제목 + 추천)
+        h += _mtgRenderTitleBar(s);
+        // 위쪽: 회의록(있으면) / 대화내역(없으면)
+        if (hasSummary) {
+            h += _mtgRenderSummaryCard(s, sum, /*main=*/true);
+            h += _mtgRenderTranscriptCard(s, segs, /*compact=*/true);
+        } else {
+            h += _mtgRenderTranscriptCard(s, segs, /*compact=*/false);
+            h += _mtgRenderEmptySummary(s, canGen);
+        }
+        main.innerHTML = h;
+    }
+
+    // [r276] 제목 바 — 제목 클릭해 수정 + ✨ 추천 + 액션 버튼들
+    function _mtgRenderTitleBar(s) {
+        var h = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">';
+        h += '<h2 style="margin:0;font-size:17px;font-weight:800;flex:1;min-width:0;cursor:pointer;" onclick="mtgEditTitle(\'' + s.id + '\')" title="클릭해 제목 수정">📝 ' + _annEsc(s.title || '(제목 없음)') + '</h2>';
+        h += '<button class="aihub-gpu-btn" style="font-size:11.5px;" onclick="mtgSuggestTitle(\'' + s.id + '\')" title="LLM 으로 제목 추천">✨ 제목 추천</button>';
+        h += '<button class="aihub-gpu-btn" style="font-size:11.5px;" onclick="mtgExportWiki(\'' + s.id + '\')">📄 위키로</button>';
+        h += '<button class="aihub-gpu-btn" style="font-size:11.5px;border-color:#d2393d;color:#d2393d;" onclick="mtgDelete(\'' + s.id + '\')">🗑 삭제</button>';
+        h += '</div>';
+        return h;
+    }
+
+    // [r276] 대화내역 카드 — 음성/채팅 합쳐서 시각순. compact=true면 좁게.
+    function _mtgRenderTranscriptCard(s, segs, compact) {
         var startedAtStr = '';
         try { if (s.started_at) startedAtStr = new Date(s.started_at).toLocaleString(); } catch (e) {}
         var timeBtn = _mtgState._timeMode === 'abs' ? '🕐 절대' : '⏱ 상대';
         var timeW = _mtgState._timeMode === 'abs' ? '64' : '38';
-        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;display:flex;align-items:center;gap:8px;">'
-            + '<span style="font-weight:700;font-size:13px;">💬 대화내역</span>'
-            + '<span style="color:var(--c-text3);font-size:11.5px;font-weight:400;">' + segs.length + '문장 · ' + _mtgFmtDur(s.duration_sec) + (startedAtStr ? (' · 시작 <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;" title="시작 시각 수정">' + _annEsc(startedAtStr) + '</a>') : (' · <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">시작 시각 설정</a>')) + '</span>'
-            + '<button class="aihub-gpu-btn" style="margin-left:auto;font-size:11px;" onclick="mtgToggleTimeMode()" title="시간 표시 전환">' + timeBtn + '</button>'
-            + '</div>';
-        h += '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px;">';
-        if (!segs.length) h += '<div style="color:var(--c-text3);">대화내역이 없습니다.</div>';
-        segs.forEach(function (g) {
-            var c = _mtgSpeakerColor(g.speaker);
-            h += '<div style="display:flex;gap:8px;font-size:12.5px;line-height:1.5;">'
-                + '<span style="flex-shrink:0;color:var(--c-text3);font-family:ui-monospace,monospace;font-size:10.5px;width:' + timeW + 'px;text-align:right;">' + _mtgFmtTime(g.t, s.started_at) + '</span>'
-                + '<span style="flex-shrink:0;font-weight:700;color:' + c + ';min-width:64px;cursor:pointer;" title="클릭해 화자 이름 변경" onclick="mtgRenameSpeaker(\'' + s.id + '\',\'' + _annEsc(g.speaker || '').replace(/'/g, '\\x27') + '\')">' + _annEsc(g.speaker) + '</span>'
-                + '<span style="flex:1;">' + _annEsc(g.text) + '</span></div>';
+        // 통합 대화내역: 음성(t=초) + 채팅(at=ISO → started_at 기준 초 환산)
+        var startedMs = s.started_at ? +(new Date(s.started_at)) : null;
+        var chats = (s.chat_messages || []).map(function (m, i) {
+            var t = 0;
+            if (m.at && startedMs) { try { t = Math.max(0, Math.floor((+(new Date(m.at)) - startedMs) / 1000)); } catch (e) {} }
+            return {kind: 'chat', i: i, t: t, at: m.at, speaker: m.byName || m.by || '?', text: m.text};
         });
-        h += '</div></div>';
-        // 우: 회의록
-        h += '<div style="flex:0 0 420px;max-width:44%;border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);max-height:80vh;overflow-y:auto;">';
-        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;display:flex;align-items:center;gap:6px;"><span style="font-weight:700;font-size:13px;flex:1;">📝 회의록</span>'
-            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgResummarize(\'' + s.id + '\')">🔄 재요약</button>'
-            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgExportWiki(\'' + s.id + '\')">📄 위키로</button>'
-            + '<button class="aihub-gpu-btn" style="font-size:11px;border-color:#d2393d;color:#d2393d;" onclick="mtgDelete(\'' + s.id + '\')">🗑</button></div>';
-        h += '<div style="padding:12px 14px;font-size:12.5px;line-height:1.6;">';
-        if (sum.error) h += '<div style="color:#b53236;font-size:11.5px;margin-bottom:8px;">⚠ ' + _annEsc(sum.error) + '</div>';
-        if (sum.tldr) h += '<div style="font-weight:700;margin-bottom:4px;">요약</div><div style="margin-bottom:12px;color:var(--c-text2);">' + _annEsc(sum.tldr) + '</div>';
-        if ((sum.agenda || []).length) { h += '<div style="font-weight:700;margin-bottom:4px;">안건</div><ul style="margin:0 0 12px;padding-left:18px;color:var(--c-text2);">' + sum.agenda.map(function (a) { return '<li>' + _annEsc(a) + '</li>'; }).join('') + '</ul>'; }
-        if ((sum.topics || []).length) { h += '<div style="font-weight:700;margin-bottom:4px;">논의</div>'; sum.topics.forEach(function (tp) { h += '<div style="margin-bottom:8px;"><div style="font-weight:600;">• ' + _annEsc(tp.title || '') + '</div><div style="color:var(--c-text3);font-size:12px;margin-left:10px;">' + _annEsc(tp.summary || '') + '</div></div>'; }); }
-        if ((sum.decisions || []).length) { h += '<div style="font-weight:700;margin:8px 0 4px;">결정사항</div><ul style="margin:0 0 12px;padding-left:18px;color:var(--c-text2);">' + sum.decisions.map(function (d) { return '<li>' + _annEsc(d) + '</li>'; }).join('') + '</ul>'; }
-        if ((sum.action_items || []).length) { h += '<div style="font-weight:700;margin:8px 0 4px;">액션 아이템</div><div style="display:flex;flex-direction:column;gap:4px;">' + sum.action_items.map(function (a) { var due = a.due ? (' <span style="color:var(--c-text3);">(' + _annEsc(a.due) + ')</span>') : ''; return '<label style="display:flex;gap:6px;align-items:baseline;"><input type="checkbox" disabled><span><b>' + _annEsc(a.who || '') + '</b> — ' + _annEsc(a.what || '') + due + '</span></label>'; }).join('') + '</div>'; }
-        if (!sum.tldr && !(sum.agenda || []).length && !(sum.decisions || []).length) {
-            // [r275] 빈 회의록 — 큰 생성 버튼 + 짧은 회의 안내
-            var canGen = segs.length > 0 && !_mtgInProgress(s);
-            h += '<div style="text-align:center;padding:20px 10px;color:var(--c-text3);">';
-            h += '<div style="font-size:36px;">📝</div>';
-            h += '<div style="font-weight:700;color:var(--c-text2);margin-top:6px;">회의록이 아직 작성되지 않았습니다</div>';
-            h += '<div style="font-size:11.5px;margin-top:4px;">' + (canGen ? '대화내역을 바탕으로 LLM 이 회의록을 작성합니다.' : '대화내역 처리가 끝난 뒤 시도해 주세요.') + '</div>';
-            if (canGen) {
-                h += '<button class="aihub-gpu-btn primary" style="margin-top:12px;font-size:12.5px;padding:6px 14px;" onclick="mtgResummarize(\'' + s.id + '\')">📝 회의록 생성</button>';
-                h += '<div style="margin-top:8px;font-size:10.5px;color:var(--c-text3);">맥락 메모와 함께 생성하려면 <a onclick="mtgResummarize(\'' + s.id + '\',true)" style="color:var(--c-accent);cursor:pointer;">고급</a></div>';
-            }
+        var voices = (segs || []).map(function (g) { return {kind: 'voice', t: g.t || 0, speaker: g.speaker, text: g.text}; });
+        var merged = voices.concat(chats).sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
+
+        // 참가자 칩
+        var spk = {};
+        merged.forEach(function (g) { var n = g.speaker || '?'; spk[n] = (spk[n] || 0) + 1; });
+        var spkList = Object.keys(spk).sort(function (a, b) { return spk[b] - spk[a]; });
+
+        var maxH = compact ? '40vh' : '60vh';
+        var h = '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-paper);margin-bottom:14px;">';
+        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+            + '<span style="font-weight:700;font-size:13px;">💬 대화내역</span>'
+            + '<span style="color:var(--c-text3);font-size:11.5px;font-weight:400;">' + merged.length + '항목 · 음성 ' + voices.length + ' · 채팅 ' + chats.length + ' · ' + _mtgFmtDur(s.duration_sec)
+            + (startedAtStr ? (' · 시작 <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">' + _annEsc(startedAtStr) + '</a>') : (' · <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">시작 시각 설정</a>'))
+            + '</span>'
+            + '<span style="margin-left:auto;display:flex;gap:6px;">'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgAddVoiceFiles(\'' + s.id + '\')" title="추가 음성 파일 업로드">+ 음성</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgToggleChatInput()" title="텍스트 채팅 추가">+ 채팅</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgToggleTimeMode()" title="시간 표시 전환">' + timeBtn + '</button>'
+            + '</span></div>';
+        // 참가자 칩 줄
+        if (spkList.length) {
+            h += '<div style="padding:6px 12px;border-bottom:1px solid var(--c-border);display:flex;flex-wrap:wrap;gap:5px;background:var(--c-paper);">';
+            h += '<span style="color:var(--c-text3);font-size:11px;align-self:center;">👥</span>';
+            spkList.forEach(function (sn) {
+                var c = _mtgSpeakerColor(sn);
+                h += '<span onclick="mtgRenameSpeaker(\'' + s.id + '\',\'' + _annEsc(sn).replace(/'/g, '\\x27') + '\')" style="display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;border:1px solid ' + c + ';color:' + c + ';font-size:10.5px;font-weight:700;cursor:pointer;" title="클릭해 이름 변경">'
+                    + '<span style="width:6px;height:6px;border-radius:50%;background:' + c + ';"></span>' + _annEsc(sn) + ' <span style="color:var(--c-text3);font-weight:400;">×' + spk[sn] + '</span></span>';
+            });
             h += '</div>';
         }
+        // 채팅 입력 폼(접힘)
+        h += '<div id="mtg-chat-input" style="display:none;padding:6px 12px;border-bottom:1px solid var(--c-border);background:var(--c-card);">'
+            + '<div style="display:flex;gap:6px;">'
+            + '<input id="mtg-chat-text" type="text" placeholder="채팅 메시지 입력 후 Enter (시각: 회의 시작 + 지금까지 경과)" style="flex:1;padding:6px 9px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);font-size:12px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();mtgAddChat(\'' + s.id + '\');}">'
+            + '<button class="aihub-gpu-btn primary" style="font-size:11.5px;" onclick="mtgAddChat(\'' + s.id + '\')">전송</button>'
+            + '</div></div>';
+        // 본문
+        h += '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px;max-height:' + maxH + ';overflow-y:auto;">';
+        if (!merged.length) h += '<div style="color:var(--c-text3);">대화내역이 없습니다. + 음성/채팅 으로 추가하세요.</div>';
+        merged.forEach(function (g) {
+            var c = _mtgSpeakerColor(g.speaker);
+            var icon = g.kind === 'chat' ? '💬' : '🎙';
+            var delBtn = g.kind === 'chat' ? ('<a onclick="mtgDeleteChat(\'' + s.id + '\',' + g.i + ')" style="color:#d2393d;cursor:pointer;opacity:.5;margin-left:6px;" title="채팅 삭제">✕</a>') : '';
+            h += '<div style="display:flex;gap:8px;font-size:12.5px;line-height:1.5;align-items:baseline;">'
+                + '<span style="flex-shrink:0;color:var(--c-text3);font-family:ui-monospace,monospace;font-size:10.5px;width:' + timeW + 'px;text-align:right;">' + _mtgFmtTime(g.t, s.started_at) + '</span>'
+                + '<span style="flex-shrink:0;font-size:10px;opacity:.6;" title="' + (g.kind === 'chat' ? '채팅' : '음성') + '">' + icon + '</span>'
+                + '<span style="flex-shrink:0;font-weight:700;color:' + c + ';min-width:64px;cursor:pointer;" title="클릭해 화자 이름 변경" onclick="mtgRenameSpeaker(\'' + s.id + '\',\'' + _annEsc(g.speaker || '').replace(/'/g, '\\x27') + '\')">' + _annEsc(g.speaker) + '</span>'
+                + '<span style="flex:1;">' + _annEsc(g.text) + delBtn + '</span></div>';
+        });
+        h += '</div></div>';
+        return h;
+    }
+
+    // [r276] 회의록 카드 — 인플레이스 편집 + 메타(작성자/수정자/시점)
+    function _mtgRenderSummaryCard(s, sum, isMain) {
+        var meta = s.summary_meta || {};
+        var canGen = (s.segments || []).length > 0 && !_mtgInProgress(s);
+        var h = '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);margin-bottom:14px;">';
+        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:10px 14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+            + '<span style="font-weight:800;font-size:14px;flex:1;">📝 회의록</span>'
+            + (meta.edited ? '<span style="font-size:10.5px;color:var(--c-text3);">✎ 사용자 편집됨</span>' : '<span style="font-size:10.5px;color:var(--c-text3);">🤖 AI 작성</span>')
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgResummarize(\'' + s.id + '\')" title="LLM 으로 재작성(편집한 내용은 덮어쓰기)">🔄 재요약</button>'
+            + '</div>';
+        // 메타 정보 줄
+        if (meta.created_by_name || meta.updated_by_name) {
+            var cAt = '', uAt = '';
+            try { if (meta.created_at) cAt = new Date(meta.created_at).toLocaleString(); } catch (e) {}
+            try { if (meta.updated_at) uAt = new Date(meta.updated_at).toLocaleString(); } catch (e) {}
+            h += '<div style="padding:6px 14px;border-bottom:1px solid var(--c-border);font-size:11px;color:var(--c-text3);background:var(--c-paper);">'
+                + (meta.created_by_name ? ('최초 작성: <b>' + _annEsc(meta.created_by_name) + '</b>' + (cAt ? (' · ' + cAt) : '')) : '')
+                + (meta.updated_by_name && (meta.updated_by !== meta.created_by || meta.updated_at !== meta.created_at) ? (' · 최종 수정: <b>' + _annEsc(meta.updated_by_name) + '</b>' + (uAt ? (' · ' + uAt) : '')) : '')
+                + '</div>';
+        }
+        h += '<div style="padding:14px 18px;font-size:13px;line-height:1.7;">';
+        // 각 섹션 — 클릭하면 편집
+        h += _mtgRenderSummarySection(s.id, 'tldr', '요약', sum.tldr || '', 'text');
+        h += _mtgRenderSummarySection(s.id, 'agenda', '안건', sum.agenda || [], 'list');
+        h += _mtgRenderSummarySection(s.id, 'topics', '논의', sum.topics || [], 'topics');
+        h += _mtgRenderSummarySection(s.id, 'decisions', '결정사항', sum.decisions || [], 'list');
+        h += _mtgRenderSummarySection(s.id, 'action_items', '액션 아이템', sum.action_items || [], 'actions');
+        if (sum.error) h += '<div style="color:#b53236;font-size:11.5px;margin-top:8px;">⚠ ' + _annEsc(sum.error) + '</div>';
         if (s.wiki_doc_id) h += '<div style="margin-top:12px;font-size:11px;color:var(--c-text3);">✓ 위키 문서로 내보냄</div>';
         h += '</div></div>';
+        return h;
+    }
+    function _mtgRenderSummarySection(sid, key, label, value, kind) {
+        var empty = (kind === 'text') ? !value : !(value && value.length);
+        var h = '<div style="margin-bottom:12px;">';
+        h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="font-weight:700;">' + label + '</span>'
+            + '<button class="aihub-gpu-btn" style="font-size:10.5px;padding:0 6px;" onclick="mtgEditSummarySection(\'' + sid + '\',\'' + key + '\')">✎ 편집</button>'
+            + '</div>';
+        if (empty) { h += '<div style="color:var(--c-text3);font-size:11.5px;font-style:italic;">(비어 있음 — 편집해서 추가)</div></div>'; return h; }
+        if (kind === 'text') h += '<div style="color:var(--c-text2);white-space:pre-wrap;">' + _annEsc(value) + '</div>';
+        else if (kind === 'list') h += '<ul style="margin:0;padding-left:18px;color:var(--c-text2);">' + value.map(function (a) { return '<li>' + _annEsc(a) + '</li>'; }).join('') + '</ul>';
+        else if (kind === 'topics') h += value.map(function (tp) { return '<div style="margin-bottom:8px;"><div style="font-weight:600;">• ' + _annEsc(tp.title || '') + '</div><div style="color:var(--c-text3);font-size:12px;margin-left:10px;">' + _annEsc(tp.summary || '') + '</div></div>'; }).join('');
+        else if (kind === 'actions') h += '<div style="display:flex;flex-direction:column;gap:4px;">' + value.map(function (a) { var due = a.due ? (' <span style="color:var(--c-text3);">(' + _annEsc(a.due) + ')</span>') : ''; return '<label style="display:flex;gap:6px;align-items:baseline;"><input type="checkbox" disabled><span><b>' + _annEsc(a.who || '') + '</b> — ' + _annEsc(a.what || '') + due + '</span></label>'; }).join('') + '</div>';
         h += '</div>';
-        main.innerHTML = h;
+        return h;
+    }
+
+    // [r275] 빈 회의록 — 큰 생성 버튼
+    function _mtgRenderEmptySummary(s, canGen) {
+        var h = '<div style="border:1px solid var(--c-border);border-radius:10px;background:var(--c-card);padding:24px;text-align:center;color:var(--c-text3);margin-bottom:14px;">';
+        h += '<div style="font-size:36px;">📝</div>';
+        h += '<div style="font-weight:700;color:var(--c-text2);margin-top:6px;">회의록이 아직 작성되지 않았습니다</div>';
+        h += '<div style="font-size:11.5px;margin-top:4px;">' + (canGen ? '대화내역(음성+채팅)을 바탕으로 LLM 이 회의록을 작성합니다.' : '대화내역 처리가 끝난 뒤 시도해 주세요.') + '</div>';
+        if (canGen) {
+            h += '<button class="aihub-gpu-btn primary" style="margin-top:12px;font-size:12.5px;padding:6px 14px;" onclick="mtgResummarize(\'' + s.id + '\')">📝 회의록 생성</button>';
+            h += '<div style="margin-top:8px;font-size:10.5px;color:var(--c-text3);">맥락 메모와 함께 생성하려면 <a onclick="mtgResummarize(\'' + s.id + '\',true)" style="color:var(--c-accent);cursor:pointer;">고급</a></div>';
+        }
+        h += '</div>';
+        return h;
     }
     async function mtgResummarize(id, withHint) {
         var url = rfsBackEnd(); if (!url) return;
@@ -32283,6 +32383,115 @@ ${intrLog}
         try { await fetch(url + '/meetings/sessions/' + id, {method: 'DELETE'}); } catch (e) {}
         _mtgState.current = null; await mtgLoadSessions(); mtgRenderList();
         showToast('삭제됨', 'info');
+    }
+
+    // [r276] 제목 수정
+    async function mtgEditTitle(id) {
+        var s = _mtgState.current; if (!s) return;
+        var v = await uiPrompt({title: '제목 수정', value: s.title || '', placeholder: '회의 제목'});
+        if (v == null) return; v = String(v).trim(); if (!v || v === s.title) return;
+        var url = rfsBackEnd(); if (!url) return;
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({title: v})});
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            showToast('✓ 제목 변경', 'success'); mtgOpenSession(id, true);
+        } catch (e) { showToast('변경 실패: ' + (e.message || e), 'alert'); }
+    }
+    // [r276] LLM 제목 추천 + 적용
+    async function mtgSuggestTitle(id) {
+        var url = rfsBackEnd(); if (!url) return;
+        showToast('✨ 제목 추천 중…', 'info');
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/suggest-title', {method: 'POST'});
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 120)); }
+            var d = await res.json();
+            var suggested = d.title || '';
+            if (!suggested) { showToast('추천 결과 비어있음', 'alert'); return; }
+            var ok = await uiConfirm({title: '제목 추천', message: '추천: "' + suggested + '"\n\n이 제목으로 변경할까요?', confirmText: '적용', cancelText: '취소'});
+            if (!ok) return;
+            var pr = await fetch(url + '/meetings/sessions/' + id, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({title: suggested})});
+            if (!pr.ok) throw new Error('적용 실패 HTTP ' + pr.status);
+            showToast('✓ 적용: ' + suggested, 'success'); mtgOpenSession(id, true);
+        } catch (e) { showToast('추천 실패: ' + (e.message || e), 'alert'); }
+    }
+    // [r276] 채팅 입력 폼 토글
+    function mtgToggleChatInput() {
+        var el = document.getElementById('mtg-chat-input'); if (!el) return;
+        el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+        if (el.style.display === 'block') { var inp = document.getElementById('mtg-chat-text'); if (inp) inp.focus(); }
+    }
+    // [r276] 채팅 추가
+    async function mtgAddChat(id) {
+        var inp = document.getElementById('mtg-chat-text'); if (!inp) return;
+        var text = (inp.value || '').trim(); if (!text) return;
+        var url = rfsBackEnd(); if (!url) return;
+        var meName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || rfsCurrentUserName() || rfsCurrentUser() || '나';
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/chat', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: rfsCurrentUser() || 'anon', user_name: meName, text: text})
+            });
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 120)); }
+            inp.value = '';
+            mtgOpenSession(id, true);
+        } catch (e) { showToast('채팅 추가 실패: ' + (e.message || e), 'alert'); }
+    }
+    async function mtgDeleteChat(id, idx) {
+        var ok = await uiConfirm({title: '채팅 삭제', message: '이 메시지를 삭제할까요?', confirmText: '삭제', danger: true});
+        if (!ok) return;
+        var url = rfsBackEnd(); if (!url) return;
+        try { await fetch(url + '/meetings/sessions/' + id + '/chat/' + idx, {method: 'DELETE'}); mtgOpenSession(id, true); }
+        catch (e) { showToast('삭제 실패', 'alert'); }
+    }
+    // [r276] 회의록 섹션 인플레이스 편집
+    async function mtgEditSummarySection(id, key) {
+        var s = _mtgState.current; if (!s) return;
+        var sum = s.summary || {};
+        var cur = sum[key];
+        var msg = '', def = '';
+        if (key === 'tldr') { msg = '요약(여러 줄 가능)'; def = String(cur || ''); }
+        else if (key === 'agenda' || key === 'decisions') { msg = (key === 'agenda' ? '안건' : '결정사항') + ' — 한 줄에 하나씩'; def = (cur || []).join('\n'); }
+        else if (key === 'topics') { msg = '논의 — 한 줄에 하나, "제목 :: 상세설명" 형식(:: 없으면 전체가 제목)'; def = (cur || []).map(function (t) { return (t.title || '') + (t.summary ? ' :: ' + t.summary : ''); }).join('\n'); }
+        else if (key === 'action_items') { msg = '액션 아이템 — 한 줄에 하나, "담당자 | 할 일 | 기한" 형식(기한 생략 가능)'; def = (cur || []).map(function (a) { return [a.who || '', a.what || '', a.due || ''].join(' | '); }).join('\n'); }
+        var v = await uiPrompt({title: '회의록 편집 — ' + key, message: msg, value: def, multiline: true, placeholder: ''});
+        if (v == null) return;   // 취소
+        // 새 summary 구성
+        var newSummary = Object.assign({}, sum);
+        if (key === 'tldr') newSummary.tldr = String(v).trim();
+        else if (key === 'agenda' || key === 'decisions') newSummary[key] = String(v).split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+        else if (key === 'topics') newSummary.topics = String(v).split(/\r?\n/).map(function (x) { x = x.trim(); if (!x) return null; var p = x.split('::'); return {title: (p[0] || '').trim(), summary: (p.slice(1).join('::') || '').trim()}; }).filter(Boolean);
+        else if (key === 'action_items') newSummary.action_items = String(v).split(/\r?\n/).map(function (x) { x = x.trim(); if (!x) return null; var p = x.split('|').map(function (y) { return y.trim(); }); return {who: p[0] || '', what: p[1] || '', due: p[2] || ''}; }).filter(function (a) { return a.what || a.who; });
+        var url = rfsBackEnd(); if (!url) return;
+        var meName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || rfsCurrentUserName() || rfsCurrentUser() || '나';
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id + '/summary', {
+                method: 'PATCH', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: rfsCurrentUser() || 'anon', user_name: meName, summary: newSummary})
+            });
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 120)); }
+            showToast('✓ ' + key + ' 수정', 'success');
+            mtgOpenSession(id, true);
+        } catch (e) { showToast('수정 실패: ' + (e.message || e), 'alert'); }
+    }
+    // [r276] 추가 음성 파일 업로드 — 기존 /meetings/upload 재사용 후, 백그라운드 재처리(STT)
+    //   현재는 새 세션을 만들지 않고 file picker 만 띄워줘 사용자가 받아간 트랙을 합칠 수 있게.
+    function mtgAddVoiceFiles(id) {
+        // 간단: file input 띄워 + 사용자에게 안내 — 본격 합치기는 후속(별도 가져오기 권장)
+        var inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true;
+        inp.accept = '.zip,.flac,.ogg,.oga,.wav,.mp3,.m4a,.aac,.opus,.webm';
+        inp.onchange = async function () {
+            if (!inp.files || !inp.files.length) return;
+            var ok = await uiConfirm({title: '음성 추가', message: '현재 회의에는 추가 음성 STT 합치기가 아직 지원되지 않습니다. 새 회의로 가져오시겠어요? (기존 회의는 그대로 유지)', confirmText: '새 회의로', cancelText: '취소'});
+            if (!ok) return;
+            // 새 가져오기 다이얼로그로 보내고, 사용자가 새 회의를 만들도록
+            mtgImportDialog();
+            setTimeout(function () {
+                if (_mtgState) { _mtgState._pickedFiles = []; }
+                var farr = []; for (var i = 0; i < inp.files.length; i++) farr.push(inp.files[i]);
+                mtgAddFiles(farr);
+            }, 50);
+        };
+        inp.click();
     }
 
     // ════════════════════════════════════════════════════════════

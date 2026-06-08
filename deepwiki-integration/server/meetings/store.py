@@ -13,6 +13,9 @@ _ALLOWED_COLS = {
     "id", "project_id", "title", "status", "source", "craig_id", "started_at",
     "participants", "segments", "transcript_text", "summary", "duration_sec",
     "model", "created_by", "created_at", "updated_at", "wiki_doc_id",
+    # [r276] 채팅/회의록 편집 추적
+    "chat_messages",       # [{at, by, byName, text}] — 텍스트 채팅(음성과 합쳐 대화내역에 표시)
+    "summary_meta",        # {created_by, created_at, updated_by, updated_at, edited(bool)}
 }
 
 
@@ -111,8 +114,14 @@ create table if not exists meeting_sessions (
   created_by text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  wiki_doc_id text
+  wiki_doc_id text,
+  -- [r276] 채팅/회의록 편집 추적
+  chat_messages jsonb default '[]'::jsonb,  -- [{at, by, byName, text}]
+  summary_meta jsonb                        -- {created_by, created_at, updated_by, updated_at, edited}
 );
 create index if not exists idx_meeting_sessions_project on meeting_sessions(project_id, created_at desc);
+-- [r276] 기존 테이블에 컬럼 추가(멱등)
+alter table meeting_sessions add column if not exists chat_messages jsonb default '[]'::jsonb;
+alter table meeting_sessions add column if not exists summary_meta jsonb;
 alter table meeting_sessions disable row level security;
 """

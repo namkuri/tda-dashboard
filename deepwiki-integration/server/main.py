@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r275"
+SERVER_REVISION = "r276"
 
 
 
@@ -1409,6 +1409,19 @@ class MeetingPatchRequest(BaseModel):
     title: Optional[str] = None
 
 
+class MeetingChatAddRequest(BaseModel):
+    user_id: str
+    user_name: Optional[str] = None
+    text: str
+    at: Optional[str] = None           # [r276] ISO. 비우면 지금.
+
+
+class MeetingSummaryEditRequest(BaseModel):
+    user_id: str
+    user_name: Optional[str] = None
+    summary: Dict[str, Any]            # [r276] 사용자가 편집한 회의록(통째로)
+
+
 class MeetingExportRequest(BaseModel):
     user_id: str
     project_id: Optional[str] = None
@@ -1645,6 +1658,105 @@ async def meetings_patch(sid: str, req: MeetingPatchRequest):
         return {"ok": True, "changed": 0}
     _mtg_store.update_session(sid, patch)
     return {"ok": True, "changed": len(patch)}
+
+
+@app.post("/meetings/sessions/{sid}/chat")
+async def meetings_chat_add(sid: str, req: MeetingChatAddRequest):
+    """[r276] 텍스트 채팅 메시지 추가 — 대화내역에 음성과 함께 표시."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    if not (req.text or "").strip():
+        raise HTTPException(422, "text 비어있음")
+    msgs = list(s.get("chat_messages") or [])
+    from datetime import datetime, timezone
+    at = req.at or datetime.now(timezone.utc).isoformat()
+    msg = {"at": at, "by": req.user_id, "byName": req.user_name or req.user_id, "text": req.text.strip()}
+    msgs.append(msg)
+    _mtg_store.update_session(sid, {"chat_messages": msgs})
+    return {"ok": True, "message": msg, "count": len(msgs)}
+
+
+@app.delete("/meetings/sessions/{sid}/chat/{idx}")
+async def meetings_chat_delete(sid: str, idx: int):
+    """[r276] 채팅 메시지 삭제(인덱스)."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    msgs = list(s.get("chat_messages") or [])
+    if 0 <= idx < len(msgs):
+        msgs.pop(idx)
+        _mtg_store.update_session(sid, {"chat_messages": msgs})
+    return {"ok": True, "count": len(msgs)}
+
+
+@app.patch("/meetings/sessions/{sid}/summary")
+async def meetings_summary_edit(sid: str, req: MeetingSummaryEditRequest):
+    """[r276] 회의록 본문 사용자 편집 — summary_meta 에 작성자/수정자/시점 기록."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    if not isinstance(req.summary, dict):
+        raise HTTPException(422, "summary 형식 오류")
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    meta = dict(s.get("summary_meta") or {})
+    if not meta.get("created_by"):
+        meta["created_by"] = req.user_id
+        meta["created_by_name"] = req.user_name or req.user_id
+        meta["created_at"] = now
+    meta["updated_by"] = req.user_id
+    meta["updated_by_name"] = req.user_name or req.user_id
+    meta["updated_at"] = now
+    meta["edited"] = True
+    _mtg_store.update_session(sid, {"summary": req.summary, "summary_meta": meta, "status": "ready"})
+    return {"ok": True, "summary_meta": meta}
+
+
+@app.post("/meetings/sessions/{sid}/suggest-title")
+async def meetings_suggest_title(sid: str):
+    """[r276] LLM 으로 회의 제목 추천."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    segs = s.get("segments") or []
+    chats = s.get("chat_messages") or []
+    if not segs and not chats:
+        raise HTTPException(400, "추천할 내용 없음(대화내역/채팅 비어있음)")
+    # 컨텍스트: 짧게(LLM 빠르게)
+    lines = []
+    for g in segs[:80]:
+        lines.append(f"{g.get('speaker','?')}: {g.get('text','')[:120]}")
+    for m in chats[:30]:
+        lines.append(f"[chat] {m.get('byName') or m.get('by','?')}: {m.get('text','')[:120]}")
+    body = "\n".join(lines)
+    sys_p = (
+        "당신은 회의 녹취·채팅을 보고 적절한 한국어 회의 제목을 짧게 제안하는 도구입니다.\n"
+        "[규칙] 1) 8~20자 이내. 2) 회의의 핵심 주제·결과 위주. 3) 회의 일자/시간 같은 불필요한 정보 X.\n"
+        "4) 따옴표/마침표/이모지 없이 제목 문자열만 출력. 다른 텍스트 X."
+    )
+    from llm_router import get_llm
+    llm = get_llm(s.get("model"))
+    buf = ""
+    try:
+        async for delta in llm.chat_stream(
+            messages=[{"role": "system", "content": sys_p},
+                      {"role": "user", "content": f"[대화내역]\n{body[:4000]}\n\n제목만:"}],
+            model=s.get("model"), temperature=0.4,
+        ):
+            buf += delta
+    except Exception as e:
+        raise HTTPException(500, f"제목 추천 실패: {e}")
+    # 첫 줄, 잘라내기, 따옴표/마침표 제거
+    title = (buf or "").strip().split("\n")[0].strip().strip("\"'`").rstrip(".!?·~ ")
+    title = title[:60] if title else ""
+    if not title:
+        raise HTTPException(500, "제목 추천 결과 비어있음")
+    return {"title": title}
 
 
 @app.post("/meetings/sessions/{sid}/summarize")
