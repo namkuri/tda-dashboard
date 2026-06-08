@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r274"
+SERVER_REVISION = "r275"
 
 
 
@@ -1396,10 +1396,17 @@ class MeetingImportRequest(BaseModel):
     whisper_model: str = "medium"       # tiny|base|small|medium|large-v3
     language: str = "ko"
     model: Optional[str] = None         # 요약 LLM(미지정=기본)
+    started_at: Optional[str] = None    # [r275] 회의 실제 시작 시각(ISO). 비우면 import 시각.
 
 
 class MeetingSummarizeRequest(BaseModel):
     model: Optional[str] = None
+    hint: Optional[str] = None   # [r275] 사용자 메모(맥락 보조)
+
+
+class MeetingPatchRequest(BaseModel):
+    started_at: Optional[str] = None   # [r275] 회의 실제 시작 시각(ISO)
+    title: Optional[str] = None
 
 
 class MeetingExportRequest(BaseModel):
@@ -1542,7 +1549,10 @@ async def _meet_run_job(p: dict, sid: str):
                     "participants": participants, "duration_sec": dur, "model": p.get("whisper_model")})
         # 4) 요약
         _busy_set(running=True, kind="meeting_import", stage="summarize", message="회의록 요약(LLM)")
-        summary = await _mtg_sum.summarize(merged, title=p.get("title", ""), model=p.get("model"))
+        summary = await _mtg_sum.summarize(
+            merged, title=p.get("title", ""), model=p.get("model"),
+            started_at=p.get("started_at") or "", participants=participants,
+        )
         await _upd({"status": "ready", "summary": summary})
     except Exception as e:
         import traceback as _tb
@@ -1578,7 +1588,8 @@ async def meetings_import(req: MeetingImportRequest):
     if _MEET_TASKS or _busy_active():
         raise HTTPException(409, "이미 처리 중인 작업이 있습니다 — 끝난 뒤 다시 시도하세요.")
     sess = _mtg_store.create_session(project_id=req.project_id, title=req.title or "회의",
-                                     user_id=req.user_id, craig_id=req.craig_id)
+                                     user_id=req.user_id, craig_id=req.craig_id,
+                                     started_at=req.started_at)
     sid = sess["id"]
     _MEET_TASKS.add(sid)
     task = asyncio.create_task(_meet_run_job(req.model_dump(), sid))
@@ -1618,13 +1629,35 @@ async def meetings_rename_speaker(sid: str, req: MeetingRenameSpeakerRequest):
     return {"ok": True, "changed": n}
 
 
+@app.patch("/meetings/sessions/{sid}")
+async def meetings_patch(sid: str, req: MeetingPatchRequest):
+    """[r275] 회의 세션 메타데이터(시작 시각/제목) 수정."""
+    _meet_guard()
+    s = _mtg_store.get_session(sid)
+    if not s:
+        raise HTTPException(404, "회의 세션 없음")
+    patch = {}
+    if req.started_at is not None:
+        patch["started_at"] = req.started_at or None
+    if req.title is not None and req.title.strip():
+        patch["title"] = req.title.strip()
+    if not patch:
+        return {"ok": True, "changed": 0}
+    _mtg_store.update_session(sid, patch)
+    return {"ok": True, "changed": len(patch)}
+
+
 @app.post("/meetings/sessions/{sid}/summarize")
 async def meetings_resummarize(sid: str, req: MeetingSummarizeRequest):
     _meet_guard()
     s = _mtg_store.get_session(sid)
     if not s:
         raise HTTPException(404, "회의 세션 없음")
-    summary = await _mtg_sum.summarize(s.get("segments") or [], title=s.get("title") or "", model=req.model)
+    summary = await _mtg_sum.summarize(
+        s.get("segments") or [], title=s.get("title") or "", model=req.model,
+        started_at=s.get("started_at") or "", participants=s.get("participants") or [],
+        hint=req.hint or "",
+    )
     _mtg_store.update_session(sid, {"summary": summary, "status": "ready"})
     return {"ok": True, "summary": summary}
 

@@ -52,13 +52,15 @@ def get_session(sid: str) -> Optional[Dict[str, Any]]:
 
 
 def create_session(*, project_id: Optional[str], title: str, user_id: str,
-                   source: str = "craig", craig_id: Optional[str] = None) -> Dict[str, Any]:
+                   source: str = "craig", craig_id: Optional[str] = None,
+                   started_at: Optional[str] = None) -> Dict[str, Any]:
     store = get_store()
     now = _iso()
     row = {
         "id": _uid(), "project_id": project_id, "title": title or "(제목 없음)",
         "status": "importing", "source": source, "craig_id": craig_id,
-        "started_at": now, "participants": [], "segments": [], "transcript_text": "",
+        "started_at": started_at or now,   # [r275] 사용자 지정 회의 시작 시각 우선
+        "participants": [], "segments": [], "transcript_text": "",
         "summary": None, "duration_sec": 0, "model": None,
         "created_by": user_id, "created_at": now, "updated_at": now, "wiki_doc_id": None,
     }

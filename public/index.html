@@ -10963,7 +10963,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r274';
+        var _AHUB_FRONT_REV = 'r275';
 
 
         var _ahubRevWarned = false;
@@ -31753,7 +31753,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r274';
+    var _RFS_FRONT_REV = 'r275';
 
 
     async function rfsHealthCheck() {
@@ -31801,8 +31801,36 @@ ${intrLog}
     // ════════════════════════════════════════════════════════════
     // [r242] 회의록 자동작성 — Craig(Discord 음성) → STT → LLM 회의록
     // ════════════════════════════════════════════════════════════
-    var _mtgState = { sessions: [], current: null, importing: false, _poll: null };
+    var _mtgState = { sessions: [], current: null, importing: false, _poll: null, _timeMode: 'rel' };  // [r275] 'rel' | 'abs'
     function _mtgFmtDur(sec) { sec = parseInt(sec || 0, 10); var m = Math.floor(sec / 60), s = sec % 60; return (m ? (m + '분 ') : '') + s + '초'; }
+    function _mtgFmtTime(sec, startedAt) {
+        sec = parseInt(sec || 0, 10);
+        if (_mtgState._timeMode === 'abs' && startedAt) {
+            try {
+                var d = new Date(new Date(startedAt).getTime() + sec * 1000);
+                var hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0'), ss = String(d.getSeconds()).padStart(2, '0');
+                return hh + ':' + mm + ':' + ss;
+            } catch (e) {}
+        }
+        var m = Math.floor(sec / 60), s = sec % 60;
+        return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    function mtgToggleTimeMode() { _mtgState._timeMode = (_mtgState._timeMode === 'abs') ? 'rel' : 'abs'; mtgRenderDetail(); }
+    async function mtgEditStartedAt(id) {
+        var s = _mtgState.current; if (!s) return;
+        var cur = s.started_at || '';
+        var v = await uiPrompt({title: '회의 시작 시각 수정', message: 'ISO 또는 datetime-local (예: 2026-06-08T12:03). 비우면 import 시각으로 폴백.', value: cur ? new Date(cur).toISOString().slice(0, 16) : '', placeholder: '2026-06-08T12:03'});
+        if (v == null) return;
+        var iso = '';
+        if (v && v.trim()) { try { iso = new Date(v.trim()).toISOString(); } catch (e) { showToast('시각 형식 오류', 'alert'); return; } }
+        var url = rfsBackEnd(); if (!url) return;
+        try {
+            var res = await fetch(url + '/meetings/sessions/' + id, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({started_at: iso})});
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            showToast('✓ 회의 시작 시각 변경', 'success');
+            mtgOpenSession(id, true);
+        } catch (e) { showToast('변경 실패: ' + (e.message || e), 'alert'); }
+    }
     function _mtgInProgress(s) { return s && ['importing', 'transcribing', 'summarizing'].indexOf(s.status) >= 0; }
     function _mtgStopPoll() { if (_mtgState._poll) { clearInterval(_mtgState._poll); _mtgState._poll = null; } }
     function _mtgSpeakerColor(name) {
@@ -31886,6 +31914,9 @@ ${intrLog}
         h += '<div style="color:var(--c-text3);font-size:12px;margin-bottom:14px;">Discord에서 Craig로 녹음 → <b style="color:var(--c-accent);">Multi-Track(per-speaker) FLAC</b> 받아 아래에 올리세요. 화자별로 자동 텍스트화·요약합니다. 백그라운드 처리이므로 시작 후 창을 닫아도 OK.</div>';
         h += '<div style="display:flex;flex-direction:column;gap:10px;">';
         h += '<label style="font-size:12px;font-weight:700;">회의 제목<input id="mtg-f-title" type="text" placeholder="예: 2026 W23 기획 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
+        // [r275] 회의 실제 시작 시각 — 비워두면 현재 시각
+        var _now = new Date(); var _localNow = new Date(_now.getTime() - _now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        h += '<label style="font-size:12px;font-weight:700;">회의 시작 시각 <span style="color:var(--c-text3);font-weight:400;">(절대 시각 표시용. 비우면 지금)</span><input id="mtg-f-started" type="datetime-local" value="' + _localNow + '" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label>';
         // [r274] 메인 경로: 드래그앤드롭 + 다중 선택 가능한 파일 업로드
         h += '<div>';
         h += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🎙 오디오 파일 (필수)</div>';
@@ -32031,11 +32062,14 @@ ${intrLog}
             }
             // [r246] 백엔드에 처리 시작 요청 — 즉시 반환 기대. 응답이 옛 SSE(text/event-stream)면 구버전 백엔드.
             log('▶ 백엔드에 처리 시작 요청'); stage('백엔드에 처리 시작 요청…');
+            var startedAt = (document.getElementById('mtg-f-started') || {}).value || '';
+            if (startedAt) { try { startedAt = new Date(startedAt).toISOString(); } catch (e) {} }   // [r275] datetime-local → ISO
             var res = await fetch(url + '/meetings/import', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({user_id: rfsCurrentUser(), project_id: activeProjectId || null, title: title.trim(),
                     craig_id: cid.trim() || null, craig_url: durl.trim() || null, key: key.trim() || null,
-                    upload_token: uploadToken, whisper_model: wmodel, language: lang})
+                    upload_token: uploadToken, whisper_model: wmodel, language: lang,
+                    started_at: startedAt || null})
             });
             if (res.status === 503) { var e5 = await res.text(); throw new Error('회의록 모듈 미로드: ' + e5.slice(0, 120)); }
             if (res.status === 409) { throw new Error('이미 처리 중인 작업이 있습니다. 끝난 뒤 다시 시도하세요.'); }
@@ -32133,13 +32167,22 @@ ${intrLog}
         h += '<div style="display:flex;gap:14px;align-items:flex-start;">';
         // 좌: 대화내역
         h += '<div style="flex:1;min-width:0;border:1px solid var(--c-border);border-radius:10px;background:var(--c-paper);max-height:80vh;overflow-y:auto;">';
-        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;font-weight:700;font-size:13px;">💬 대화내역 <span style="color:var(--c-text3);font-weight:400;">' + segs.length + '문장 · ' + _mtgFmtDur(s.duration_sec) + '</span></div>';
+        // [r275] 헤더 — 시작 시각 + 시간 표시 토글(상대/절대)
+        var startedAtStr = '';
+        try { if (s.started_at) startedAtStr = new Date(s.started_at).toLocaleString(); } catch (e) {}
+        var timeBtn = _mtgState._timeMode === 'abs' ? '🕐 절대' : '⏱ 상대';
+        var timeW = _mtgState._timeMode === 'abs' ? '64' : '38';
+        h += '<div style="position:sticky;top:0;background:var(--c-card);border-bottom:1px solid var(--c-border);padding:8px 12px;display:flex;align-items:center;gap:8px;">'
+            + '<span style="font-weight:700;font-size:13px;">💬 대화내역</span>'
+            + '<span style="color:var(--c-text3);font-size:11.5px;font-weight:400;">' + segs.length + '문장 · ' + _mtgFmtDur(s.duration_sec) + (startedAtStr ? (' · 시작 <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;" title="시작 시각 수정">' + _annEsc(startedAtStr) + '</a>') : (' · <a onclick="mtgEditStartedAt(\'' + s.id + '\')" style="color:var(--c-accent);cursor:pointer;">시작 시각 설정</a>')) + '</span>'
+            + '<button class="aihub-gpu-btn" style="margin-left:auto;font-size:11px;" onclick="mtgToggleTimeMode()" title="시간 표시 전환">' + timeBtn + '</button>'
+            + '</div>';
         h += '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px;">';
         if (!segs.length) h += '<div style="color:var(--c-text3);">대화내역이 없습니다.</div>';
         segs.forEach(function (g) {
-            var c = _mtgSpeakerColor(g.speaker); var tt = parseInt(g.t || 0, 10); var mm = Math.floor(tt / 60), ss = tt % 60;
+            var c = _mtgSpeakerColor(g.speaker);
             h += '<div style="display:flex;gap:8px;font-size:12.5px;line-height:1.5;">'
-                + '<span style="flex-shrink:0;color:var(--c-text3);font-family:ui-monospace,monospace;font-size:10.5px;width:38px;text-align:right;">' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss + '</span>'
+                + '<span style="flex-shrink:0;color:var(--c-text3);font-family:ui-monospace,monospace;font-size:10.5px;width:' + timeW + 'px;text-align:right;">' + _mtgFmtTime(g.t, s.started_at) + '</span>'
                 + '<span style="flex-shrink:0;font-weight:700;color:' + c + ';min-width:64px;cursor:pointer;" title="클릭해 화자 이름 변경" onclick="mtgRenameSpeaker(\'' + s.id + '\',\'' + _annEsc(g.speaker || '').replace(/'/g, '\\x27') + '\')">' + _annEsc(g.speaker) + '</span>'
                 + '<span style="flex:1;">' + _annEsc(g.text) + '</span></div>';
         });
@@ -32157,20 +32200,39 @@ ${intrLog}
         if ((sum.topics || []).length) { h += '<div style="font-weight:700;margin-bottom:4px;">논의</div>'; sum.topics.forEach(function (tp) { h += '<div style="margin-bottom:8px;"><div style="font-weight:600;">• ' + _annEsc(tp.title || '') + '</div><div style="color:var(--c-text3);font-size:12px;margin-left:10px;">' + _annEsc(tp.summary || '') + '</div></div>'; }); }
         if ((sum.decisions || []).length) { h += '<div style="font-weight:700;margin:8px 0 4px;">결정사항</div><ul style="margin:0 0 12px;padding-left:18px;color:var(--c-text2);">' + sum.decisions.map(function (d) { return '<li>' + _annEsc(d) + '</li>'; }).join('') + '</ul>'; }
         if ((sum.action_items || []).length) { h += '<div style="font-weight:700;margin:8px 0 4px;">액션 아이템</div><div style="display:flex;flex-direction:column;gap:4px;">' + sum.action_items.map(function (a) { var due = a.due ? (' <span style="color:var(--c-text3);">(' + _annEsc(a.due) + ')</span>') : ''; return '<label style="display:flex;gap:6px;align-items:baseline;"><input type="checkbox" disabled><span><b>' + _annEsc(a.who || '') + '</b> — ' + _annEsc(a.what || '') + due + '</span></label>'; }).join('') + '</div>'; }
-        if (!sum.tldr && !(sum.agenda || []).length && !(sum.decisions || []).length) h += '<div style="color:var(--c-text3);">요약이 없습니다. 🔄 재요약을 눌러보세요.</div>';
+        if (!sum.tldr && !(sum.agenda || []).length && !(sum.decisions || []).length) {
+            // [r275] 빈 회의록 — 큰 생성 버튼 + 짧은 회의 안내
+            var canGen = segs.length > 0 && !_mtgInProgress(s);
+            h += '<div style="text-align:center;padding:20px 10px;color:var(--c-text3);">';
+            h += '<div style="font-size:36px;">📝</div>';
+            h += '<div style="font-weight:700;color:var(--c-text2);margin-top:6px;">회의록이 아직 작성되지 않았습니다</div>';
+            h += '<div style="font-size:11.5px;margin-top:4px;">' + (canGen ? '대화내역을 바탕으로 LLM 이 회의록을 작성합니다.' : '대화내역 처리가 끝난 뒤 시도해 주세요.') + '</div>';
+            if (canGen) {
+                h += '<button class="aihub-gpu-btn primary" style="margin-top:12px;font-size:12.5px;padding:6px 14px;" onclick="mtgResummarize(\'' + s.id + '\')">📝 회의록 생성</button>';
+                h += '<div style="margin-top:8px;font-size:10.5px;color:var(--c-text3);">맥락 메모와 함께 생성하려면 <a onclick="mtgResummarize(\'' + s.id + '\',true)" style="color:var(--c-accent);cursor:pointer;">고급</a></div>';
+            }
+            h += '</div>';
+        }
         if (s.wiki_doc_id) h += '<div style="margin-top:12px;font-size:11px;color:var(--c-text3);">✓ 위키 문서로 내보냄</div>';
         h += '</div></div>';
         h += '</div>';
         main.innerHTML = h;
     }
-    async function mtgResummarize(id) {
+    async function mtgResummarize(id, withHint) {
         var url = rfsBackEnd(); if (!url) return;
-        showToast('🔄 재요약 중…', 'info');
+        var hint = '';
+        if (withHint) {
+            var v = await uiPrompt({title: '맥락 메모', message: 'LLM 에 추가로 알려줄 회의 배경/주제(선택). 예: "Phase G 위키 일치도 검증 회의"', placeholder: '메모 (선택)'});
+            if (v == null) return;   // 취소
+            hint = String(v || '').trim();
+        }
+        showToast('🔄 회의록 생성 중…', 'info');
         try {
-            var res = await fetch(url + '/meetings/sessions/' + id + '/summarize', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})});
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            await mtgOpenSession(id); showToast('✓ 재요약 완료', 'success');
-        } catch (e) { showToast('재요약 실패: ' + (e.message || e), 'alert'); }
+            var res = await fetch(url + '/meetings/sessions/' + id + '/summarize',
+                {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({hint: hint})});
+            if (!res.ok) { var et = await res.text(); throw new Error(et.slice(0, 150)); }
+            await mtgOpenSession(id, true); showToast('✓ 회의록 작성 완료', 'success');
+        } catch (e) { showToast('회의록 생성 실패: ' + (e.message || e), 'alert'); }
     }
     async function mtgExportWiki(id) {
         var url = rfsBackEnd(); if (!url) return;
