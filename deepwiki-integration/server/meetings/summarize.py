@@ -7,8 +7,16 @@ from llm_router import get_llm
 
 _SYSTEM = """당신은 한국어 회의 녹취록을 받아 풍부한 회의록(JSON)으로 정리하는 시니어 에디터입니다.
 
+【작성 스타일 — 가장 중요】
+- **개조식(불릿 위주)** 으로 작성하세요. 줄글 단락은 가능한 한 피하고 짧은 항목·한 줄 단위로 분해.
+- 예외는 단 하나 — **tldr(요약)만 서술식 4~6문장 한 단락**으로.
+- topics[].sections 도 가능한 한 kind="list" 또는 "tier"/"table" 등 구조적 형태로.
+  · text 섹션을 쓰더라도 한 단락이 아니라 **여러 짧은 문장**으로 끊거나, 가능하면 list 로 변환.
+- callout 의 content 도 길면 한 문장으로 압축, 추가 정보는 본문 list 에.
+- decisions/action_items/principles 의 각 항목은 **짧고 명확한 한 문장**. 두 문장 이상 합치지 말 것.
+
 【타입 규칙 — 절대 위반 금지】
-- agenda, decisions, principles 는 **반드시 문자열(string) 배열**. 객체 금지. 한 항목은 한 문장 또는 한 단락.
+- agenda, decisions, principles 는 **반드시 문자열(string) 배열**. 객체 금지. 한 항목은 한 문장.
 - topics[].sections[].items 는 list/tier 일 때만 사용하며 형식은 아래 스키마 그대로.
 - action_items 만 {who, what, due} 객체.
 - 모든 문자열 안에 따옴표는 \\" 로 이스케이프.
@@ -44,14 +52,16 @@ _SYSTEM = """당신은 한국어 회의 녹취록을 받아 풍부한 회의록(
 [논의(topics) 규칙 — 가장 중요]
 - agenda 와 **1:1 같은 순서·같은 제목**으로 매핑.
 - 각 항목의 sections 배열에 **여러 하위 섹션**을 담는다(배경·기술 파이프라인·정의 합의·티어 등).
-- sections[].kind 종류:
-    "text"     — 일반 단락(content 에 3~8문장)
-    "list"     — 불릿 목록(items 배열, 각 항목은 한 문장 또는 'X — 설명' 형식)
-    "callout"  — 핵심 피드백/권장 — 발화자 명시(by 필드) + content 1~3문장
-    "tier"     — 단계/난이도 비교(items 배열, 각 {label,title,body} 형식 — 예: T1 단순/선행 …)
+- sections[].kind 종류 (개조식 우선 — list/tier/table 가 기본, text 는 최후 수단):
+    "list"     — **기본 형태**. 불릿 목록(items 배열). 각 항목은 한 문장 또는 'X — 설명' 형식.
+                 한 섹션 안에 단락 대신 3~7개 짧은 불릿으로 분해할 것.
+    "tier"     — 단계/난이도 비교(items 배열, {label,title,body} — 예: T1 단순/선행 …)
     "table"    — 표(headers, rows). 역할 분담·매트릭스 등에 사용
-- 분량 기준: agenda 1개당 sections 가 최소 2개, 보통 3~5개여야 한다.
-- 한 안건의 모든 section 을 합쳐도 3문장 이하라면 **부적합** — 녹취를 더 깊이 읽고 풀어쓸 것.
+    "callout"  — 핵심 피드백/권장. 발화자 명시(by 필드). content 는 한 문장으로 압축.
+    "text"     — 단락이 꼭 필요한 경우만(예: 배경 도입). **2~3문장 이내**로 짧게.
+                 같은 정보를 list 로 쓸 수 있으면 무조건 list 우선.
+- 분량 기준: agenda 1개당 sections 최소 2~3개. 줄글 단락 대신 짧은 list 항목 여러 개로.
+- **금지**: 같은 단락을 다른 표현으로 반복(배경=결론처럼 동일 내용을 두 섹션에 적기).
 
 [결정사항(decisions) 규칙]
 - 추상명사 단독("의존도 설정", "역할 분담") **금지**.
@@ -70,8 +80,9 @@ _SYSTEM = """당신은 한국어 회의 녹취록을 받아 풍부한 회의록(
 - 회의에서 합의된 **재사용 가능한 원칙/가이드라인**이 있다면 별도 추출.
 - 예: "설명은 환경/이벤트/상호작용 세 층위로 분리한다", "MVP는 독립 모듈부터, 통합은 마지막".
 
-[요약(tldr) 규칙]
-- 5~8문장 한 단락. 주요 안건·핵심 결정·담당 배분을 한눈에 보이게.
+[요약(tldr) 규칙 — 유일한 서술식 허용 구역]
+- 4~6문장 한 단락. 주요 안건·핵심 결정·담당 배분을 한눈에 보이게.
+- **여기만 서술식 OK**. tldr 외 모든 곳은 개조식.
 - 메타 동사 단독 금지. 결정과 담당자를 구체적으로 명시.
 
 [짧은 회의]
@@ -87,16 +98,17 @@ _SYSTEM = """당신은 한국어 회의 녹취록을 받아 풍부한 회의록(
       "title": "agenda 와 동일",
       "lead": "1~2문장 도입 — 이 안건의 핵심을 한 줄로",
       "sections": [
-        {"kind":"text", "heading":"배경 — Envelope 구조", "content":"3~8문장 단락"},
+        {"kind":"list", "heading":"배경",
+         "items":["기존 루프: 베이스 → Expedition → 회귀", "NPC가 중간에 변주 → Envelope 시스템", "환경 파트는 Envelope에 미편입 — 이번 안건"]},
         {"kind":"list", "heading":"기술 파이프라인 & 난이도",
          "items":["계곡/다리 (저비용) — 통로 바닥 내려 …", "붕괴 (중) — 평지 무너져 …", "침수 (고) — 유체 시뮬 …"]},
         {"kind":"callout", "heading":"핵심 피드백 — wooheesung",
-         "content":"현재 '환경' 설명에 세 층위가 섞여 있어 분리가 전제되어야 한다.", "by":"wooheesung"},
+         "content":"환경 설명을 ① 환경 자체 ② 작동 방식 ③ 상호작용 3층위로 분리해야 한다.", "by":"wooheesung"},
         {"kind":"tier", "heading":"의존도에 따른 단계",
          "items":[
            {"label":"T1","title":"단순·선행","body":"가스·슬라임·낙석. SDF 변경 불필요."},
            {"label":"T2","title":"중간","body":"SDF 절벽·계곡·붕괴 지형."},
-           {"label":"T3","title":"복잡·후행","body":"NPC 결합 사례. 기획이 가장 많이 필요해 맨 뒤."}
+           {"label":"T3","title":"복잡·후행","body":"NPC 결합 사례. 기획이 가장 많이 필요."}
          ]},
         {"kind":"table", "heading":"역할 / 트랙 배분",
          "headers":["담당","주요 트랙"],
@@ -115,21 +127,27 @@ _SYSTEM = """당신은 한국어 회의 녹취록을 받아 풍부한 회의록(
 2. principles 의 모든 항목은 문자열인가?
 3. agenda 의 모든 항목은 짧은 문자열인가?
 4. 마크다운 코드펜스 없이 순수 JSON 만 출력하는가?
+5. **tldr 외에 줄글 단락(text section)** 이 과도하게 들어있지 않은가? list/tier/table 로 대체 가능했나?
+6. 같은 내용을 **다른 표현으로 반복**(배경 ≈ 결론)하지 않았나?
 """
 
 
 _SYSTEM_REDUCE = """당신은 회의를 N개 부분으로 나눠 정리한 부분 회의록(JSON 배열)을 받아,
 **전체 회의의 최종 회의록 JSON 1개**로 종합하는 시니어 에디터입니다. 단순 합치기가 아닌 **재정리**.
 
+【작성 스타일 — 가장 중요】
+- **개조식(불릿 위주)**. tldr 외 모든 곳은 짧은 list/tier/table 항목으로.
+- 같은 단락을 다른 표현으로 반복 금지. 배경 ≈ 결론 같은 중복 섹션 금지.
+
 [종합 규칙]
 1. 같은 주제는 하나의 agenda 항목으로 통합. 결과 3~6개 안건으로.
 2. agenda 는 **중요도 순**(영향·결정·시간 비중) 정렬.
-3. topics 는 agenda 와 1:1 같은 순서·같은 제목으로 매핑. 각 topic 의 sections 배열을 풍부하게:
-   배경/논의/콜아웃/티어/표 등 여러 섹션으로(메타 동사 금지, 발화자 인용 권장).
-4. decisions 는 추상명사 단독 금지. '무엇을 + 어떻게 + 왜' 포함. 같은 결정 1개로 통합.
+3. topics 는 agenda 와 1:1 같은 순서·같은 제목으로 매핑. 각 topic 의 sections 는
+   list/tier/table/callout 위주 — text 는 최후 수단 + 2~3문장 이내.
+4. decisions 는 추상명사 단독 금지. 짧고 명확한 한 문장. 같은 결정 1개로 통합.
 5. action_items: who 는 정확한 참가자 식별자(나·본인·별칭 금지). 중복 통합.
 6. principles: 회의 합의된 재사용 가능 원칙을 별도 추출.
-7. tldr 은 5~8문장으로 전체 회의의 안건·결정·담당을 압축.
+7. tldr 은 4~6문장으로 전체 회의의 안건·결정·담당을 압축 (서술식 OK).
 
 [출력] 시스템 프롬프트의 sections 모델을 그대로 따른 JSON only.
 """
@@ -275,6 +293,29 @@ async def summarize(segments: List[Dict[str, Any]], *, title: str = "",
         return {"tldr": "", "agenda": [], "topics": [], "decisions": [], "action_items": [], "error": err}
 
 
+def _split_sentences(text: str) -> List[str]:
+    """[r298] 한국어 단락 → 문장 분리. '다.' '요.' '습니다.' 뒤에서 끊음.
+    너무 짧은 조각은 다음과 합침. 결과 1개면 분해하지 않은 것.
+    """
+    if not text:
+        return []
+    import re as _re
+    # 한국어 종결형 뒤에서 분리. '...다.' 다음 공백/끝.
+    parts = _re.split(r"(?<=[다요죠음임])\.[\s]+", text.strip())
+    out = []
+    for p in parts:
+        s = p.strip().rstrip(".")
+        if not s: continue
+        if not s.endswith((".", "!", "?")):
+            s += "."
+        # 너무 짧은(20자 미만) 조각은 직전과 합침
+        if out and len(s) < 20:
+            out[-1] = out[-1].rstrip(".") + " " + s
+        else:
+            out.append(s)
+    return out
+
+
 def _coerce_text(v: Any) -> str:
     """[r295] LLM 이 문자열 배열을 객체 배열로 잘못 반환하면 텍스트로 변환.
     예: {"decision":"X","how":"Y","why":"Z"} → "X — Y (Y: Z)" 식으로 풀어 적음.
@@ -406,8 +447,15 @@ def _normalize(parsed: Dict[str, Any], participants: Optional[List[Dict[str, Any
                 ns["headers"] = [_coerce_text(h) for h in (s.get("headers") or [])]
                 ns["rows"] = [[_coerce_text(c) for c in (r or [])] for r in (s.get("rows") or [])]
             else:
-                ns["kind"] = "text"
-                ns["content"] = _coerce_text(s.get("content"))
+                # [r298] text 단락이 3문장 이상이면 자동으로 list 로 분해 — 개조식 강제.
+                content = _coerce_text(s.get("content"))
+                sentences = _split_sentences(content)
+                if len(sentences) >= 3:
+                    ns["kind"] = "list"
+                    ns["items"] = sentences
+                else:
+                    ns["kind"] = "text"
+                    ns["content"] = content
             secs_out.append(ns)
         fixed_topics.append({
             "title": _coerce_text(t.get("title")),
