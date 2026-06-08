@@ -38,7 +38,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r285"
+SERVER_REVISION = "r286"
 
 
 
@@ -1564,7 +1564,9 @@ async def _meet_run_job(p: dict, sid: str):
         if not tracks:
             await _upd({"status": "error", "summary": {"error": "오디오 트랙을 찾지 못함(다운로드/업로드 형식 확인)"}})
             return
-        await _upd({"status": "transcribing"})
+        # [r286] STT 디바이스(GPU/CPU) 확정 후 session 에 저장 — 프론트가 진행 중 배너에 표시
+        _stt_dev = _mtg_tr.current_device()
+        await _upd({"status": "transcribing", "stt_device": _stt_dev})
         # 3) 화자별 STT(증분 저장 — 폴링이 자라는 대화내역을 보여줌)
         all_segs, participants = [], []
         for i, tk in enumerate(tracks):

@@ -20,6 +20,8 @@ _ALLOWED_COLS = {
     "summary_markdown",
     # [r283] 회의록 HTML 임베드 — {he_<id>: {html, title, mode, at, size}}. 본문의 마커가 가리키는 데이터.
     "html_embeds",
+    # [r286] 현재 STT 가 실제로 쓰는 디바이스('cuda' | 'cpu') — 프론트 진행 배너에 표시.
+    "stt_device",
 }
 
 
@@ -157,6 +159,8 @@ alter table meeting_sessions add column if not exists summary_meta jsonb;
 alter table meeting_sessions add column if not exists summary_markdown text;
 -- [r283] 회의록 HTML 임베드 — 본문 마커 <!--TDAHTML:he_xxx--> 가 가리키는 데이터
 alter table meeting_sessions add column if not exists html_embeds jsonb default '{}'::jsonb;
+-- [r286] STT 가 실제로 쓰는 디바이스('cuda' | 'cpu')
+alter table meeting_sessions add column if not exists stt_device text;
 -- PostgREST 스키마 캐시 강제 갱신(alter 직후 즉시 반영)
 notify pgrst, 'reload schema';
 alter table meeting_sessions disable row level security;

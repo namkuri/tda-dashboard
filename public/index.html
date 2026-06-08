@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r285';
+        var _AHUB_FRONT_REV = 'r286';
 
 
         var _ahubRevWarned = false;
@@ -17500,7 +17500,7 @@ return data;
             ['ai_usage_logs', "id text primary key, project_id text, user_id text, user_name text, kind text, model text, host text, gpu_host_id text, in_tokens int default 0, out_tokens int default 0, dur_ms bigint default 0, detail text, out_summary text, created_at timestamptz default now()"],
             ['gpu_status_log', "id text primary key, gpu_host_id text, status text, owner_nickname text, model_name text, at timestamptz default now()"],
             // [r242] 회의록 자동작성 — Craig 녹음 → STT → LLM 회의록
-            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text, chat_messages jsonb default '[]'::jsonb, summary_meta jsonb, summary_markdown text, html_embeds jsonb default '{}'::jsonb"],
+            ['meeting_sessions', "id text primary key, project_id text, title text not null default '(제목 없음)', status text default 'draft', source text default 'craig', craig_id text, started_at timestamptz, participants jsonb default '[]'::jsonb, segments jsonb default '[]'::jsonb, transcript_text text default '', summary jsonb, duration_sec int default 0, model text, created_by text, created_at timestamptz default now(), updated_at timestamptz default now(), wiki_doc_id text, chat_messages jsonb default '[]'::jsonb, summary_meta jsonb, summary_markdown text, html_embeds jsonb default '{}'::jsonb, stt_device text"],
             // [r243] 프로덕트 관리 — Stage(타입/생애주기/Goal) + 게임개발 직무체계 계층 태그
             ['product_stages', "id text primary key, project_id text, name text not null default '새 Stage', type text, goal text default '', lifecycle text, tags jsonb default '[]'::jsonb, tag_meta jsonb default '{}'::jsonb, status text default 'active', sort_order bigint, created_by text, created_at timestamptz default now(), updated_at timestamptz default now()"],
             // [r244] 프로젝트별 커스텀 직무체계(대/중/소 추가분). id=project_id, nodes=커스텀 노드 배열
@@ -31915,7 +31915,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r285';
+    var _RFS_FRONT_REV = 'r286';
 
 
     async function rfsHealthCheck() {
@@ -32050,6 +32050,8 @@ ${intrLog}
                 return;
             }
             var stt = j.stt || {};
+            // [r286] STT 디바이스/모델 정보 캐시 — 진행 중 배너에서 'GPU(cuda)' 또는 'CPU' 표시
+            _mtgState._sttHealth = {gpu: !!stt.gpu, device: stt.device_resolved || (stt.gpu ? 'cuda' : 'cpu')};
             if (!stt.faster_whisper || !stt.ffmpeg) { show('⚠ STT 준비 안 됨 — ' + _annEsc(stt.error || 'faster-whisper/ffmpeg 설치 필요'), WARN_BG, WARN_FG, WARN_BD); return; }
             var llm = j.llm || {};
             if (llm.llm_ready === false) {
@@ -32321,8 +32323,19 @@ ${intrLog}
         // [r244] 처리 중 배너 (자동 새로고침 중)
         if (_mtgInProgress(s)) {
             var stmsg = ({importing: '오디오 준비/다운로드', transcribing: '화자별 STT', summarizing: '회의록 요약'})[s.status] || '처리';
+            // [r286] STT 진행 시 GPU/CPU 칩 — health 캐시(_mtgState._sttHealth) 또는 session.stt_device(백엔드 명시) 우선
+            var devChip = '';
+            if (s.status === 'transcribing') {
+                var dev = (s.stt_device || (_mtgState._sttHealth && _mtgState._sttHealth.device) || '').toLowerCase();
+                if (dev === 'cuda' || dev === 'gpu') {
+                    devChip = '<span title="GPU(cuBLAS) 가속" style="font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(46,158,91,.22);color:#1c6b3b;border:1px solid rgba(46,158,91,.55);">🚀 GPU</span>';
+                } else if (dev === 'cpu') {
+                    devChip = '<span title="CPU 모드(느림). nvidia-cublas-cu12/cudnn-cu12 설치 + 백엔드 완전 재시작 시 GPU" style="font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(245,158,11,.22);color:#7c3a08;border:1px solid rgba(245,158,11,.55);">🐢 CPU</span>';
+                }
+            }
             h += '<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--c-border);border-radius:8px;background:rgba(245,158,11,.14);color:#92400e;font-size:12.5px;display:flex;align-items:center;gap:8px;">'
-                + '<span class="rfs-dc-spinner"></span><span style="flex:1;"><b>' + stmsg + ' 진행 중</b> — 5초마다 자동 새로고침. <b>가져오기 창</b>을 닫거나 새로고침/페이지 이탈 시 처리가 중단됩니다. (긴 회의·CPU면 수 분 소요, 백엔드 콘솔에 진행 표시)</span>'
+                + '<span class="rfs-dc-spinner"></span>' + devChip
+                + '<span style="flex:1;"><b>' + stmsg + ' 진행 중</b> — 5초마다 자동 새로고침. <b>가져오기 창</b>을 닫거나 새로고침/페이지 이탈 시 처리가 중단됩니다.' + (s.status === 'transcribing' ? ' (긴 회의·CPU면 수 분 소요, 백엔드 콘솔에 진행 표시)' : '') + '</span>'
                 + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="mtgOpenSession(\'' + s.id + '\',true)">🔄 새로고침</button></div>';
         } else if (s.status === 'error') {
             var _errMsg = (s.summary && s.summary.error) ? s.summary.error : '';

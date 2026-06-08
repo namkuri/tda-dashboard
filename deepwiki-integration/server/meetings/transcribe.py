@@ -116,6 +116,13 @@ def _cuda_ok() -> bool:
         return False
 
 
+def current_device() -> str:
+    """[r286] 다음 transcribe_track 호출에서 사용될 device — _cuda_ok 결과 기반.
+    main._meet_run_job 이 session.stt_device 에 저장 → 프론트가 진행 중 배너에 'GPU/CPU' 표시.
+    """
+    return "cuda" if _cuda_ok() else "cpu"
+
+
 def _load_model(size: str = "medium", force_cpu: bool = False):
     """모델 로드. GPU 가용성 사전 검증 → 안 되면 즉시 CPU/int8 폴백."""
     cache_key = (size, "cpu" if force_cpu else "auto")
