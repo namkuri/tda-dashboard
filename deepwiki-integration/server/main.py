@@ -79,7 +79,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r293"
+SERVER_REVISION = "r294"
 
 
 
@@ -2030,16 +2030,23 @@ async def _meet_resummarize_job(sid: str, model: Optional[str], hint: str):
             started_at=s.get("started_at") or "", participants=s.get("participants") or [],
             hint=hint or "",
         )
-        # [r282] JSON → 마크다운 동시 저장. 단, 사용자가 직접 편집 중인 markdown 이 있고
-        #   summary_meta.edited 가 true 면 보존(덮어쓰기 방지). 그 외엔 새로 작성.
+        # [r294] 사용자가 다이얼로그에서 '재작성'을 명시적으로 누른 흐름이므로 markdown 도 항상
+        #   새로 생성(이전 편집 덮어쓰기 — 다이얼로그 경고 문구와 일치). 메타도 'AI 작성'으로 리셋.
+        md = _mtg_sum.to_markdown(s.get("title") or "회의", summary,
+                                  started_at=s.get("started_at") or "",
+                                  participants=s.get("participants") or [])
         prev_meta = s.get("summary_meta") or {}
-        if prev_meta.get("edited") and s.get("summary_markdown"):
-            patch = {"summary": summary, "status": "ready"}
-        else:
-            md = _mtg_sum.to_markdown(s.get("title") or "회의", summary,
-                                      started_at=s.get("started_at") or "",
-                                      participants=s.get("participants") or [])
-            patch = {"summary": summary, "summary_markdown": md, "status": "ready"}
+        new_meta = {
+            "created_by": prev_meta.get("created_by"),
+            "created_by_name": prev_meta.get("created_by_name"),
+            "created_at": prev_meta.get("created_at"),
+            "updated_by": "ai",
+            "updated_by_name": f"🤖 AI 재작성 ({model or 'auto'})",
+            "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "edited": False,
+        }
+        patch = {"summary": summary, "summary_markdown": md,
+                 "summary_meta": new_meta, "status": "ready"}
         await loop.run_in_executor(None, lambda: _mtg_store.update_session(sid, patch))
     except Exception as e:
         import traceback as _tb

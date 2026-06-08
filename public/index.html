@@ -10975,7 +10975,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r293';
+        var _AHUB_FRONT_REV = 'r294';
 
 
         var _ahubRevWarned = false;
@@ -31917,7 +31917,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r293';
+    var _RFS_FRONT_REV = 'r294';
 
 
     async function rfsHealthCheck() {
@@ -32857,9 +32857,18 @@ ${intrLog}
         var order = {best: 0, good: 1, fast: 2, local: 3};
         var sorted = models.slice().sort(function (a, b) { var oa = order[a.tier], ob = order[b.tier]; return (oa == null ? 9 : oa) - (ob == null ? 9 : ob); });
         var optsHtml = sorted.map(function (m, i) {
-            return '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;cursor:pointer;background:var(--c-paper);">'
-                + '<input type="radio" name="mtg-rs-model" value="' + _annEsc(m.id) + '"' + (i === 0 ? ' checked' : '') + '>'
-                + '<span style="flex:1;font-size:12.5px;">' + _annEsc(m.label) + '</span></label>';
+            // [r294] tier 별 색상 칩 + Ollama/Flash 디테일 부족 경고
+            var tierChip = '';
+            if (m.tier === 'best') tierChip = '<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;background:rgba(46,158,91,.22);color:#1c6b3b;border:1px solid rgba(46,158,91,.55);">BEST</span>';
+            else if (m.tier === 'good') tierChip = '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(42,122,184,.18);color:#1a3a58;border:1px solid rgba(42,122,184,.4);">GOOD</span>';
+            else if (m.tier === 'fast') tierChip = '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(245,158,11,.18);color:#7c3a08;border:1px solid rgba(245,158,11,.4);">FAST</span>';
+            else if (m.tier === 'local') tierChip = '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(124,113,99,.18);color:var(--c-text2);border:1px solid var(--c-border);">LOCAL</span>';
+            var warn = (m.tier === 'local' || m.tier === 'fast') ? '<div style="font-size:10.5px;color:#7c3a08;margin-top:2px;">⚠ 디테일/구조 부족 가능 — Pro/Best 권장</div>' : '';
+            return '<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;cursor:pointer;background:var(--c-paper);">'
+                + '<input type="radio" name="mtg-rs-model" value="' + _annEsc(m.id) + '"' + (i === 0 ? ' checked' : '') + ' style="margin-top:2px;">'
+                + '<span style="flex:1;font-size:12.5px;">' + _annEsc(m.label) + warn + '</span>'
+                + tierChip
+                + '</label>';
         }).join('');
         var hintInput = withHint ? '<div style="margin-top:10px;"><label style="font-size:12px;font-weight:700;">맥락 메모 (선택)<input id="mtg-rs-hint" type="text" placeholder="예: Phase G 위키 일치도 검증 회의" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-paper);color:var(--c-text);"></label></div>' : '';
         var ok = await uiConfirm({
