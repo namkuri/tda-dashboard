@@ -79,7 +79,7 @@ START_TIME = time.time()
 # [r209] 백엔드 코드 리비전 — /health 응답에 포함. 프론트(_AHUB_FRONT_REV)와
 # 비교해 "코드 변경 후 서버 미재시작"을 자동 감지·경고.
 
-SERVER_REVISION = "r295"
+SERVER_REVISION = "r296"
 
 
 
@@ -2236,6 +2236,12 @@ async def llm_gemini_config(req: GeminiConfigRequest):
         raise HTTPException(400, "Gemini 키가 유효하지 않습니다 (모델 목록 조회 실패)")
     GEMINI_CONFIG["api_key"] = key
     GEMINI_CONFIG["label"] = req.label or "내 Gemini"
+    # [r296] 파일 영속화 — 백엔드 재시작 시 휘발 방지
+    try:
+        from llm_router import save_gemini_config as _save_cfg
+        _save_cfg()
+    except Exception as _e:
+        print(f"[main] Gemini config 영속화 실패: {_e}")
     models = await client.list_models()
     free = [m for m in models if any(m.startswith(f) for f in GEMINI_FREE_MODELS)] or GEMINI_FREE_MODELS
     return {"ok": True, "label": GEMINI_CONFIG["label"], "masked": "..." + key[-4:], "free_models": free}
@@ -2258,6 +2264,12 @@ async def llm_gemini_config_get():
 async def llm_gemini_config_delete():
     GEMINI_CONFIG["api_key"] = None
     GEMINI_CONFIG["label"] = None
+    # [r296] 파일도 삭제
+    try:
+        from llm_router import save_gemini_config as _save_cfg
+        _save_cfg()
+    except Exception:
+        pass
     return {"ok": True}
 
 
@@ -2668,6 +2680,16 @@ def _model_installed(target: str, installed: list) -> bool:
 async def startup():
     print("\n" + "═" * 60)
     print(" 🤖 TDA Deep Wiki 백엔드 시작")
+    # [r296] Gemini 키 영속화 로드 — 백엔드 재시작 시 휘발 방지(파일 우선, env 폴백)
+    try:
+        from llm_router import load_gemini_config as _load_gem
+        gi = _load_gem()
+        if gi.get("key_present"):
+            print(f"  🟢 Gemini 키 로드 — source={gi['source']}, label='{gi.get('label')}', masked={gi.get('masked')}")
+        else:
+            print(f"  🟡 Gemini 키 없음 — AI Agent 페이지에서 등록 또는 env GEMINI_API_KEY 설정")
+    except Exception as _ge:
+        print(f"  ⚠ Gemini config 로드 실패: {_ge}")
     # [r290] CUDA cuBLAS 가용성 명확 진단 — GPU STT 가속의 대표적 실패 지점
     try:
         from meetings import transcribe as _stt_diag

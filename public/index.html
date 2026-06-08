@@ -7456,6 +7456,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!h) { showToast('호스트를 찾을 수 없습니다', 'alert'); return; }
             var s = _dwGetSettings();
             s.backendUrl = h.tunnel_url;
+            // [r296] 사용자가 명시적으로 선택한 호스트도 자동 폴백 추적 대상으로 — 그 호스트가
+            //   offline 되면 다른 공유 호스트로 자동 전환. 사용자가 수동으로 backendUrl 직접
+            //   입력한 경우만 자동 전환 안 함.
+            s.backendAutoConnected = h.id;
             _dwSaveSettings(s);
             showToast('✦ ' + (h.owner_nickname || '?') + ' 의 GPU 호스트에 연결됨 · 모델: ' + (h.model_name || '?'), 'success');
             // [r142 #6] 로그
@@ -7470,10 +7474,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             try {
                 window._gpuHostsRealtime = supabaseClient.channel('rt-gpu-hosts')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'gpu_hosts' }, function (payload) {
-                        // 모달이 열려있으면 즉시 갱신, 아니면 카운트만
                         _gpuFetchHosts().then(function () {
                             var m = document.getElementById('gpu-hosts-modal');
                             if (m && !m.classList.contains('hidden')) _gpuRenderHosts();
+                            // [r296] 자동 연결 호스트가 offline 됐으면 다른 호스트로 전환 시도
+                            if (typeof _gpuAutoConnectIfNeeded === 'function') _gpuAutoConnectIfNeeded();
                         });
                     })
                     .subscribe();
@@ -7493,8 +7498,57 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!supabaseClient || !currentUser) return;
             var s = _dwGetSettings();
             if (s && s.shareGpu) _gpuStartHeartbeat();
-            _gpuFetchHosts();
+            _gpuFetchHosts().then(_gpuAutoConnectIfNeeded);   // [r296] 공유 호스트 자동 연결
             _gpuSubscribeRealtime();
+        }
+
+        // [r296] 백엔드 URL 미설정 또는 응답 없음 → 다른 사용자가 공유한 online GPU 호스트로 자동 연결.
+        //   사용자가 직접 설정한 URL 은 덮어쓰지 않음 (응답 OK 면 유지).
+        async function _gpuAutoConnectIfNeeded() {
+            try {
+                var s = _dwGetSettings(); if (!s) return;
+                var hosts = window._gpuHosts || [];
+                if (!hosts.length) return;
+                var myHostId = (typeof _gpuMyHostId === 'function') ? _gpuMyHostId() : null;
+                // online/busy 호스트만, 본인 호스트 제외
+                var avail = hosts.filter(function (h) {
+                    return h && h.id !== myHostId && h.tunnel_url
+                        && (h.status === 'online' || h.status === 'busy');
+                }).sort(function (a, b) {
+                    // online 우선, 그 다음 최근 갱신
+                    if (a.status !== b.status) return a.status === 'online' ? -1 : 1;
+                    return (b.last_seen_at || '').localeCompare(a.last_seen_at || '');
+                });
+                if (!avail.length) return;
+                // 1) backendUrl 미설정 → 자동 연결
+                if (!(s.backendUrl || '').trim()) {
+                    var pick = avail[0];
+                    s.backendUrl = pick.tunnel_url;
+                    s.backendAutoConnected = pick.id;   // 자동 연결 표시(향후 검증·교체용)
+                    if (typeof _dwSaveSettings === 'function') _dwSaveSettings(s);
+                    showToast('✦ 공유 GPU 자동 연결: ' + (pick.owner_nickname || '?') + ' · 모델 ' + (pick.model_name || '?'), 'success');
+                    if (typeof _dwpLog === 'function') _dwpLog('🤝 공유 GPU 자동 연결 → ' + (pick.owner_nickname || '?') + ' (' + pick.tunnel_url + ')', 'success');
+                    if (typeof dwHealthCheck === 'function') dwHealthCheck();
+                    if (typeof _dwpRenderModelIndicator === 'function') _dwpRenderModelIndicator();
+                    return;
+                }
+                // 2) backendUrl 있지만 자동 연결된 호스트라면 — 그 호스트가 offline 됐는지 확인
+                if (s.backendAutoConnected) {
+                    var prev = hosts.find(function (h) { return h.id === s.backendAutoConnected; });
+                    if (!prev || prev.status === 'offline') {
+                        var nextPick = avail.find(function (h) { return h.id !== s.backendAutoConnected; });
+                        if (nextPick) {
+                            s.backendUrl = nextPick.tunnel_url;
+                            s.backendAutoConnected = nextPick.id;
+                            if (typeof _dwSaveSettings === 'function') _dwSaveSettings(s);
+                            showToast('🔄 공유 GPU 자동 전환: ' + (nextPick.owner_nickname || '?'), 'info');
+                            if (typeof _dwpLog === 'function') _dwpLog('🔄 공유 GPU 호스트 전환 → ' + (nextPick.owner_nickname || '?'), 'info');
+                            if (typeof dwHealthCheck === 'function') dwHealthCheck();
+                            if (typeof _dwpRenderModelIndicator === 'function') _dwpRenderModelIndicator();
+                        }
+                    }
+                }
+            } catch (e) { console.warn('[gpu] auto-connect 실패', e); }
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -10975,7 +11029,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r295';
+        var _AHUB_FRONT_REV = 'r296';
 
 
         var _ahubRevWarned = false;
@@ -31917,7 +31971,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r295';
+    var _RFS_FRONT_REV = 'r296';
 
 
     async function rfsHealthCheck() {

@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 repos/
 *.log
+# [r296] Gemini API 키 영속화 — 절대 커밋 금지
+.gemini_config.json
