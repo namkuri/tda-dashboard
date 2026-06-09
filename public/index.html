@@ -9574,7 +9574,20 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         function _driveUid() { return 'df_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
         function _driveEsc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
         function _driveFmt(n) { n = n || 0; if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB'; return (n / 1073741824).toFixed(2) + ' GB'; }
-        function _driveSafeName(name) { return (name || 'file').normalize('NFC').replace(/[^\w.\-가-힣]/g, '_').slice(-80); }
+        // [r307] Supabase Storage 키 — 비-ASCII 문자는 'Invalid key' 에러 유발. 한국어/한자 등 모두 _ 로
+        //   변환하고 확장자만 보존. 일부 stack 에서 NFC + 한국어가 URL-encode 되며 키 검증 실패.
+        function _driveSafeName(name) {
+            name = (name || 'file').normalize('NFC');
+            var ext = '';
+            var dotIdx = name.lastIndexOf('.');
+            if (dotIdx > 0 && dotIdx < name.length - 1) {
+                ext = name.slice(dotIdx).replace(/[^a-zA-Z0-9.]/g, '');
+                name = name.slice(0, dotIdx);
+            }
+            name = name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+            if (!name) name = 'file';
+            return (name + ext).slice(-80);
+        }
         function _driveIsImage(mime, name) { return /^image\//.test(mime || '') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(name || ''); }
         function _driveIcon(m) { var n = (m.name || '').toLowerCase(), mi = m.mime || ''; if (_driveIsImage(mi, n)) return '🖼️'; if (/pdf/.test(mi) || /\.pdf$/.test(n)) return '📕'; if (/\.(zip|rar|7z|tar|gz)$/.test(n)) return '🗜️'; if (/\.(html?|js|ts|css|json|py|java|c|cpp)$/.test(n)) return '📄'; if (/\.(mp4|webm|mov|avi)$/.test(n)) return '🎬'; if (/\.(mp3|wav|ogg|flac)$/.test(n)) return '🎵'; if (/\.(docx?|hwp)$/.test(n)) return '📝'; if (/\.(xlsx?|csv)$/.test(n)) return '📊'; return '📎'; }
 
@@ -11246,7 +11259,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r306';
+        var _AHUB_FRONT_REV = 'r307';
 
 
         var _ahubRevWarned = false;
@@ -12339,10 +12352,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             });
             return _twitterWidgetsLoadPending;
         }
-        // [r304] HTML 표 셀 등 마크다운 파싱 안 거친 raw URL/마크다운 링크 텍스트를 a 로 변환.
-        //   사용자가 HTML 표 안에 '[영상](url)' 또는 raw URL 만 적어도 자동 인식되게.
+        // [r304/r307] HTML 표 셀 등 마크다운 파싱 안 거친 영역의 자동 변환:
+        //   - YouTube/X 링크(raw URL + 마크다운 링크) → a + 임베드
+        //   - 이미지 마크다운 ![alt](url|data:) → <img>
+        //   - raw 이미지 URL(.png/.jpg/.gif/.webp/.svg) → <img>
         function _convertMediaTextNodes(containerEl) {
-            var URL_RE = /\bhttps?:\/\/(?:[\w.-]*\.)?(?:youtu\.be|youtube\.com|youtube-nocookie\.com|x\.com|twitter\.com)\/[^\s<>"')\]]+/g;
+            // r307: 이미지 마크다운 / 이미지 raw URL — 우선 검출
+            var IMG_MD_RE = /!\[([^\]]*)\]\(((?:https?:\/\/[^\s)]+|data:image\/[^\s)]+))\)/g;
+            var IMG_URL_RE = /\bhttps?:\/\/[^\s<>"')\]]+?\.(?:png|jpe?g|gif|webp|svg|bmp|avif)(?:\?[^\s<>"')\]]*)?/gi;
+            var VID_URL_RE = /\bhttps?:\/\/(?:[\w.-]*\.)?(?:youtu\.be|youtube\.com|youtube-nocookie\.com|x\.com|twitter\.com)\/[^\s<>"')\]]+/g;
             var MD_LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
             var nodes = [];
             var walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, {
@@ -12351,41 +12369,72 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         'a, iframe, code, pre, script, style, textarea, .tda-yt-embed, .tda-yt-cell, .tda-tw-embed, .twitter-tweet'
                     )) return NodeFilter.FILTER_REJECT;
                     var v = node.nodeValue || '';
-                    if (!/(youtu|youtube|x\.com|twitter\.com)/i.test(v)) return NodeFilter.FILTER_REJECT;
+                    // 이미지 마크다운 / 이미지 URL / 비디오 URL 중 하나라도 있으면 처리
+                    if (!/(youtu|youtube|x\.com|twitter\.com|!\[|\.(?:png|jpe?g|gif|webp|svg|bmp|avif)|data:image)/i.test(v))
+                        return NodeFilter.FILTER_REJECT;
                     return NodeFilter.FILTER_ACCEPT;
                 }
             });
             var n; while ((n = walker.nextNode())) nodes.push(n);
             nodes.forEach(function (textNode) {
                 var text = textNode.nodeValue;
-                // 마크다운 링크 먼저 수집 (선점)
-                var mds = [];
+                var matches = [];
+                // (1) 이미지 마크다운 ![]() — 가장 우선
+                IMG_MD_RE.lastIndex = 0;
+                var im;
+                while ((im = IMG_MD_RE.exec(text)) !== null) {
+                    matches.push({ idx: im.index, len: im[0].length, kind: 'img', alt: im[1], url: im[2] });
+                }
+                // (2) 일반 마크다운 링크 [](url) — YouTube/X 만
+                var consumed = matches.slice();
                 MD_LINK_RE.lastIndex = 0;
                 var mm;
                 while ((mm = MD_LINK_RE.exec(text)) !== null) {
+                    var ins = consumed.some(function (d) { return mm.index >= d.idx && mm.index < d.idx + d.len; });
+                    if (ins) continue;
                     if (/(youtu|youtube|x\.com|twitter\.com)/i.test(mm[2])) {
-                        mds.push({ idx: mm.index, len: mm[0].length, label: mm[1], url: mm[2] });
+                        matches.push({ idx: mm.index, len: mm[0].length, kind: 'link', label: mm[1], url: mm[2] });
                     }
                 }
-                // raw URL — 단, 마크다운 링크 범위 내에 들어있으면 제외
-                var raws = [];
-                URL_RE.lastIndex = 0;
-                var rm;
-                while ((rm = URL_RE.exec(text)) !== null) {
-                    var inMd = mds.some(function (d) { return rm.index >= d.idx && rm.index < d.idx + d.len; });
-                    if (!inMd) raws.push({ idx: rm.index, len: rm[0].length, label: null, url: rm[0] });
+                // (3) raw 이미지 URL — 이미 다른 매치 안이면 제외
+                consumed = matches.slice();
+                IMG_URL_RE.lastIndex = 0;
+                var iu;
+                while ((iu = IMG_URL_RE.exec(text)) !== null) {
+                    var ins2 = consumed.some(function (d) { return iu.index >= d.idx && iu.index < d.idx + d.len; });
+                    if (!ins2) matches.push({ idx: iu.index, len: iu[0].length, kind: 'img', alt: '', url: iu[0] });
                 }
-                var all = mds.concat(raws).sort(function (a, b) { return a.idx - b.idx; });
-                if (!all.length) return;
+                // (4) YouTube/X raw URL
+                consumed = matches.slice();
+                VID_URL_RE.lastIndex = 0;
+                var vu;
+                while ((vu = VID_URL_RE.exec(text)) !== null) {
+                    var ins3 = consumed.some(function (d) { return vu.index >= d.idx && vu.index < d.idx + d.len; });
+                    if (!ins3) matches.push({ idx: vu.index, len: vu[0].length, kind: 'link', label: null, url: vu[0] });
+                }
+                if (!matches.length) return;
+                matches.sort(function (a, b) { return a.idx - b.idx; });
                 var frag = document.createDocumentFragment();
                 var last = 0;
-                all.forEach(function (m) {
+                var inCell = !!(textNode.parentNode && textNode.parentNode.closest('td, th'));
+                matches.forEach(function (m) {
                     if (m.idx > last) frag.appendChild(document.createTextNode(text.substring(last, m.idx)));
-                    var a = document.createElement('a');
-                    a.href = m.url;
-                    a.textContent = m.label || m.url;
-                    a.target = '_blank'; a.rel = 'noopener';
-                    frag.appendChild(a);
+                    if (m.kind === 'img') {
+                        // <img> 직접 — 셀 안은 max-width 200 / 본문은 480
+                        var img = document.createElement('img');
+                        img.src = m.url; img.alt = m.alt || '';
+                        img.loading = 'lazy';
+                        img.style.cssText = inCell
+                            ? 'max-width:200px;max-height:160px;display:block;margin:4px 0;border-radius:6px;border:1px solid var(--c-border);'
+                            : 'max-width:480px;display:block;margin:8px 0;border-radius:8px;border:1px solid var(--c-border);';
+                        frag.appendChild(img);
+                    } else {
+                        var a = document.createElement('a');
+                        a.href = m.url;
+                        a.textContent = m.label || m.url;
+                        a.target = '_blank'; a.rel = 'noopener';
+                        frag.appendChild(a);
+                    }
                     last = m.idx + m.len;
                 });
                 if (last < text.length) frag.appendChild(document.createTextNode(text.substring(last)));
@@ -32621,7 +32670,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r306';
+    var _RFS_FRONT_REV = 'r307';
 
 
     async function rfsHealthCheck() {
