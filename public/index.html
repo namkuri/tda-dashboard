@@ -11112,7 +11112,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r303';
+        var _AHUB_FRONT_REV = 'r304';
 
 
         var _ahubRevWarned = false;
@@ -12205,8 +12205,64 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             });
             return _twitterWidgetsLoadPending;
         }
+        // [r304] HTML 표 셀 등 마크다운 파싱 안 거친 raw URL/마크다운 링크 텍스트를 a 로 변환.
+        //   사용자가 HTML 표 안에 '[영상](url)' 또는 raw URL 만 적어도 자동 인식되게.
+        function _convertMediaTextNodes(containerEl) {
+            var URL_RE = /\bhttps?:\/\/(?:[\w.-]*\.)?(?:youtu\.be|youtube\.com|youtube-nocookie\.com|x\.com|twitter\.com)\/[^\s<>"')\]]+/g;
+            var MD_LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+            var nodes = [];
+            var walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, {
+                acceptNode: function (node) {
+                    if (node.parentNode && node.parentNode.closest(
+                        'a, iframe, code, pre, script, style, textarea, .tda-yt-embed, .tda-yt-cell, .tda-tw-embed, .twitter-tweet'
+                    )) return NodeFilter.FILTER_REJECT;
+                    var v = node.nodeValue || '';
+                    if (!/(youtu|youtube|x\.com|twitter\.com)/i.test(v)) return NodeFilter.FILTER_REJECT;
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            var n; while ((n = walker.nextNode())) nodes.push(n);
+            nodes.forEach(function (textNode) {
+                var text = textNode.nodeValue;
+                // 마크다운 링크 먼저 수집 (선점)
+                var mds = [];
+                MD_LINK_RE.lastIndex = 0;
+                var mm;
+                while ((mm = MD_LINK_RE.exec(text)) !== null) {
+                    if (/(youtu|youtube|x\.com|twitter\.com)/i.test(mm[2])) {
+                        mds.push({ idx: mm.index, len: mm[0].length, label: mm[1], url: mm[2] });
+                    }
+                }
+                // raw URL — 단, 마크다운 링크 범위 내에 들어있으면 제외
+                var raws = [];
+                URL_RE.lastIndex = 0;
+                var rm;
+                while ((rm = URL_RE.exec(text)) !== null) {
+                    var inMd = mds.some(function (d) { return rm.index >= d.idx && rm.index < d.idx + d.len; });
+                    if (!inMd) raws.push({ idx: rm.index, len: rm[0].length, label: null, url: rm[0] });
+                }
+                var all = mds.concat(raws).sort(function (a, b) { return a.idx - b.idx; });
+                if (!all.length) return;
+                var frag = document.createDocumentFragment();
+                var last = 0;
+                all.forEach(function (m) {
+                    if (m.idx > last) frag.appendChild(document.createTextNode(text.substring(last, m.idx)));
+                    var a = document.createElement('a');
+                    a.href = m.url;
+                    a.textContent = m.label || m.url;
+                    a.target = '_blank'; a.rel = 'noopener';
+                    frag.appendChild(a);
+                    last = m.idx + m.len;
+                });
+                if (last < text.length) frag.appendChild(document.createTextNode(text.substring(last)));
+                textNode.parentNode.replaceChild(frag, textNode);
+            });
+        }
+
         function enhanceMediaLinks(containerEl) {
             if (!containerEl) return;
+            // [r304] 1차 — 마크다운/raw URL 텍스트를 a 로 변환 (HTML 표 셀 등 마크다운 미파싱 영역)
+            try { _convertMediaTextNodes(containerEl); } catch (e) { console.warn('[media] text scan', e); }
             var anchors = containerEl.querySelectorAll('a[href]');
             var hasTweet = false;
             Array.prototype.forEach.call(anchors, function (a) {
@@ -32431,7 +32487,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r303';
+    var _RFS_FRONT_REV = 'r304';
 
 
     async function rfsHealthCheck() {
