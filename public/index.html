@@ -11112,7 +11112,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r302';
+        var _AHUB_FRONT_REV = 'r303';
 
 
         var _ahubRevWarned = false;
@@ -26718,18 +26718,143 @@ ${intrLog}
             var statusEl = document.getElementById('doc-save-status'); if (statusEl) { statusEl.textContent = '수정 중...'; statusEl.style.color = '#f59e0b'; }
             clearTimeout(_docSaveTimer); _docSaveTimer = setTimeout(flushDocSave, 1200);
         }
+        // [r303] 표 셀 인라인 편집 + 마크다운/HTML 원본 동기화
+        function _lpUpdateTableCell(cellEl) {
+            var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return false;
+            var row = cellEl.closest('.lp-row, .lp-blank'); if (!row) return false;
+            var idx = parseInt(row.getAttribute('data-idx'), 10);
+            if (isNaN(idx)) return false;
+            var b = host._lpBlocks[idx]; if (!b) return false;
+            var tr = cellEl.parentNode;
+            if (!tr || tr.tagName !== 'TR') return false;
+            var table = cellEl.closest('table'); if (!table) return false;
+            var allRows = [];
+            if (table.tHead) Array.prototype.forEach.call(table.tHead.rows, function (r) { allRows.push(r); });
+            Array.prototype.forEach.call(table.tBodies, function (tb) {
+                Array.prototype.forEach.call(tb.rows, function (r) { allRows.push(r); });
+            });
+            var rowIdx = allRows.indexOf(tr);
+            var cellIdx = Array.prototype.indexOf.call(tr.children, cellEl);
+            if (rowIdx < 0 || cellIdx < 0) return false;
+            var newCellText = (cellEl.textContent || '').trim();
+            var origText = b.text;
+            var newText = null;
+            // (1) HTML 표
+            if (/<table[\s>]/i.test(origText)) {
+                var colCount = allRows[0] ? allRows[0].children.length : 0;
+                if (!colCount) return false;
+                var targetCellGlobal = rowIdx * colCount + cellIdx;
+                var count = 0;
+                var esc = newCellText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                newText = origText.replace(/(<t[dh](?:\s[^>]*)?>)([\s\S]*?)(<\/t[dh]>)/gi, function (m, open, inner, close) {
+                    if (count++ === targetCellGlobal) return open + esc + close;
+                    return m;
+                });
+            }
+            // (2) 마크다운 표
+            else if (/^\s*\|.*\|\s*$/m.test(origText)) {
+                var lines = origText.split('\n');
+                var mdRowsIdx = [];
+                lines.forEach(function (line, li) {
+                    if (/^\s*\|.*\|\s*$/.test(line) && !/^\s*\|[\s\-:|]+\|\s*$/.test(line)) mdRowsIdx.push(li);
+                });
+                if (rowIdx >= mdRowsIdx.length) return false;
+                var li = mdRowsIdx[rowIdx];
+                // | 셀1 | 셀2 | 형식 — 첫/마지막 빈 항목 trim
+                var cells = lines[li].split('|');
+                if (cells.length < 3) return false;
+                var contentCells = cells.slice(1, -1);
+                if (cellIdx >= contentCells.length) return false;
+                contentCells[cellIdx] = ' ' + newCellText.replace(/\|/g, '\\|') + ' ';
+                lines[li] = '|' + contentCells.join('|') + '|';
+                newText = lines.join('\n');
+            } else {
+                return false;
+            }
+            if (!newText || newText === origText) return false;
+            b.text = newText;
+            var content = host._lpBlocks.map(function (x) { return x.text; }).join('\n');
+            _lpCommit(content);
+            return true;
+        }
+        function _lpMakeCellEditable(cellEl) {
+            if (!cellEl || cellEl.dataset.tdaEditing === '1') return;
+            cellEl.dataset.tdaEditing = '1';
+            cellEl.contentEditable = 'true';
+            cellEl.style.outline = '2px solid var(--c-accent)';
+            cellEl.style.background = 'rgba(201,100,66,.06)';
+            var origText = cellEl.textContent;
+            cellEl.focus();
+            // 캐럿 끝
+            try {
+                var rng = document.createRange(); rng.selectNodeContents(cellEl); rng.collapse(false);
+                var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rng);
+            } catch (e) {}
+            function commit() {
+                cellEl.contentEditable = 'false';
+                cellEl.style.outline = '';
+                cellEl.style.background = '';
+                cellEl.dataset.tdaEditing = '0';
+                cellEl.removeEventListener('blur', commit);
+                cellEl.removeEventListener('keydown', onKey);
+                if ((cellEl.textContent || '').trim() === origText.trim()) return;
+                _lpUpdateTableCell(cellEl);
+            }
+            function onKey(e) {
+                if (e.key === 'Escape') { e.preventDefault(); cellEl.textContent = origText; cellEl.blur(); }
+                else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); cellEl.blur(); }
+            }
+            cellEl.addEventListener('blur', commit);
+            cellEl.addEventListener('keydown', onKey);
+        }
         // 라이브 영역 클릭 위임 — 링크/임베드가 아니면 해당 블록 편집 진입.
         // [r235 #1] 캡처 단계로 등록 — 본문 영역의 다른 핸들러가 버블 단계에서 stopPropagation 해도
         //   클릭이 먼저 도달하도록(위키링크 캡처 핸들러가 링크는 먼저 가로채 네비게이션 유지).
         document.addEventListener('click', function (e) {
             if (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'live') return;
             var host = document.getElementById('doc-livepreview'); if (!host) return;
-            // blur 커밋으로 DOM 이 갱신됐을 수 있어 좌표로 대상 재해석(다른 블록 한 번에 전환). 실패 시 e.target.
             var tgt = document.elementFromPoint(e.clientX, e.clientY);
             if (!tgt || !host.contains(tgt)) tgt = e.target;
             if (!tgt || !host.contains(tgt)) return;
             if (tgt.closest('a, .wikilink, .md-code-embed, input, button, .tda-html-mount, iframe, summary, .lp-toc, .lp-meta, .lp-live-edit, textarea.lp-edit')) return;
+            // [r303] 표 셀 — 단일 클릭은 인라인 편집(소스 전환 X). 더블 클릭은 기존 _lpEnterEdit.
+            var cell = tgt.closest('td, th');
+            if (cell) {
+                if (e.detail >= 2) {
+                    // 더블 클릭 → 소스 편집
+                    var row2 = cell.closest('.lp-row, .lp-blank');
+                    if (row2) {
+                        var i2 = parseInt(row2.getAttribute('data-idx'), 10);
+                        if (!isNaN(i2)) _lpEnterEdit(i2);
+                    }
+                } else {
+                    _lpMakeCellEditable(cell);
+                }
+                e.stopPropagation();
+                return;
+            }
+            // [r303] 표 안 비-셀 영역(caption/thead/tbody 사이 공백) — 무시
+            if (tgt.closest('table')) { e.stopPropagation(); return; }
             var row = tgt.closest('.lp-row, .lp-blank'); if (!row) return;
+            // [r303] 표가 포함된 row 의 표 외부(같은 row 안 공백) 클릭 — 소스 전환 대신 다음 빈 줄로 진입.
+            //   사용자가 표 옆에 텍스트를 추가하려는 의도. 다음 블록이 없거나 비어있지 않으면 새 빈 블록 삽입.
+            if (row.querySelector && row.querySelector('table')) {
+                var rIdx = parseInt(row.getAttribute('data-idx'), 10);
+                if (!isNaN(rIdx) && host._lpBlocks) {
+                    var nextIdx = rIdx + 1;
+                    var next = host._lpBlocks[nextIdx];
+                    if (!next || !next.blank) {
+                        // 빈 블록 삽입
+                        host._lpBlocks.splice(nextIdx, 0, { text: '', blank: true });
+                    }
+                    var newContent = host._lpBlocks.map(function (x) { return x.text; }).join('\n');
+                    _lpCommit(newContent);
+                    renderLivePreview();
+                    setTimeout(function () { _lpEnterEdit(nextIdx); }, 30);
+                    e.stopPropagation();
+                    return;
+                }
+            }
             var idx = parseInt(row.getAttribute('data-idx'), 10);
             if (!isNaN(idx)) _lpEnterEdit(idx);
         }, true);
@@ -32306,7 +32431,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r302';
+    var _RFS_FRONT_REV = 'r303';
 
 
     async function rfsHealthCheck() {
