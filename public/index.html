@@ -9143,15 +9143,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 return;
             }
 
-            // (2) 외부 URL이 없는 진짜 비트맵(스크린샷, 캡쳐, 그림판 등)은 기존대로 base64 저장
+            // [r308] 비트맵 이미지 — 반드시 Supabase Storage 에 저장. base64 인라인 폴백 제거.
+            //   DB(doc.content) 비대화·서버 비용 폭증 방지. 업로드 실패 시 사용자에 명확 안내 후 첨부 중단.
             for(let i = 0; i < items.length; i++) {
                 if(items[i].type.startsWith('image/')) {
                     e.preventDefault();
                     const file = items[i].getAsFile();
                     if(!file) continue;
                     var _tgt = e.target;
-                    // [r40] 우선 Supabase Storage(공용 드라이브)에 저장 → public URL 삽입. 실패(버킷 미설정 등) 시 base64 내부 저장으로 폴백.
                     (async function(){
+                        showToast('⏳ 이미지 업로드 중…', 'info');
                         var url = null;
                         try { url = await uploadImageToStorage(file, activeDocId); } catch(err) { url = null; }
                         if (url) {
@@ -9159,17 +9160,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                             showToast('🖼 이미지를 드라이브에 저장·삽입했습니다.', 'success');
                             return;
                         }
-                        const reader = new FileReader();
-                        reader.onload = function(ev) {
-                            const dataUrl = ev.target.result;
-                            if(!currentData.images) currentData.images = {};
-                            const imgId = 'img_' + Date.now();
-                            currentData.images[imgId] = dataUrl;
-                            insertToActiveEditor(_tgt, '\n![이미지](img://' + imgId + ')\n');
-                            saveData();
-                            showToast('이미지 삽입(임시 내부 저장) — 서버 상태 탭에서 드라이브 설정을 하면 공용 저장됩니다.', 'info');
-                        };
-                        reader.readAsDataURL(file);
+                        // [r308] storage 실패 → 첨부 중단(DB 에 base64 박지 않음). 원인 안내.
+                        showToast('⚠ 이미지 업로드 실패 — 공용 드라이브 버킷(' + (typeof DRIVE_BUCKET !== 'undefined' ? DRIVE_BUCKET : 'drive') + ') 설정/권한/로그인 확인. 설정 > 상태 탭에서 점검하세요.', 'alert');
                     })();
                     return;
                 }
@@ -10178,20 +10170,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         showToast('✓ ' + (isImg ? '이미지' : '파일') + ' 첨부됨', 'success');
                         return;
                     }
-                    // [r306] 업로드 실패 폴백 — 이미지면 base64 인라인, 파일이면 안내만
-                    if (isImg) {
-                        var reader = new FileReader();
-                        reader.onload = function (ev) {
-                            var token = '![' + (file.name || '이미지') + '](' + ev.target.result + ')';
-                            _insertTokenAtTarget(token);
-                            var sizeKB = Math.round((file.size || 0) / 1024);
-                            showToast('⚠ 드라이브 업로드 실패 → base64 인라인 저장(' + sizeKB + 'KB). 공용 드라이브 버킷 설정 확인 권장.', 'alert');
-                        };
-                        reader.onerror = function () { showToast('이미지 읽기 실패', 'alert'); };
-                        reader.readAsDataURL(file);
-                    } else {
-                        showToast('⚠ 파일 업로드 실패 — 공용 드라이브 버킷(' + (typeof DRIVE_BUCKET !== 'undefined' ? DRIVE_BUCKET : 'drive') + ') 설정 또는 로그인 상태 확인. 설정 > 상태 탭 점검.', 'alert');
-                    }
+                    // [r308] 업로드 실패 — base64 인라인 폴백 제거. DB 비대화 방지. 사용자에 명확 원인 안내.
+                    showToast('⚠ ' + (isImg ? '이미지' : '파일') + ' 업로드 실패 — 공용 드라이브 버킷(' + (typeof DRIVE_BUCKET !== 'undefined' ? DRIVE_BUCKET : 'drive') + ') 설정/권한/로그인 확인. 설정 > 상태 탭에서 점검 후 다시 시도.', 'alert');
                 } catch (e) {
                     showToast('첨부 실패: ' + (e.message || e), 'alert');
                     console.warn('[ctx] _pickAndInsertFile', e);
@@ -11259,7 +11239,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r307';
+        var _AHUB_FRONT_REV = 'r308';
 
 
         var _ahubRevWarned = false;
@@ -27968,23 +27948,18 @@ ${intrLog}
             const textarea = document.getElementById('doc-editor-textarea');
             if(!textarea) return;
             activeEditorId = 'doc-editor-textarea';
-            // [r40] 드롭 이미지도 공용 드라이브(Storage)에 저장 → public URL. 실패 시 base64(img://) 폴백.
+            // [r308] 드롭 이미지도 반드시 Storage 에 저장. base64 인라인 폴백 제거 — DB 비대화 방지.
             (async function(){
+                showToast('⏳ 이미지 업로드 중…', 'info');
                 var url = null;
                 try { url = await uploadImageToStorage(file, activeDocId); } catch(e) { url = null; }
-                if (url) { insertToActiveEditor(textarea, '\n![' + file.name + '](' + url + ')\n'); _docForceRefreshAfterInsert(textarea); showToast("🖼 '" + file.name + "' 드라이브에 저장·첨부됨", 'success'); return; }
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    var dataUrl = e.target.result;
-                    if(!currentData.images) currentData.images = {};
-                    var imgId = 'img_' + Date.now();
-                    currentData.images[imgId] = dataUrl;
-                    insertToActiveEditor(textarea, '\n![' + file.name + '](img://' + imgId + ')\n');
-                    saveData();
+                if (url) {
+                    insertToActiveEditor(textarea, '\n![' + file.name + '](' + url + ')\n');
                     _docForceRefreshAfterInsert(textarea);
-                    showToast("이미지 '" + file.name + "' 첨부(임시 내부저장) — 드라이브 설정 시 공용 저장", 'info');
-                };
-                reader.readAsDataURL(file);
+                    showToast("🖼 '" + file.name + "' 드라이브에 저장·첨부됨", 'success');
+                    return;
+                }
+                showToast('⚠ 이미지 업로드 실패 — 공용 드라이브 버킷(' + (typeof DRIVE_BUCKET !== 'undefined' ? DRIVE_BUCKET : 'drive') + ') 설정/권한/로그인 확인. 설정 > 상태 탭에서 점검.', 'alert');
             })();
         }
         // [r57] 이미지/파일 비동기 삽입 후 미리보기를 1초 debounce 기다리지 않고 즉시 갱신 + 저장 (드롭 후 새로고침해야 보이던 문제 수정)
@@ -32670,7 +32645,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r307';
+    var _RFS_FRONT_REV = 'r308';
 
 
     async function rfsHealthCheck() {
