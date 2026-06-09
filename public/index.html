@@ -10069,19 +10069,130 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
         function _onCiteContext(e) {
             var el = e.target;
+            // [r305] td/th 안 우클릭 — 셀 자체를 대상으로 컨텍스트 메뉴(인라인 편집 상태 아니어도)
+            var cell = el && el.closest && el.closest('td, th');
             while (el && !_isCiteable(el) && el !== document.body) el = el.parentNode;
-            if (!_isCiteable(el)) return;
-            // 모달 안의 입력은 모달 zIndex 보다 위로 올려 보이게
+            if (!_isCiteable(el) && !cell) return;
             e.preventDefault();
-            _citeTargetEl = el;
-            // contenteditable인 경우 selection range 저장
-            if (el.isContentEditable) {
+            _citeTargetEl = el && _isCiteable(el) ? el : null;
+            if (_citeTargetEl && _citeTargetEl.isContentEditable) {
                 var sel = window.getSelection();
                 if (sel && sel.rangeCount > 0) _citeRange = sel.getRangeAt(0).cloneRange();
             } else {
                 _citeRange = null;
             }
-            _openCitePicker();
+            // [r305] 컨텍스트 메뉴 표시 — 인용 / 이미지 첨부 / 파일 첨부
+            _showInsertContextMenu(e.clientX, e.clientY, cell);
+        }
+
+        // [r305] 우클릭 컨텍스트 메뉴 — 인용/이미지/파일 첨부 옵션
+        var _insertCtxCell = null;   // 대상 표 셀(있으면)
+        function _showInsertContextMenu(x, y, cell) {
+            _hideInsertContextMenu();
+            _insertCtxCell = cell || null;
+            var m = document.createElement('div');
+            m.id = '_insertCtxMenu';
+            m.style.cssText = 'position:fixed;z-index:9500;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.25);padding:4px;min-width:200px;font-size:13px;';
+            m.innerHTML =
+                '<div class="ctx-mi" data-act="cite"  style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
+                +   '<span style="font-size:16px;">🔗</span><span style="flex:1;">인용 삽입</span><span style="font-size:10.5px;color:var(--c-text3);">사용자·문서·태스크·일정…</span>'
+                + '</div>'
+                + '<div class="ctx-mi" data-act="image" style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
+                +   '<span style="font-size:16px;">🖼</span><span style="flex:1;">이미지 첨부</span><span style="font-size:10.5px;color:var(--c-text3);">파일 선택</span>'
+                + '</div>'
+                + '<div class="ctx-mi" data-act="file" style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
+                +   '<span style="font-size:16px;">📎</span><span style="flex:1;">파일 첨부</span><span style="font-size:10.5px;color:var(--c-text3);">드라이브 업로드</span>'
+                + '</div>';
+            document.body.appendChild(m);
+            // hover 효과(인라인 — CSS 의존 X)
+            m.querySelectorAll('.ctx-mi').forEach(function (mi) {
+                mi.addEventListener('mouseenter', function () { mi.style.background = 'var(--c-paper)'; });
+                mi.addEventListener('mouseleave', function () { mi.style.background = ''; });
+                mi.addEventListener('click', function () {
+                    var act = mi.getAttribute('data-act');
+                    _hideInsertContextMenu();
+                    if (act === 'cite') _openCitePicker();
+                    else if (act === 'image') _pickAndInsertFile(true);
+                    else if (act === 'file') _pickAndInsertFile(false);
+                });
+            });
+            // 화면 끝 보정
+            var rect = m.getBoundingClientRect();
+            var W = window.innerWidth, H = window.innerHeight;
+            var left = (x + rect.width > W - 4) ? Math.max(4, W - rect.width - 4) : x;
+            var top = (y + rect.height > H - 4) ? Math.max(4, H - rect.height - 4) : y;
+            m.style.left = left + 'px'; m.style.top = top + 'px';
+            // 한 번 클릭이나 esc 로 닫힘
+            setTimeout(function () {
+                document.addEventListener('mousedown', _onCtxOutside, true);
+                document.addEventListener('keydown', _onCtxKey, true);
+                document.addEventListener('contextmenu', _onCtxOutside, true);
+            }, 10);
+        }
+        function _onCtxOutside(e) {
+            var m = document.getElementById('_insertCtxMenu');
+            if (m && !m.contains(e.target)) _hideInsertContextMenu();
+        }
+        function _onCtxKey(e) { if (e.key === 'Escape') _hideInsertContextMenu(); }
+        function _hideInsertContextMenu() {
+            var m = document.getElementById('_insertCtxMenu'); if (m) m.remove();
+            document.removeEventListener('mousedown', _onCtxOutside, true);
+            document.removeEventListener('keydown', _onCtxKey, true);
+            document.removeEventListener('contextmenu', _onCtxOutside, true);
+        }
+
+        // [r305] 이미지/파일 picker — Storage 업로드 후 본문/셀에 마크다운 삽입
+        function _pickAndInsertFile(imageOnly) {
+            var inp = document.createElement('input');
+            inp.type = 'file';
+            inp.accept = imageOnly ? 'image/*' : '*/*';
+            inp.style.display = 'none';
+            document.body.appendChild(inp);
+            inp.addEventListener('change', async function () {
+                try {
+                    var file = inp.files && inp.files[0]; if (!file) return;
+                    showToast('⏳ 업로드 중…', 'info');
+                    var m = await driveUploadFile(file, { docId: activeDocId, autoFolder: true, silent: true });
+                    if (!m || !m.url) { showToast('업로드 실패', 'alert'); return; }
+                    var isImg = imageOnly || (m.mime || '').indexOf('image/') === 0;
+                    var token = isImg ? ('![' + (m.name || '이미지') + '](' + m.url + ')')
+                                       : ('[' + (m.name || '파일') + '](' + m.url + ')');
+                    _insertTokenAtTarget(token);
+                    showToast('✓ ' + (isImg ? '이미지' : '파일') + ' 첨부됨', 'success');
+                } catch (e) { showToast('첨부 실패: ' + (e.message || e), 'alert'); }
+                finally { inp.remove(); }
+            });
+            inp.click();
+        }
+
+        // [r305] 토큰 삽입 — 우클릭 대상에 따라 분기. 표 셀이면 _lpUpdateTableCell 동기화.
+        function _insertTokenAtTarget(token) {
+            // 표 셀이면 셀 안에 마크다운 삽입 + 원본 동기화
+            if (_insertCtxCell) {
+                var prev = _insertCtxCell.textContent || '';
+                _insertCtxCell.textContent = (prev ? (prev + ' ') : '') + token;
+                if (typeof _lpUpdateTableCell === 'function') {
+                    try { _lpUpdateTableCell(_insertCtxCell); } catch (e) { console.warn('[ctx] cell sync', e); }
+                }
+                _insertCtxCell = null;
+                if (typeof renderLivePreview === 'function') setTimeout(renderLivePreview, 60);
+                return;
+            }
+            // textarea/input
+            if (_citeTargetEl && _citeTargetEl.tagName === 'TEXTAREA' && typeof insertToActiveEditor === 'function') {
+                insertToActiveEditor(_citeTargetEl, '\n' + token + '\n');
+                return;
+            }
+            if (_citeTargetEl && _citeTargetEl.isContentEditable && _citeRange) {
+                try {
+                    var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(_citeRange);
+                    document.execCommand('insertText', false, token);
+                } catch (e) {}
+                return;
+            }
+            // 폴백 — 현재 활성 textarea
+            var ta = document.getElementById('doc-editor-textarea');
+            if (ta && typeof insertToActiveEditor === 'function') insertToActiveEditor(ta, '\n' + token + '\n');
         }
         // 페이지 전역 우클릭 리스너 (1회 바인딩)
         function _bindCiteContext() {
@@ -11112,7 +11223,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r304';
+        var _AHUB_FRONT_REV = 'r305';
 
 
         var _ahubRevWarned = false;
@@ -32487,7 +32598,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r304';
+    var _RFS_FRONT_REV = 'r305';
 
 
     async function rfsHealthCheck() {
