@@ -11104,7 +11104,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r299';
+        var _AHUB_FRONT_REV = 'r300';
 
 
         var _ahubRevWarned = false;
@@ -12094,19 +12094,81 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 }
             } catch (e) { console.warn('[mermaid init]', e); }
         }
-        // [r299] 전역 Mermaid 렌더 — 마크다운 렌더 후 어디서든 호출. Deep Wiki 전용 함수에
-        //   의존하지 않고 회의록·문서·라이브 협업 본문 등 모든 컨테이너에 적용.
+        // [r300] Mermaid 코드 자동 복구 — 한 줄에 모두 들어있는 경우 키워드/노드 선언 분리.
+        //   LLM/사용자 손가락 실수로 줄바꿈 없이 작성된 경우 흔함. 원본 시도 실패 시에만 호출.
+        function _mermaidAutoFix(src) {
+            var s = (src || '').trim(); if (!s) return s;
+            // 이미 충분히 줄바꿈된 경우는 건드리지 않음
+            if (s.split('\n').filter(function(l){return l.trim();}).length >= 5) return s;
+            // 다이어그램 헤더 추출(첫 키워드)
+            var headerRe = /^(flowchart\s+\S+|graph\s+\S+|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|pie(?:\s+\S+)?|journey|mindmap|gitGraph|timeline)\b\s*/i;
+            var m = s.match(headerRe);
+            if (!m) return s;
+            var header = m[0].trim();
+            var body = s.slice(m[0].length);
+            // 키워드 앞에 줄바꿈
+            body = body.replace(/\s*(\bsubgraph\b)/g, '\n$1');
+            body = body.replace(/\s+(\bend\b)/g, '\n$1\n');
+            body = body.replace(/\s+(classDef\s)/g, '\n$1');
+            body = body.replace(/\s+(\bclass\s)/g, '\n$1');
+            body = body.replace(/\s+(\bstyle\s)/g, '\n$1');
+            body = body.replace(/\s+(linkStyle\s)/g, '\n$1');
+            // 노드 토큰 정규식 — 식별자 + ([..]|(..)|{..}|"..") + (옵션) :::cls
+            //   이중괄호 ((...)) 가 단일괄호보다 우선해야 매칭 우선순위 OK
+            var TOKEN_RE = /([A-Za-z_]\w*(?:\(\([^)]*\)\)|\[\[[^\]]*\]\]|\[[^\]]*\]|\([^)]*\)|\{[^}]*\}|"[^"]*")(?:\s*:::[\w-]+)?)/g;
+            // 라인 단위로 노드 선언 분리
+            var lines = (header + '\n' + body).split('\n').map(function(line) {
+                var trimmed = line.trim();
+                if (!trimmed) return '';
+                // 엣지(--> / --- / ==>) 가 있는 줄 — chain 보존, 두 chain 이 붙어있으면 분리.
+                //   `--> 식별자 [& 식별자]* 식별자 -->` 처럼 chain 종료 직후 새 IDENT + 화살표가
+                //   오면 분리. & 로 묶인 분기까지 한 chain 으로 인식. 수렴 시까지 반복.
+                if (/-[->]|==>/.test(trimmed)) {
+                    // [r300] 그룹2 를 lookahead 로 — replace(g) 의 non-overlapping 매치 문제 회피.
+                    //   다음 chain 의 시작 IDENT 가 흡수되지 않아 다음 매치 시작점으로 정확히 가리킴.
+                    var prev;
+                    var SPLIT_RE = /((?:-->|---|==>)\s*\w+(?:\[[^\]]*\])?(?:\s*&\s*\w+(?:\[[^\]]*\])?)*)\s+(?=\w+(?:\[[^\]]*\])?\s*(?:-->|---|==>|&))/g;
+                    var safety = 0;
+                    do {
+                        prev = trimmed;
+                        trimmed = trimmed.replace(SPLIT_RE, '$1\n');
+                    } while (prev !== trimmed && ++safety < 30);
+                    return trimmed;
+                }
+                // subgraph 라인 — 헤더(subgraph IDENT[label]) 만 남기고 뒤에 따라오는 노드들은 다음 줄로
+                if (/^subgraph\s/i.test(trimmed)) {
+                    var sgM = trimmed.match(/^(subgraph\s+[A-Za-z_]\w*(?:\[[^\]]*\])?)\s*(.*)$/i);
+                    if (sgM) {
+                        var sgHead = sgM[1].trim();
+                        var sgRest = sgM[2].trim();
+                        if (!sgRest) return sgHead;
+                        TOKEN_RE.lastIndex = 0;
+                        var sgToks = sgRest.match(TOKEN_RE);
+                        if (sgToks && sgToks.length) return [sgHead].concat(sgToks).join('\n');
+                        return sgHead + '\n' + sgRest;
+                    }
+                    return trimmed;
+                }
+                // 일반 줄 — 노드 선언이 여러 개면 각각 줄로
+                TOKEN_RE.lastIndex = 0;
+                var tokens = trimmed.match(TOKEN_RE);
+                if (tokens && tokens.length > 1
+                    && tokens.join('').replace(/\s+/g, '').length >= trimmed.replace(/\s+/g, '').length * 0.7) {
+                    return tokens.join('\n');
+                }
+                return trimmed;
+            }).filter(function(l){return l;});
+            return lines.join('\n');
+        }
+
+        // [r299] 전역 Mermaid 렌더 — 마크다운 렌더 후 어디서든 호출.
+        // [r300] 렌더 실패 시 _mermaidAutoFix 자동 복구 시도.
         async function renderMermaidIn(containerEl) {
             if (!containerEl || !window.mermaid) return;
             _dwpInitMermaid();
-            // marked가 출력하는 ```mermaid 코드블록 패턴 모두 매칭.
-            //   1) <pre><code class="language-mermaid">…</code></pre> (marked.js 기본)
-            //   2) <pre><code class="hljs language-mermaid">…</code></pre> (highlight.js 후처리)
-            //   3) <code class="mermaid">…</code> (단독)
             var blocks = containerEl.querySelectorAll(
                 'pre code.language-mermaid, pre > code[class*="mermaid"], code.mermaid'
             );
-            // already-rendered 표시(중복 방지 — 같은 컨테이너 재렌더 시)
             var pending = [];
             for (var i = 0; i < blocks.length; i++) {
                 if (blocks[i].dataset && blocks[i].dataset.tdaMmdRendered === '1') continue;
@@ -12118,22 +12180,50 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var host = codeEl.parentElement && codeEl.parentElement.tagName === 'PRE'
                     ? codeEl.parentElement : codeEl;
                 var id = 'mmd-' + Date.now() + '-' + j + '-' + Math.floor(Math.random() * 9999);
+                var fixedFromOrig = false, lastErr = null;
+                var renderedSvg = '';
+                // 1차 시도 — 원본
                 try {
                     var out = await window.mermaid.render(id, src);
-                    var svg = out && out.svg ? out.svg : '';
-                    if (svg) {
-                        var wrap = document.createElement('div');
-                        wrap.className = 'tda-mermaid';
-                        wrap.style.cssText = 'margin:14px 0;padding:14px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:10px;overflow-x:auto;text-align:center;';
-                        wrap.innerHTML = svg;
-                        wrap.dataset.tdaMmdRendered = '1';
-                        host.replaceWith(wrap);
+                    renderedSvg = (out && out.svg) || '';
+                } catch (e1) {
+                    lastErr = e1;
+                    // 2차 시도 — 자동 복구
+                    var fixed = _mermaidAutoFix(src);
+                    if (fixed && fixed !== src) {
+                        try {
+                            var out2 = await window.mermaid.render(id + '-fix', fixed);
+                            if (out2 && out2.svg) {
+                                renderedSvg = out2.svg;
+                                fixedFromOrig = true;
+                            }
+                        } catch (e2) { lastErr = e2; }
                     }
-                } catch (e) {
+                }
+                if (renderedSvg) {
+                    var wrap = document.createElement('div');
+                    wrap.className = 'tda-mermaid';
+                    wrap.style.cssText = 'margin:14px 0;padding:14px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:10px;overflow-x:auto;text-align:center;';
+                    if (fixedFromOrig) {
+                        var fixHint = document.createElement('div');
+                        fixHint.style.cssText = 'margin:-6px -6px 10px;padding:6px 10px;background:rgba(46,158,91,.14);border:1px solid rgba(46,158,91,.4);border-radius:6px;font-size:11px;color:#1c6b3b;text-align:left;';
+                        fixHint.innerHTML = '✅ <b>자동 복구됨</b> — 원본 코드가 한 줄로 작성돼 줄바꿈을 자동 보정했습니다.';
+                        wrap.appendChild(fixHint);
+                    }
+                    var svgWrap = document.createElement('div'); svgWrap.innerHTML = renderedSvg;
+                    wrap.appendChild(svgWrap);
+                    wrap.dataset.tdaMmdRendered = '1';
+                    host.replaceWith(wrap);
+                } else {
                     codeEl.dataset.tdaMmdRendered = '1';
                     var err = document.createElement('div');
                     err.style.cssText = 'margin:8px 0;padding:10px 12px;background:rgba(210,57,61,0.10);border:1px solid rgba(210,57,61,0.4);border-radius:6px;font-size:12px;color:#9a1c20;';
-                    err.innerHTML = '⚠ <b>Mermaid 렌더 실패</b>: ' + String(e.message || e).replace(/</g, '&lt;');
+                    // 사용자에게 자동 복구도 안 됐다고 명시
+                    var msg = String((lastErr && lastErr.message) || lastErr || '알 수 없는 오류').replace(/</g, '&lt;');
+                    err.innerHTML = '⚠ <b>Mermaid 렌더 실패</b>: ' + msg
+                        + '<div style="margin-top:6px;font-size:10.5px;color:var(--c-text2);">'
+                        + '💡 Mermaid 는 <b>줄 단위</b> 파서입니다. <code>subgraph</code>·<code>end</code>·노드 선언은 각각 다른 줄에 작성하세요. '
+                        + '<a href="https://mermaid.js.org/syntax/flowchart.html" target="_blank" style="color:var(--c-accent);">공식 문법 ↗</a></div>';
                     if (host.parentNode) host.parentNode.insertBefore(err, host);
                 }
             }
@@ -32093,7 +32183,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r299';
+    var _RFS_FRONT_REV = 'r300';
 
 
     async function rfsHealthCheck() {
