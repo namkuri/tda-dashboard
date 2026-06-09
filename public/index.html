@@ -9104,6 +9104,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
 
         function handlePaste(e) {
+            // [r302] readOnly 인 textarea 에 붙여넣는 경우(fetch 대기 중) — readOnly 잠시 해제해
+            //   사용자 입력 받아들이고, fetch then 콜백이 _contentLoaded 체크해 덮어쓰지 않게 함.
+            //   완전 차단하면 첫 붙여넣기 사라지는 UX 문제(사용자가 시도해도 무반응).
+            try {
+                if (e.target && e.target.tagName === 'TEXTAREA' && e.target.readOnly) {
+                    e.target.readOnly = false;
+                }
+            } catch (_) {}
             const clipboardData = e.clipboardData || window.clipboardData;
 
             // [v29 FIX-IMG-1] 이미지 비트맵보다 외부 URL을 먼저 검사
@@ -11104,7 +11112,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r301';
+        var _AHUB_FRONT_REV = 'r302';
 
 
         var _ahubRevWarned = false;
@@ -12209,6 +12217,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var ytId = _extractYoutubeId(href);
                 if (ytId) {
                     a.dataset.tdaMediaEmbedded = '1';
+                    // [r302] anchor 텍스트가 URL 그대로(GFM autolink)면 짧은 라벨로 교체 — 표 셀에서 깔끔
+                    if (a.textContent === href || a.textContent.trim() === href.trim()) {
+                        a.textContent = inCell ? '▶ 영상' : '▶ YouTube';
+                        a.style.cssText = (a.style.cssText || '') + ';color:var(--c-accent);font-weight:600;text-decoration:none;';
+                    }
                     var iframe = document.createElement('iframe');
                     iframe.src = 'https://www.youtube-nocookie.com/embed/' + ytId;
                     iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
@@ -12238,6 +12251,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var twId = _extractTweetId(href);
                 if (twId) {
                     a.dataset.tdaMediaEmbedded = '1';
+                    // [r302] anchor 텍스트가 URL 그대로면 짧은 라벨로 교체
+                    if (a.textContent === href || a.textContent.trim() === href.trim()) {
+                        a.textContent = inCell ? '🐦 트윗' : '🐦 X (Twitter)';
+                        a.style.cssText = (a.style.cssText || '') + ';color:var(--c-accent);font-weight:600;text-decoration:none;';
+                    }
                     var bq = document.createElement('blockquote');
                     bq.className = 'twitter-tweet tda-tw-embed';
                     bq.setAttribute('data-dnt', 'true');
@@ -19560,10 +19578,18 @@ return data;
                 if (_ta_lock) { _ta_lock.readOnly = true; _ta_lock.placeholder = '⏳ 본문을 불러오는 중…'; }
                 _fetchDocContent(docId).then(function(content) {
                     if (activeDocId !== docId) return; // 다른 문서로 전환됨
+                    // [r302] 사용자가 fetch 대기 중 붙여넣기/입력했으면(_contentLoaded 가 true 로 바뀜) 그 내용 보존.
+                    //   handlePaste 가 preventDefault 후 textarea.value 직접 set → handleDocInput 가
+                    //   doc.content 갱신 + _contentLoaded=true. 그 사이 fetch 가 끝나면 빈 content 로
+                    //   덮어쓰면서 사용자 첫 붙여넣기가 사라지던 race 차단.
+                    if (_initDoc._contentLoaded === true) {
+                        var _ta2 = document.getElementById('doc-editor-textarea');
+                        if (_ta2) { _ta2.readOnly = false; _ta2.placeholder = '# 마크다운으로 내용을 작성하세요...'; }
+                        return;
+                    }
                     _initDoc.content = content || '';
                     _initDoc._contentLoaded = true;
                     _docLastLoggedContent[docId] = content || '';
-                    // [r184] 로드된 본문을 당일 기록의 기준점으로(undo가 원본까지 돌아가도록)
                     if (typeof _dhRecord === 'function') _dhRecord(docId, content || '');
                     if (typeof _dhUpdateButtons === 'function') _dhUpdateButtons();
                     updateDocEditorUI();
@@ -27632,7 +27658,7 @@ ${intrLog}
                 const item = li.querySelector('.tree-item');
                 if(!item) return;
 
-                // ── mouse ── [r236 A2] 0.5초 이상 눌러야 드래그 시작(빠른 클릭은 문서 열기)
+                // ── mouse ── [r302] 0.2초 이상 눌러야 드래그 시작(빠른 클릭은 문서 열기). 더 빠르게.
                 item.addEventListener('mousedown', function(e) {
                     if(e.button !== 0) return;
                     if(e.target.closest('button, input, .tree-item-actions, span[onclick]')) return;
@@ -27640,19 +27666,19 @@ ${intrLog}
                     function cleanup(){ if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; } document.removeEventListener('mousemove', preMove, true); document.removeEventListener('mouseup', preUp, true); }
                     function preMove(ev){ if(Math.abs(ev.clientX - sx) > 6 || Math.abs(ev.clientY - sy) > 6) cleanup(); }  // 홀드 전 이동 → 취소
                     function preUp(){ cleanup(); }  // 홀드 전 떼면 클릭(openDoc) 자연 발생
-                    holdTimer = setTimeout(function(){ cleanup(); startTreeDrag(li, sx, sy, false); }, 500);
+                    holdTimer = setTimeout(function(){ cleanup(); startTreeDrag(li, sx, sy, false); }, 200);
                     document.addEventListener('mousemove', preMove, true);
                     document.addEventListener('mouseup', preUp, true);
                 });
 
-                // ── touch ── (길게 누르기 0.5초)
+                // ── touch ── [r302] 길게 누르기 0.2초
                 let touchTimer = null;
                 item.addEventListener('touchstart', function(e) {
                     if(e.target.closest('button, input, .tree-item-actions')) return;
                     touchTimer = setTimeout(() => {
                         const t = e.touches[0];
                         startTreeDrag(li, t.clientX, t.clientY, true);
-                    }, 500);
+                    }, 200);
                 }, { passive: true });
                 item.addEventListener('touchend', () => clearTimeout(touchTimer), { passive: true });
                 item.addEventListener('touchmove', () => clearTimeout(touchTimer), { passive: true });
@@ -32280,7 +32306,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r301';
+    var _RFS_FRONT_REV = 'r302';
 
 
     async function rfsHealthCheck() {
