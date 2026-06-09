@@ -11104,7 +11104,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r300';
+        var _AHUB_FRONT_REV = 'r301';
 
 
         var _ahubRevWarned = false;
@@ -12161,6 +12161,99 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             return lines.join('\n');
         }
 
+        // [r301] YouTube/X 링크 자동 임베드 — 마크다운 렌더 직후 호출. 표 셀 안에서도 동작.
+        function _extractYoutubeId(url) {
+            url = url || '';
+            var m = url.match(/youtu\.be\/([\w-]{11})/); if (m) return m[1];
+            m = url.match(/youtube\.com\/watch\?[^#]*[?&]?v=([\w-]{11})/); if (m) return m[1];
+            m = url.match(/youtube\.com\/embed\/([\w-]{11})/); if (m) return m[1];
+            m = url.match(/youtube\.com\/shorts\/([\w-]{11})/); if (m) return m[1];
+            m = url.match(/youtube\.com\/live\/([\w-]{11})/); if (m) return m[1];
+            return null;
+        }
+        function _extractTweetId(url) {
+            var m = (url || '').match(/(?:twitter|x)\.com\/[^\/]+\/status(?:es)?\/(\d+)/i);
+            return m ? m[1] : null;
+        }
+        var _twitterWidgetsLoaded = false;
+        var _twitterWidgetsLoadPending = null;
+        function _loadTwitterWidgets() {
+            if (_twitterWidgetsLoaded) {
+                try { if (window.twttr && window.twttr.widgets) window.twttr.widgets.load(); } catch (e) {}
+                return Promise.resolve();
+            }
+            if (_twitterWidgetsLoadPending) return _twitterWidgetsLoadPending;
+            _twitterWidgetsLoadPending = new Promise(function (resolve) {
+                var s = document.createElement('script');
+                s.src = 'https://platform.twitter.com/widgets.js';
+                s.async = true; s.charset = 'utf-8';
+                s.onload = function () {
+                    _twitterWidgetsLoaded = true;
+                    try { if (window.twttr && window.twttr.widgets) window.twttr.widgets.load(); } catch (e) {}
+                    resolve();
+                };
+                s.onerror = function () { resolve(); };
+                document.head.appendChild(s);
+            });
+            return _twitterWidgetsLoadPending;
+        }
+        function enhanceMediaLinks(containerEl) {
+            if (!containerEl) return;
+            var anchors = containerEl.querySelectorAll('a[href]');
+            var hasTweet = false;
+            Array.prototype.forEach.call(anchors, function (a) {
+                if (a.dataset && a.dataset.tdaMediaEmbedded === '1') return;
+                var href = a.getAttribute('href') || '';
+                var inCell = !!a.closest('td,th');
+                // YouTube
+                var ytId = _extractYoutubeId(href);
+                if (ytId) {
+                    a.dataset.tdaMediaEmbedded = '1';
+                    var iframe = document.createElement('iframe');
+                    iframe.src = 'https://www.youtube-nocookie.com/embed/' + ytId;
+                    iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+                    iframe.setAttribute('allowfullscreen', 'true');
+                    iframe.setAttribute('loading', 'lazy');
+                    iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                    if (inCell) {
+                        // 표 셀 안 — 작은 16:9 (200x113)
+                        var wrap = document.createElement('div');
+                        wrap.className = 'tda-yt-cell';
+                        wrap.style.cssText = 'position:relative;width:200px;height:113px;margin:4px 0;background:#000;border-radius:4px;overflow:hidden;';
+                        iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+                        wrap.appendChild(iframe);
+                        a.parentNode.insertBefore(wrap, a.nextSibling);
+                    } else {
+                        // 일반 본문 — 반응형 16:9
+                        var wrap2 = document.createElement('div');
+                        wrap2.className = 'tda-yt-embed';
+                        wrap2.style.cssText = 'position:relative;width:100%;max-width:640px;margin:10px 0;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden;border:1px solid var(--c-border);';
+                        iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+                        wrap2.appendChild(iframe);
+                        a.parentNode.insertBefore(wrap2, a.nextSibling);
+                    }
+                    return;
+                }
+                // X / Twitter
+                var twId = _extractTweetId(href);
+                if (twId) {
+                    a.dataset.tdaMediaEmbedded = '1';
+                    var bq = document.createElement('blockquote');
+                    bq.className = 'twitter-tweet tda-tw-embed';
+                    bq.setAttribute('data-dnt', 'true');
+                    if (inCell) bq.setAttribute('data-width', '220');
+                    else bq.setAttribute('data-width', '500');
+                    bq.style.cssText = 'margin:8px 0;';
+                    var ta = document.createElement('a');
+                    ta.href = href; ta.textContent = '🐦 ' + href; ta.target = '_blank'; ta.rel = 'noopener';
+                    bq.appendChild(ta);
+                    a.parentNode.insertBefore(bq, a.nextSibling);
+                    hasTweet = true;
+                }
+            });
+            if (hasTweet) _loadTwitterWidgets();
+        }
+
         // [r299] 전역 Mermaid 렌더 — 마크다운 렌더 후 어디서든 호출.
         // [r300] 렌더 실패 시 _mermaidAutoFix 자동 복구 시도.
         async function renderMermaidIn(containerEl) {
@@ -12394,6 +12487,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var inner = box ? box.querySelector('#dwp-body-inner') : null;
                 if (inner) {
                     await _dwpRenderMermaidBlocks(inner);
+                    // [r301] YouTube/X 자동 임베드
+                    if (typeof enhanceMediaLinks === 'function') { try { enhanceMediaLinks(inner); } catch (e) {} }
                     _dwpAttachLinkHandlers(inner, page);
                     // [r125 #4] Mermaid SVG 클릭 줌 + #5 prev/next 네비
                     _dwpAttachMermaidZoom(inner);
@@ -26410,6 +26505,8 @@ ${intrLog}
             if (typeof _buildHtmlEmbeds === 'function') { try { _buildHtmlEmbeds(host); } catch (e) { console.warn('[lp] embed mount', e); } }
             // [r299] Mermaid 다이어그램 렌더 (```mermaid 코드블록)
             if (typeof renderMermaidIn === 'function') { try { renderMermaidIn(host); } catch (e) { console.warn('[lp] mermaid', e); } }
+            // [r301] YouTube/X 링크 자동 임베드 — 표 셀 안에서도 동작
+            if (typeof enhanceMediaLinks === 'function') { try { enhanceMediaLinks(host); } catch (e) { console.warn('[lp] media embed', e); } }
         }
         // [r238 #7] 메타데이터(프론트매터) 소스 직접 편집
         function _lpEditMeta(idx) {
@@ -32183,7 +32280,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r300';
+    var _RFS_FRONT_REV = 'r301';
 
 
     async function rfsHealthCheck() {
@@ -32746,6 +32843,10 @@ ${intrLog}
         // [r299] Mermaid 다이어그램 렌더 (```mermaid 코드블록)
         if (mview && typeof renderMermaidIn === 'function') {
             try { renderMermaidIn(mview); } catch (e) { console.warn('[mtg] mermaid', e); }
+        }
+        // [r301] YouTube/X 링크 자동 임베드
+        if (mview && typeof enhanceMediaLinks === 'function') {
+            try { enhanceMediaLinks(mview); } catch (e) { console.warn('[mtg] media', e); }
         }
     }
 
