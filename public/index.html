@@ -11104,7 +11104,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r298';
+        var _AHUB_FRONT_REV = 'r299';
 
 
         var _ahubRevWarned = false;
@@ -12093,6 +12093,51 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     _dwpMermaidReady = true;
                 }
             } catch (e) { console.warn('[mermaid init]', e); }
+        }
+        // [r299] 전역 Mermaid 렌더 — 마크다운 렌더 후 어디서든 호출. Deep Wiki 전용 함수에
+        //   의존하지 않고 회의록·문서·라이브 협업 본문 등 모든 컨테이너에 적용.
+        async function renderMermaidIn(containerEl) {
+            if (!containerEl || !window.mermaid) return;
+            _dwpInitMermaid();
+            // marked가 출력하는 ```mermaid 코드블록 패턴 모두 매칭.
+            //   1) <pre><code class="language-mermaid">…</code></pre> (marked.js 기본)
+            //   2) <pre><code class="hljs language-mermaid">…</code></pre> (highlight.js 후처리)
+            //   3) <code class="mermaid">…</code> (단독)
+            var blocks = containerEl.querySelectorAll(
+                'pre code.language-mermaid, pre > code[class*="mermaid"], code.mermaid'
+            );
+            // already-rendered 표시(중복 방지 — 같은 컨테이너 재렌더 시)
+            var pending = [];
+            for (var i = 0; i < blocks.length; i++) {
+                if (blocks[i].dataset && blocks[i].dataset.tdaMmdRendered === '1') continue;
+                pending.push(blocks[i]);
+            }
+            for (var j = 0; j < pending.length; j++) {
+                var codeEl = pending[j];
+                var src = codeEl.textContent || '';
+                var host = codeEl.parentElement && codeEl.parentElement.tagName === 'PRE'
+                    ? codeEl.parentElement : codeEl;
+                var id = 'mmd-' + Date.now() + '-' + j + '-' + Math.floor(Math.random() * 9999);
+                try {
+                    var out = await window.mermaid.render(id, src);
+                    var svg = out && out.svg ? out.svg : '';
+                    if (svg) {
+                        var wrap = document.createElement('div');
+                        wrap.className = 'tda-mermaid';
+                        wrap.style.cssText = 'margin:14px 0;padding:14px;background:var(--c-paper);border:1px solid var(--c-border);border-radius:10px;overflow-x:auto;text-align:center;';
+                        wrap.innerHTML = svg;
+                        wrap.dataset.tdaMmdRendered = '1';
+                        host.replaceWith(wrap);
+                    }
+                } catch (e) {
+                    codeEl.dataset.tdaMmdRendered = '1';
+                    var err = document.createElement('div');
+                    err.style.cssText = 'margin:8px 0;padding:10px 12px;background:rgba(210,57,61,0.10);border:1px solid rgba(210,57,61,0.4);border-radius:6px;font-size:12px;color:#9a1c20;';
+                    err.innerHTML = '⚠ <b>Mermaid 렌더 실패</b>: ' + String(e.message || e).replace(/</g, '&lt;');
+                    if (host.parentNode) host.parentNode.insertBefore(err, host);
+                }
+            }
+            return pending.length;
         }
         // [r114] 본문 안 ```mermaid 코드블록을 다이어그램으로 변환
         async function _dwpRenderMermaidBlocks(containerEl) {
@@ -26273,6 +26318,8 @@ ${intrLog}
             host.innerHTML = tocHtml + metaHtml + frag;
             // [r278] 라이브 프리뷰에도 HTML 임베드 iframe 마운트(붙여넣은 HTML 표시)
             if (typeof _buildHtmlEmbeds === 'function') { try { _buildHtmlEmbeds(host); } catch (e) { console.warn('[lp] embed mount', e); } }
+            // [r299] Mermaid 다이어그램 렌더 (```mermaid 코드블록)
+            if (typeof renderMermaidIn === 'function') { try { renderMermaidIn(host); } catch (e) { console.warn('[lp] mermaid', e); } }
         }
         // [r238 #7] 메타데이터(프론트매터) 소스 직접 편집
         function _lpEditMeta(idx) {
@@ -32046,7 +32093,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r298';
+    var _RFS_FRONT_REV = 'r299';
 
 
     async function rfsHealthCheck() {
@@ -32602,10 +32649,13 @@ ${intrLog}
         }
         main.innerHTML = h;
         // [r283] 회의록 본문 모드면 HTML 임베드(<!--TDAHTML:id-->) iframe 마운트.
-        //   회의록 컨텍스트에서는 _mtgState.current.html_embeds 를 override 로 전달.
         var mview = document.getElementById('mtg-summary-md-view');
         if (mview && typeof _buildHtmlEmbeds === 'function') {
             try { _buildHtmlEmbeds(mview, (_mtgState.current && _mtgState.current.html_embeds) || {}); } catch (e) {}
+        }
+        // [r299] Mermaid 다이어그램 렌더 (```mermaid 코드블록)
+        if (mview && typeof renderMermaidIn === 'function') {
+            try { renderMermaidIn(mview); } catch (e) { console.warn('[mtg] mermaid', e); }
         }
     }
 
@@ -32882,6 +32932,10 @@ ${intrLog}
                 var host = document.getElementById('mtg-summary-md-view');
                 if (host && typeof _buildHtmlEmbeds === 'function') {
                     try { _buildHtmlEmbeds(host, (_mtgState.current && _mtgState.current.html_embeds) || {}); } catch (e) {}
+                }
+                // [r299] Mermaid 렌더
+                if (host && typeof renderMermaidIn === 'function') {
+                    try { renderMermaidIn(host); } catch (e) {}
                 }
             }, 30);
         } else if (mode === 'source') {
