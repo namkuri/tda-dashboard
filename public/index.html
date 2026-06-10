@@ -11239,7 +11239,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r308';
+        var _AHUB_FRONT_REV = 'r309';
 
 
         var _ahubRevWarned = false;
@@ -12530,6 +12530,14 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         } catch (e2) { lastErr = e2; }
                     }
                 }
+                // [r309] mermaid v10 이 render 실패 시 body 에 남기는 임시 div/svg 정리.
+                //   페이지 하단에 'Syntax error in text' / 'mermaid version 10.9.0' 텍스트 표시 차단.
+                try {
+                    [id, id + '-fix', 'd' + id, 'd' + id + '-fix'].forEach(function (cleanId) {
+                        var stray = document.getElementById(cleanId);
+                        if (stray && stray.parentNode === document.body) stray.remove();
+                    });
+                } catch (_) {}
                 if (renderedSvg) {
                     var wrap = document.createElement('div');
                     wrap.className = 'tda-mermaid';
@@ -12588,8 +12596,38 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                         pre.parentNode.insertBefore(err, pre);
                     }
                 }
+                // [r309] mermaid v10 임시 div/svg 정리 — body 하단 'Syntax error in text' 잔존 방지
+                try {
+                    [id, 'd' + id].forEach(function (cleanId) {
+                        var stray = document.getElementById(cleanId);
+                        if (stray && stray.parentNode === document.body) stray.remove();
+                    });
+                } catch (_) {}
             }
         }
+        // [r309] 전역 cleanup — 페이지 어딘가에 남은 mermaid 임시 요소 일괄 제거.
+        //   body 직계 자식 중 mermaid 시그니처(svg.flowchart/statediagram/sequence 등 또는
+        //   'Syntax error in text' 텍스트)를 가진 요소 제거.
+        function _cleanupMermaidStrays() {
+            try {
+                var n = document.body.children.length;
+                while (n--) {
+                    var el = document.body.children[n];
+                    if (el.tagName !== 'DIV' || el.id === '' || el.className) continue;
+                    // 우리/dwp/회의 wrapper 보호
+                    if (el.classList && (el.classList.contains('tda-mermaid') || el.classList.contains('dwp-mermaid'))) continue;
+                    if (el.id.indexOf('mmd-') === 0 || el.id.indexOf('dmmd-') === 0
+                        || /^d?mermaid/i.test(el.id)) { el.remove(); continue; }
+                    // 시그니처 검사 — svg + aria-roledescription
+                    var svg = el.querySelector(':scope > svg[aria-roledescription], :scope > svg.flowchart, :scope > svg.statediagram');
+                    if (svg) { el.remove(); continue; }
+                    // 'Syntax error in text' 텍스트 잔존
+                    if (/Syntax error in text|mermaid version/i.test(el.textContent || '')) el.remove();
+                }
+            } catch (_) {}
+        }
+        // 페이지 보일 때마다(visibilitychange/route 진입) 잔존 요소 정리
+        setInterval(_cleanupMermaidStrays, 3000);
         // [r114/r122] 페이지 내 SPA 링크 + [path/file:line] Sources → GitHub 링크 자동 변환
         function _dwpAttachLinkHandlers(containerEl, pageMeta) {
             if (!containerEl) return;
@@ -20473,10 +20511,15 @@ return data;
             iframe.srcdoc = cleanHtml;
             previewEl.appendChild(iframe);
 
-            // 자동 높이 조절 리스너
+            // [r309] 자동 높이 조절 — ±8px 임계값 + 최대 캡(80vh) 으로 무한 grow 차단.
             var handler = function(e) {
                 if (e.data && e.data.type === 'tda-iframe-h' && e.data.h) {
-                    var newH = Math.max(400, e.data.h + 32);
+                    if (e.source !== iframe.contentWindow) return;
+                    var rawH = Math.max(400, e.data.h + 32);
+                    var capH = Math.floor(window.innerHeight * 0.8);
+                    var newH = Math.min(rawH, capH);
+                    var curH = parseFloat(iframe.style.height) || 0;
+                    if (Math.abs(newH - curH) < 8) return;   // 미세 변화 무시(피드백 루프 차단)
                     iframe.style.height = newH + 'px';
                 }
             };
@@ -20560,7 +20603,18 @@ addEventListener("resize",sendPos);
                 window.addEventListener('message', function (e) {
                     if (!e.data || e.data.type !== 'tda-iframe-h' || !e.data.h) return;
                     var fr = document.querySelectorAll('.tda-embed-body iframe');
-                    for (var i = 0; i < fr.length; i++) { if (fr[i].contentWindow === e.source) { fr[i].style.height = Math.max(120, e.data.h + 24) + 'px'; break; } }
+                    for (var i = 0; i < fr.length; i++) {
+                        if (fr[i].contentWindow === e.source) {
+                            // [r309] ±8px 임계값 + 80vh 캡 — 무한 grow 차단
+                            var rawH = Math.max(120, e.data.h + 24);
+                            var capH = Math.floor(window.innerHeight * 0.8);
+                            var newH = Math.min(rawH, capH);
+                            var curH = parseFloat(fr[i].style.height) || 0;
+                            if (Math.abs(newH - curH) < 8) break;
+                            fr[i].style.height = newH + 'px';
+                            break;
+                        }
+                    }
                 });
             }
             // [r47/r48] 임베드 iframe → 부모 메시지: 코멘트 생성(우클릭 좌표)·준비완료(하이라이트 전송)·위치보고(카드 정렬)·하이라이트 클릭(코멘트 토글)
@@ -32645,7 +32699,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r308';
+    var _RFS_FRONT_REV = 'r309';
 
 
     async function rfsHealthCheck() {
