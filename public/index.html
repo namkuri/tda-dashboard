@@ -638,7 +638,8 @@
         /* [r37] ul 기본 좌측 패딩(~40px) 제거 — 문서명 좌측 빈 공간 원인 */
         .doc-tree-list { list-style: none; padding-left: 0; margin: 0; }
         .tree-node { padding-left: 14px; list-style-type: none; border-left: 1px dashed #cdc8ba; margin-left: 6px; }
-        .tree-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; color: #3b3934; margin-bottom: 2px; border: 1px solid transparent; }
+        /* [r310 #3] 트리 행은 텍스트 선택 비활성화 — 드래그 시 블록 선택으로 드래그 방해되던 문제 차단 */
+        .tree-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; color: #3b3934; margin-bottom: 2px; border: 1px solid transparent; user-select: none; -webkit-user-select: none; }
         .tree-item:hover { background-color: #f4f1e9; }
         .tree-item.active { background-color: #f3e6df; color: #9a6a4b; font-weight: bold; border-color: #e0c4b3; }
         .tree-item-actions { opacity: 0; transition: opacity 0.2s; display: flex; gap: 4px; }
@@ -11239,7 +11240,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r309';
+        var _AHUB_FRONT_REV = 'r310';
 
 
         var _ahubRevWarned = false;
@@ -20661,7 +20662,31 @@ addEventListener("resize",sendPos);
                 head.innerHTML = '📎 <span class="tda-embed-name">' + _annEsc(em.title || 'HTML') + '</span><span class="tda-embed-tag">HTML</span>'
                     + '<button class="tda-embed-full" title="전체화면으로 보기 (넓게)" onclick="event.stopPropagation();_openHtmlEmbedFullscreen(\'' + id + '\')">⛶</button>'
                     + '<span class="tda-embed-caret">▾</span>';
-                head.onclick = function () { wrap.classList.toggle('collapsed'); };
+                // [r310 #1] 접힌 상태 클릭 → 소스 보기로 전환, 펼친 상태 클릭 → 접기.
+                head.onclick = function (ev) {
+                    if (ev && (ev.target.closest('button') || ev.target.closest('.tda-embed-full'))) return;
+                    var wasCollapsed = wrap.classList.contains('collapsed');
+                    if (wasCollapsed) {
+                        // 접힌 상태에서 클릭 → 펼치는 대신 소스 보기로 (HTML 코드 수정 흐름)
+                        if (typeof setEditorMode === 'function') {
+                            try { setEditorMode('source'); } catch (e) { wrap.classList.remove('collapsed'); }
+                        } else { wrap.classList.remove('collapsed'); }
+                    } else {
+                        wrap.classList.add('collapsed');
+                    }
+                };
+                // [r310 #2] 우클릭 → 컨텍스트 메뉴: HTML 다운로드 + 전체화면.
+                head.oncontextmenu = function (ev) {
+                    ev.preventDefault(); ev.stopPropagation();
+                    _showHtmlEmbedContextMenu(ev.clientX, ev.clientY, id, em);
+                };
+                // body 안 iframe 영역 우클릭도 동일하게 처리(iframe 외부 wrap level)
+                wrap.addEventListener('contextmenu', function (ev) {
+                    if (ev.target.closest('.tda-embed-body iframe')) return;   // iframe 내부는 그대로
+                    if (ev.target.closest('.tda-embed-head')) return;          // head 는 위에서 처리
+                    ev.preventDefault(); ev.stopPropagation();
+                    _showHtmlEmbedContextMenu(ev.clientX, ev.clientY, id, em);
+                });
                 var body = document.createElement('div'); body.className = 'tda-embed-body';
                 var iframe = document.createElement('iframe');
                 iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox');
@@ -20692,6 +20717,89 @@ addEventListener("resize",sendPos);
             });
         }
         // [r36] HTML 임베드 전체화면 보기 — 전체 창 너비 iframe(임베드가 좁게/모바일로 렌더되는 문제 회피)
+        // [r310 #2] HTML 임베드 우클릭 컨텍스트 메뉴 — 다운로드 / 전체화면 / 클립보드 복사
+        async function _showHtmlEmbedContextMenu(x, y, id, em) {
+            _hideHtmlEmbedCtxMenu();
+            var m = document.createElement('div');
+            m.id = '_htmlEmbedCtxMenu';
+            m.style.cssText = 'position:fixed;z-index:9500;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.25);padding:4px;min-width:220px;font-size:13px;';
+            m.innerHTML =
+                '<div class="hectx-mi" data-act="download" style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
+                +   '<span style="font-size:16px;">📥</span><span style="flex:1;">HTML 다운로드</span><span style="font-size:10.5px;color:var(--c-text3);">.html</span>'
+                + '</div>'
+                + '<div class="hectx-mi" data-act="fullscreen" style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
+                +   '<span style="font-size:16px;">⛶</span><span style="flex:1;">전체화면으로 보기</span>'
+                + '</div>'
+                + '<div class="hectx-mi" data-act="copy" style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
+                +   '<span style="font-size:16px;">📋</span><span style="flex:1;">HTML 소스 복사</span><span style="font-size:10.5px;color:var(--c-text3);">클립보드</span>'
+                + '</div>';
+            document.body.appendChild(m);
+            m.querySelectorAll('.hectx-mi').forEach(function (mi) {
+                mi.addEventListener('mouseenter', function () { mi.style.background = 'var(--c-paper)'; });
+                mi.addEventListener('mouseleave', function () { mi.style.background = ''; });
+                mi.addEventListener('click', async function () {
+                    var act = mi.getAttribute('data-act');
+                    _hideHtmlEmbedCtxMenu();
+                    try {
+                        var html = await _resolveHtmlEmbedSource(em, id);
+                        if (act === 'download') _downloadHtmlBlob(html, (em.title || 'embed') + '.html');
+                        else if (act === 'fullscreen') { if (typeof _openHtmlEmbedFullscreen === 'function') _openHtmlEmbedFullscreen(id); }
+                        else if (act === 'copy') {
+                            await navigator.clipboard.writeText(html);
+                            showToast('✓ HTML 소스 복사됨', 'success');
+                        }
+                    } catch (e) { showToast('실패: ' + (e.message || e), 'alert'); }
+                });
+            });
+            // 화면 끝 보정
+            var rect = m.getBoundingClientRect();
+            var W = window.innerWidth, H = window.innerHeight;
+            m.style.left = ((x + rect.width > W - 4) ? Math.max(4, W - rect.width - 4) : x) + 'px';
+            m.style.top  = ((y + rect.height > H - 4) ? Math.max(4, H - rect.height - 4) : y) + 'px';
+            setTimeout(function () {
+                document.addEventListener('mousedown', _onHtmlEmbedCtxOutside, true);
+                document.addEventListener('keydown', _onHtmlEmbedCtxKey, true);
+                document.addEventListener('contextmenu', _onHtmlEmbedCtxOutside, true);
+            }, 10);
+        }
+        function _onHtmlEmbedCtxOutside(e) {
+            var m = document.getElementById('_htmlEmbedCtxMenu');
+            if (m && !m.contains(e.target)) _hideHtmlEmbedCtxMenu();
+        }
+        function _onHtmlEmbedCtxKey(e) { if (e.key === 'Escape') _hideHtmlEmbedCtxMenu(); }
+        function _hideHtmlEmbedCtxMenu() {
+            var m = document.getElementById('_htmlEmbedCtxMenu'); if (m) m.remove();
+            document.removeEventListener('mousedown', _onHtmlEmbedCtxOutside, true);
+            document.removeEventListener('keydown', _onHtmlEmbedCtxKey, true);
+            document.removeEventListener('contextmenu', _onHtmlEmbedCtxOutside, true);
+        }
+        // [r310] 임베드 원본 HTML 해결 — inline 'html' 필드 또는 storage path 에서 fetch
+        async function _resolveHtmlEmbedSource(em, id) {
+            if (em && em.html) return em.html;
+            if (typeof _tdaResolveEmbedHtml === 'function') {
+                return await _tdaResolveEmbedHtml(em, id);
+            }
+            // storage path 직접 fetch 폴백
+            if (em && em.storagePath && supabaseClient) {
+                var u = supabaseClient.storage.from(DRIVE_BUCKET).getPublicUrl(em.storagePath).data.publicUrl;
+                if (u) {
+                    var r = await fetch(u); if (r.ok) return await r.text();
+                }
+            }
+            return '';
+        }
+        function _downloadHtmlBlob(html, filename) {
+            var safe = (filename || 'embed.html').replace(/[\\/:*?"<>|]/g, '_');
+            if (!/\.html?$/i.test(safe)) safe += '.html';
+            var blob = new Blob([html || ''], { type: 'text/html;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = safe; a.style.display = 'none';
+            document.body.appendChild(a); a.click();
+            setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+            showToast('📥 ' + safe + ' 다운로드됨', 'success');
+        }
+
         function _openHtmlEmbedFullscreen(id) {
             var doc = (currentData.docs || []).find(function (d) { return d.id === activeDocId; });
             var em = doc && doc.meta && doc.meta.htmlEmbeds && doc.meta.htmlEmbeds[id];
@@ -28087,6 +28195,14 @@ ${intrLog}
             const docId = li.dataset.docid;
             if(!docId) return;
 
+            // [r310 #3] 드래그 중 텍스트 선택 차단 — body 에 일시 적용 + selection 초기화.
+            //   드래그 도중 mousemove 가 텍스트 selection 을 만들어 드래그 인디케이터가 끊기던 문제.
+            try { window.getSelection().removeAllRanges(); } catch (e) {}
+            var prevBodyUS = document.body.style.userSelect, prevBodyWUS = document.body.style.webkitUserSelect;
+            document.body.style.userSelect = 'none';
+            document.body.style.webkitUserSelect = 'none';
+            // 정리는 mouseup 핸들러(아래)에서 복원
+
             const rect = li.getBoundingClientRect();
             const cloneInner = li.querySelector('.tree-item');
             const clone = cloneInner ? cloneInner.cloneNode(true) : li.cloneNode(false);
@@ -28278,6 +28394,8 @@ ${intrLog}
                 document.removeEventListener('mouseup', onEnd);
                 document.removeEventListener('touchmove', onMove);
                 document.removeEventListener('touchend', onEnd);
+                // [r310 #3] body user-select 복원
+                try { document.body.style.userSelect = prevBodyUS || ''; document.body.style.webkitUserSelect = prevBodyWUS || ''; } catch (e) {}
                 // [r236 A2] 드래그(홀드)가 시작된 뒤의 트레일링 클릭은 삼켜서 문서가 열리지 않게
                 var _swallow = function(ev){ ev.stopPropagation(); ev.preventDefault(); document.removeEventListener('click', _swallow, true); };
                 document.addEventListener('click', _swallow, true);
@@ -32699,7 +32817,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r309';
+    var _RFS_FRONT_REV = 'r310';
 
 
     async function rfsHealthCheck() {
