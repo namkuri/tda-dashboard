@@ -11240,7 +11240,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r310';
+        var _AHUB_FRONT_REV = 'r311';
 
 
         var _ahubRevWarned = false;
@@ -14617,10 +14617,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 if (it.sep) return '<div class="db-ctx-sep"></div>';
                 return '<div class="db-ctx-item' + (it.danger ? ' danger' : '') + '" onclick="dbHideRowCtx();' + it.act + '"><span>' + it.ico + '</span> ' + it.label + '</div>';
             }).join('');
-            var x = Math.min(e.clientX, window.innerWidth - 240);
-            var y = Math.min(e.clientY, window.innerHeight - 280);
-            menu.style.left = x + 'px'; menu.style.top = y + 'px';
+            // [r311] 실제 높이 측정 후 보정 — 화면 끝 잘림 방지
+            menu.style.left = '-9999px'; menu.style.top = '0px';
             menu.classList.remove('hidden');
+            var dbR = menu.getBoundingClientRect();
+            var dbW = window.innerWidth, dbH = window.innerHeight;
+            var x = e.clientX, y = e.clientY;
+            if (x + dbR.width > dbW - 4) x = Math.max(4, dbW - dbR.width - 4);
+            if (y + dbR.height > dbH - 4) y = Math.max(4, dbH - dbR.height - 4);
+            menu.style.left = x + 'px'; menu.style.top = y + 'px';
             setTimeout(function () {
                 document.addEventListener('mousedown', _dbCtxOutside, true);
                 document.addEventListener('keydown', dbHideRowCtx, { once: true });
@@ -29020,12 +29025,19 @@ ${intrLog}
                     ? '<div class="ctx-menu-item" onclick="ctxUndeprecate()"><span>♻️</span> 폐기 취소</div>'
                     : '<div class="ctx-menu-item" onclick="ctxDeprecate()"><span>🔒</span> 폐기 처리</div>') +
                 '<div class="ctx-menu-item danger" onclick="deleteDoc(\''+docId+'\')"><span>🗑️</span> 삭제</div>';
-            var x = Math.min(e.clientX, window.innerWidth - 230);
-            var y = Math.min(e.clientY, window.innerHeight - 280);
-            if(y < 0) y = 0;
+            // [r311] 메뉴 실제 높이 측정 후 위치 보정 — 항목 많은(하단 문서) 우클릭 시 화면 아래로
+            //   잘리던 문제. 이전엔 280px 고정 가정.
+            menu.style.left = '-9999px'; menu.style.top = '0px';
+            menu.style.display = 'block';
+            var rect = menu.getBoundingClientRect();
+            var W = window.innerWidth, H = window.innerHeight;
+            var x = e.clientX, y = e.clientY;
+            // 오른쪽 끝 잘림 — 좌측으로 이동
+            if (x + rect.width > W - 4) x = Math.max(4, W - rect.width - 4);
+            // 아래쪽 끝 잘림 — 위로 이동(아래 공간 부족이면 위쪽으로 펼침)
+            if (y + rect.height > H - 4) y = Math.max(4, H - rect.height - 4);
             menu.style.left = x + 'px';
             menu.style.top = y + 'px';
-            menu.style.display = 'block';
             // [v26 FIX-1] 외부 클릭뿐 아니라 키 입력 / 마우스 휠 / 창 크기 변경 / 포커스 잃음 시에도 메뉴 닫기
             // 모두 once: true 로 등록되어 한 번 트리거되면 자동 해제됨
             setTimeout(function(){
@@ -29061,10 +29073,14 @@ ${intrLog}
                 _ctxScopeItem +
                 '<div class="ctx-menu-item" onclick="hideTreeContextMenu();buryTaskWithReason(event,\'' + taskId + '\')"><span>🗑</span> 처내기 (Buried)</div>' +
                 '<div class="ctx-menu-item danger" onclick="hideTreeContextMenu();deleteTask(event,\'' + taskId + '\')"><span>❌</span> 삭제</div>';
-            var x = Math.min(e.clientX, window.innerWidth - 230);
-            var y = Math.min(e.clientY, window.innerHeight - 200);
-            if (y < 0) y = 0;
-            menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block';
+            // [r311] 실제 높이 측정 후 보정 — 하단 클릭 시 화면 밖 잘림 방지
+            menu.style.left = '-9999px'; menu.style.top = '0px'; menu.style.display = 'block';
+            var ccR = menu.getBoundingClientRect();
+            var ccW = window.innerWidth, ccH = window.innerHeight;
+            var x = e.clientX, y = e.clientY;
+            if (x + ccR.width > ccW - 4) x = Math.max(4, ccW - ccR.width - 4);
+            if (y + ccR.height > ccH - 4) y = Math.max(4, ccH - ccR.height - 4);
+            menu.style.left = x + 'px'; menu.style.top = y + 'px';
             _attachCtxDismiss(); // [r153] 통일된 해제
         }
 
@@ -32817,7 +32833,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r310';
+    var _RFS_FRONT_REV = 'r311';
 
 
     async function rfsHealthCheck() {
