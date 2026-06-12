@@ -10414,6 +10414,27 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 return;
             }
             if (_citeTargetEl && _citeTargetEl.isContentEditable && _citeRange) {
+                // [r314] 라이브 편집 중(.lp-live-edit) 이고 토큰에 줄바꿈이 있으면 contentEditable
+                //   execCommand 가 \n 을 제대로 못 다룸 → 표/이미지 마크다운이 한 줄로 합쳐져
+                //   본문에 표가 안 나타남. 해결: commit 후 다음 블록에 통째로 삽입 + renderLivePreview.
+                var hasNewline = /\n/.test(token);
+                var editingIdx = (typeof _lpEditingIdx !== 'undefined') ? _lpEditingIdx : null;
+                if (hasNewline && editingIdx != null && typeof _lpCommitEdit === 'function') {
+                    try {
+                        _lpCommitEdit();
+                        setTimeout(function () {
+                            var host = document.getElementById('doc-livepreview');
+                            if (!host || !host._lpBlocks) return;
+                            var nextI = editingIdx + 1;
+                            // 표/이미지 블록 자체를 새 블록으로 삽입
+                            host._lpBlocks.splice(nextI, 0, { text: token.replace(/^\n+|\n+$/g, ''), blank: false });
+                            var content = host._lpBlocks.map(function (x) { return x.text; }).join('\n');
+                            if (typeof _lpCommit === 'function') _lpCommit(content);
+                            if (typeof renderLivePreview === 'function') renderLivePreview();
+                        }, 50);
+                    } catch (e) { console.warn('[ctx] live insert', e); }
+                    return;
+                }
                 try {
                     var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(_citeRange);
                     document.execCommand('insertText', false, token);
@@ -11459,7 +11480,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r313';
+        var _AHUB_FRONT_REV = 'r314';
 
 
         var _ahubRevWarned = false;
@@ -27269,9 +27290,13 @@ ${intrLog}
                         } else { try { document.execCommand('insertText', false, '\n'); } catch (x) {} }
                         return;
                     }
-                    // Enter — 새 블록으로 진행: commit + 다음 idx 에 빈 줄 삽입 + 그 줄 편집 모드
+                    // [r314] Enter = 새 블록 — ed.blur() 비동기 의존 대신 _lpCommitEdit() 명시 호출.
+                    //   blur 이벤트가 늦게 트리거돼 setTimeout 60ms 안에 commit 이 안 끝나면
+                    //   _lpBlocks 가 옛 상태라 splice 한 빈 블록이 사라지고 새 줄 진입 실패하던 문제.
                     var curIdx = _lpEditingIdx;
-                    ed.blur();   // commit (renderLivePreview 호출됨)
+                    // ed 에서 blur 핸들러 일시 제거 후 명시 commit — 중복 호출 방지
+                    try { ed.removeEventListener('blur', _lpCommitEdit); } catch (_) {}
+                    if (typeof _lpCommitEdit === 'function') _lpCommitEdit();
                     setTimeout(function () {
                         var host = document.getElementById('doc-livepreview');
                         if (!host || !host._lpBlocks) return;
@@ -27281,7 +27306,7 @@ ${intrLog}
                         if (typeof _lpCommit === 'function') _lpCommit(content);
                         if (typeof renderLivePreview === 'function') renderLivePreview();
                         setTimeout(function () { _lpEnterEdit(next); }, 30);
-                    }, 60);
+                    }, 30);
                 }
             });
             ed.focus(); _lpPlaceCaretEnd(ed);
@@ -33077,7 +33102,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r313';
+    var _RFS_FRONT_REV = 'r314';
 
 
     async function rfsHealthCheck() {
