@@ -10092,34 +10092,71 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         }
 
         // [r305] 우클릭 컨텍스트 메뉴 — 인용/이미지/파일 첨부 옵션
-        var _insertCtxCell = null;   // 대상 표 셀(있으면)
+        // [r312] 표 인식 — 셀 위 우클릭이면 행/열 추가·삭제·정렬 옵션 + 표 삽입 옵션 추가
+        var _insertCtxCell = null;
+        function _miHTML(act, ico, label, hint, danger) {
+            return '<div class="ctx-mi" data-act="' + act + '" style="padding:7px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;' + (danger ? 'color:#9a1c20;' : '') + '">'
+                + '<span style="font-size:15px;width:18px;text-align:center;">' + ico + '</span>'
+                + '<span style="flex:1;">' + label + '</span>'
+                + (hint ? '<span style="font-size:10.5px;color:var(--c-text3);">' + hint + '</span>' : '')
+                + '</div>';
+        }
+        function _miSep() { return '<div style="height:1px;background:var(--c-border);margin:3px 4px;"></div>'; }
         function _showInsertContextMenu(x, y, cell) {
             _hideInsertContextMenu();
             _insertCtxCell = cell || null;
             var m = document.createElement('div');
             m.id = '_insertCtxMenu';
-            m.style.cssText = 'position:fixed;z-index:9500;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.25);padding:4px;min-width:200px;font-size:13px;';
-            m.innerHTML =
-                '<div class="ctx-mi" data-act="cite"  style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
-                +   '<span style="font-size:16px;">🔗</span><span style="flex:1;">인용 삽입</span><span style="font-size:10.5px;color:var(--c-text3);">사용자·문서·태스크·일정…</span>'
-                + '</div>'
-                + '<div class="ctx-mi" data-act="image" style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
-                +   '<span style="font-size:16px;">🖼</span><span style="flex:1;">이미지 첨부</span><span style="font-size:10.5px;color:var(--c-text3);">파일 선택</span>'
-                + '</div>'
-                + '<div class="ctx-mi" data-act="file" style="padding:8px 14px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;">'
-                +   '<span style="font-size:16px;">📎</span><span style="flex:1;">파일 첨부</span><span style="font-size:10.5px;color:var(--c-text3);">드라이브 업로드</span>'
-                + '</div>';
+            m.style.cssText = 'position:fixed;z-index:9500;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.25);padding:4px;min-width:230px;font-size:13px;max-height:80vh;overflow-y:auto;';
+            var html = '';
+            if (cell) {
+                // 표 조작 옵션
+                html += _miHTML('row-above',  '⬆',  '위에 행 추가',  '');
+                html += _miHTML('row-below',  '⬇',  '아래에 행 추가', '');
+                html += _miHTML('col-left',   '⬅',  '왼쪽에 열 추가', '');
+                html += _miHTML('col-right',  '➡',  '오른쪽에 열 추가', '');
+                html += _miSep();
+                html += _miHTML('row-del', '🗑', '이 행 삭제', '', true);
+                html += _miHTML('col-del', '🗑', '이 열 삭제', '', true);
+                html += _miSep();
+                html += '<div style="padding:5px 14px 3px;font-size:10.5px;font-weight:700;color:var(--c-text3);">정렬</div>';
+                html += '<div style="display:flex;gap:2px;padding:0 6px 4px;">'
+                     + '<button data-act="align-left"   title="좌"   style="flex:1;padding:6px;border:1px solid var(--c-border);background:var(--c-paper);border-radius:4px;cursor:pointer;font-size:12px;">⬅</button>'
+                     + '<button data-act="align-center" title="중"   style="flex:1;padding:6px;border:1px solid var(--c-border);background:var(--c-paper);border-radius:4px;cursor:pointer;font-size:12px;">↔</button>'
+                     + '<button data-act="align-right"  title="우"   style="flex:1;padding:6px;border:1px solid var(--c-border);background:var(--c-paper);border-radius:4px;cursor:pointer;font-size:12px;">➡</button>'
+                     + '<button data-act="valign-top"   title="상" style="flex:1;padding:6px;border:1px solid var(--c-border);background:var(--c-paper);border-radius:4px;cursor:pointer;font-size:12px;">⤴</button>'
+                     + '<button data-act="valign-middle" title="중간" style="flex:1;padding:6px;border:1px solid var(--c-border);background:var(--c-paper);border-radius:4px;cursor:pointer;font-size:12px;">↕</button>'
+                     + '<button data-act="valign-bottom" title="하" style="flex:1;padding:6px;border:1px solid var(--c-border);background:var(--c-paper);border-radius:4px;cursor:pointer;font-size:12px;">⤵</button>'
+                     + '</div>';
+                html += _miSep();
+            } else {
+                html += _miHTML('table-new', '📊', '표 삽입', '행 × 열');
+                html += _miSep();
+            }
+            html += _miHTML('cite',  '🔗', '인용 삽입',  '사용자·문서·태스크…');
+            html += _miHTML('image', '🖼', '이미지 첨부', '파일 선택');
+            html += _miHTML('file',  '📎', '파일 첨부',   '드라이브 업로드');
+            m.innerHTML = html;
             document.body.appendChild(m);
-            // hover 효과(인라인 — CSS 의존 X)
+            // hover + 클릭
+            var savedCell = _insertCtxCell;
             m.querySelectorAll('.ctx-mi').forEach(function (mi) {
                 mi.addEventListener('mouseenter', function () { mi.style.background = 'var(--c-paper)'; });
                 mi.addEventListener('mouseleave', function () { mi.style.background = ''; });
                 mi.addEventListener('click', function () {
                     var act = mi.getAttribute('data-act');
                     _hideInsertContextMenu();
-                    if (act === 'cite') _openCitePicker();
-                    else if (act === 'image') _pickAndInsertFile(true);
-                    else if (act === 'file') _pickAndInsertFile(false);
+                    _insertCtxCell = savedCell;
+                    _handleInsertCtxAct(act);
+                });
+            });
+            // 정렬 버튼 클릭
+            m.querySelectorAll('button[data-act]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    var act = b.getAttribute('data-act');
+                    _hideInsertContextMenu();
+                    _insertCtxCell = savedCell;
+                    _handleInsertCtxAct(act);
                 });
             });
             // 화면 끝 보정
@@ -10182,6 +10219,174 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             inp.click();
         }
 
+        // [r312] 컨텍스트 메뉴 액션 핸들러
+        function _handleInsertCtxAct(act) {
+            if (act === 'cite') { _openCitePicker(); return; }
+            if (act === 'image') { _pickAndInsertFile(true); return; }
+            if (act === 'file') { _pickAndInsertFile(false); return; }
+            if (act === 'table-new') { _openTablePickerDialog(); return; }
+            if (!_insertCtxCell) return;
+            var cell = _insertCtxCell;
+            if (act === 'row-above')  return _lpTableInsertRow(cell, 'above');
+            if (act === 'row-below')  return _lpTableInsertRow(cell, 'below');
+            if (act === 'col-left')   return _lpTableInsertCol(cell, 'left');
+            if (act === 'col-right')  return _lpTableInsertCol(cell, 'right');
+            if (act === 'row-del')    return _lpTableDeleteRow(cell);
+            if (act === 'col-del')    return _lpTableDeleteCol(cell);
+            if (act.indexOf('align-') === 0) {
+                var which = act.slice(6);   // left / center / right
+                cell.style.textAlign = which;
+                return _lpSyncTableFromDOM(cell);
+            }
+            if (act.indexOf('valign-') === 0) {
+                var v = act.slice(7);       // top / middle / bottom
+                cell.style.verticalAlign = v;
+                return _lpSyncTableFromDOM(cell);
+            }
+        }
+        // [r312] 표 picker 다이얼로그 — 행/열 입력 → 마크다운 표 생성
+        async function _openTablePickerDialog() {
+            var ok = await uiConfirm({
+                title: '📊 표 삽입',
+                messageHtml:
+                    '<div style="display:flex;gap:10px;margin:6px 0;">'
+                    + '<label style="flex:1;font-size:12px;font-weight:700;">행<input id="_tblRows" type="number" min="1" max="30" value="3" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>'
+                    + '<label style="flex:1;font-size:12px;font-weight:700;">열<input id="_tblCols" type="number" min="1" max="12" value="3" style="margin-top:4px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-paper);color:var(--c-text);"></label>'
+                    + '</div>'
+                    + '<div style="font-size:11px;color:var(--c-text3);margin-top:4px;">행은 헤더 포함. 본문 행은 입력값 - 1 개.</div>',
+                confirmText: '삽입', cancelText: '취소'
+            });
+            if (!ok) return;
+            var rows = Math.max(1, Math.min(30, parseInt((document.getElementById('_tblRows') || {}).value || '3', 10)));
+            var cols = Math.max(1, Math.min(12, parseInt((document.getElementById('_tblCols') || {}).value || '3', 10)));
+            var lines = [];
+            var head = []; for (var c = 0; c < cols; c++) head.push(' 열' + (c + 1) + ' ');
+            lines.push('|' + head.join('|') + '|');
+            var sep = []; for (var c2 = 0; c2 < cols; c2++) sep.push('---');
+            lines.push('|' + sep.join('|') + '|');
+            for (var r = 1; r < rows; r++) {
+                var row = []; for (var c3 = 0; c3 < cols; c3++) row.push('   ');
+                lines.push('|' + row.join('|') + '|');
+            }
+            _insertTokenAtTarget('\n' + lines.join('\n') + '\n');
+        }
+        // [r312] DOM 표를 전체 재직렬화해 b.text 갱신. _lpUpdateTableCell 의 row/col 인덱스
+        //   기반 교체와 달리 표 구조 변경(행/열 추가·삭제·정렬)에 필요.
+        function _lpSyncTableFromDOM(anchorCell) {
+            var host = document.getElementById('doc-livepreview'); if (!host || !host._lpBlocks) return false;
+            var row = anchorCell.closest('.lp-row, .lp-blank'); if (!row) return false;
+            var idx = parseInt(row.getAttribute('data-idx'), 10);
+            if (isNaN(idx)) return false;
+            var b = host._lpBlocks[idx]; if (!b) return false;
+            var table = anchorCell.closest('table'); if (!table) return false;
+            var newText = null;
+            var origText = b.text || '';
+            if (/<table[\s>]/i.test(origText)) {
+                // HTML 표 — outerHTML 로 교체. b.text 안의 <table>...</table> 부분만 swap.
+                var newHtml = table.outerHTML;
+                newText = origText.replace(/<table[\s\S]*?<\/table>/i, newHtml);
+            } else {
+                // 마크다운 표 — DOM 을 새로 마크다운으로 직렬화 + 정렬 반영.
+                newText = _tableToMarkdown(table);
+                // 원본의 표 영역만 교체 — 마크다운 표 줄 묶음 전체.
+                //   b.text 의 표 줄들(연속된 |...|) 을 new MD 로 교체.
+                var lines = origText.split('\n');
+                var first = -1, last = -1;
+                for (var i = 0; i < lines.length; i++) {
+                    if (/^\s*\|.*\|\s*$/.test(lines[i])) {
+                        if (first < 0) first = i;
+                        last = i;
+                    } else if (first >= 0) break;
+                }
+                if (first >= 0) {
+                    var before = lines.slice(0, first);
+                    var after = lines.slice(last + 1);
+                    newText = before.concat(newText.split('\n')).concat(after).join('\n');
+                } else {
+                    newText = newText;
+                }
+            }
+            if (!newText || newText === origText) return false;
+            b.text = newText;
+            var content = host._lpBlocks.map(function (x) { return x.text; }).join('\n');
+            _lpCommit(content);
+            if (typeof renderLivePreview === 'function') setTimeout(renderLivePreview, 30);
+            return true;
+        }
+        function _tableToMarkdown(table) {
+            var allRows = [];
+            if (table.tHead) Array.from(table.tHead.rows).forEach(function (r) { allRows.push({ row: r, head: true }); });
+            Array.from(table.tBodies).forEach(function (tb) { Array.from(tb.rows).forEach(function (r) { allRows.push({ row: r, head: false }); }); });
+            if (!allRows.length) return '';
+            var lines = [];
+            var headerRow = allRows[0].row;
+            // 헤더
+            lines.push('|' + Array.from(headerRow.cells).map(function (c) {
+                return ' ' + (c.textContent || '').trim().replace(/\|/g, '\\|') + ' ';
+            }).join('|') + '|');
+            // 구분선 — 정렬 반영
+            lines.push('|' + Array.from(headerRow.cells).map(function (c) {
+                var ta = (c.style.textAlign || '').toLowerCase();
+                if (ta === 'center') return ':---:';
+                if (ta === 'right')  return '---:';
+                if (ta === 'left')   return ':---';
+                return '---';
+            }).join('|') + '|');
+            for (var i = 1; i < allRows.length; i++) {
+                var r = allRows[i].row;
+                lines.push('|' + Array.from(r.cells).map(function (c) {
+                    return ' ' + (c.textContent || '').trim().replace(/\|/g, '\\|') + ' ';
+                }).join('|') + '|');
+            }
+            return lines.join('\n');
+        }
+        // [r312] 표 행 추가
+        function _lpTableInsertRow(cell, where) {
+            var tr = cell.closest('tr'); if (!tr) return;
+            var section = tr.parentNode; if (!section) return;
+            var nr = section.insertRow(Array.prototype.indexOf.call(section.rows, tr) + (where === 'below' ? 1 : 0));
+            var colCount = tr.cells.length;
+            for (var i = 0; i < colCount; i++) { var c = nr.insertCell(-1); c.innerHTML = '&nbsp;'; }
+            _lpSyncTableFromDOM(cell);
+        }
+        // [r312] 표 열 추가
+        function _lpTableInsertCol(cell, where) {
+            var table = cell.closest('table'); if (!table) return;
+            var cellIdx = Array.prototype.indexOf.call(cell.parentNode.children, cell);
+            var insertIdx = cellIdx + (where === 'right' ? 1 : 0);
+            var allRows = [];
+            if (table.tHead) Array.from(table.tHead.rows).forEach(function (r) { allRows.push(r); });
+            Array.from(table.tBodies).forEach(function (tb) { Array.from(tb.rows).forEach(function (r) { allRows.push(r); }); });
+            allRows.forEach(function (r, ri) {
+                var isHead = ri === 0;
+                var nc = document.createElement(isHead ? 'th' : 'td');
+                nc.innerHTML = '&nbsp;';
+                var refCell = r.children[insertIdx];
+                if (refCell) r.insertBefore(nc, refCell);
+                else r.appendChild(nc);
+            });
+            _lpSyncTableFromDOM(cell);
+        }
+        // [r312] 행 삭제 — 헤더 행이면 거절
+        function _lpTableDeleteRow(cell) {
+            var tr = cell.closest('tr'); if (!tr) return;
+            if (tr.parentNode && tr.parentNode.tagName === 'THEAD') { showToast('헤더 행은 삭제할 수 없습니다', 'alert'); return; }
+            tr.remove();
+            _lpSyncTableFromDOM(cell);
+        }
+        // [r312] 열 삭제
+        function _lpTableDeleteCol(cell) {
+            var table = cell.closest('table'); if (!table) return;
+            var cellIdx = Array.prototype.indexOf.call(cell.parentNode.children, cell);
+            var allRows = [];
+            if (table.tHead) Array.from(table.tHead.rows).forEach(function (r) { allRows.push(r); });
+            Array.from(table.tBodies).forEach(function (tb) { Array.from(tb.rows).forEach(function (r) { allRows.push(r); }); });
+            if (allRows[0] && allRows[0].children.length <= 1) { showToast('마지막 열은 삭제할 수 없습니다', 'alert'); return; }
+            allRows.forEach(function (r) {
+                if (r.children[cellIdx]) r.removeChild(r.children[cellIdx]);
+            });
+            _lpSyncTableFromDOM(table.querySelector('td, th') || cell);
+        }
         // [r305] 토큰 삽입 — 우클릭 대상에 따라 분기. 표 셀이면 _lpUpdateTableCell 동기화.
         function _insertTokenAtTarget(token) {
             // 표 셀이면 셀 안에 마크다운 삽입 + 원본 동기화
@@ -11240,7 +11445,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r311';
+        var _AHUB_FRONT_REV = 'r312';
 
 
         var _ahubRevWarned = false;
@@ -32833,7 +33038,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r311';
+    var _RFS_FRONT_REV = 'r312';
 
 
     async function rfsHealthCheck() {
