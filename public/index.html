@@ -10244,8 +10244,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 return _lpSyncTableFromDOM(cell);
             }
         }
-        // [r312] 표 picker 다이얼로그 — 행/열 입력 → 마크다운 표 생성
+        // [r312/r313] 표 picker 다이얼로그 — 행/열 입력 → 마크다운 표 생성.
+        //   await 중 _insertCtxCell/_citeTargetEl 이 다른 핸들러로 사라지지 않게 보존+복원.
         async function _openTablePickerDialog() {
+            var savedCell = _insertCtxCell;
+            var savedTarget = _citeTargetEl;
+            var savedRange = _citeRange;
             var ok = await uiConfirm({
                 title: '📊 표 삽입',
                 messageHtml:
@@ -10259,6 +10263,10 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             if (!ok) return;
             var rows = Math.max(1, Math.min(30, parseInt((document.getElementById('_tblRows') || {}).value || '3', 10)));
             var cols = Math.max(1, Math.min(12, parseInt((document.getElementById('_tblCols') || {}).value || '3', 10)));
+            // 복원
+            _insertCtxCell = savedCell;
+            _citeTargetEl = savedTarget;
+            _citeRange = savedRange;
             var lines = [];
             var head = []; for (var c = 0; c < cols; c++) head.push(' 열' + (c + 1) + ' ');
             lines.push('|' + head.join('|') + '|');
@@ -10412,9 +10420,15 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 } catch (e) {}
                 return;
             }
-            // 폴백 — 현재 활성 textarea
+            // [r313] 폴백 — 현재 활성 textarea + 라이브 모드면 본문 즉시 재렌더
             var ta = document.getElementById('doc-editor-textarea');
-            if (ta && typeof insertToActiveEditor === 'function') insertToActiveEditor(ta, '\n' + token + '\n');
+            if (ta && typeof insertToActiveEditor === 'function') {
+                insertToActiveEditor(ta, '\n' + token + '\n');
+                if (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'live'
+                    && typeof renderLivePreview === 'function') {
+                    setTimeout(renderLivePreview, 50);
+                }
+            }
         }
         // 페이지 전역 우클릭 리스너 (1회 바인딩)
         function _bindCiteContext() {
@@ -11445,7 +11459,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r312';
+        var _AHUB_FRONT_REV = 'r313';
 
 
         var _ahubRevWarned = false;
@@ -27241,15 +27255,33 @@ ${intrLog}
             ed.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') { e.preventDefault(); _lpCancelEdit(); return; }
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ed.blur(); return; }
-                // [r241 #2] Enter → 깔끔한 새 줄(\n) 삽입(Range 직접 — 브라우저 div/br 자동삽입 방지).
+                // [r313] Enter = 새 블록(현재 commit + 다음 빈 줄 편집).
+                //        Shift+Enter = 같은 블록 안 줄바꿈(\n 삽입).
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    var sel = window.getSelection();
-                    if (sel && sel.rangeCount) {
-                        var rng = sel.getRangeAt(0); rng.deleteContents();
-                        var tn = document.createTextNode('\n'); rng.insertNode(tn);
-                        rng.setStartAfter(tn); rng.collapse(true); sel.removeAllRanges(); sel.addRange(rng);
-                    } else { try { document.execCommand('insertText', false, '\n'); } catch (x) {} }
+                    if (e.shiftKey) {
+                        // 같은 줄 안 줄바꿈 — Range 로 \n 삽입 (브라우저 div/br 자동삽입 방지)
+                        var sel = window.getSelection();
+                        if (sel && sel.rangeCount) {
+                            var rng = sel.getRangeAt(0); rng.deleteContents();
+                            var tn = document.createTextNode('\n'); rng.insertNode(tn);
+                            rng.setStartAfter(tn); rng.collapse(true); sel.removeAllRanges(); sel.addRange(rng);
+                        } else { try { document.execCommand('insertText', false, '\n'); } catch (x) {} }
+                        return;
+                    }
+                    // Enter — 새 블록으로 진행: commit + 다음 idx 에 빈 줄 삽입 + 그 줄 편집 모드
+                    var curIdx = _lpEditingIdx;
+                    ed.blur();   // commit (renderLivePreview 호출됨)
+                    setTimeout(function () {
+                        var host = document.getElementById('doc-livepreview');
+                        if (!host || !host._lpBlocks) return;
+                        var next = (typeof curIdx === 'number' ? curIdx : 0) + 1;
+                        host._lpBlocks.splice(next, 0, { text: '', blank: true });
+                        var content = host._lpBlocks.map(function (x) { return x.text; }).join('\n');
+                        if (typeof _lpCommit === 'function') _lpCommit(content);
+                        if (typeof renderLivePreview === 'function') renderLivePreview();
+                        setTimeout(function () { _lpEnterEdit(next); }, 30);
+                    }, 60);
                 }
             });
             ed.focus(); _lpPlaceCaretEnd(ed);
@@ -27835,10 +27867,17 @@ ${intrLog}
             const selStart = textarea.selectionStart, selEnd = textarea.selectionEnd;
             const selText = textarea.value.substring(selStart, selEnd).trim();
             e.preventDefault();
+            // [r313] 소스 textarea 우클릭에도 표 삽입 / 이미지 / 파일 옵션 추가.
+            //   _citeTargetEl 을 textarea 로 잡아 _insertTokenAtTarget 폴백이 textarea 에 삽입.
+            _citeTargetEl = textarea; _citeRange = null; _insertCtxCell = null;
             const menu = document.getElementById('tree-context-menu');
             if(!menu) return;
             if (menu.parentNode !== document.body) document.body.appendChild(menu);
-            var html = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openGitInsertPicker(\'import\')"><span>📥</span> 코드 가져오기 (코드블록 삽입)</div>'
+            var html = '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_openTablePickerDialog()"><span>📊</span> 표 삽입 (행 × 열)</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_pickAndInsertFile(true)"><span>🖼</span> 이미지 첨부</div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();_pickAndInsertFile(false)"><span>📎</span> 파일 첨부</div>'
+                + '<div class="ctx-menu-sep"></div>'
+                + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openGitInsertPicker(\'import\')"><span>📥</span> 코드 가져오기 (코드블록 삽입)</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openGitInsertPicker(\'cite\')"><span>🔖</span> 코드 인용하기</div>'
                 + '<div class="ctx-menu-item" onclick="hideTreeContextMenu();openDocCitePicker()"><span>📄</span> 문서 인용하기</div>';
             if (selText) {
@@ -33038,7 +33077,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r312';
+    var _RFS_FRONT_REV = 'r313';
 
 
     async function rfsHealthCheck() {
