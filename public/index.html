@@ -4226,6 +4226,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="timeline" id="cs-nav-timeline" onclick="switchView('timeline')" title="타임라인 (WBS 노드 간트)"><span class="cs-ico">📊</span><span class="cs-label">타임라인</span></button>
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
                     <button class="cs-nav" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
+                    <!-- [r315] 문서 맵 — 문서 탐색 + 위키링크 연결 그래프 -->
+                    <button class="cs-nav" data-nav="docmap" id="cs-nav-docmap" onclick="switchView('docmap')" title="문서 맵 — 문서 탐색 + 위키링크 연결 그래프"><span class="cs-ico">🕸</span><span class="cs-label">문서 맵</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
                     <!-- [r81 #2] 이슈 트래커 -->
                     <button class="cs-nav" data-nav="issues" id="cs-nav-issues" onclick="switchView('issues')" title="이슈 트래커 (등록·담당자·우선순위·납기·상태)"><span class="cs-ico">🐛</span><span class="cs-label">이슈 트래커</span></button>
@@ -5755,6 +5757,42 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <button class="aihub-gpu-btn" style="font-size:12px;" onclick="pmOpen()">← Stage 목록</button>
             </div>
             <div id="pm-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
+        </div>
+
+        <!-- [r315] 문서 맵 — 문서 탐색 + 위키링크 연결 그래프 -->
+        <div id="docmap-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:hidden;background:var(--c-paper);display:flex;flex-direction:column;">
+            <div style="padding:12px 20px;border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:12px;background:var(--c-card);flex:none;">
+                <div style="font-size:19px;">🕸</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:15px;font-weight:800;color:var(--c-text);">문서 맵</div>
+                    <div style="font-size:11px;color:var(--c-text3);margin-top:1px;">문서 탐색 + 위키링크 연결 그래프 — 문서 안 <code style="font-size:10.5px;">[[제목]]</code>/<code style="font-size:10.5px;">[[doc:id]]</code> 연결을 시각화</div>
+                </div>
+                <div id="dm-tabs" style="display:inline-flex;gap:0;border:1px solid var(--c-border);border-radius:8px;overflow:hidden;flex:none;">
+                    <button class="dm-tab" data-dmtab="explorer" onclick="dmSetTab('explorer')" style="font-size:12.5px;font-weight:700;padding:7px 14px;border:none;background:var(--c-accent);color:#fff;cursor:pointer;">📁 문서 탐색</button>
+                    <button class="dm-tab" data-dmtab="graph" onclick="dmSetTab('graph')" style="font-size:12.5px;font-weight:700;padding:7px 14px;border:none;background:var(--c-paper);color:var(--c-text2);cursor:pointer;">🔗 연결 보기</button>
+                </div>
+            </div>
+            <!-- 탐색 탭: 좌측 트리 + 우측 뷰어/에디터 -->
+            <div id="dm-explorer" style="flex:1;display:flex;min-height:0;">
+                <div id="dm-tree" style="width:280px;flex:none;border-right:1px solid var(--c-border);background:var(--c-card);overflow-y:auto;padding:10px 8px;"></div>
+                <div id="dm-doc" style="flex:1;min-width:0;display:flex;flex-direction:column;"></div>
+            </div>
+            <!-- 연결 보기 탭: SVG 그래프 -->
+            <div id="dm-graph" style="flex:1;display:none;position:relative;min-height:0;overflow:hidden;background:var(--c-paper);">
+                <div id="dm-graph-toolbar" style="position:absolute;top:10px;left:12px;z-index:5;display:flex;gap:6px;align-items:center;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:5px 8px;font-size:11.5px;box-shadow:0 2px 8px rgba(0,0,0,.12);">
+                    <span style="color:var(--c-text3);">노드 <b id="dm-g-nodes">0</b> · 연결 <b id="dm-g-links">0</b></span>
+                    <span style="width:1px;height:14px;background:var(--c-border);"></span>
+                    <button class="aihub-gpu-btn" style="font-size:11px;padding:3px 8px;" onclick="dmGraphRelayout()" title="레이아웃 다시 계산">🔄 재배치</button>
+                    <button class="aihub-gpu-btn" style="font-size:11px;padding:3px 8px;" onclick="dmGraphFit()" title="화면에 맞춤">⊡ 맞춤</button>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--c-text2);"><input type="checkbox" id="dm-g-labels" checked onchange="dmGraphRender()"> 라벨</label>
+                </div>
+                <svg id="dm-graph-svg" style="width:100%;height:100%;display:block;cursor:grab;"></svg>
+                <div id="dm-graph-empty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;color:var(--c-text3);text-align:center;padding:40px;">
+                    <div style="font-size:40px;margin-bottom:10px;">🔗</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--c-text2);">아직 문서 간 연결이 없습니다</div>
+                    <div style="font-size:12px;margin-top:6px;">문서 본문에 <code>[[다른 문서 제목]]</code> 또는 <code>[[doc:id]]</code> 위키링크를 넣으면<br>여기에 연결 그래프가 그려집니다.</div>
+                </div>
+            </div>
         </div>
 
         <div id="aihub-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:auto;padding:18px 22px;background:var(--c-paper);">
@@ -11480,7 +11518,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r314';
+        var _AHUB_FRONT_REV = 'r315';
 
 
         var _ahubRevWarned = false;
@@ -17209,6 +17247,16 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 var _gpp = document.getElementById('gif-picker'); if (_gpp) _gpp.style.display = 'none';
             }
             if (viewName === 'product' && typeof pmOpen === 'function') setTimeout(pmOpen, 30);
+            // [r315] 문서 맵
+            var _csDm = document.getElementById('cs-nav-docmap'); if (_csDm) _csDm.classList.toggle('active', viewName === 'docmap');
+            var _dmVw = document.getElementById('docmap-view'); if (_dmVw) { _dmVw.classList.toggle('hidden', viewName !== 'docmap'); _dmVw.style.display = (viewName === 'docmap') ? 'flex' : 'none'; }
+            if (viewName === 'docmap') {
+                var _dvd = document.getElementById('docs-view'); if (_dvd) { _dvd.classList.add('hidden'); _dvd.classList.remove('flex-show'); }
+                var _kvd = document.getElementById('kanban-view'); if (_kvd) { _kvd.classList.add('hidden'); _kvd.classList.remove('block'); }
+                try { var _pbd=document.getElementById('preview-btn'),_ebd=document.getElementById('editor-btn'),_gbd=document.getElementById('gif-btn'); if(_pbd)_pbd.classList.add('hidden'); if(_ebd)_ebd.classList.add('hidden'); if(_gbd)_gbd.classList.add('hidden'); } catch(e){}
+                var _gpd = document.getElementById('gif-picker'); if (_gpd) _gpd.style.display = 'none';
+                if (typeof dmOpen === 'function') setTimeout(dmOpen, 30);
+            }
             if (viewName === 'aiHub' && typeof aihubRender === 'function') aihubRender();
             // [r208] AI Hub 진입 시 마지막 동기화 시각 갱신
             if (viewName === 'aiHub' && typeof ahubRefreshIdxBadge === 'function') setTimeout(ahubRefreshIdxBadge, 30);
@@ -23459,6 +23507,14 @@ addEventListener("resize",sendPos);
         document.addEventListener('click', function(e) {
             var wl = (e.target && e.target.closest) ? e.target.closest('.wikilink') : null;
             if (!wl) return;
+            // [r315] 문서 맵 안에서 클릭한 위키링크는 페이지를 벗어나지 않고 그 안에서 문서 전환.
+            if (e.target.closest && e.target.closest('#dm-doc')) {
+                var _dmType = wl.getAttribute('data-wl-type');
+                var _dmId = wl.getAttribute('data-wl-id');
+                if (_dmType === 'doc' && _dmId) { e.preventDefault(); e.stopPropagation(); if (typeof dmOpenDoc === 'function') dmOpenDoc(_dmId); return; }
+                if (_dmType === 'new') { e.preventDefault(); e.stopPropagation(); var _nt = wl.getAttribute('data-wl-title') || (wl.textContent||'').replace(/✚\s*$/,'').trim(); if (typeof _wlCreateAndNav === 'function') _wlCreateAndNav(_nt); return; }
+                // task/hash/code 등은 기존 동작
+            }
             e.preventDefault(); e.stopPropagation();
             var type = wl.getAttribute('data-wl-type');
             var id = wl.getAttribute('data-wl-id');
@@ -33102,7 +33158,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r314';
+    var _RFS_FRONT_REV = 'r315';
 
 
     async function rfsHealthCheck() {
@@ -33146,6 +33202,425 @@ ${intrLog}
     function rfsBackEnd() { return (_dwGetSettings() || {}).backendUrl || ''; }
     function rfsCurrentUser() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.id) || null; }
     function rfsCurrentUserName() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || rfsCurrentUser() || ''; }
+
+    // ════════════════════════════════════════════════════════════
+    // [r315] 문서 맵 — 문서 탐색 + 위키링크 연결 그래프 (기존 wiki 문서 재사용, 페이지 내 편집)
+    // ════════════════════════════════════════════════════════════
+    var _dmState = { tab: 'explorer', activeId: null, mode: 'preview', nodes: [], links: [], tf: { x: 0, y: 0, k: 1 }, _saveTimer: null, _hoverPv: null };
+
+    function _dmDocs() {
+        // 현재 프로젝트의 일반 문서(kind 'wiki'). 편집 대상.
+        return (currentData.docs || []).filter(function (d) {
+            return d.projectId === activeProjectId && (d.kind || 'wiki') === 'wiki';
+        });
+    }
+    function _dmById(id) { return (currentData.docs || []).find(function (d) { return d.id === id; }); }
+    function _dmIsFolder(d) { return !!(d && d.meta && d.meta.isFolder); }
+
+    function dmOpen() {
+        if (!_dmState.activeId) {
+            var first = _dmDocs().find(function (d) { return !_dmIsFolder(d); });
+            if (first) _dmState.activeId = first.id;
+        }
+        dmRenderTree();
+        dmSetTab(_dmState.tab);
+    }
+    function dmSetTab(tab) {
+        _dmState.tab = tab;
+        document.querySelectorAll('#dm-tabs .dm-tab').forEach(function (b) {
+            var on = b.getAttribute('data-dmtab') === tab;
+            b.style.background = on ? 'var(--c-accent)' : 'var(--c-paper)';
+            b.style.color = on ? '#fff' : 'var(--c-text2)';
+        });
+        var ex = document.getElementById('dm-explorer'), gr = document.getElementById('dm-graph');
+        if (ex) ex.style.display = (tab === 'explorer') ? 'flex' : 'none';
+        if (gr) gr.style.display = (tab === 'graph') ? 'flex' : 'none';
+        if (tab === 'graph') dmGraphBuildAndRender();
+        else dmRenderDoc();
+    }
+
+    // ── 트리 ──
+    function dmRenderTree() {
+        var host = document.getElementById('dm-tree'); if (!host) return;
+        var docs = _dmDocs();
+        if (!docs.length) {
+            host.innerHTML = '<div style="padding:18px 10px;color:var(--c-text3);font-size:12px;line-height:1.6;">문서가 없습니다.<br>아래 <b>+ 새 문서</b>로 만들거나<br>좌측 <b>문서</b> 메뉴에서 작성하세요.</div>'
+                + '<button class="aihub-gpu-btn primary" style="margin:8px;font-size:12px;" onclick="dmNewDoc()">+ 새 문서</button>';
+            return;
+        }
+        var childrenMap = {};
+        docs.forEach(function (d) {
+            var pid = (d.parentId && d.parentId.trim()) ? d.parentId.trim() : '__root__';
+            (childrenMap[pid] = childrenMap[pid] || []).push(d);
+        });
+        Object.keys(childrenMap).forEach(function (k) {
+            childrenMap[k].sort(function (a, b) { return ((a.sortOrder || 0) - (b.sortOrder || 0)) || ((a.createdAt || 0) - (b.createdAt || 0)); });
+        });
+        var html = '<div style="display:flex;align-items:center;gap:6px;padding:2px 6px 8px;">'
+            + '<span style="font-size:11px;font-weight:800;color:var(--c-text3);flex:1;">문서 ' + docs.filter(function (d) { return !_dmIsFolder(d); }).length + '</span>'
+            + '<button class="aihub-gpu-btn" style="font-size:10.5px;padding:2px 7px;" onclick="dmNewDoc()" title="새 문서">+ 새 문서</button></div>';
+        function walk(pid, depth) {
+            var arr = childrenMap[pid] || [];
+            arr.forEach(function (d) {
+                var isF = _dmIsFolder(d);
+                var active = (d.id === _dmState.activeId);
+                var ind = depth * 12;
+                html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="' + (isF ? "dmToggleFolder('" + d.id + "')" : "dmOpenDoc('" + d.id + "')") + '" '
+                    + 'style="display:flex;align-items:center;gap:6px;padding:5px 8px;padding-left:' + (8 + ind) + 'px;border-radius:6px;cursor:pointer;font-size:12.5px;margin:1px 0;user-select:none;'
+                    + (active ? 'background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);font-weight:700;' : 'color:var(--c-text);') + '">'
+                    + '<span style="flex:none;">' + (isF ? (d.isCollapsed ? '▶' : '▼') : (d.emoji || '📄')) + '</span>'
+                    + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+                    + '</div>';
+                if (isF && !d.isCollapsed) walk(d.id, depth + 1);
+            });
+        }
+        var body = '';
+        var _tmp = html; html = '';
+        walk('__root__', 0);
+        host.innerHTML = _tmp + html;
+    }
+    function dmToggleFolder(id) {
+        var d = _dmById(id); if (!d) return;
+        d.isCollapsed = !d.isCollapsed;
+        if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} }
+        dmRenderTree();
+    }
+
+    // ── 문서 뷰어/에디터 (본문/소스 토글) ──
+    function dmOpenDoc(id) {
+        var d = _dmById(id); if (!d) { showToast('문서를 찾을 수 없습니다', 'alert'); return; }
+        if (_dmIsFolder(d)) { dmToggleFolder(id); return; }
+        _dmState.activeId = id;
+        _dmState.mode = 'preview';
+        if (_dmState.tab !== 'explorer') dmSetTab('explorer');
+        // 지연 로드된 본문 fetch
+        if (d._contentLoaded === false && typeof _fetchDocContent === 'function') {
+            dmRenderDoc(true);
+            _fetchDocContent(id).then(function (c) {
+                d.content = c || ''; d._contentLoaded = true;
+                if (_dmState.activeId === id) dmRenderDoc();
+            });
+        } else {
+            dmRenderDoc();
+        }
+        dmRenderTree();
+    }
+    function dmRenderDoc(loading) {
+        var host = document.getElementById('dm-doc'); if (!host) return;
+        var d = _dmById(_dmState.activeId);
+        if (!d) {
+            host.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);font-size:13px;">좌측에서 문서를 선택하세요.</div>';
+            return;
+        }
+        var locked = d.isLocked || (d.meta && d.meta.vault);
+        var mode = _dmState.mode || 'preview';
+        var bar = '<div style="flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--c-border);background:var(--c-card);">'
+            + '<span style="font-size:15px;">' + (d.emoji || '📄') + '</span>'
+            + '<span style="font-weight:800;font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+            + '<span style="display:inline-flex;border:1px solid var(--c-border);border-radius:6px;overflow:hidden;">'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;border:none;border-radius:0;' + (mode === 'preview' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="dmSetMode(\'preview\')">📖 본문</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;border:none;border-radius:0;' + (mode === 'source' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="dmSetMode(\'source\')"' + (locked ? ' disabled title="잠긴 문서"' : '') + '>📝 소스</button>'
+            + '</span>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmRenameDoc(\'' + d.id + '\')" title="제목 변경">✏️</button>'
+            + '</div>';
+        if (loading) {
+            host.innerHTML = bar + '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
+            return;
+        }
+        if (mode === 'source' && !locked) {
+            var ta = '<textarea id="dm-src" oncontextmenu="handleEditorContextMenu(event)" style="flex:1;width:100%;box-sizing:border-box;border:none;outline:none;resize:none;padding:16px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;background:var(--c-paper);color:var(--c-text);">' + _annEsc(d.content || '') + '</textarea>';
+            host.innerHTML = bar + ta;
+            var taEl = document.getElementById('dm-src');
+            if (taEl) {
+                taEl.addEventListener('input', function () { dmOnEdit(d.id, taEl.value); });
+                setTimeout(function () { taEl.focus(); }, 20);
+            }
+            return;
+        }
+        // preview
+        var md = d.content || '';
+        var rendered;
+        try {
+            var raw = md.replace(/<!--TDAHTML:([A-Za-z0-9_]+)-->/g, function (m, hid) { return '\n\n<div class="tda-html-mount" data-tdahtml="' + hid + '"></div>\n\n'; });
+            var cfg = (typeof domPurifyConfig !== 'undefined') ? Object.assign({}, domPurifyConfig) : undefined;
+            if (cfg) cfg.ADD_ATTR = (cfg.ADD_ATTR || []).concat(['data-tdahtml', 'data-wl-type', 'data-wl-id', 'data-wl-title', 'data-wl-hash']);
+            rendered = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(raw), cfg) : parseMarkdownWithTables(raw);
+        } catch (e) { rendered = _annEsc(md); }
+        var empty = !md.trim() ? '<div style="color:var(--c-text3);font-size:13px;padding:8px 0;">빈 문서입니다. <b>📝 소스</b>로 전환해 작성하세요.</div>' : '';
+        host.innerHTML = bar + '<div id="dm-doc-body" class="markdown-body" style="flex:1;overflow-y:auto;padding:20px 26px;font-size:13.5px;line-height:1.75;cursor:text;" onclick="if(event.target.id===\'dm-doc-body\'||event.target.tagName===\'P\'||/^H[1-6]$/.test(event.target.tagName)){dmSetMode(\'source\');}" title="클릭해 소스 편집">' + (empty || rendered) + '</div>';
+        var body = document.getElementById('dm-doc-body');
+        if (body) {
+            try { if (typeof _buildHtmlEmbeds === 'function') _buildHtmlEmbeds(body, (d.meta && d.meta.htmlEmbeds) || {}); } catch (e) {}
+            try { if (typeof renderMermaidIn === 'function') renderMermaidIn(body); } catch (e) {}
+            try { if (typeof enhanceMediaLinks === 'function') enhanceMediaLinks(body); } catch (e) {}
+        }
+    }
+    function dmSetMode(m) {
+        var d = _dmById(_dmState.activeId);
+        if (m === 'source' && d && (d.isLocked || (d.meta && d.meta.vault))) { showToast('🔒 잠긴 문서', 'alert'); return; }
+        _dmState.mode = m; dmRenderDoc();
+    }
+    function dmOnEdit(id, content) {
+        var d = _dmById(id); if (!d) return;
+        d.content = content; d._contentLoaded = true; d.updatedAt = Date.now();
+        clearTimeout(_dmState._saveTimer);
+        _dmState._saveTimer = setTimeout(function () { dmSaveDoc(id); }, 1200);
+    }
+    function dmSaveDoc(id) {
+        var d = _dmById(id); if (!d) return;
+        if (typeof autoRegisterWikiLinks === 'function') { try { autoRegisterWikiLinks('doc', id, d.content || ''); } catch (e) {} }
+        // 저장 — dbUpsertDoc 있으면 그걸로, 없으면 supabase 직접
+        if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} }
+        else if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            try {
+                supabaseClient.from('wiki_docs').update({ content: d.content, title: d.title, meta: d.meta || {}, updated_at: Date.now(), updated_by: (currentUser && currentUser.id) || null }).eq('id', id);
+            } catch (e) {}
+        }
+    }
+    async function dmNewDoc(parentId) {
+        var title = await uiPrompt({ title: '새 문서', label: '문서 제목', placeholder: '예: 환경 시스템 정의' });
+        if (title == null) return; title = String(title).trim(); if (!title) return;
+        // 직접 생성 — kind 'wiki' 로 고정, docmap 안에 머무름(openDoc 미사용)
+        var nd = {
+            id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null,
+            title: title, emoji: '📄', isCollapsed: false,
+            content: '# ' + title + '\n\n여기에 내용을 작성하세요...\n\n다른 문서를 연결하려면 [[문서 제목]] 처럼 입력하세요.',
+            _contentLoaded: true, createdAt: Date.now(), updatedAt: Date.now(), kind: 'wiki', meta: {},
+            sortOrder: Date.now(), linkedDocIds: [], linkedTaskIds: [],
+            createdBy: (currentUser && currentUser.id) || null, updatedBy: (currentUser && currentUser.id) || null
+        };
+        currentData.docs.push(nd);
+        if (typeof saveData === 'function') saveData();
+        if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(nd); } catch (e) {} }
+        _dmState.activeId = nd.id; _dmState.mode = 'source';
+        dmRenderTree(); dmRenderDoc();
+        showToast('📄 "' + title + '" 생성됨', 'success');
+    }
+    async function dmRenameDoc(id) {
+        var d = _dmById(id); if (!d) return;
+        var nt = await uiPrompt({ title: '제목 변경', message: '새 제목', value: d.title || '' });
+        if (nt == null) return; nt = String(nt).trim(); if (!nt) return;
+        d.title = nt; d.updatedAt = Date.now();
+        dmSaveDoc(id); dmRenderTree(); dmRenderDoc();
+    }
+
+    // ── 위키링크 연결 그래프 ──
+    function _dmParseLinks(content, titleMap) {
+        // [[doc:id]] 직접 + [[제목]]/[[제목#h]]/[[제목|alias]] 제목 해석 → 대상 doc id 집합
+        var out = {}; if (!content) return [];
+        var re1 = /\[\[doc:([A-Za-z0-9_-]+)\]\]/g, m;
+        while ((m = re1.exec(content))) out[m[1]] = 1;
+        var re2 = /\[\[([^\]\[\n|#]+?)(?:#[^\]\[\n|]*)?(?:\|[^\]\[\n]+)?\]\]/g;
+        while ((m = re2.exec(content))) {
+            var t = (m[1] || '').trim().toLowerCase();
+            if (/^(doc|task|code|user|project|sprint|review|event|asset|issue):/.test(t)) continue;
+            var tid = titleMap[t];
+            if (tid) out[tid] = 1;
+        }
+        return Object.keys(out);
+    }
+    async function dmGraphBuildAndRender() {
+        var docs = _dmDocs().filter(function (d) { return !_dmIsFolder(d); });
+        // 본문 미로드 문서 로드(병렬)
+        var unloaded = docs.filter(function (d) { return d._contentLoaded === false; });
+        if (unloaded.length && typeof _fetchDocContent === 'function') {
+            try {
+                await Promise.all(unloaded.slice(0, 200).map(function (d) {
+                    return _fetchDocContent(d.id).then(function (c) { d.content = c || ''; d._contentLoaded = true; }).catch(function () {});
+                }));
+            } catch (e) {}
+        }
+        var titleMap = {};
+        docs.forEach(function (d) { var t = (d.title || '').trim().toLowerCase(); if (t) titleMap[t] = d.id; });
+        var nodeById = {};
+        var nodes = docs.map(function (d, i) {
+            var n = { id: d.id, title: d.title || '(제목 없음)', emoji: d.emoji || '📄', deg: 0, x: 0, y: 0, vx: 0, vy: 0 };
+            nodeById[d.id] = n; return n;
+        });
+        var links = [];
+        var seen = {};
+        docs.forEach(function (d) {
+            var targets = _dmParseLinks(d.content || '', titleMap);
+            targets.forEach(function (tid) {
+                if (tid === d.id || !nodeById[tid]) return;
+                var key = d.id + '>' + tid; if (seen[key]) return; seen[key] = 1;
+                links.push({ s: d.id, t: tid });
+                nodeById[d.id].deg++; nodeById[tid].deg++;
+            });
+        });
+        _dmState.nodes = nodes; _dmState.links = links; _dmState._nodeById = nodeById;
+        var nE = document.getElementById('dm-g-nodes'); if (nE) nE.textContent = nodes.length;
+        var lE = document.getElementById('dm-g-links'); if (lE) lE.textContent = links.length;
+        var emptyEl = document.getElementById('dm-graph-empty');
+        if (!links.length) {
+            if (emptyEl) emptyEl.style.display = 'flex';
+        } else {
+            if (emptyEl) emptyEl.style.display = 'none';
+        }
+        dmGraphLayout();
+        dmGraphFit();
+        dmGraphRender();
+    }
+    function dmGraphLayout() {
+        var nodes = _dmState.nodes, links = _dmState.links;
+        if (!nodes.length) return;
+        // 초기 배치 — 황금각 나선
+        var GA = Math.PI * (3 - Math.sqrt(5));
+        nodes.forEach(function (n, i) { var r = 26 * Math.sqrt(i + 1); n.x = 600 + r * Math.cos(i * GA); n.y = 380 + r * Math.sin(i * GA); n.vx = 0; n.vy = 0; });
+        var idx = {}; nodes.forEach(function (n, i) { idx[n.id] = i; });
+        // 간단 force 시뮬 (고정 반복)
+        var ITER = 280;
+        for (var it = 0; it < ITER; it++) {
+            var alpha = 1 - it / ITER;
+            // 반발
+            for (var a = 0; a < nodes.length; a++) {
+                for (var b = a + 1; b < nodes.length; b++) {
+                    var na = nodes[a], nb = nodes[b];
+                    var dx = na.x - nb.x, dy = na.y - nb.y;
+                    var d2 = dx * dx + dy * dy || 0.01;
+                    var f = 9000 / d2;
+                    var dd = Math.sqrt(d2);
+                    var fx = (dx / dd) * f, fy = (dy / dd) * f;
+                    na.vx += fx; na.vy += fy; nb.vx -= fx; nb.vy -= fy;
+                }
+            }
+            // 스프링
+            links.forEach(function (l) {
+                var s = nodes[idx[l.s]], t = nodes[idx[l.t]]; if (!s || !t) return;
+                var dx = t.x - s.x, dy = t.y - s.y; var dd = Math.sqrt(dx * dx + dy * dy) || 0.01;
+                var f = (dd - 120) * 0.04;
+                var fx = (dx / dd) * f, fy = (dy / dd) * f;
+                s.vx += fx; s.vy += fy; t.vx -= fx; t.vy -= fy;
+            });
+            // 중심 인력 + 적용
+            nodes.forEach(function (n) {
+                n.vx += (600 - n.x) * 0.002; n.vy += (380 - n.y) * 0.002;
+                n.x += n.vx * alpha * 0.5; n.y += n.vy * alpha * 0.5;
+                n.vx *= 0.82; n.vy *= 0.82;
+            });
+        }
+    }
+    function dmGraphRelayout() { dmGraphLayout(); dmGraphFit(); dmGraphRender(); }
+    function dmGraphFit() {
+        var nodes = _dmState.nodes; var svg = document.getElementById('dm-graph-svg'); if (!nodes.length || !svg) return;
+        var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        nodes.forEach(function (n) { minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y); });
+        var pad = 80; var w = (maxX - minX) + pad * 2, h = (maxY - minY) + pad * 2;
+        var rect = svg.getBoundingClientRect();
+        var vw = rect.width || 900, vh = rect.height || 600;
+        var k = Math.min(vw / w, vh / h, 1.6); if (!isFinite(k) || k <= 0) k = 1;
+        _dmState.tf = { k: k, x: vw / 2 - ((minX + maxX) / 2) * k, y: vh / 2 - ((minY + maxY) / 2) * k };
+        dmGraphApplyTransform();
+    }
+    function dmGraphApplyTransform() {
+        var g = document.getElementById('dm-graph-g'); if (!g) return;
+        var t = _dmState.tf;
+        g.setAttribute('transform', 'translate(' + t.x + ',' + t.y + ') scale(' + t.k + ')');
+    }
+    function _dmColor(deg) {
+        if (deg >= 6) return '#c96442';
+        if (deg >= 3) return '#b8852a';
+        if (deg >= 1) return '#2e9e5b';
+        return '#8a8378';
+    }
+    function dmGraphRender() {
+        var svg = document.getElementById('dm-graph-svg'); if (!svg) return;
+        var nodes = _dmState.nodes, links = _dmState.links;
+        var idx = {}; nodes.forEach(function (n, i) { idx[n.id] = i; });
+        var showLabels = (document.getElementById('dm-g-labels') || {}).checked !== false;
+        var parts = ['<g id="dm-graph-g">'];
+        // 링크
+        links.forEach(function (l, i) {
+            var s = nodes[idx[l.s]], t = nodes[idx[l.t]]; if (!s || !t) return;
+            parts.push('<line class="dm-glink" data-s="' + l.s + '" data-t="' + l.t + '" x1="' + s.x.toFixed(1) + '" y1="' + s.y.toFixed(1) + '" x2="' + t.x.toFixed(1) + '" y2="' + t.y.toFixed(1) + '" stroke="var(--c-border)" stroke-width="1.4" marker-end="url(#dm-arrow)" />');
+        });
+        // 노드
+        nodes.forEach(function (n) {
+            var r = Math.min(26, 7 + 2.4 * Math.sqrt(n.deg));
+            var col = _dmColor(n.deg);
+            parts.push('<g class="dm-gnode" data-id="' + n.id + '" transform="translate(' + n.x.toFixed(1) + ',' + n.y.toFixed(1) + ')" style="cursor:pointer;">'
+                + '<circle r="' + r.toFixed(1) + '" fill="' + col + '" fill-opacity="0.9" stroke="#fff" stroke-width="1.5"></circle>'
+                + (showLabels ? '<text x="0" y="' + (r + 12).toFixed(1) + '" text-anchor="middle" font-size="11" fill="var(--c-text)" style="pointer-events:none;font-family:inherit;">' + _annEsc((n.title || '').slice(0, 18)) + '</text>' : '')
+                + '</g>');
+        });
+        parts.push('</g>');
+        svg.innerHTML = '<defs><marker id="dm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--c-line2,#c2c9d3)"></path></marker></defs>' + parts.join('');
+        dmGraphApplyTransform();
+        dmGraphBindEvents();
+    }
+    function dmGraphBindEvents() {
+        var svg = document.getElementById('dm-graph-svg'); if (!svg) return;
+        var gnodes = [].slice.call(svg.querySelectorAll('.dm-gnode'));
+        var glinks = [].slice.call(svg.querySelectorAll('.dm-glink'));
+        gnodes.forEach(function (g) {
+            var id = g.getAttribute('data-id');
+            g.addEventListener('mouseenter', function () {
+                var nb = {}; nb[id] = 1;
+                glinks.forEach(function (l) {
+                    var on = (l.dataset.s === id || l.dataset.t === id);
+                    l.setAttribute('stroke', on ? 'var(--c-accent)' : 'var(--c-border)');
+                    l.setAttribute('stroke-width', on ? '2.4' : '1.4');
+                    l.style.opacity = on ? '1' : '0.12';
+                    if (l.dataset.s === id) nb[l.dataset.t] = 1; if (l.dataset.t === id) nb[l.dataset.s] = 1;
+                });
+                gnodes.forEach(function (n) { n.style.opacity = nb[n.getAttribute('data-id')] ? '1' : '0.22'; });
+                dmShowGraphPreview(g, id);
+            });
+            g.addEventListener('mouseleave', function () {
+                glinks.forEach(function (l) { l.setAttribute('stroke', 'var(--c-border)'); l.setAttribute('stroke-width', '1.4'); l.style.opacity = '1'; });
+                gnodes.forEach(function (n) { n.style.opacity = '1'; });
+                dmHideGraphPreview();
+            });
+            g.addEventListener('click', function (e) { e.stopPropagation(); dmHideGraphPreview(); dmOpenDoc(id); });
+        });
+        // 팬/줌
+        if (!svg._dmPanBound) {
+            svg._dmPanBound = true;
+            var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+            svg.addEventListener('mousedown', function (e) {
+                if (e.target.closest('.dm-gnode')) return;
+                dragging = true; svg.style.cursor = 'grabbing'; sx = e.clientX; sy = e.clientY; ox = _dmState.tf.x; oy = _dmState.tf.y;
+            });
+            window.addEventListener('mousemove', function (e) {
+                if (!dragging) return;
+                _dmState.tf.x = ox + (e.clientX - sx); _dmState.tf.y = oy + (e.clientY - sy); dmGraphApplyTransform();
+            });
+            window.addEventListener('mouseup', function () { dragging = false; svg.style.cursor = 'grab'; });
+            svg.addEventListener('wheel', function (e) {
+                e.preventDefault();
+                var rect = svg.getBoundingClientRect();
+                var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                var t = _dmState.tf;
+                var factor = e.deltaY < 0 ? 1.12 : 0.89;
+                var nk = Math.max(0.2, Math.min(3, t.k * factor));
+                // 마우스 포인트 고정 줌
+                t.x = mx - (mx - t.x) * (nk / t.k);
+                t.y = my - (my - t.y) * (nk / t.k);
+                t.k = nk; dmGraphApplyTransform();
+            }, { passive: false });
+        }
+    }
+    function dmShowGraphPreview(gEl, id) {
+        var d = _dmById(id); if (!d) return;
+        dmHideGraphPreview();
+        var pv = document.createElement('div');
+        pv.id = 'dm-graph-pv';
+        pv.style.cssText = 'position:fixed;z-index:9600;max-width:320px;max-height:300px;overflow:auto;background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.22);padding:12px 14px;font-size:12px;';
+        var snippet = (d.content || '').replace(/<!--TDAHTML:[^>]*-->/g, '').slice(0, 400);
+        var rendered = '';
+        try { rendered = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(snippet), domPurifyConfig) : _annEsc(snippet); } catch (e) { rendered = _annEsc(snippet); }
+        pv.innerHTML = '<div style="font-weight:800;font-size:13px;margin-bottom:6px;border-bottom:1px solid var(--c-border);padding-bottom:5px;">' + (d.emoji || '📄') + ' ' + _annEsc(d.title || '') + '</div>'
+            + '<div class="markdown-body" style="font-size:11.5px;line-height:1.6;color:var(--c-text2);">' + (rendered || '<i>빈 문서</i>') + '</div>'
+            + '<div style="margin-top:8px;font-size:10.5px;color:var(--c-text3);">클릭하면 편집</div>';
+        document.body.appendChild(pv);
+        var r = gEl.getBoundingClientRect();
+        var px = r.right + 10, py = r.top;
+        if (px + 330 > window.innerWidth) px = r.left - 330;
+        if (py + 310 > window.innerHeight) py = window.innerHeight - 310;
+        pv.style.left = Math.max(8, px) + 'px'; pv.style.top = Math.max(8, py) + 'px';
+        _dmState._hoverPv = pv;
+    }
+    function dmHideGraphPreview() { var pv = document.getElementById('dm-graph-pv'); if (pv) pv.remove(); _dmState._hoverPv = null; }
 
     // ════════════════════════════════════════════════════════════
     // [r242] 회의록 자동작성 — Craig(Discord 음성) → STT → LLM 회의록
