@@ -5795,6 +5795,374 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             </div>
         </div>
 
+        <!-- [r317] 프로젝트 파이프라인 STEP 템플릿 — 새 문서 기본 양식(원본 마크다운, 미실행 스크립트로 보관) -->
+        <script type="text/template" class="dm-tpl" data-dm-step="1">
+---
+title: <대원칙 한 줄 요약>
+doc: CPR-0001
+owner: Director
+status: locked      # draft | active | locked
+version: 1
+---
+
+# CPR-0001 · 대원칙 — 게임의 헌법
+
+## Vision · VIS-1
+> <게임이 주려는 단 하나의 경험을 긍정형 한 문장으로>
+
+## Invariants (위반 금지)
+### INV-1 · <불변식 이름>
+- <절대 규칙 한 줄>
+- 적용 도메인 : <어디에만 적용되는지 — 반드시 한정한다 (예: "위협 정보만")>
+
+### INV-2 · <불변식 이름>
+- <절대 규칙 한 줄>
+
+## 이 문서를 가리키는 것들
+- 여기 나열하지 않는다 — 부모는 자식을 나열하지 않는다.
+- 하위가 `inherits: CPR-0001@1` 로 위를 향해 참조한다.
+
+## 변경 이력
+- @1 : 최초 확정
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="2">
+---
+title: 상황 MDA · <상황명>
+doc: MDA-0001
+inherits: CPR-0001@1
+owner: Director
+status: draft
+---
+
+# MDA-0001 · <상황명> (상황 MDA)
+
+## A · Aesthetics (목표 경험)
+- <이 상황이 주려는 감정/경험 — 무엇을 느끼게 할 것인가>
+
+## D · Dynamics (유도 행동)
+- <그 경험을 만들 플레이어 행동>
+
+## M · Mechanics (레버 — 수치는 GDR로)
+- <행동을 강제할 레버 '카테고리'만. 구체 수치(분/%/거리)는 적지 않는다>
+
+## 불변식 적합성
+- [[CPR-0001#INV-1]] : <이 상황이 INV-1을 어떻게 지키는가> ✓
+
+## 연결
+- 상속 [[CPR-0001#INV-1]]
+- 피처는 GDR이 `source: MDA-0001` 로 역참조 (여기서 GDR을 나열하지 않는다)
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="3">
+---
+title: 루프 MDA
+doc: LOOP-MDA-0001
+inherits: CPR-0001@1
+owner: Director
+status: draft
+---
+
+# LOOP-MDA-0001 · 루프 MDA (상황 엮기)
+
+## 루프 그 자체의 A/D/M
+- A : <루프가 주는 상위 리듬/성장감>
+- D : <상황 배치·우선순위 판단>
+- M : <전이 트리거 / 결과 이월 / 게이팅>
+
+## 루프 맵
+| 단계 | 산출 | 다음 |
+|---|---|---|
+| <상황> | <넘기는 것> | <다음 상황> |
+
+## 의존성 매트릭스 (DSM)
+| 준다 ＼ 받는다 | <A> | <B> | <C> |
+|---|---|---|---|
+| <A> | – | <자원> | · |
+
+## 전이 계약 (예)
+- <상황X> → <상황Y> : 트리거 <조건> / 이월 <데이터>([[CPR-0001#INV-1]])
+
+## 연결
+- 엮는 상황 [[MDA-0001]] (외 상황 MDA들)
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="4">
+---
+title: Pillar Guide · <기둥명>
+doc: PG-0001
+pillar: <기둥 슬러그>
+owner: Director
+source: CPR-0001@1
+status: draft
+---
+
+# PG-0001 · <기둥명> — Pillar Guide (설계 지침)
+
+## 유래 (비롯됨)
+- [[CPR-0001#INV-1]] 또는 [[MDA-0001]] — 어느 불변식/경험에서 왔는지
+- 적용 상황 : [[MDA-0001]]
+
+## 추상 → 구체 사다리
+1. [[CPR-0001#INV-1]] (추상) : <원칙>
+2. MDA·A : <경험>
+3. MDA·D : <행동>
+4. PG 원칙 : <설계 지침 한 줄>
+5. GDR 수치 (가장 구체) : <예시 수치>
+
+## DO / DON'T
+- DO : <지침을 살리는 구현>
+- DON'T : <지침을 깨는 구현>
+
+## 리트머스
+- "<이 기능을 켜면 ___ 하게 되는가?>" → Yes면 위반
+
+## North Star
+> <이 기둥이 가장 강하게 체감되는 한 장면을 글로 박제>
+
+## 검증 훅
+- GDR이 `pillars: [<슬러그>]` 로 역참조 → 적용 피처 자동 수집
+- 적용 범위 : <어떤 시스템/UI에 적용되는지>
+
+## 연결
+- 유래 [[CPR-0001#INV-1]] · 적용 상황 [[MDA-0001]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="5">
+---
+title: Feature Matrix
+doc: FM-0001
+owner: Designer
+source: MDA-0001@1
+status: active
+---
+
+# FM-0001 · Feature Matrix + 커버리지
+
+## MDA Feature Matrix
+| 피처 | 상황 | A | M(레버) | pillars |
+|---|---|---|---|---|
+| F-01 <피처> | [[MDA-0001]] | <경험> | <레버> | <슬러그들> |
+
+## Pillar × Feature 커버리지
+| feature ＼ pillar | <기둥1> | <기둥2> | <기둥3> |
+|---|---|---|---|
+| F-01 <피처> | ●● | △ | – |
+
+> 읽기 : <빈/위반(✗) 칸을 해석 — ✗는 cut 후보>
+> 표기 : ●●강함 · ●있음 · △약함 · –없음 · ✗위반
+
+## 연결
+- 출처 [[MDA-0001]] · pillar [[PG-0001]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="6">
+---
+title: <피처명>
+doc: GDR-0012
+source: MDA-0001@1
+pillars: [<기둥 슬러그>]
+owner: Designer
+status: draft       # draft | approved | cut
+---
+
+# GDR-0012 · <피처명>
+
+## 맥락
+<어느 상황/기둥을 구현하는가. [[MDA-0001]] · [[PG-0001]]>
+
+## 결정
+- <메카닉을 모호함 없이>
+
+## 데이터·튜닝 [의무]
+| 파라미터 | 값 | 근거 |
+|---|---|---|
+| <키> | <값> | <플레이테스트 근거> |
+
+## 검증 [의무]
+- 리트머스 [[PG-0001]] "<질문>" → No ✓
+- KPI : <측정 지표·목표치>
+- 커버리지 [[FM-0001]] : <기둥> ●●
+
+## 연결
+- 상위 [[MDA-0001]] · pillar [[PG-0001]] · 불변식 [[CPR-0001#INV-1]] · 매트릭스 [[FM-0001]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="7">
+---
+title: 범위 결정 (MoSCoW + cut)
+doc: SCOPE-0001
+owner: Producer
+status: active
+---
+
+# SCOPE-0001 · 범위 결정
+
+## 범위 규칙
+- cv-invariant([[CPR-0001#INV-1]]) 직결 피처는 항상 Must
+- 커버리지([[FM-0001]])에서 ✗ → cut 후보
+
+## MoSCoW
+| 등급 | 피처 | 근거 |
+|---|---|---|
+| Must | [[GDR-0012]] | <근거> |
+| Should | <피처> | <근거> |
+| Won't | <피처> | <차기로> |
+
+## Cut
+- <피처> — <이유> (커버리지 ✗ / 비용 초과)
+
+## 연결
+- 피처 출처 [[GDR-0012]] · 매트릭스 [[FM-0001]] · 불변식 [[CPR-0001#INV-1]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="8">
+---
+title: MVP 정의 (시스템 / 데모)
+doc: MVP-0001
+type: system-mvp     # system-mvp | demo-mvp
+owner: Producer
+status: active
+---
+
+# MVP-0001 · MVP 정의 (수직 단면)
+
+## 한 줄 정의
+> "<핵심 루프 1회전을 한 문장으로>" — 끝까지 작동하는가.
+
+## 시스템 MVP (G-system : 작동하는가)
+- 포함 : [[GDR-0012]] 외 — 의존 그래프가 닫히는 최소 셋
+
+## 데모 MVP (G-demo : 체감되는가) ⊂ 시스템 MVP
+- [[PG-0001]] North Star 장면을 실제로 재현
+
+## 수용 테스트
+| # | 시나리오 | 통과 조건 |
+|---|---|---|
+| A1 | <시나리오> | <통과 조건> |
+| A2 | 불변식 | <INV 위반 0건> ([[CPR-0001#INV-1]]) |
+
+## 연결
+- 피처 [[GDR-0012]] · 범위 [[SCOPE-0001]] · pillar [[PG-0001]] · 불변식 [[CPR-0001#INV-1]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="9">
+---
+title: <기술 결정명>
+doc: ADR-0042
+owner: Engineer
+status: proposed     # proposed | accepted | superseded
+source: [GDR-0012@1]
+date: <YYYY-MM-DD>
+deciders: [Tech Lead]
+---
+
+# ADR-0042 · <기술 결정명>
+
+## 맥락
+<무엇을 결정해야 하는가. 어떤 상위 의도([[GDR-0012]])를 구현하나>
+
+## 결정 동인
+- <일관성/치팅/성능 등>
+- [[CPR-0001#INV-1]] : <불변식이 기술에서 깨지지 않게>
+
+## 검토한 옵션
+| 옵션 | 장점 | 단점 |
+|---|---|---|
+| <A> | <장점> | <단점> |
+
+## 결정
+- <채택안과 핵심 파라미터>
+
+## 네트워크·권위 (Tech Lead)
+- <무엇을 서버가 정하고 무엇을 동기화하나>
+
+## 결과 / 존속성 (그레고리)
+- (+) <장점>  (−) <비용>
+- 분류 : <G-system / L-system> · 의존 <병목 여부>
+
+## 연결
+- 상위 의도 [[GDR-0012]] · 불변식 [[CPR-0001#INV-1]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="10">
+---
+title: 의존성·존속성 점검
+doc: ARCH-CHECK-0001
+owner: Engineer
+status: active
+source: [ADR-0042@1]
+---
+
+# ARCH-CHECK-0001 · 의존성·존속성 점검
+
+## 단방향 규칙
+- 허용 : 상위 → 하위 (GS → GF → CORE)
+- 금지 : 하위 → 상위 → 빌드 실패
+
+## 그레고리 분류
+| 시스템 | 분류 | 존속 |
+|---|---|---|
+| <시스템>([[ADR-0042]]) | <G/L-system> | <존속 범위> |
+
+## 병목 / 순환
+- <최대 의존 노드 → 인터페이스 동결 우선>
+- 코드 순환 : <있음/없음>
+
+## 액션 아이템
+- <할 일>
+
+## 연결
+- 점검 대상 [[ADR-0042]] · 의존 피처 [[GDR-0012]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="11">
+---
+title: 개발 우선순위
+doc: PRIO-0001
+owner: Producer
+status: active
+---
+
+# PRIO-0001 · 개발 우선순위
+
+## 스코어링 (가중)
+| 기준 | 가중 |
+|---|---|
+| pillar 직결([[FM-0001]]) | x3 |
+| MVP 포함([[MVP-0001]]) | x2 |
+| 의존 병목 | x2 |
+
+## 순서 (스코어 · 위상정렬)
+1. [[GDR-0012]] <사유>
+2. [[ADR-0042]] <의존 병목 선행>
+
+## 자원 게이트 (DSDM)
+- Must ≤ 가용 50% · buffer 20%
+
+## 연결
+- 항목 [[GDR-0012]] [[ADR-0042]] · 매트릭스 [[FM-0001]] · 범위 [[SCOPE-0001]] · MVP [[MVP-0001]]
+        </script>
+        <script type="text/template" class="dm-tpl" data-dm-step="12">
+---
+title: 기술 구조 승인 (게이트)
+doc: GATE-0001
+owner: Tech Lead
+status: pending
+gate: true
+---
+
+# GATE-0001 · 기술 구조 승인 → MVP 빌드
+
+## 승인 대상
+- [[ARCH-CHECK-0001]] 통과 · [[ADR-0042]] 확정
+
+## 체크리스트
+| 항목 | 상태 |
+|---|---|
+| 순환 의존 없음 | ✓ / ✗ |
+| G-system 병목 동결 | ✓ / ✗ |
+| 불변식([[CPR-0001#INV-1]]) 네트워크 보존 | ✓ / ✗ |
+| 데모 슬라이스([[MVP-0001]]) 리스크 식별 | ✓ / △ |
+
+## 판정
+- 통과 → [[PRIO-0001]] 순서로 구현 착수
+- 위반 → 반려·재설계
+
+## 연결
+- 점검 [[ARCH-CHECK-0001]] · 결정 [[ADR-0042]] · 불변식 [[CPR-0001#INV-1]] · 후속 [[PRIO-0001]]
+        </script>
+
         <div id="aihub-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:auto;padding:18px 22px;background:var(--c-paper);">
             <div style="max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
                 <header style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -11518,7 +11886,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r316';
+        var _AHUB_FRONT_REV = 'r317';
 
 
         var _ahubRevWarned = false;
@@ -33158,7 +33526,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r316';
+    var _RFS_FRONT_REV = 'r317';
 
 
     async function rfsHealthCheck() {
@@ -33235,6 +33603,23 @@ ${intrLog}
     function _dmStepInfo(no) { var all = _dmSteps(); for (var i = 0; i < all.length; i++) if (all[i].no === no) return all[i]; return null; }
     function _dmStepColor(no) { var s = _dmStepInfo(no); return s ? s.color : '#8a8378'; }
     function _dmDocStep(d) { var n = d && d.meta && d.meta.stepNo; n = parseInt(n, 10); return (n >= 1 && n <= 12) ? n : 0; }
+    // [r317] STEP 템플릿(기본 양식) — 숨김 <script> 요소에서 원본 마크다운 읽기
+    function _dmTemplate(stepNo) {
+        var el = document.querySelector('.dm-tpl[data-dm-step="' + stepNo + '"]');
+        if (!el) return '';
+        return (el.textContent || '').replace(/^\n+/, '').replace(/\s+$/, '');
+    }
+    // [r317] 본문 프론트매터에서 title 추출 (---\n...title: X...\n---)
+    function _dmFrontTitle(d) {
+        var c = (d && d.content) || '';
+        var m = c.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
+        if (!m) return '';
+        var tm = m[1].match(/^[ \t]*title[ \t]*:[ \t]*(.+?)[ \t]*$/m);
+        if (!tm) return '';
+        var t = tm[1].trim().replace(/^["']|["']$/g, '');
+        if (/^<.*>$/.test(t)) return '';   // 플레이스홀더(<...>)면 표시 안 함
+        return t;
+    }
 
     function _dmDocs() {
         // 이 페이지 전용 컬렉션(kind 'pipeline'). '문서' 탭(kind 'wiki')과 분리.
@@ -33297,11 +33682,13 @@ ${intrLog}
                 if (_dmState._collapsed[s.no]) return;
                 items.forEach(function (d) {
                     var active = (d.id === _dmState.activeId);
+                    var ft = _dmFrontTitle(d);   // [r317] 프론트매터 title
                     html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="dmOpenDoc(\'' + d.id + '\')" '
                         + 'style="display:flex;align-items:center;gap:6px;padding:4px 8px;padding-left:24px;border-radius:6px;cursor:pointer;font-size:12.5px;margin:1px 0;user-select:none;'
                         + (active ? 'background:' + col + '22;color:' + col + ';font-weight:700;box-shadow:inset 2px 0 0 ' + col + ';' : 'color:var(--c-text);') + '">'
                         + '<span style="flex:none;">' + (d.emoji || '📄') + '</span>'
-                        + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+                        + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+                        + (ft ? '<span title="' + _annEsc(ft) + '" style="margin-left:auto;flex:none;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--c-text3);font-weight:300;font-size:11px;">' + _annEsc(ft) + '</span>' : '')
                         + '</div>';
                 });
             });
@@ -33312,8 +33699,10 @@ ${intrLog}
             html += '<div style="margin:14px 4px 3px;padding-bottom:4px;border-bottom:2px solid var(--c-border);font-weight:800;font-size:12px;color:var(--c-text3);">기타 · 미분류</div>';
             un.forEach(function (d) {
                 var active = (d.id === _dmState.activeId);
+                var ft = _dmFrontTitle(d);   // [r317] 프론트매터 title
                 html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="dmOpenDoc(\'' + d.id + '\')" style="display:flex;align-items:center;gap:6px;padding:4px 8px;padding-left:16px;border-radius:6px;cursor:pointer;font-size:12.5px;margin:1px 0;' + (active ? 'background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);font-weight:700;' : 'color:var(--c-text);') + '">'
-                    + '<span style="flex:none;">' + (d.emoji || '📄') + '</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span></div>';
+                    + '<span style="flex:none;">' + (d.emoji || '📄') + '</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+                    + (ft ? '<span title="' + _annEsc(ft) + '" style="margin-left:auto;flex:none;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--c-text3);font-weight:300;font-size:11px;">' + _annEsc(ft) + '</span>' : '') + '</div>';
             });
         }
         host.innerHTML = html;
@@ -33394,6 +33783,7 @@ ${intrLog}
             try { if (typeof _buildHtmlEmbeds === 'function') _buildHtmlEmbeds(body, (d.meta && d.meta.htmlEmbeds) || {}); } catch (e) {}
             try { if (typeof renderMermaidIn === 'function') renderMermaidIn(body); } catch (e) {}
             try { if (typeof enhanceMediaLinks === 'function') enhanceMediaLinks(body); } catch (e) {}
+            try { dmBindWlPreview(body); } catch (e) {}   // [r317] 위키링크 호버 팝업
         }
     }
     function dmSetMode(m) {
@@ -33418,16 +33808,96 @@ ${intrLog}
             } catch (e) {}
         }
     }
+    // ── [r317] 위키링크 호버 팝업(문서 미리보기) ── 예시 HTML의 링크→팝업/드래그 리사이즈 이식
+    function dmBindWlPreview(container) {
+        if (!container) return;
+        var links = container.querySelectorAll('a.wikilink[data-wl-type="doc"][data-wl-id]');
+        Array.prototype.forEach.call(links, function (a) {
+            if (a._dmWlBound) return; a._dmWlBound = true;
+            var hoverT = null;
+            a.addEventListener('mouseenter', function () {
+                clearTimeout(hoverT);
+                hoverT = setTimeout(function () { dmShowWlPopup(a.getAttribute('data-wl-id'), a); }, 240);
+            });
+            a.addEventListener('mouseleave', function () { clearTimeout(hoverT); dmScheduleHideWlPopup(); });
+        });
+    }
+    function dmScheduleHideWlPopup() {
+        var pop = document.getElementById('dm-wl-popup');
+        if (!pop || pop._pinned) return;
+        clearTimeout(pop._hideT);
+        pop._hideT = setTimeout(function () { if (!pop._hover && !pop._pinned) dmHideWlPopup(); }, 260);
+    }
+    function dmHideWlPopup() { var pop = document.getElementById('dm-wl-popup'); if (pop) pop.remove(); }
+    function dmShowWlPopup(id, anchor) {
+        if (!id || !anchor) return;
+        var d = _dmById(id);
+        var pop = document.getElementById('dm-wl-popup');
+        if (pop && pop._docId === id) { clearTimeout(pop._hideT); return; }
+        if (pop && pop._pinned) return;   // 고정된 팝업이 있으면 새로 안 띄움
+        dmHideWlPopup();
+        pop = document.createElement('div');
+        pop.id = 'dm-wl-popup'; pop._docId = id;
+        pop.style.cssText = 'position:fixed;z-index:9000;width:380px;height:300px;min-width:240px;min-height:150px;max-width:680px;max-height:80vh;'
+            + 'background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.28);'
+            + 'display:flex;flex-direction:column;overflow:hidden;resize:both;font-size:12.5px;';
+        var title = d ? (d.title || '(제목 없음)') : '(없는 문서)';
+        var emoji = (d && d.emoji) || '📄';
+        pop.innerHTML = '<div id="dm-wl-head" style="flex:none;display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--c-border);background:var(--c-paper);cursor:move;user-select:none;">'
+            + '<span style="flex:none;">' + emoji + '</span>'
+            + '<span style="font-weight:800;font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(title) + '</span>'
+            + (d ? '<button onclick="dmHideWlPopup();dmOpenDoc(\'' + id + '\')" title="문서 열기" style="border:1px solid var(--c-border);background:var(--c-card);border-radius:5px;cursor:pointer;font-size:11px;padding:2px 7px;">↦ 열기</button>' : '')
+            + '<button onclick="dmHideWlPopup()" title="닫기" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;color:var(--c-text3);">✕</button></div>'
+            + '<div id="dm-wl-body" class="markdown-body" style="flex:1;overflow-y:auto;padding:12px 16px;line-height:1.7;"><span style="color:var(--c-text3);">불러오는 중…</span></div>';
+        document.body.appendChild(pop);
+        // 위치 — 앵커 근처(화면 밖 방지)
+        var r = anchor.getBoundingClientRect();
+        var px = Math.max(8, Math.min(r.left, window.innerWidth - 400));
+        var py = r.bottom + 8; if (py + 300 > window.innerHeight) py = Math.max(8, r.top - 308);
+        pop.style.left = px + 'px'; pop.style.top = py + 'px';
+        pop.addEventListener('mouseenter', function () { pop._hover = true; clearTimeout(pop._hideT); });
+        pop.addEventListener('mouseleave', function () { pop._hover = false; dmScheduleHideWlPopup(); });
+        // 헤더 드래그(이동) — 잡으면 고정
+        var hd = pop.querySelector('#dm-wl-head');
+        if (hd) hd.addEventListener('mousedown', function (e) {
+            if (e.target.tagName === 'BUTTON') return;
+            e.preventDefault(); pop._pinned = true;
+            var sx = e.clientX, sy = e.clientY, bx = pop.offsetLeft, by = pop.offsetTop;
+            function mv(ev) { pop.style.left = (bx + ev.clientX - sx) + 'px'; pop.style.top = (by + ev.clientY - sy) + 'px'; }
+            function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+            document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+        });
+        function fill(doc) {
+            var bd = pop.querySelector('#dm-wl-body'); if (!bd) return;
+            if (!doc) { bd.innerHTML = '<span style="color:var(--c-text3);">문서를 찾을 수 없습니다.</span>'; return; }
+            var rr;
+            try {
+                var cfg = (typeof domPurifyConfig !== 'undefined') ? Object.assign({}, domPurifyConfig) : undefined;
+                if (cfg) cfg.ADD_ATTR = (cfg.ADD_ATTR || []).concat(['data-wl-type', 'data-wl-id', 'data-wl-title', 'data-wl-hash']);
+                rr = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(doc.content || ''), cfg) : parseMarkdownWithTables(doc.content || '');
+            } catch (e) { rr = _annEsc(doc.content || ''); }
+            bd.innerHTML = rr || '<span style="color:var(--c-text3);">빈 문서</span>';
+            try { dmBindWlPreview(bd); } catch (e) {}
+        }
+        if (d && d._contentLoaded === false && typeof _fetchDocContent === 'function') {
+            _fetchDocContent(id).then(function (c) { d.content = c || ''; d._contentLoaded = true; if (document.getElementById('dm-wl-popup') === pop) fill(d); });
+        } else { fill(d); }
+    }
     async function dmNewDoc(stepNo) {
         stepNo = parseInt(stepNo, 10) || 0;
         var si = stepNo ? _dmStepInfo(stepNo) : null;
         var title = await uiPrompt({ title: '새 문서' + (si ? (' · S' + (stepNo < 10 ? '0' + stepNo : stepNo) + ' ' + si.title) : ''), label: '문서 제목', placeholder: '예: 야간생존 상황 MDA' });
         if (title == null) return; title = String(title).trim(); if (!title) return;
+        // [r317] 기본 양식 = 해당 STEP 템플릿(zip kit). 없으면 안내 문구로 폴백.
+        var tpl = stepNo ? _dmTemplate(stepNo) : '';
+        var body = tpl
+            ? ('# ' + title + '\n\n' + tpl)
+            : ('# ' + title + '\n\n여기에 내용을 작성하세요...\n\n다른 단계 문서를 참조하려면 [[문서 제목]] 처럼 입력하면 연결 보기(Alluvial)에 띠로 나타납니다.');
         // 전용 컬렉션(kind 'pipeline') + meta.stepNo. '문서' 탭과 분리.
         var nd = {
             id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: null,
             title: title, emoji: '📄', isCollapsed: false,
-            content: '# ' + title + '\n\n여기에 내용을 작성하세요...\n\n다른 단계 문서를 참조하려면 [[문서 제목]] 처럼 입력하면 연결 보기(Alluvial)에 띠로 나타납니다.',
+            content: body,
             _contentLoaded: true, createdAt: Date.now(), updatedAt: Date.now(), kind: 'pipeline',
             meta: { stepNo: stepNo || 0 },
             sortOrder: Date.now(), linkedDocIds: [], linkedTaskIds: [],
