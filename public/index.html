@@ -4226,8 +4226,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                     <button class="cs-nav" data-nav="timeline" id="cs-nav-timeline" onclick="switchView('timeline')" title="타임라인 (WBS 노드 간트)"><span class="cs-ico">📊</span><span class="cs-label">타임라인</span></button>
                     <button class="cs-nav" data-nav="sprint" id="cs-nav-sprint" onclick="switchView('sprint')" title="스프린트"><span class="cs-ico">🏃</span><span class="cs-label">스프린트</span></button>
                     <button class="cs-nav" data-nav="kanban" id="cs-nav-kanban" onclick="switchView('kanban')" title="칸반 보드"><span class="cs-ico">📋</span><span class="cs-label">칸반 보드</span></button>
-                    <!-- [r315] 문서 맵 — 문서 탐색 + 위키링크 연결 그래프 -->
-                    <button class="cs-nav" data-nav="docmap" id="cs-nav-docmap" onclick="switchView('docmap')" title="문서 맵 — 문서 탐색 + 위키링크 연결 그래프"><span class="cs-ico">🕸</span><span class="cs-label">문서 맵</span></button>
+                    <!-- [r315/r316] 프로젝트 파이프라인 — 12단계 문서 탐색 + Alluvial 연결 그래프 -->
+                    <button class="cs-nav" data-nav="docmap" id="cs-nav-docmap" onclick="switchView('docmap')" title="프로젝트 파이프라인 — PHASE 1~5 / STEP 1~12 문서 + 위키링크 Alluvial 연결"><span class="cs-ico">🧭</span><span class="cs-label">프로젝트 파이프라인</span></button>
                     <button class="cs-nav" data-nav="canon" id="cs-nav-canon" onclick="switchView('canon')" title="프로젝트 위키 (Official)"><span class="cs-ico">📘</span><span class="cs-label">프로젝트 위키</span><span class="cs-official">Official</span></button>
                     <!-- [r81 #2] 이슈 트래커 -->
                     <button class="cs-nav" data-nav="issues" id="cs-nav-issues" onclick="switchView('issues')" title="이슈 트래커 (등록·담당자·우선순위·납기·상태)"><span class="cs-ico">🐛</span><span class="cs-label">이슈 트래커</span></button>
@@ -5759,13 +5759,13 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div id="pm-main" style="flex:1;overflow:auto;padding:18px 22px;"></div>
         </div>
 
-        <!-- [r315] 문서 맵 — 문서 탐색 + 위키링크 연결 그래프 -->
+        <!-- [r315/r316] 프로젝트 파이프라인 — 12단계 문서 탐색 + Alluvial 연결 그래프 -->
         <div id="docmap-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:hidden;background:var(--c-paper);display:flex;flex-direction:column;">
             <div style="padding:12px 20px;border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:12px;background:var(--c-card);flex:none;">
-                <div style="font-size:19px;">🕸</div>
+                <div style="font-size:19px;">🧭</div>
                 <div style="flex:1;min-width:0;">
-                    <div style="font-size:15px;font-weight:800;color:var(--c-text);">문서 맵</div>
-                    <div style="font-size:11px;color:var(--c-text3);margin-top:1px;">문서 탐색 + 위키링크 연결 그래프 — 문서 안 <code style="font-size:10.5px;">[[제목]]</code>/<code style="font-size:10.5px;">[[doc:id]]</code> 연결을 시각화</div>
+                    <div style="font-size:15px;font-weight:800;color:var(--c-text);">프로젝트 파이프라인</div>
+                    <div style="font-size:11px;color:var(--c-text3);margin-top:1px;">PHASE 1~5 · STEP 1~12 — 단방향 12단계 파이프라인. 연결 보기는 문서 안 <code style="font-size:10.5px;">[[제목]]</code>/<code style="font-size:10.5px;">[[doc:id]]</code> 참조를 Alluvial 로 시각화</div>
                 </div>
                 <div id="dm-tabs" style="display:inline-flex;gap:0;border:1px solid var(--c-border);border-radius:8px;overflow:hidden;flex:none;">
                     <button class="dm-tab" data-dmtab="explorer" onclick="dmSetTab('explorer')" style="font-size:12.5px;font-weight:700;padding:7px 14px;border:none;background:var(--c-accent);color:#fff;cursor:pointer;">📁 문서 탐색</button>
@@ -11518,7 +11518,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r315';
+        var _AHUB_FRONT_REV = 'r316';
 
 
         var _ahubRevWarned = false;
@@ -33158,7 +33158,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r315';
+    var _RFS_FRONT_REV = 'r316';
 
 
     async function rfsHealthCheck() {
@@ -33204,14 +33204,42 @@ ${intrLog}
     function rfsCurrentUserName() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || rfsCurrentUser() || ''; }
 
     // ════════════════════════════════════════════════════════════
-    // [r315] 문서 맵 — 문서 탐색 + 위키링크 연결 그래프 (기존 wiki 문서 재사용, 페이지 내 편집)
+    // [r315/r316] 프로젝트 파이프라인 — PHASE 1~5 / STEP 1~12 문서 탐색 + Alluvial 연결 그래프
+    //   · 별도 컬렉션(kind 'pipeline') — '문서' 탭과 분리. 여기서 만든 문서만 보임.
+    //   · 대분류=PHASE, 중분류=STEP 고정 분류 체계(첨부 HTML 기준).
+    //   · 연결 보기 = 12 STEP 을 좌→우 열로 둔 Alluvial(Sankey) — 위키링크가 띠(리본).
     // ════════════════════════════════════════════════════════════
-    var _dmState = { tab: 'explorer', activeId: null, mode: 'preview', nodes: [], links: [], tf: { x: 0, y: 0, k: 1 }, _saveTimer: null, _hoverPv: null };
+    var _dmState = { tab: 'explorer', activeId: null, mode: 'preview', nodes: [], links: [], tf: { x: 0, y: 0, k: 1 }, _saveTimer: null, _hoverPv: null, _collapsed: {} };
+
+    // 대분류(PHASE) → 중분류(STEP) 고정 분류 — 첨부 HTML 의 5 PHASE / 12 STEP.
+    var _dmPhases = [
+        { no: 1, name: '경험 정립', color: '#D98A3D', steps: [
+            { no: 1, title: '대원칙 (CPR)', owner: 'Director형 PD' },
+            { no: 2, title: '상황 MDA', owner: 'Director형 PD' },
+            { no: 3, title: '루프 MDA', owner: 'Director형 PD' } ] },
+        { no: 2, name: '기획 번역', color: '#3C8DA6', steps: [
+            { no: 4, title: 'Pillar Guide', owner: 'Director형 PD' },
+            { no: 5, title: 'Feature Matrix', owner: 'Designer' },
+            { no: 6, title: 'GDR 작성', owner: 'Designer' } ] },
+        { no: 3, name: '범위 결정', color: '#2E9E6B', steps: [
+            { no: 7, title: '범위·cut (SCOPE)', owner: 'Producer형 PD' },
+            { no: 8, title: 'MVP 정의', owner: 'Producer형 PD' } ] },
+        { no: 4, name: '아키텍처', color: '#3A6EA5', steps: [
+            { no: 9, title: 'ADR 작성', owner: 'Engineer' },
+            { no: 10, title: '의존성·존속성 점검', owner: 'Tech Lead' } ] },
+        { no: 5, name: '실행 정렬 & 승인', color: '#6E59C9', steps: [
+            { no: 11, title: '개발 우선순위', owner: 'Producer형 PD × Engineer' },
+            { no: 12, title: '기술 구조 승인', owner: 'Tech Lead Gate' } ] }
+    ];
+    function _dmSteps() { var a = []; _dmPhases.forEach(function (p) { p.steps.forEach(function (s) { a.push({ no: s.no, title: s.title, owner: s.owner, phaseNo: p.no, phaseName: p.name, color: p.color }); }); }); return a; }
+    function _dmStepInfo(no) { var all = _dmSteps(); for (var i = 0; i < all.length; i++) if (all[i].no === no) return all[i]; return null; }
+    function _dmStepColor(no) { var s = _dmStepInfo(no); return s ? s.color : '#8a8378'; }
+    function _dmDocStep(d) { var n = d && d.meta && d.meta.stepNo; n = parseInt(n, 10); return (n >= 1 && n <= 12) ? n : 0; }
 
     function _dmDocs() {
-        // 현재 프로젝트의 일반 문서(kind 'wiki'). 편집 대상.
+        // 이 페이지 전용 컬렉션(kind 'pipeline'). '문서' 탭(kind 'wiki')과 분리.
         return (currentData.docs || []).filter(function (d) {
-            return d.projectId === activeProjectId && (d.kind || 'wiki') === 'wiki';
+            return d.projectId === activeProjectId && (d.kind || 'wiki') === 'pipeline';
         });
     }
     function _dmById(id) { return (currentData.docs || []).find(function (d) { return d.id === id; }); }
@@ -33239,57 +33267,62 @@ ${intrLog}
         else dmRenderDoc();
     }
 
-    // ── 트리 ──
+    // ── 트리 (PHASE 대분류 → STEP 중분류 → 문서) ──
     function dmRenderTree() {
         var host = document.getElementById('dm-tree'); if (!host) return;
         var docs = _dmDocs();
-        if (!docs.length) {
-            host.innerHTML = '<div style="padding:18px 10px;color:var(--c-text3);font-size:12px;line-height:1.6;">문서가 없습니다.<br>아래 <b>+ 새 문서</b>로 만들거나<br>좌측 <b>문서</b> 메뉴에서 작성하세요.</div>'
-                + '<button class="aihub-gpu-btn primary" style="margin:8px;font-size:12px;" onclick="dmNewDoc()">+ 새 문서</button>';
-            return;
-        }
-        var childrenMap = {};
-        docs.forEach(function (d) {
-            var pid = (d.parentId && d.parentId.trim()) ? d.parentId.trim() : '__root__';
-            (childrenMap[pid] = childrenMap[pid] || []).push(d);
-        });
-        Object.keys(childrenMap).forEach(function (k) {
-            childrenMap[k].sort(function (a, b) { return ((a.sortOrder || 0) - (b.sortOrder || 0)) || ((a.createdAt || 0) - (b.createdAt || 0)); });
-        });
+        // step별 문서 모으기
+        var byStep = {};
+        docs.forEach(function (d) { var sn = _dmDocStep(d); (byStep[sn] = byStep[sn] || []).push(d); });
+        Object.keys(byStep).forEach(function (k) { byStep[k].sort(function (a, b) { return ((a.sortOrder || 0) - (b.sortOrder || 0)) || ((a.createdAt || 0) - (b.createdAt || 0)); }); });
+        var nDoc = docs.filter(function (d) { return _dmDocStep(d) > 0; }).length;
         var html = '<div style="display:flex;align-items:center;gap:6px;padding:2px 6px 8px;">'
-            + '<span style="font-size:11px;font-weight:800;color:var(--c-text3);flex:1;">문서 ' + docs.filter(function (d) { return !_dmIsFolder(d); }).length + '</span>'
-            + '<button class="aihub-gpu-btn" style="font-size:10.5px;padding:2px 7px;" onclick="dmNewDoc()" title="새 문서">+ 새 문서</button></div>';
-        function walk(pid, depth) {
-            var arr = childrenMap[pid] || [];
-            arr.forEach(function (d) {
-                var isF = _dmIsFolder(d);
-                var active = (d.id === _dmState.activeId);
-                var ind = depth * 12;
-                html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="' + (isF ? "dmToggleFolder('" + d.id + "')" : "dmOpenDoc('" + d.id + "')") + '" '
-                    + 'style="display:flex;align-items:center;gap:6px;padding:5px 8px;padding-left:' + (8 + ind) + 'px;border-radius:6px;cursor:pointer;font-size:12.5px;margin:1px 0;user-select:none;'
-                    + (active ? 'background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);font-weight:700;' : 'color:var(--c-text);') + '">'
-                    + '<span style="flex:none;">' + (isF ? (d.isCollapsed ? '▶' : '▼') : (d.emoji || '📄')) + '</span>'
-                    + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+            + '<span style="font-size:11px;font-weight:800;color:var(--c-text3);flex:1;">문서 ' + nDoc + ' · 12단계</span></div>';
+        _dmState._collapsed = _dmState._collapsed || {};
+        _dmPhases.forEach(function (p) {
+            // 대분류 헤더
+            html += '<div style="display:flex;align-items:center;gap:7px;margin:12px 4px 3px;padding-bottom:4px;border-bottom:2px solid ' + p.color + ';">'
+                + '<span style="width:9px;height:9px;border-radius:3px;background:' + p.color + ';flex:none;"></span>'
+                + '<span style="font-weight:800;font-size:12px;color:var(--c-text);">PHASE ' + p.no + ' · ' + _annEsc(p.name) + '</span></div>';
+            p.steps.forEach(function (s) {
+                var items = byStep[s.no] || [];
+                var col = p.color;
+                // 중분류 헤더 (STEP)
+                html += '<div class="dm-step-hd" onclick="dmToggleStep(' + s.no + ')" style="display:flex;align-items:center;gap:6px;margin:6px 4px 1px;cursor:pointer;user-select:none;">'
+                    + '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;background:' + col + '22;color:' + col + ';border-radius:4px;padding:1px 5px;flex:none;">S' + (s.no < 10 ? '0' + s.no : s.no) + '</span>'
+                    + '<span style="font-size:11.5px;font-weight:700;color:var(--c-text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(s.title) + '</span>'
+                    + (items.length ? '<span style="font-size:10px;color:var(--c-text3);">' + items.length + '</span>' : '')
+                    + '<button class="dm-step-add" onclick="event.stopPropagation();dmNewDoc(' + s.no + ')" title="이 단계에 새 문서" style="border:none;background:none;cursor:pointer;color:var(--c-accent);font-size:13px;line-height:1;padding:0 2px;">＋</button>'
                     + '</div>';
-                if (isF && !d.isCollapsed) walk(d.id, depth + 1);
+                if (_dmState._collapsed[s.no]) return;
+                items.forEach(function (d) {
+                    var active = (d.id === _dmState.activeId);
+                    html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="dmOpenDoc(\'' + d.id + '\')" '
+                        + 'style="display:flex;align-items:center;gap:6px;padding:4px 8px;padding-left:24px;border-radius:6px;cursor:pointer;font-size:12.5px;margin:1px 0;user-select:none;'
+                        + (active ? 'background:' + col + '22;color:' + col + ';font-weight:700;box-shadow:inset 2px 0 0 ' + col + ';' : 'color:var(--c-text);') + '">'
+                        + '<span style="flex:none;">' + (d.emoji || '📄') + '</span>'
+                        + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+                        + '</div>';
+                });
+            });
+        });
+        // 미분류
+        var un = byStep[0] || [];
+        if (un.length) {
+            html += '<div style="margin:14px 4px 3px;padding-bottom:4px;border-bottom:2px solid var(--c-border);font-weight:800;font-size:12px;color:var(--c-text3);">기타 · 미분류</div>';
+            un.forEach(function (d) {
+                var active = (d.id === _dmState.activeId);
+                html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="dmOpenDoc(\'' + d.id + '\')" style="display:flex;align-items:center;gap:6px;padding:4px 8px;padding-left:16px;border-radius:6px;cursor:pointer;font-size:12.5px;margin:1px 0;' + (active ? 'background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);font-weight:700;' : 'color:var(--c-text);') + '">'
+                    + '<span style="flex:none;">' + (d.emoji || '📄') + '</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span></div>';
             });
         }
-        var body = '';
-        var _tmp = html; html = '';
-        walk('__root__', 0);
-        host.innerHTML = _tmp + html;
+        host.innerHTML = html;
     }
-    function dmToggleFolder(id) {
-        var d = _dmById(id); if (!d) return;
-        d.isCollapsed = !d.isCollapsed;
-        if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} }
-        dmRenderTree();
-    }
+    function dmToggleStep(no) { _dmState._collapsed = _dmState._collapsed || {}; _dmState._collapsed[no] = !_dmState._collapsed[no]; dmRenderTree(); }
 
     // ── 문서 뷰어/에디터 (본문/소스 토글) ──
     function dmOpenDoc(id) {
         var d = _dmById(id); if (!d) { showToast('문서를 찾을 수 없습니다', 'alert'); return; }
-        if (_dmIsFolder(d)) { dmToggleFolder(id); return; }
         _dmState.activeId = id;
         _dmState.mode = 'preview';
         if (_dmState.tab !== 'explorer') dmSetTab('explorer');
@@ -33314,14 +33347,22 @@ ${intrLog}
         }
         var locked = d.isLocked || (d.meta && d.meta.vault);
         var mode = _dmState.mode || 'preview';
+        var sn = _dmDocStep(d); var si = sn ? _dmStepInfo(sn) : null;
+        var stepChip = si
+            ? '<span title="' + _annEsc(si.owner) + '" style="font-family:ui-monospace,monospace;font-size:10.5px;font-weight:700;background:' + si.color + '22;color:' + si.color + ';border-radius:5px;padding:2px 8px;flex:none;">S' + (sn < 10 ? '0' + sn : sn) + ' · ' + _annEsc(si.title) + '</span>'
+            : '<span style="font-size:10.5px;color:var(--c-text3);">미분류</span>';
         var bar = '<div style="flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--c-border);background:var(--c-card);">'
             + '<span style="font-size:15px;">' + (d.emoji || '📄') + '</span>'
-            + '<span style="font-weight:800;font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+            + '<span style="font-weight:800;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38%;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
+            + stepChip
+            + '<span style="flex:1;"></span>'
             + '<span style="display:inline-flex;border:1px solid var(--c-border);border-radius:6px;overflow:hidden;">'
             + '<button class="aihub-gpu-btn" style="font-size:11px;border:none;border-radius:0;' + (mode === 'preview' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="dmSetMode(\'preview\')">📖 본문</button>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;border:none;border-radius:0;' + (mode === 'source' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="dmSetMode(\'source\')"' + (locked ? ' disabled title="잠긴 문서"' : '') + '>📝 소스</button>'
             + '</span>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmMoveStep(\'' + d.id + '\')" title="단계(STEP) 이동">⇄ 단계</button>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmRenameDoc(\'' + d.id + '\')" title="제목 변경">✏️</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;color:#9a1c20;" onclick="dmDeleteDoc(\'' + d.id + '\')" title="삭제">🗑</button>'
             + '</div>';
         if (loading) {
             host.innerHTML = bar + '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
@@ -33377,15 +33418,18 @@ ${intrLog}
             } catch (e) {}
         }
     }
-    async function dmNewDoc(parentId) {
-        var title = await uiPrompt({ title: '새 문서', label: '문서 제목', placeholder: '예: 환경 시스템 정의' });
+    async function dmNewDoc(stepNo) {
+        stepNo = parseInt(stepNo, 10) || 0;
+        var si = stepNo ? _dmStepInfo(stepNo) : null;
+        var title = await uiPrompt({ title: '새 문서' + (si ? (' · S' + (stepNo < 10 ? '0' + stepNo : stepNo) + ' ' + si.title) : ''), label: '문서 제목', placeholder: '예: 야간생존 상황 MDA' });
         if (title == null) return; title = String(title).trim(); if (!title) return;
-        // 직접 생성 — kind 'wiki' 로 고정, docmap 안에 머무름(openDoc 미사용)
+        // 전용 컬렉션(kind 'pipeline') + meta.stepNo. '문서' 탭과 분리.
         var nd = {
-            id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: parentId || null,
+            id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: null,
             title: title, emoji: '📄', isCollapsed: false,
-            content: '# ' + title + '\n\n여기에 내용을 작성하세요...\n\n다른 문서를 연결하려면 [[문서 제목]] 처럼 입력하세요.',
-            _contentLoaded: true, createdAt: Date.now(), updatedAt: Date.now(), kind: 'wiki', meta: {},
+            content: '# ' + title + '\n\n여기에 내용을 작성하세요...\n\n다른 단계 문서를 참조하려면 [[문서 제목]] 처럼 입력하면 연결 보기(Alluvial)에 띠로 나타납니다.',
+            _contentLoaded: true, createdAt: Date.now(), updatedAt: Date.now(), kind: 'pipeline',
+            meta: { stepNo: stepNo || 0 },
             sortOrder: Date.now(), linkedDocIds: [], linkedTaskIds: [],
             createdBy: (currentUser && currentUser.id) || null, updatedBy: (currentUser && currentUser.id) || null
         };
@@ -33393,8 +33437,9 @@ ${intrLog}
         if (typeof saveData === 'function') saveData();
         if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(nd); } catch (e) {} }
         _dmState.activeId = nd.id; _dmState.mode = 'source';
+        if (_dmState.tab !== 'explorer') dmSetTab('explorer');
         dmRenderTree(); dmRenderDoc();
-        showToast('📄 "' + title + '" 생성됨', 'success');
+        showToast('📄 "' + title + '" 생성됨' + (si ? (' (' + si.title + ')') : ''), 'success');
     }
     async function dmRenameDoc(id) {
         var d = _dmById(id); if (!d) return;
@@ -33402,6 +33447,30 @@ ${intrLog}
         if (nt == null) return; nt = String(nt).trim(); if (!nt) return;
         d.title = nt; d.updatedAt = Date.now();
         dmSaveDoc(id); dmRenderTree(); dmRenderDoc();
+    }
+    async function dmDeleteDoc(id) {
+        var d = _dmById(id); if (!d) return;
+        var ok = await uiConfirm({ title: '문서 삭제', message: '"' + (d.title || '') + '" 문서를 삭제할까요?', confirmText: '삭제', danger: true });
+        if (!ok) return;
+        var i = currentData.docs.indexOf(d); if (i >= 0) currentData.docs.splice(i, 1);
+        if (typeof saveData === 'function') saveData();
+        if (typeof dbDeleteDoc === 'function') { try { dbDeleteDoc(id); } catch (e) {} }
+        else if (typeof supabaseClient !== 'undefined' && supabaseClient) { try { supabaseClient.from('wiki_docs').delete().eq('id', id); } catch (e) {} }
+        if (_dmState.activeId === id) { var f = _dmDocs()[0]; _dmState.activeId = f ? f.id : null; }
+        dmRenderTree(); dmRenderDoc();
+        showToast('🗑 삭제됨', 'success');
+    }
+    // 문서를 다른 단계(STEP)로 이동
+    async function dmMoveStep(id) {
+        var d = _dmById(id); if (!d) return;
+        var opts = _dmSteps().map(function (s) { return 'S' + (s.no < 10 ? '0' + s.no : s.no) + ' ' + s.title; });
+        var cur = _dmDocStep(d);
+        var pick = await uiPrompt({ title: '단계 이동', message: '이동할 STEP 번호(1~12) 입력', value: String(cur || 1) });
+        if (pick == null) return;
+        var n = parseInt(pick, 10); if (!(n >= 1 && n <= 12)) { showToast('1~12 사이 번호', 'alert'); return; }
+        if (!d.meta) d.meta = {}; d.meta.stepNo = n; d.updatedAt = Date.now();
+        dmSaveDoc(id); dmRenderTree(); dmRenderDoc();
+        showToast('S' + (n < 10 ? '0' + n : n) + ' 로 이동', 'success');
     }
 
     // ── 위키링크 연결 그래프 ──
@@ -33419,10 +33488,13 @@ ${intrLog}
         }
         return Object.keys(out);
     }
+    // ── Alluvial(Sankey) — 12 STEP 을 좌→우 열로, 위키링크가 띠(리본) ──
+    var _DM_COLW = 14, _DM_PITCH = 150, _DM_LEFT = 90, _DM_TOP = 84, _DM_T = 10, _DM_NODEGAP = 16, _DM_COLH = 560;
     async function dmGraphBuildAndRender() {
-        var docs = _dmDocs().filter(function (d) { return !_dmIsFolder(d); });
+        var allPipe = _dmDocs();
+        var docs = allPipe.filter(function (d) { return _dmDocStep(d) > 0; });
         // 본문 미로드 문서 로드(병렬)
-        var unloaded = docs.filter(function (d) { return d._contentLoaded === false; });
+        var unloaded = allPipe.filter(function (d) { return d._contentLoaded === false; });
         if (unloaded.length && typeof _fetchDocContent === 'function') {
             try {
                 await Promise.all(unloaded.slice(0, 200).map(function (d) {
@@ -33431,18 +33503,18 @@ ${intrLog}
             } catch (e) {}
         }
         var titleMap = {};
-        docs.forEach(function (d) { var t = (d.title || '').trim().toLowerCase(); if (t) titleMap[t] = d.id; });
+        allPipe.forEach(function (d) { var t = (d.title || '').trim().toLowerCase(); if (t) titleMap[t] = d.id; });
         var nodeById = {};
-        var nodes = docs.map(function (d, i) {
-            var n = { id: d.id, title: d.title || '(제목 없음)', emoji: d.emoji || '📄', deg: 0, x: 0, y: 0, vx: 0, vy: 0 };
+        var nodes = docs.map(function (d) {
+            var sn = _dmDocStep(d);
+            var n = { id: d.id, title: d.title || '(제목 없음)', step: sn, color: _dmStepColor(sn), deg: 0, w: _DM_COLW, x: 0, y: 0, h: 0, _out: 0, _in: 0 };
             nodeById[d.id] = n; return n;
         });
-        var links = [];
-        var seen = {};
+        var links = [], seen = {};
         docs.forEach(function (d) {
             var targets = _dmParseLinks(d.content || '', titleMap);
             targets.forEach(function (tid) {
-                if (tid === d.id || !nodeById[tid]) return;
+                if (tid === d.id || !nodeById[tid]) return;   // 대상이 step 없는 문서면 제외
                 var key = d.id + '>' + tid; if (seen[key]) return; seen[key] = 1;
                 links.push({ s: d.id, t: tid });
                 nodeById[d.id].deg++; nodeById[tid].deg++;
@@ -33452,99 +33524,91 @@ ${intrLog}
         var nE = document.getElementById('dm-g-nodes'); if (nE) nE.textContent = nodes.length;
         var lE = document.getElementById('dm-g-links'); if (lE) lE.textContent = links.length;
         var emptyEl = document.getElementById('dm-graph-empty');
-        if (!links.length) {
-            if (emptyEl) emptyEl.style.display = 'flex';
-        } else {
-            if (emptyEl) emptyEl.style.display = 'none';
-        }
+        if (emptyEl) emptyEl.style.display = (nodes.length && links.length) ? 'none' : 'flex';
         dmGraphLayout();
-        dmGraphFit();
         dmGraphRender();
+        dmGraphFit();
     }
     function dmGraphLayout() {
-        var nodes = _dmState.nodes, links = _dmState.links;
-        if (!nodes.length) return;
-        // 초기 배치 — 황금각 나선
-        var GA = Math.PI * (3 - Math.sqrt(5));
-        nodes.forEach(function (n, i) { var r = 26 * Math.sqrt(i + 1); n.x = 600 + r * Math.cos(i * GA); n.y = 380 + r * Math.sin(i * GA); n.vx = 0; n.vy = 0; });
-        var idx = {}; nodes.forEach(function (n, i) { idx[n.id] = i; });
-        // 간단 force 시뮬 (고정 반복)
-        var ITER = 280;
-        for (var it = 0; it < ITER; it++) {
-            var alpha = 1 - it / ITER;
-            // 반발
-            for (var a = 0; a < nodes.length; a++) {
-                for (var b = a + 1; b < nodes.length; b++) {
-                    var na = nodes[a], nb = nodes[b];
-                    var dx = na.x - nb.x, dy = na.y - nb.y;
-                    var d2 = dx * dx + dy * dy || 0.01;
-                    var f = 9000 / d2;
-                    var dd = Math.sqrt(d2);
-                    var fx = (dx / dd) * f, fy = (dy / dd) * f;
-                    na.vx += fx; na.vy += fy; nb.vx -= fx; nb.vy -= fy;
-                }
-            }
-            // 스프링
-            links.forEach(function (l) {
-                var s = nodes[idx[l.s]], t = nodes[idx[l.t]]; if (!s || !t) return;
-                var dx = t.x - s.x, dy = t.y - s.y; var dd = Math.sqrt(dx * dx + dy * dy) || 0.01;
-                var f = (dd - 120) * 0.04;
-                var fx = (dx / dd) * f, fy = (dy / dd) * f;
-                s.vx += fx; s.vy += fy; t.vx -= fx; t.vy -= fy;
-            });
-            // 중심 인력 + 적용
-            nodes.forEach(function (n) {
-                n.vx += (600 - n.x) * 0.002; n.vy += (380 - n.y) * 0.002;
-                n.x += n.vx * alpha * 0.5; n.y += n.vy * alpha * 0.5;
-                n.vx *= 0.82; n.vy *= 0.82;
-            });
-        }
+        var nodes = _dmState.nodes; if (!nodes.length) return;
+        // step(열)별로 모아 세로 스택. 노드 높이 ∝ 연결 차수.
+        var cols = {};
+        nodes.forEach(function (n) { (cols[n.step] = cols[n.step] || []).push(n); });
+        Object.keys(cols).forEach(function (sn) {
+            var arr = cols[sn];
+            arr.sort(function (a, b) { return b.deg - a.deg; });
+            var heights = arr.map(function (n) { return Math.max(20, Math.min(220, n.deg * _DM_T + 6)); });
+            var total = heights.reduce(function (a, b) { return a + b; }, 0) + Math.max(0, arr.length - 1) * _DM_NODEGAP;
+            // 상단 정렬(라벨 바로 아래) — 단, 전체 열들의 중앙선 기준으로 살짝 내려 균형.
+            var startY = _DM_TOP + 8;
+            var x = _DM_LEFT + (parseInt(sn, 10) - 1) * _DM_PITCH;
+            var cy = startY;
+            arr.forEach(function (n, i) { n.x = x; n.h = heights[i]; n.y = cy; n._out = 0; n._in = 0; cy += heights[i] + _DM_NODEGAP; });
+        });
+        // 바운드 저장(fit 용)
+        var maxX = -1e9, maxY = -1e9;
+        nodes.forEach(function (n) { maxX = Math.max(maxX, n.x + n.w + 70); maxY = Math.max(maxY, n.y + n.h); });
+        _dmState._bounds = { minX: _DM_LEFT - 40, minY: 0, maxX: maxX, maxY: Math.max(maxY + 24, _DM_TOP + 80) };
     }
-    function dmGraphRelayout() { dmGraphLayout(); dmGraphFit(); dmGraphRender(); }
-    function dmGraphFit() {
-        var nodes = _dmState.nodes; var svg = document.getElementById('dm-graph-svg'); if (!nodes.length || !svg) return;
-        var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-        nodes.forEach(function (n) { minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y); });
-        var pad = 80; var w = (maxX - minX) + pad * 2, h = (maxY - minY) + pad * 2;
-        var rect = svg.getBoundingClientRect();
-        var vw = rect.width || 900, vh = rect.height || 600;
-        var k = Math.min(vw / w, vh / h, 1.6); if (!isFinite(k) || k <= 0) k = 1;
-        _dmState.tf = { k: k, x: vw / 2 - ((minX + maxX) / 2) * k, y: vh / 2 - ((minY + maxY) / 2) * k };
-        dmGraphApplyTransform();
-    }
+    function dmGraphRelayout() { dmGraphLayout(); dmGraphRender(); dmGraphFit(); }
     function dmGraphApplyTransform() {
         var g = document.getElementById('dm-graph-g'); if (!g) return;
-        var t = _dmState.tf;
+        var t = _dmState.tf || { x: 0, y: 0, k: 1 };
         g.setAttribute('transform', 'translate(' + t.x + ',' + t.y + ') scale(' + t.k + ')');
     }
-    function _dmColor(deg) {
-        if (deg >= 6) return '#c96442';
-        if (deg >= 3) return '#b8852a';
-        if (deg >= 1) return '#2e9e5b';
-        return '#8a8378';
+    function dmGraphFit() {
+        var svg = document.getElementById('dm-graph-svg'); var b = _dmState._bounds; if (!svg || !b) return;
+        var pad = 40; var w = (b.maxX - b.minX) + pad * 2, h = (b.maxY - b.minY) + pad * 2;
+        var rect = svg.getBoundingClientRect(); var vw = rect.width || 1000, vh = rect.height || 600;
+        var k = Math.min(vw / w, vh / h, 1.4); if (!isFinite(k) || k <= 0) k = 1;
+        _dmState.tf = { k: k, x: vw / 2 - ((b.minX + b.maxX) / 2) * k, y: vh / 2 - ((b.minY + b.maxY) / 2) * k };
+        dmGraphApplyTransform();
+    }
+    function _dmRibbon(x0, y0a, y0b, x1, y1a, y1b) {
+        var cx = (x0 + x1) / 2;
+        return 'M ' + x0.toFixed(1) + ' ' + y0a.toFixed(1)
+            + ' C ' + cx.toFixed(1) + ' ' + y0a.toFixed(1) + ', ' + cx.toFixed(1) + ' ' + y1a.toFixed(1) + ', ' + x1.toFixed(1) + ' ' + y1a.toFixed(1)
+            + ' L ' + x1.toFixed(1) + ' ' + y1b.toFixed(1)
+            + ' C ' + cx.toFixed(1) + ' ' + y1b.toFixed(1) + ', ' + cx.toFixed(1) + ' ' + y0b.toFixed(1) + ', ' + x0.toFixed(1) + ' ' + y0b.toFixed(1)
+            + ' Z';
     }
     function dmGraphRender() {
         var svg = document.getElementById('dm-graph-svg'); if (!svg) return;
-        var nodes = _dmState.nodes, links = _dmState.links;
-        var idx = {}; nodes.forEach(function (n, i) { idx[n.id] = i; });
+        var nodes = _dmState.nodes, links = _dmState.links, nodeById = _dmState._nodeById || {};
         var showLabels = (document.getElementById('dm-g-labels') || {}).checked !== false;
         var parts = ['<g id="dm-graph-g">'];
-        // 링크
-        links.forEach(function (l, i) {
-            var s = nodes[idx[l.s]], t = nodes[idx[l.t]]; if (!s || !t) return;
-            parts.push('<line class="dm-glink" data-s="' + l.s + '" data-t="' + l.t + '" x1="' + s.x.toFixed(1) + '" y1="' + s.y.toFixed(1) + '" x2="' + t.x.toFixed(1) + '" y2="' + t.y.toFixed(1) + '" stroke="var(--c-border)" stroke-width="1.4" marker-end="url(#dm-arrow)" />');
+        // PHASE 헤더 + STEP 라벨 (열 머리)
+        _dmPhases.forEach(function (p) {
+            var firstS = p.steps[0].no, lastS = p.steps[p.steps.length - 1].no;
+            var x0 = _DM_LEFT + (firstS - 1) * _DM_PITCH - 18;
+            var x1 = _DM_LEFT + (lastS - 1) * _DM_PITCH + _DM_COLW + 50;
+            parts.push('<rect x="' + x0.toFixed(1) + '" y="8" width="' + (x1 - x0).toFixed(1) + '" height="22" rx="5" fill="' + p.color + '" fill-opacity="0.16"></rect>');
+            parts.push('<text x="' + (x0 + 8).toFixed(1) + '" y="23" font-size="11.5" font-weight="700" fill="' + p.color + '" style="pointer-events:none;">PHASE ' + p.no + ' · ' + _annEsc(p.name) + '</text>');
+            p.steps.forEach(function (s) {
+                var sx = _DM_LEFT + (s.no - 1) * _DM_PITCH;
+                parts.push('<text x="' + sx.toFixed(1) + '" y="50" font-size="11" font-weight="700" fill="var(--c-text2)" style="pointer-events:none;">S' + (s.no < 10 ? '0' + s.no : s.no) + '</text>');
+                parts.push('<text x="' + sx.toFixed(1) + '" y="64" font-size="9.5" fill="var(--c-text3)" style="pointer-events:none;">' + _annEsc(s.title.slice(0, 11)) + '</text>');
+            });
         });
-        // 노드
+        // 리본 (위키링크) — 노드 높이에 분산 스택
+        links.forEach(function (l) {
+            var s = nodeById[l.s], t = nodeById[l.t]; if (!s || !t) return;
+            var th = Math.max(4, Math.min(_DM_T, (s.h - 2) / Math.max(1, s.deg)));
+            var th2 = Math.max(4, Math.min(_DM_T, (t.h - 2) / Math.max(1, t.deg)));
+            var sy0 = s.y + Math.min(s.h - th, s._out); var sy1 = sy0 + th; s._out += th;
+            var ty0 = t.y + Math.min(t.h - th2, t._in); var ty1 = ty0 + th2; t._in += th2;
+            parts.push('<path class="dm-glink" data-s="' + l.s + '" data-d="' + l.t + '" d="' + _dmRibbon(s.x + s.w, sy0, sy1, t.x, ty0, ty1) + '" fill="' + s.color + '" fill-opacity="0.38"></path>');
+        });
+        // 노드 (세로 막대)
         nodes.forEach(function (n) {
-            var r = Math.min(26, 7 + 2.4 * Math.sqrt(n.deg));
-            var col = _dmColor(n.deg);
-            parts.push('<g class="dm-gnode" data-id="' + n.id + '" transform="translate(' + n.x.toFixed(1) + ',' + n.y.toFixed(1) + ')" style="cursor:pointer;">'
-                + '<circle r="' + r.toFixed(1) + '" fill="' + col + '" fill-opacity="0.9" stroke="#fff" stroke-width="1.5"></circle>'
-                + (showLabels ? '<text x="0" y="' + (r + 12).toFixed(1) + '" text-anchor="middle" font-size="11" fill="var(--c-text)" style="pointer-events:none;font-family:inherit;">' + _annEsc((n.title || '').slice(0, 18)) + '</text>' : '')
+            parts.push('<g class="dm-gnode" data-id="' + n.id + '" style="cursor:pointer;">'
+                + '<title>' + _annEsc(n.title) + '</title>'
+                + '<rect x="' + n.x.toFixed(1) + '" y="' + n.y.toFixed(1) + '" width="' + n.w + '" height="' + n.h.toFixed(1) + '" rx="2.5" fill="' + n.color + '"></rect>'
+                + (showLabels ? '<text x="' + (n.x + n.w + 6).toFixed(1) + '" y="' + (n.y + n.h / 2 + 3.5).toFixed(1) + '" font-size="10.5" font-weight="500" fill="var(--c-text)" style="pointer-events:none;">' + _annEsc((n.title || '').slice(0, 14)) + '</text>' : '')
                 + '</g>');
         });
         parts.push('</g>');
-        svg.innerHTML = '<defs><marker id="dm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--c-line2,#c2c9d3)"></path></marker></defs>' + parts.join('');
+        svg.innerHTML = parts.join('');
         dmGraphApplyTransform();
         dmGraphBindEvents();
     }
@@ -33557,17 +33621,15 @@ ${intrLog}
             g.addEventListener('mouseenter', function () {
                 var nb = {}; nb[id] = 1;
                 glinks.forEach(function (l) {
-                    var on = (l.dataset.s === id || l.dataset.t === id);
-                    l.setAttribute('stroke', on ? 'var(--c-accent)' : 'var(--c-border)');
-                    l.setAttribute('stroke-width', on ? '2.4' : '1.4');
-                    l.style.opacity = on ? '1' : '0.12';
-                    if (l.dataset.s === id) nb[l.dataset.t] = 1; if (l.dataset.t === id) nb[l.dataset.s] = 1;
+                    var on = (l.dataset.s === id || l.dataset.d === id);
+                    l.setAttribute('fill-opacity', on ? '0.72' : '0.05');
+                    if (l.dataset.s === id) nb[l.dataset.d] = 1; if (l.dataset.d === id) nb[l.dataset.s] = 1;
                 });
-                gnodes.forEach(function (n) { n.style.opacity = nb[n.getAttribute('data-id')] ? '1' : '0.22'; });
+                gnodes.forEach(function (n) { n.style.opacity = nb[n.getAttribute('data-id')] ? '1' : '0.2'; });
                 dmShowGraphPreview(g, id);
             });
             g.addEventListener('mouseleave', function () {
-                glinks.forEach(function (l) { l.setAttribute('stroke', 'var(--c-border)'); l.setAttribute('stroke-width', '1.4'); l.style.opacity = '1'; });
+                glinks.forEach(function (l) { l.setAttribute('fill-opacity', '0.38'); });
                 gnodes.forEach(function (n) { n.style.opacity = '1'; });
                 dmHideGraphPreview();
             });
@@ -33579,7 +33641,7 @@ ${intrLog}
             var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
             svg.addEventListener('mousedown', function (e) {
                 if (e.target.closest('.dm-gnode')) return;
-                dragging = true; svg.style.cursor = 'grabbing'; sx = e.clientX; sy = e.clientY; ox = _dmState.tf.x; oy = _dmState.tf.y;
+                dragging = true; svg.style.cursor = 'grabbing'; sx = e.clientX; sy = e.clientY; ox = (_dmState.tf || {}).x || 0; oy = (_dmState.tf || {}).y || 0;
             });
             window.addEventListener('mousemove', function (e) {
                 if (!dragging) return;
@@ -33590,13 +33652,11 @@ ${intrLog}
                 e.preventDefault();
                 var rect = svg.getBoundingClientRect();
                 var mx = e.clientX - rect.left, my = e.clientY - rect.top;
-                var t = _dmState.tf;
+                var t = _dmState.tf || { x: 0, y: 0, k: 1 };
                 var factor = e.deltaY < 0 ? 1.12 : 0.89;
                 var nk = Math.max(0.2, Math.min(3, t.k * factor));
-                // 마우스 포인트 고정 줌
-                t.x = mx - (mx - t.x) * (nk / t.k);
-                t.y = my - (my - t.y) * (nk / t.k);
-                t.k = nk; dmGraphApplyTransform();
+                t.x = mx - (mx - t.x) * (nk / t.k); t.y = my - (my - t.y) * (nk / t.k); t.k = nk;
+                dmGraphApplyTransform();
             }, { passive: false });
         }
     }
