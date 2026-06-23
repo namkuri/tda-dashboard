@@ -12938,7 +12938,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r321';
+        var _AHUB_FRONT_REV = 'r322';
 
 
         var _ahubRevWarned = false;
@@ -34629,7 +34629,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r321';
+    var _RFS_FRONT_REV = 'r322';
 
 
     async function rfsHealthCheck() {
@@ -34836,7 +34836,7 @@ ${intrLog}
                 var col = p.color;
                 // 중분류 헤더 (STEP)
                 html += '<div class="dm-step-hd" oncontextmenu="dmHelpCtx(event,\'step\',' + s.no + ')" onclick="dmToggleStep(' + s.no + ')" style="display:flex;align-items:center;gap:5px;margin:6px 4px 1px;cursor:pointer;user-select:none;">'
-                    + '<span style="flex:none;font-size:9px;color:var(--c-text3);width:10px;text-align:center;line-height:1;">' + (_dmState._collapsed[s.no] ? '▶' : '▼') + '</span>'
+                    + '<span style="flex:none;font-size:5px;color:var(--c-text3);width:8px;text-align:center;line-height:1;">' + (_dmState._collapsed[s.no] ? '▶' : '▼') + '</span>'
                     + '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;background:' + col + '22;color:' + col + ';border-radius:4px;padding:1px 5px;flex:none;">S' + (s.no < 10 ? '0' + s.no : s.no) + '</span>'
                     + '<span style="font-size:11.5px;font-weight:700;color:var(--c-text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(s.title) + '</span>'
                     + '<button class="dm-help-btn" onclick="event.stopPropagation();dmShowHelp(\'step\',' + s.no + ',this)" title="이 STEP 작성 가이드" style="border:none;background:none;cursor:help;color:var(--c-text3);font-size:9px;font-weight:700;line-height:1;width:11px;height:11px;border-radius:50%;padding:0;flex:none;">?</button>'
