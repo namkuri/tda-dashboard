@@ -4832,6 +4832,9 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* [r323] 컬럼 리사이즈 핸들(헤더 우측 경계 드래그) */
         .dm-col-resize { position: absolute; top: 0; right: -5px; width: 11px; height: 100%; cursor: col-resize; z-index: 4; user-select: none; }
         .dm-col-resize:hover { background: var(--c-accent); opacity: .4; }
+        /* [r326] 트리 프론트매터 title 로딩 shimmer */
+        .dm-ft-shimmer { background: linear-gradient(90deg, var(--c-border) 25%, var(--c-paper) 50%, var(--c-border) 75%); background-size: 200% 100%; animation: dmShimmer 1.1s linear infinite; opacity: .7; }
+        @keyframes dmShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         #dm-doc-body table, .dm-doc-style table { cursor: default; }
         #dm-doc-body thead th, .dm-doc-style thead th { background: var(--c-paper); font-weight: 700; color: var(--c-text); }
         #dm-doc-body tbody td:first-child, .dm-doc-style tbody td:first-child { text-align: left; background: var(--c-paper); color: var(--c-text); }
@@ -12960,7 +12963,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r325';
+        var _AHUB_FRONT_REV = 'r326';
 
 
         var _ahubRevWarned = false;
@@ -34654,7 +34657,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r325';
+    var _RFS_FRONT_REV = 'r326';
 
 
     async function rfsHealthCheck() {
@@ -34738,14 +34741,15 @@ ${intrLog}
         return (el.textContent || '').replace(/^\n+/, '').replace(/\s+$/, '');
     }
     // [r317] 본문 프론트매터에서 title 추출 (---\n...title: X...\n---)
+    // [r317/r326] 본문 프론트매터 title — 본문은 지연로드라, meta.docTitle(메타는 즉시 로드)에 캐시해 항상 표시
     function _dmFrontTitle(d) {
+        if (d && d.meta && typeof d.meta.docTitle === 'string') return d.meta.docTitle;   // 캐시(본문 미로드여도)
         var c = (d && d.content) || '';
+        if (!c) return '';   // 미로드 — 캐시도 없음(아직 모름)
+        var t = '';
         var m = c.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
-        if (!m) return '';
-        var tm = m[1].match(/^[ \t]*title[ \t]*:[ \t]*(.+?)[ \t]*$/m);
-        if (!tm) return '';
-        var t = tm[1].trim().replace(/^["']|["']$/g, '');
-        if (/^<.*>$/.test(t)) return '';   // 플레이스홀더(<...>)면 표시 안 함
+        if (m) { var tm = m[1].match(/^[ \t]*title[ \t]*:[ \t]*(.+?)[ \t]*$/m); if (tm) { t = tm[1].trim().replace(/^["']|["']$/g, ''); if (/^<.*>$/.test(t)) t = ''; } }
+        if (d && d.meta) { try { d.meta.docTitle = t; } catch (e) {} }   // 결과(빈 값 포함) 캐시
         return t;
     }
     // ── [r319] PHASE/STEP 도움말(설명 md) — 숨김 <script>에서 읽어 팝업 ──
@@ -34828,20 +34832,20 @@ ${intrLog}
     // [r325] 파이프라인 문서의 doc: id(meta.docId)를 모두 채운다 — 본문 지연로드라 위키링크 해석이
     //   안 되던 문제 해결. 미로드 문서만 본문을 한 번 불러와 meta.docId 캐시 후(영속) 트리/본문 재렌더.
     function _dmBackfillDocIds() {
-        var need = _dmDocs().filter(function (d) { return !(d.meta && d.meta.docId) && d._contentLoaded === false; });
-        // 이미 로드된 문서는 즉시 캐시
-        _dmDocs().forEach(function (d) { if (!(d.meta && d.meta.docId) && d.content) _wlDocFrontId(d); });
-        if (!need.length || typeof _fetchDocContent !== 'function') return;
-        var done = 0, changed = false;
+        // 이미 로드된 문서는 즉시 캐시(docId + title)
+        _dmDocs().forEach(function (d) { if (d.content && !(d.meta && typeof d.meta.docTitle === 'string')) { _wlDocFrontId(d); _dmFrontTitle(d); } });
+        var need = _dmDocs().filter(function (d) { return d._contentLoaded === false && !(d.meta && typeof d.meta.docTitle === 'string'); });
+        if (!need.length || typeof _fetchDocContent !== 'function') { _dmState.backfilling = false; return; }
+        _dmState.backfilling = true; dmRenderTree();   // [r326] 로딩 표시
+        var done = 0;
         need.forEach(function (d) {
             _fetchDocContent(d.id).then(function (c) {
-                d.content = c || ''; d._contentLoaded = true;
-                if (!d.meta) d.meta = {};
-                var id = _wlDocFrontId(d);   // 파싱+meta.docId 캐시
-                if (id) { changed = true; if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} } }
+                d.content = c || ''; d._contentLoaded = true; if (!d.meta) d.meta = {};
+                _wlDocFrontId(d); _dmFrontTitle(d);   // docId + title 캐시(영속)
+                if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} }
             }).catch(function () {}).then(function () {
                 done++;
-                if (done === need.length && changed) { dmRenderTree(); if (_dmState.activeId) dmRenderDoc(); }
+                if (done === need.length) { _dmState.backfilling = false; dmRenderTree(); if (_dmState.activeId) dmRenderDoc(); }
             });
         });
     }
@@ -34869,7 +34873,9 @@ ${intrLog}
         Object.keys(byStep).forEach(function (k) { byStep[k].sort(function (a, b) { return ((a.sortOrder || 0) - (b.sortOrder || 0)) || ((a.createdAt || 0) - (b.createdAt || 0)); }); });
         var nDoc = docs.filter(function (d) { return _dmDocStep(d) > 0; }).length;
         var html = '<div style="display:flex;align-items:center;gap:6px;padding:2px 6px 8px;">'
-            + '<span style="font-size:11px;font-weight:800;color:var(--c-text3);flex:1;">문서 ' + nDoc + ' · 12단계</span></div>';
+            + '<span style="font-size:11px;font-weight:800;color:var(--c-text3);flex:1;">문서 ' + nDoc + ' · 12단계</span>'
+            + (_dmState.backfilling ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--c-accent);"><span class="rfs-dc-spinner" style="width:11px;height:11px;border-width:2px;"></span>정보 불러오는 중…</span>' : '')
+            + '</div>';
         _dmState._collapsed = _dmState._collapsed || {};
         _dmPhases.forEach(function (p) {
             // 대분류 헤더 (우클릭/? = PHASE 설명)
@@ -34892,12 +34898,14 @@ ${intrLog}
                 items.forEach(function (d) {
                     var active = (d.id === _dmState.activeId);
                     var ft = _dmFrontTitle(d);   // [r317] 프론트매터 title
+                    var ftLoading = _dmState.backfilling && d._contentLoaded === false && !(d.meta && typeof d.meta.docTitle === 'string');  // [r326]
                     html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="dmOpenDoc(\'' + d.id + '\')" oncontextmenu="dmTreeCtx(event,\'' + d.id + '\')" '
                         + 'style="display:flex;align-items:center;gap:6px;padding:4px 8px;padding-left:24px;border-radius:6px;cursor:pointer;font-size:12.5px;margin:1px 0;user-select:none;'
                         + (active ? 'background:' + col + '22;color:' + col + ';font-weight:700;box-shadow:inset 2px 0 0 ' + col + ';' : 'color:var(--c-text);') + '">'
                         + '<span style="flex:none;">' + (d.emoji || '📄') + '</span>'
                         + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
-                        + (ft ? '<span title="' + _annEsc(ft) + '" style="margin-left:auto;flex:none;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--c-text3);font-weight:300;font-size:11px;">' + _annEsc(ft) + '</span>' : '')
+                        + (ft ? '<span title="' + _annEsc(ft) + '" style="margin-left:auto;flex:none;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--c-text3);font-weight:300;font-size:11px;">' + _annEsc(ft) + '</span>'
+                            : (ftLoading ? '<span class="dm-ft-shimmer" style="margin-left:auto;flex:none;width:52px;height:9px;border-radius:4px;"></span>' : ''))
                         + '</div>';
                 });
             });
@@ -35490,8 +35498,18 @@ ${intrLog}
     }
     function dmSaveDoc(id) {
         var d = _dmById(id); if (!d) return;
-        // [r325] 본문의 doc: id를 meta.docId로 동기화(위키링크 해석용 — 지연로드 무관)
-        if (d.content) { if (!d.meta) d.meta = {}; var _fid = ''; var _m = d.content.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/); if (_m) { var _dm = _m[1].match(/^[ \t]*doc[ \t]*:[ \t]*(.+?)[ \t]*$/m); if (_dm) _fid = _dm[1].trim().replace(/^["']|["']$/g, ''); } d.meta.docId = _fid || undefined; }
+        // [r325/r326] 본문의 doc: id / title 을 meta(docId·docTitle)로 동기화 — 지연로드여도 트리/위키링크에 표시
+        if (d.content) {
+            if (!d.meta) d.meta = {};
+            var _fid = '', _ftt = '';
+            var _m = d.content.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
+            if (_m) {
+                var _dm = _m[1].match(/^[ \t]*doc[ \t]*:[ \t]*(.+?)[ \t]*$/m); if (_dm) _fid = _dm[1].trim().replace(/^["']|["']$/g, '');
+                var _tm = _m[1].match(/^[ \t]*title[ \t]*:[ \t]*(.+?)[ \t]*$/m); if (_tm) { _ftt = _tm[1].trim().replace(/^["']|["']$/g, ''); if (/^<.*>$/.test(_ftt)) _ftt = ''; }
+            }
+            d.meta.docId = _fid || undefined;
+            d.meta.docTitle = _ftt;
+        }
         if (typeof autoRegisterWikiLinks === 'function') { try { autoRegisterWikiLinks('doc', id, d.content || ''); } catch (e) {} }
         // 저장 — dbUpsertDoc 있으면 그걸로, 없으면 supabase 직접
         if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} }
