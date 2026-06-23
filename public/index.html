@@ -4830,10 +4830,11 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* [r323] 빈 셀도 최소 폭·높이를 갖도록 */
         #dm-doc-body td:empty::after, #dm-doc-body th:empty::after, .dm-doc-style td:empty::after, .dm-doc-style th:empty::after { content: '\00a0'; color: transparent; }
         /* [r323] 컬럼 리사이즈 핸들(헤더 우측 경계 드래그) */
-        .dm-col-resize { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 3; user-select: none; }
-        .dm-col-resize:hover { background: var(--c-accent); opacity: .35; }
+        .dm-col-resize { position: absolute; top: 0; right: -5px; width: 11px; height: 100%; cursor: col-resize; z-index: 4; user-select: none; }
+        .dm-col-resize:hover { background: var(--c-accent); opacity: .4; }
+        #dm-doc-body table, .dm-doc-style table { cursor: default; }
         #dm-doc-body thead th, .dm-doc-style thead th { background: var(--c-paper); font-weight: 700; color: var(--c-text); }
-        #dm-doc-body tbody td:first-child, .dm-doc-style tbody td:first-child { text-align: left; font-family: ui-monospace, monospace; font-weight: 600; background: var(--c-paper); color: var(--c-text); }
+        #dm-doc-body tbody td:first-child, .dm-doc-style tbody td:first-child { text-align: left; background: var(--c-paper); color: var(--c-text); }
         .dm-help-btn:hover { background: var(--c-accent) !important; color: #fff !important; }
         /* [r233 #12] --- 구분선 살짝만 더 밝게(은은하게) */
         #doc-preview-container hr, .markdown-body hr, .rfs-md-rendered hr { border: none; border-top: 1px solid var(--c-border); opacity: .6; margin: 18px 0; background: none; }
@@ -10019,7 +10020,10 @@ gate: true
                 var docHit = null;
                 if (titlePart) {
                     var _visDocs = (currentData.docs || []).filter(_wlVisible);
-                    docHit = _visDocs.find(function (d) { return (d.title || '').toLowerCase() === lower; });
+                    // [r324] doc: 프론트매터 id 우선 매칭([[CPR-0001]] 등). 같은 id면 파이프라인 문서 우선.
+                    var _byId = _visDocs.filter(function (d) { return _wlDocFrontId(d).toLowerCase() === lower; });
+                    if (_byId.length) docHit = _byId.find(function (d) { return (d.kind || '') === 'pipeline'; }) || _byId[0];
+                    if (!docHit) docHit = _visDocs.find(function (d) { return (d.title || '').toLowerCase() === lower; });
                     if (!docHit) { var _nrm = _wlNorm(titlePart); if (_nrm) docHit = _visDocs.find(function (d) { return _wlNorm(d.title) === _nrm; }); }  // [r233 #5] 정규화 매칭
                 }
                 var taskHit = (titlePart && !docHit) ? (currentData.tasks || []).find(function (tk) { return (tk.projectId || 'default') === activeProjectId && (tk.title || '').toLowerCase() === lower; }) : null;
@@ -10209,6 +10213,14 @@ gate: true
                 .replace(/[_\-]+/g, ' ')                    // 언더스코어/하이픈 → 공백
                 .replace(/\s+/g, ' ')
                 .trim();
+        }
+        // [r324] 문서 본문 프론트매터의 doc: id 추출 — 파이프라인 키트 규약([[CPR-0001]]처럼 doc id로 참조)
+        function _wlDocFrontId(d) {
+            var c = d && d.content; if (!c || c.indexOf('---') < 0) return '';
+            var m = c.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
+            if (!m) return '';
+            var dm = m[1].match(/^[ \t]*doc[ \t]*:[ \t]*(.+?)[ \t]*$/m);
+            return dm ? dm[1].trim().replace(/^["']|["']$/g, '') : '';
         }
         // [r235 #5] vault: 링크 대상(파일명/제목/ID)을 실제 문서로 해석 — 각주의 (vault:xxx) 링크용
         function _vaultResolve(target) {
@@ -12943,7 +12955,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r323';
+        var _AHUB_FRONT_REV = 'r324';
 
 
         var _ahubRevWarned = false;
@@ -24988,9 +25000,11 @@ addEventListener("resize",sendPos);
             if (e.target.closest && e.target.closest('#dm-doc')) {
                 var _dmType = wl.getAttribute('data-wl-type');
                 var _dmId = wl.getAttribute('data-wl-id');
-                if (_dmType === 'doc' && _dmId) { e.preventDefault(); e.stopPropagation(); if (typeof dmOpenDoc === 'function') dmOpenDoc(_dmId); return; }
+                var _dmHash = wl.getAttribute('data-wl-hash') || '';
+                if (_dmType === 'doc' && _dmId) { e.preventDefault(); e.stopPropagation(); if (typeof dmOpenDoc === 'function') dmOpenDoc(_dmId, _dmHash); return; }
+                if (_dmType === 'hash') { e.preventDefault(); e.stopPropagation(); if (typeof dmScrollToHeader === 'function') dmScrollToHeader(_dmHash); return; }  // [r324] 현재 문서 내 헤더 점프
                 if (_dmType === 'new') { e.preventDefault(); e.stopPropagation(); var _nt = wl.getAttribute('data-wl-title') || (wl.textContent||'').replace(/✚\s*$/,'').trim(); if (typeof _wlCreateAndNav === 'function') _wlCreateAndNav(_nt); return; }
-                // task/hash/code 등은 기존 동작
+                // task/code 등은 기존 동작
             }
             e.preventDefault(); e.stopPropagation();
             var type = wl.getAttribute('data-wl-type');
@@ -34635,7 +34649,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r323';
+    var _RFS_FRONT_REV = 'r324';
 
 
     async function rfsHealthCheck() {
@@ -34919,22 +34933,40 @@ ${intrLog}
     }
 
     // ── 문서 뷰어/에디터 (본문/소스 토글) ──
-    function dmOpenDoc(id) {
+    function dmOpenDoc(id, hash) {
         var d = _dmById(id); if (!d) { showToast('문서를 찾을 수 없습니다', 'alert'); return; }
+        var sameDoc = (_dmState.activeId === id);
         _dmState.activeId = id;
         _dmState.mode = 'preview';
         if (_dmState.tab !== 'explorer') dmSetTab('explorer');
+        if (sameDoc && hash) { dmScrollToHeader(hash); return; }   // [r324] 같은 문서 내 헤더면 스크롤만
         // 지연 로드된 본문 fetch
         if (d._contentLoaded === false && typeof _fetchDocContent === 'function') {
             dmRenderDoc(true);
             _fetchDocContent(id).then(function (c) {
                 d.content = c || ''; d._contentLoaded = true;
-                if (_dmState.activeId === id) dmRenderDoc();
+                if (_dmState.activeId === id) { dmRenderDoc(); if (hash) setTimeout(function () { dmScrollToHeader(hash); }, 60); }
             });
         } else {
             dmRenderDoc();
+            if (hash) setTimeout(function () { dmScrollToHeader(hash); }, 60);   // [r324] 다른 문서 → 열고 헤더로 스크롤
         }
         dmRenderTree();
+    }
+    // [r324] 파이프라인 본문 내 헤더로 스크롤 — 슬러그 정확/접두 매칭(#INV-1 → "INV-1 · ...")
+    function dmScrollToHeader(slug) {
+        var body = document.getElementById('dm-doc-body'); if (!body || !slug) return;
+        slug = String(slug).toLowerCase();
+        var hs = body.querySelectorAll('h1,h2,h3,h4,h5,h6'); var el = null, pref = null;
+        for (var i = 0; i < hs.length; i++) {
+            var s = (typeof _wlSlug === 'function') ? _wlSlug(hs[i].textContent || '') : (hs[i].textContent || '').toLowerCase();
+            if (s === slug) { el = hs[i]; break; }
+            if (!pref && (s.indexOf(slug) === 0 || s.indexOf(slug + '-') === 0)) pref = hs[i];
+        }
+        el = el || pref; if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var prev = el.style.backgroundColor; el.style.transition = 'background-color .4s'; el.style.backgroundColor = 'var(--c-accent-soft)';
+        setTimeout(function () { el.style.backgroundColor = prev || ''; }, 1300);
     }
     function dmRenderDoc(loading) {
         var host = document.getElementById('dm-doc'); if (!host) return;
@@ -35251,13 +35283,16 @@ ${intrLog}
                     cell.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); dmTableMenu(e, cell); });
                 });
             }
-            // 컬럼 리사이즈 핸들(헤더 셀 우측 경계) — 잠금 아닐 때
-            if (!body._dmLocked) headCells.forEach(function (c, i) {
-                if (c.querySelector('.dm-col-resize')) return;
-                var h = document.createElement('span'); h.className = 'dm-col-resize'; h.title = '드래그하여 열 너비 조절';
-                h.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); _dmStartColResize(tbl, idx, headCells, i, e.clientX); });
-                h.addEventListener('click', function (e) { e.stopPropagation(); });
-                c.appendChild(h);
+            // [r324] 컬럼 리사이즈 핸들 — 헤더뿐 아니라 모든 셀의 우측 경계(어디서든 잡히도록)
+            if (!body._dmLocked && headCells.length) dmAllRows(tbl).forEach(function (r) {
+                Array.prototype.forEach.call(r.children, function (c, i) {
+                    if (i >= headCells.length) return;
+                    if (c.querySelector('.dm-col-resize')) return;
+                    var h = document.createElement('span'); h.className = 'dm-col-resize'; h.title = '드래그하여 열 너비 조절';
+                    h.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); _dmStartColResize(tbl, idx, headCells, i, e.clientX); });
+                    h.addEventListener('click', function (e) { e.stopPropagation(); });
+                    c.appendChild(h);
+                });
             });
         });
     }
