@@ -13816,7 +13816,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r334';
+        var _AHUB_FRONT_REV = 'r335';
 
 
         var _ahubRevWarned = false;
@@ -35525,7 +35525,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r334';
+    var _RFS_FRONT_REV = 'r335';
 
 
     async function rfsHealthCheck() {
@@ -36095,6 +36095,15 @@ ${intrLog}
             var re = new RegExp('(\\[\\[[^\\]]*' + did.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '[^\\]]*\\]\\])|(\\b' + did.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '(?:@\\d+)?\\b)', 'i');
             if (re.test(c.toLowerCase())) refs.push(x);
         });
+        // [r335 #1] 같은 doc:id(버전 family)는 최신 버전 하나만 — 트리와 동일하게
+        var _bfam = {}, _bdedup = [];
+        refs.forEach(function (x) {
+            var xd = (_wlDocFrontId(x) || '').toLowerCase();
+            if (!xd) { _bdedup.push(x); return; }
+            if (!_bfam[xd]) { _bfam[xd] = x; _bdedup.push(x); }
+            else if ((_dmDocVer(x) || 1) > (_dmDocVer(_bfam[xd]) || 1)) { var bi = _bdedup.indexOf(_bfam[xd]); if (bi >= 0) _bdedup[bi] = x; _bfam[xd] = x; }
+        });
+        refs = _bdedup;
         if (!refs.length) return;
         var sec = document.createElement('div');
         sec.style.cssText = 'margin-top:30px;padding-top:14px;border-top:2px solid var(--c-border);';
@@ -36103,7 +36112,7 @@ ${intrLog}
         refs.forEach(function (x) {
             var sn = _dmDocStep(x); var si = sn ? _dmStepInfo(sn) : null; var ph = si ? ('PHASE ' + si.phaseNo) : '';
             var ver = _dmDocVer(x); var col = si ? si.color : 'var(--c-text3)';
-            html += '<div class="dm-backlink" data-id="' + x.id + '" onclick="dmOpenDoc(\'' + x.id + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--c-border);border-radius:8px;margin-bottom:5px;cursor:pointer;background:var(--c-paper);">'
+            html += '<div class="dm-backlink" data-id="' + x.id + '" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--c-border);border-radius:8px;margin-bottom:5px;cursor:pointer;background:var(--c-paper);">'
                 + '<span style="flex:none;">' + (x.emoji || '📄') + '</span>'
                 + '<span style="font-size:12.5px;font-weight:700;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40%;">' + _annEsc(x.title || '(제목 없음)') + '</span>'
                 + (_dmFrontTitle(x) ? '<span style="font-size:11px;color:var(--c-text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(_dmFrontTitle(x)) + '</span>' : '')
@@ -36120,6 +36129,7 @@ ${intrLog}
             var rid = row.getAttribute('data-id'); var ht = null;
             row.addEventListener('mouseenter', function () { clearTimeout(ht); dmHighlightTreeDoc(rid); ht = setTimeout(function () { dmShowWlPopup(rid, row, '', _curDid); }, 240); });
             row.addEventListener('mouseleave', function () { clearTimeout(ht); dmHighlightTreeDoc(null); dmScheduleHideWlPopup(); });
+            row.addEventListener('click', function () { clearTimeout(ht); dmHideWlPopup(); dmHighlightTreeDoc(null); dmOpenDoc(rid); });   // [r335 #2] 클릭 시 호버 타이머 취소+팝업 닫기
         });
     }
     // ── [r319] 메타데이터(프론트매터) 패널 — 예쁜 표시 + 미작성/누락 감지 + 편집 ──
@@ -37004,6 +37014,7 @@ ${intrLog}
     function dmHideWlPopup() { clearTimeout(_dmWlHideT); var pop = document.getElementById('dm-wl-popup'); if (pop) pop.remove(); }
     function dmShowWlPopup(id, anchor, hash, mention) {
         if (!id || !anchor) return;
+        if (!document.body.contains(anchor)) return;   // [r335 #2] detach된 앵커(재렌더 후)면 미표시 — (0,0) 팝업 방지
         clearTimeout(_dmWlHideT);   // [r334 #2] 다른 항목으로 즉시 옮길 때 이전 hide 타이머가 새 팝업을 지우지 않게
         var d = _dmById(id);
         var pop = document.getElementById('dm-wl-popup');
