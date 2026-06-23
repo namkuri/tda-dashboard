@@ -12725,6 +12725,11 @@ gate: true
         }
         // [r305] 토큰 삽입 — 우클릭 대상에 따라 분기. 표 셀이면 _lpUpdateTableCell 동기화.
         function _insertTokenAtTarget(token) {
+            // [r333 #8] 파이프라인 본문 — 새 블록으로 삽입
+            if (window._dmPendingInsertIdx != null && typeof dmInsertBlock === 'function') {
+                var _pi = window._dmPendingInsertIdx; window._dmPendingInsertIdx = null;
+                dmInsertBlock(_pi, String(token).replace(/^\n+|\n+$/g, '')); return;
+            }
             // 표 셀이면 셀 안에 마크다운 삽입 + 원본 동기화
             if (_insertCtxCell) {
                 var prev = _insertCtxCell.textContent || '';
@@ -13808,7 +13813,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r332';
+        var _AHUB_FRONT_REV = 'r333';
 
 
         var _ahubRevWarned = false;
@@ -35510,7 +35515,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r332';
+    var _RFS_FRONT_REV = 'r333';
 
 
     async function rfsHealthCheck() {
@@ -35716,6 +35721,7 @@ ${intrLog}
         dmRenderTree();
         dmSetTab(_dmState.tab);
         _dmBindTips();         // [r331 #2] 커스텀 툴팁 1회 바인딩
+        _dmBindUndoKeys();     // [r333 #6] Ctrl+Z/Y undo·redo 1회 바인딩
         _dmBackfillDocIds();   // [r325] 위키링크 doc:id 해석을 위해 미로드 문서의 doc id 미리 채움
     }
     // [r325] 파이프라인 문서의 doc: id(meta.docId)를 모두 채운다 — 본문 지연로드라 위키링크 해석이
@@ -35935,7 +35941,7 @@ ${intrLog}
         var mainHtml;
         if (loading) mainHtml = bar + '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
         else if (mode === 'source' && !locked) mainHtml = bar + '<textarea id="dm-src" oncontextmenu="handleEditorContextMenu(event)" style="flex:1;width:100%;box-sizing:border-box;border:none;outline:none;resize:none;padding:16px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;background:var(--c-paper);color:var(--c-text);">' + _annEsc(d.content || '') + '</textarea>';
-        else mainHtml = bar + '<div id="dm-doc-body" class="markdown-body dm-doc-style" style="flex:1;overflow-y:auto;padding:22px 30px;"></div>';
+        else mainHtml = bar + '<div id="dm-doc-body" class="markdown-body dm-doc-style" oncontextmenu="dmBodyCtx(event)" style="flex:1;overflow-y:auto;padding:22px 30px;"></div>';
         // [r329] 분할보기 — 우측에 참조 문서 패널(읽기전용 미리보기)
         var splitDoc = _dmState.splitId ? _dmById(_dmState.splitId) : null;
         if (splitDoc && splitDoc.id !== d.id) {
@@ -36094,10 +36100,11 @@ ${intrLog}
         });
         sec.innerHTML = html;
         body.appendChild(sec);
-        // [r332 #7] 링크된 언급 호버 → 미리보기 팝업 + 트리 하이라이트
+        // [r332 #7 / r333 #1] 링크된 언급 호버 → 미리보기 팝업 + 트리 하이라이트 + 언급 위치 하이라이트
+        var _curDid = _wlDocFrontId(d) || '';
         Array.prototype.forEach.call(sec.querySelectorAll('.dm-backlink'), function (row) {
             var rid = row.getAttribute('data-id'); var ht = null;
-            row.addEventListener('mouseenter', function () { clearTimeout(ht); dmHighlightTreeDoc(rid); ht = setTimeout(function () { dmShowWlPopup(rid, row); }, 240); });
+            row.addEventListener('mouseenter', function () { clearTimeout(ht); dmHighlightTreeDoc(rid); ht = setTimeout(function () { dmShowWlPopup(rid, row, '', _curDid); }, 240); });
             row.addEventListener('mouseleave', function () { clearTimeout(ht); dmHighlightTreeDoc(null); dmScheduleHideWlPopup(); });
         });
     }
@@ -36124,15 +36131,34 @@ ${intrLog}
         inherits: '상속하는 상위 문서 (doc id@버전)', inputs: '입력으로 삼은 상위 문서·자료', pillar: '관련 기둥(Pillar) 슬러그', pillars: '관련 기둥(Pillar)들',
         decided: '결정 일자/요약', deciders: '결정에 참여한 사람들', date: '작성/결정 일자', scope: '범위', tier: '티어/등급'
     };
-    function _dmMetaDesc(key) { return _DM_META_DESC[key] || _DM_META_DESC[String(key).toLowerCase()] || (key + ' 속성'); }
+    function _dmMetaDesc(key, stepNo) {
+        var k = String(key).toLowerCase();
+        if (k === 'doc' && stepNo) {   // [r333 #9] step별 doc 명명규칙
+            var tpl = _dmTemplateFrontKeys(stepNo); var dv = ''; tpl.forEach(function (t) { if (t.key === 'doc') dv = t.value; });
+            var pre = (dv.match(/^([A-Za-z][A-Za-z0-9-]*?)-\d+\s*$/) || [])[1]; var si = _dmStepInfo(stepNo);
+            if (pre) return '문서 고유 ID — 이 단계(S' + (stepNo < 10 ? '0' + stepNo : stepNo) + ' ' + (si ? si.title : '') + ')는 「' + pre + '-0001, ' + pre + '-0002 …」 형식으로 명명합니다. 위키링크 [[' + pre + '-0001]] 로 참조됩니다.';
+        }
+        if ((k === 'pillar' || k === 'pillars') && stepNo) {   // [r333 #5]
+            if (stepNo === 4) return '이 Pillar Guide 문서가 정의하는 기둥(Pillar) 슬러그입니다. (하위 문서들이 이 값을 참조합니다)';
+            return '참조할 기둥(Pillar) — Pillar Guide(S04)에서 정의된 기둥을 가리킵니다.';
+        }
+        return _DM_META_DESC[key] || _DM_META_DESC[k] || (key + ' 속성');
+    }
     // 상태 pill 색(#3)
     var _DM_STATUS_COLORS = { draft: '#8a8378', proposed: '#6e59c9', active: '#3c8a5a', accepted: '#3a6ea5', approved: '#3a6ea5', locked: '#9a5b2a', deprecated: '#9a1c20', rejected: '#9a1c20', done: '#3c8a5a', review: '#d49a1c' };
     function _dmStatusColor(v) { return _DM_STATUS_COLORS[String(v || '').trim().toLowerCase()] || '#6f6b5d'; }
     // [r332 #8] 키별 추천 옵션(입력 포커스 시 드롭다운). pillars 는 기존 문서 값에서 수집.
     var _DM_FIELD_OPTIONS = { status: ['draft', 'proposed', 'active', 'accepted', 'approved', 'locked', 'deprecated', 'review'] };
-    function _dmFieldOptions(kl) {
-        if (kl === 'pillar' || kl === 'pillars') {
-            var set = {}; _dmDocs().forEach(function (d) { var v = _dmFrontField(d, 'pillars') || _dmFrontField(d, 'pillar'); v.replace(/[\[\]]/g, '').split(/[,\s]+/).forEach(function (t) { t = t.trim(); if (t && !/^<.*>$/.test(t)) set[t] = 1; }); });
+    function _dmFieldOptions(kl, curDoc) {
+        if (kl === 'status') return _DM_FIELD_OPTIONS.status;
+        if (kl === 'source' || kl === 'inherits' || kl === 'inputs') {   // [r333 #3] 상위 문서 doc:id 추천(최신 버전 표기)
+            var seen = {}, out = [];
+            _dmDocs().forEach(function (d) { var did = _wlDocFrontId(d); if (!did) return; if (curDoc && d.id === curDoc.id) return; var key = did.toLowerCase(); if (seen[key]) return; seen[key] = 1; var ver = _dmDocVer(d); out.push(did + (ver ? '@' + ver : '')); });
+            return out;
+        }
+        if (kl === 'pillar' || kl === 'pillars') {   // [r333 #5] Pillar Guide(S04)에서 정의된 기둥만 추천
+            if (curDoc && _dmDocStep(curDoc) === 4) return [];   // PG 문서는 스스로 정의 — 추천 없음
+            var set = {}; _dmDocs().forEach(function (d) { if (_dmDocStep(d) !== 4) return; var v = _dmFrontField(d, 'pillars') || _dmFrontField(d, 'pillar'); v.replace(/[\[\]]/g, '').split(/[,\s]+/).forEach(function (t) { t = t.trim(); if (t && !/^<.*>$/.test(t)) set[t] = 1; }); });
             return Object.keys(set);
         }
         return _DM_FIELD_OPTIONS[kl] || null;
@@ -36185,17 +36211,17 @@ ${intrLog}
         if (u) {   // 유효 프로필 — 아바타 + 닉네임 pill(실선, 행 높이 핏하게)
             var nm = u.nickname || u.displayName || u.email || '사용자';
             var prov = u.provider === 'github' ? '⚫' : (u.provider === 'google' ? '🔵' : '');
-            var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:15px;height:15px;border-radius:50%;object-fit:cover;flex:none;display:block;">'
-                : '<span style="width:15px;height:15px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
-            return '<span data-dm-tip="등록 사용자' + (prov ? ' (' + (u.provider) + ')' : '') + (u.email ? ' · ' + _annEsc(u.email) : '') + '" style="display:inline-flex;align-items:center;gap:4px;background:var(--c-card);border:1px solid var(--c-border);border-radius:11px;padding:0 7px 0 2px;line-height:17px;vertical-align:middle;">' + av + '<span style="font-size:11.5px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span>' + (prov ? '<span style="font-size:8px;opacity:.6;">' + prov + '</span>' : '') + '</span>';
+            var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:13px;height:13px;border-radius:50%;object-fit:cover;flex:none;display:block;">'
+                : '<span style="width:13px;height:13px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
+            return '<span data-dm-tip="등록 사용자' + (prov ? ' (' + (u.provider) + ')' : '') + (u.email ? ' · ' + _annEsc(u.email) : '') + '" style="display:inline-flex;align-items:center;gap:4px;height:20px;box-sizing:border-box;background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;padding:0 8px 0 3px;vertical-align:middle;">' + av + '<span style="font-size:11.5px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span>' + (prov ? '<span style="font-size:8px;opacity:.6;">' + prov + '</span>' : '') + '</span>';
         }
-        // 일반 텍스트 — 점선 pill(프로필 미연결 표시)
-        return '<span data-dm-tip="등록 사용자가 아닌 텍스트 (@로 사용자를 연결할 수 있어요)" style="display:inline-flex;align-items:center;background:transparent;border:1px dashed var(--c-border);border-radius:11px;padding:0 9px;font-size:11.5px;line-height:17px;color:var(--c-text2);vertical-align:middle;">' + _annEsc(t) + '</span>';
+        // 일반 텍스트 — 점선 pill(프로필 미연결 표시) — 위 pill과 동일 높이
+        return '<span data-dm-tip="등록 사용자가 아닌 텍스트 (@로 사용자를 연결할 수 있어요)" style="display:inline-flex;align-items:center;height:20px;box-sizing:border-box;background:transparent;border:1px dashed var(--c-border);border-radius:10px;padding:0 9px;font-size:11.5px;color:var(--c-text2);vertical-align:middle;">' + _annEsc(t) + '</span>';
     }
-    function _dmMetaKeyHtml(key) {
+    function _dmMetaKeyHtml(key, stepNo) {
         return '<span style="flex:0 0 116px;display:flex;align-items:center;gap:4px;padding-top:1px;">'
             + '<span style="font-size:11.5px;font-weight:700;color:var(--c-text3);font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;">' + _annEsc(key) + '</span>'
-            + '<span class="dm-meta-q" data-dm-tip="' + _annEsc(_dmMetaDesc(key)) + '" style="font-size:9px;color:var(--c-text3);border:1px solid var(--c-border);border-radius:50%;min-width:13px;height:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex:none;">?</span>'
+            + '<span class="dm-meta-q" data-dm-tip="' + _annEsc(_dmMetaDesc(key, stepNo)) + '" style="font-size:9px;color:var(--c-text3);border:1px solid var(--c-border);border-radius:50%;min-width:13px;height:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex:none;">?</span>'
             + '</span>';
     }
     // [r331 #2] 커스텀 툴팁(네이티브 title 미표시 대응) — data-dm-tip 호버 시 표시
@@ -36273,7 +36299,7 @@ ${intrLog}
                 ? '<span data-meta-key="' + _annEsc(r.key) + '"' + clickAttr + ' style="flex:1;font-size:12px;color:#b5732a;' + (locked ? '' : 'cursor:text;') + 'background:rgba(217,162,74,.10);border:1px dashed rgba(217,162,74,.5);border-radius:5px;padding:1px 7px;" title="' + (locked ? '' : '클릭해 입력') + '">⚠ ' + (r.value.trim() ? ('미작성: ' + _annEsc(r.value)) : '미작성') + (locked ? '' : ' — 클릭') + '</span>'
                 : _dmMetaValueHtml(r.key, r.value, idx, locked);   // [r330] 키별 특수 렌더(status/owner/source/version…)
             html += '<div class="dm-meta-row" style="display:flex;align-items:flex-start;gap:10px;padding:4px 0;border-bottom:1px dashed var(--c-border);">'
-                + _dmMetaKeyHtml(r.key)   // [r330 #2] 키 + ? 툴팁
+                + _dmMetaKeyHtml(r.key, stepNo)   // [r330 #2 / r333 #9] 키 + ? 툴팁(doc은 step별 명명규칙)
                 + valHtml
                 + (locked ? '' : '<button onclick="dmMetaRemoveField(' + idx + ',\'' + _annEsc(r.key) + '\')" title="필드 삭제" style="border:none;background:none;cursor:pointer;color:var(--c-text3);font-size:11px;flex:none;opacity:.45;">✕</button>')
                 + '</div>';
@@ -36329,7 +36355,7 @@ ${intrLog}
         var holder = spanEl.parentNode; spanEl.replaceWith(inp); inp.focus(); try { inp.select(); } catch (e) {}
         var done = false;
         function finish(val) { if (done) return; done = true; _dmMetaAcOff(); _dmMetaSetKey(idx, key, val); }
-        var _opts = _dmFieldOptions(kl); var _multiOpt = (kl === 'status' || kl === 'pillar' || kl === 'pillars');
+        var _opts = _dmFieldOptions(kl, d); var _multiOpt = (kl === 'status' || kl === 'pillar' || kl === 'pillars' || kl === 'source' || kl === 'inherits' || kl === 'inputs');
         function commit() {
             if (done) return; var v = inp.value.trim();
             if (_opts) v = v.replace(/,\s*$/, '').trim();   // [r332 #8] 후행 쉼표 정리
@@ -36386,6 +36412,12 @@ ${intrLog}
     function _dmMetaAcRender() {
         if (!_dmMetaAcEl) return; _dmMetaAcEl.innerHTML = '';
         _dmMetaAcItems.forEach(function (u, i) {
+            if (u._wl != null) {   // [r333 #7] 위키링크 자동완성 항목
+                var wrow = document.createElement('div'); wrow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;cursor:pointer;' + (i === _dmMetaAcSel ? 'background:var(--c-paper);' : '');
+                wrow.innerHTML = '<span style="flex:none;color:var(--c-text3);">' + (u._hdr ? '#' : '📄') + '</span><span style="flex:1;font-size:12.5px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(u._label || u._wl) + '</span>';
+                wrow.addEventListener('mousedown', function (e) { e.preventDefault(); if (_dmMetaAcPick) _dmMetaAcPick(u); });
+                _dmMetaAcEl.appendChild(wrow); return;
+            }
             if (u._opt != null) {   // 옵션 항목(status 색칩 / pillars)
                 var oc = _dmStatusColor(u._opt);
                 var orow = document.createElement('div'); orow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;cursor:pointer;' + (i === _dmMetaAcSel ? 'background:var(--c-paper);' : '');
@@ -36409,6 +36441,41 @@ ${intrLog}
         if ((e.key === 'Enter' || e.key === 'Tab') && _dmMetaAcSel >= 0) { e.preventDefault(); if (_dmMetaAcPick) _dmMetaAcPick(_dmMetaAcItems[_dmMetaAcSel]); return true; }
         if (e.key === 'Escape') { _dmMetaAcOff(); return true; }
         return false;
+    }
+    // [r333 #7] 인라인 편집 중 [[ 입력 → 상위 문서/헤더 자동완성
+    function _dmWlAc(ed) {
+        var sel = window.getSelection(); if (!sel || !sel.rangeCount) return;
+        var rng = sel.getRangeAt(0); var node = rng.startContainer; var off = rng.startOffset;
+        if (node.nodeType !== 3) { _dmMetaAcOff(); return; }
+        var m = node.nodeValue.slice(0, off).match(/\[\[([^\]\[\n]*)$/);
+        if (!m) { _dmMetaAcOff(); return; }
+        var q = m[1]; var hi = q.indexOf('#'); var items = [];
+        if (hi >= 0) {   // 헤더 추천
+            var docPart = q.slice(0, hi).toLowerCase(); var hq = q.slice(hi + 1).toLowerCase();
+            var cands = _dmDocs().filter(function (d) { return (_wlDocFrontId(d) || '').toLowerCase() === docPart || (d.title || '').toLowerCase() === docPart; });
+            cands.sort(function (a, b) { return (_dmDocVer(b) || 1) - (_dmDocVer(a) || 1); });   // 최신 버전 우선
+            var tg = cands.filter(function (d) { return (d.content || '').trim(); })[0] || cands[0];   // 본문 있는 문서 우선
+            if (tg) (tg.content || '').split('\n').forEach(function (ln) { var hm = ln.match(/^#{1,6}\s+(.+?)\s*#*\s*$/); if (hm) { var h = hm[1].trim(); if (!hq || h.toLowerCase().indexOf(hq) >= 0) items.push({ _wl: q.slice(0, hi) + '#' + h, _label: h, _hdr: true }); } });
+            items = items.slice(0, 12);
+        } else {
+            var ql = q.toLowerCase(); var seen = {};
+            _dmDocs().forEach(function (d) { var did = _wlDocFrontId(d); if (!did || seen[did.toLowerCase()]) return; var t = d.title || '', ft = _dmFrontTitle(d) || ''; if (!ql || did.toLowerCase().indexOf(ql) >= 0 || t.toLowerCase().indexOf(ql) >= 0 || ft.toLowerCase().indexOf(ql) >= 0) { seen[did.toLowerCase()] = 1; items.push({ _wl: did, _label: did + ((ft || t) ? (' · ' + (ft || t)) : '') }); } });
+            items = items.slice(0, 12);
+        }
+        if (!items.length) { _dmMetaAcOff(); return; }
+        _dmMetaAcItems = items; _dmMetaAcSel = 0;
+        _dmMetaAcPick = function (it) { _dmWlAcInsert(ed, node, off, m[1].length, it._wl); };
+        if (!_dmMetaAcEl) { _dmMetaAcEl = document.createElement('div'); _dmMetaAcEl.id = 'dm-meta-ac'; _dmMetaAcEl.style.cssText = 'position:fixed;z-index:9600;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:4px;min-width:230px;max-height:260px;overflow-y:auto;'; _dmMetaAcEl.addEventListener('mouseenter', function () { _dmMetaAcHover = true; }); _dmMetaAcEl.addEventListener('mouseleave', function () { _dmMetaAcHover = false; }); document.body.appendChild(_dmMetaAcEl); }
+        var rect; try { rect = rng.getClientRects()[0] || ed.getBoundingClientRect(); } catch (e) { rect = ed.getBoundingClientRect(); }
+        _dmMetaAcEl.style.left = Math.max(6, Math.min(rect.left, window.innerWidth - 250)) + 'px'; _dmMetaAcEl.style.top = (rect.bottom + 4) + 'px';
+        _dmMetaAcRender();
+    }
+    function _dmWlAcInsert(ed, node, off, qlen, wl) {
+        var txt = node.nodeValue; var start = off - qlen; var before = txt.slice(0, start); var after = txt.slice(off);
+        var closing = /^\]\]/.test(after) ? '' : ']]';
+        node.nodeValue = before + wl + closing + after;
+        try { var sel = window.getSelection(); var r = document.createRange(); var pos = before.length + wl.length + closing.length; r.setStart(node, Math.min(pos, node.nodeValue.length)); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); } catch (e) {}
+        _dmMetaAcOff(); ed.focus();
     }
     // [r320] 필드 추가 — 패널 안에 key/value 인라인 입력 행 추가(팝업 없이)
     function dmMetaAddField(idx) {
@@ -36500,6 +36567,27 @@ ${intrLog}
         if (t.closest && t.closest('.tda-html-mount, .mermaid, .tda-embed, iframe, img')) return;        // 임베드/이미지 제외
         dmLpEnterEdit(idx);
     }
+    // [r333 #8] 본문 우클릭 컨텍스트 메뉴 — 표/이미지/파일/인용 삽입(소스보기와 동일 기능)
+    function dmBodyCtx(e) {
+        var t = e.target;
+        if (t.closest && (t.closest('table') || t.closest('a,button,input,textarea,.dm-meta-panel,.dm-lp-edit'))) return;  // 표/링크/메타/편집중은 통과
+        var d = _dmById(_dmState.activeId); if (d && (d.isLocked || (d.meta && d.meta.vault))) return;
+        e.preventDefault(); e.stopPropagation();
+        var row = t.closest && t.closest('.dm-lp-row, .dm-lp-blank'); var idx = row ? parseInt(row.getAttribute('data-idx'), 10) : -1;
+        _dmShowMenu(e, [
+            { emoji: '▦', label: '표 삽입', fn: function () { dmInsertBlock(idx, '| 제목1 | 제목2 |\n|---|---|\n|   |   |'); } },
+            { emoji: '🖼', label: '이미지 첨부', fn: function () { window._dmPendingInsertIdx = idx; if (typeof _pickAndInsertFile === 'function') _pickAndInsertFile(true); } },
+            { emoji: '📎', label: '파일 첨부', fn: function () { window._dmPendingInsertIdx = idx; if (typeof _pickAndInsertFile === 'function') _pickAndInsertFile(false); } },
+            { emoji: '🔗', label: '인용 삽입', fn: function () { window._dmPendingInsertIdx = idx; if (typeof _openCitePicker === 'function') _openCitePicker(); } }
+        ]);
+    }
+    function dmInsertBlock(afterIdx, md) {
+        var body = document.getElementById('dm-doc-body'); if (!body || !body._dmBlocks) return;
+        var at = (afterIdx >= 0 ? afterIdx + 1 : body._dmBlocks.length);
+        body._dmBlocks.splice(at, 0, { text: md, blank: false }, { text: '', blank: true });
+        dmLpCommitBlocks(); dmRenderLiveBody(body, _dmById(_dmState.activeId), false);
+        showToast('삽입됨', 'success');
+    }
     function dmLpEnterEdit(idx) {
         var d = _dmById(_dmState.activeId); if (!d) return;
         if (d.isLocked || (d.meta && d.meta.vault)) { showToast('🔒 잠긴 문서 — 편집 불가', 'alert'); return; }
@@ -36515,8 +36603,10 @@ ${intrLog}
         row.innerHTML = ''; row.appendChild(ed);
         _dmLpEditingIdx = idx;
         ed.addEventListener('blur', dmLpCommitEdit);
+        ed.addEventListener('input', function () { _dmWlAc(ed); });   // [r333 #7] [[ 자동완성
         ed.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') { e.preventDefault(); _dmLpEditingIdx = null; dmRenderDoc(); return; }
+            if (_dmMetaAcKey(e)) return;   // [r333 #7] 자동완성 네비(↑↓/Enter/Esc) 우선
+            if (e.key === 'Escape') { e.preventDefault(); _dmLpEditingIdx = null; _dmMetaAcOff(); dmRenderDoc(); return; }
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ed.blur(); return; }
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -36541,6 +36631,7 @@ ${intrLog}
         ed.focus(); _lpPlaceCaretEnd(ed);
     }
     function dmLpCommitEdit() {
+        _dmMetaAcOff();   // [r333 #7] 편집 종료 시 [[ 자동완성 닫기
         var body = document.getElementById('dm-doc-body'); if (!body || _dmLpEditingIdx == null) return;
         var idx = _dmLpEditingIdx; _dmLpEditingIdx = null;
         var ed = body.querySelector('.dm-lp-edit[data-idx="' + idx + '"]'); if (!ed) return;
@@ -36569,9 +36660,42 @@ ${intrLog}
         var body = document.getElementById('dm-doc-body'); if (!body || !body._dmBlocks) return;
         var content = body._dmBlocks.map(function (x) { return x.text; }).join('\n');
         var d = _dmById(_dmState.activeId); if (!d) return;
+        if (d.content !== content) {   // [r333 #6] undo 스택에 변경 전 내용 push
+            if (_dmState._undoDoc !== d.id) { _dmState._undo = []; _dmState._redo = []; _dmState._undoDoc = d.id; }
+            _dmState._undo.push(d.content); if (_dmState._undo.length > 120) _dmState._undo.shift(); _dmState._redo = [];
+        }
         d.content = content; d._contentLoaded = true; d.updatedAt = Date.now();
         clearTimeout(_dmState._saveTimer);
         _dmState._saveTimer = setTimeout(function () { dmSaveDoc(d.id); }, 1000);
+    }
+    // [r333 #6] 문서 편집 undo/redo (Ctrl+Z / Ctrl+Y · Ctrl+Shift+Z)
+    function _dmUndoApply(content) {
+        var d = _dmById(_dmState.activeId); if (!d) return;
+        d.content = content; d._contentLoaded = true; d.updatedAt = Date.now();
+        clearTimeout(_dmState._saveTimer); _dmState._saveTimer = setTimeout(function () { dmSaveDoc(d.id); }, 800);
+        var body = document.getElementById('dm-doc-body'); if (body && _dmState.mode === 'preview') dmRenderLiveBody(body, d, !!(d.isLocked || (d.meta && d.meta.vault))); else dmRenderDoc();
+    }
+    function dmUndo() {
+        var d = _dmById(_dmState.activeId); if (!d || _dmState._undoDoc !== d.id || !_dmState._undo || !_dmState._undo.length) { showToast('되돌릴 작업이 없습니다', 'info'); return; }
+        _dmState._redo = _dmState._redo || []; _dmState._redo.push(d.content);
+        _dmUndoApply(_dmState._undo.pop());
+    }
+    function dmRedo() {
+        var d = _dmById(_dmState.activeId); if (!d || _dmState._undoDoc !== d.id || !_dmState._redo || !_dmState._redo.length) { showToast('다시 실행할 작업이 없습니다', 'info'); return; }
+        _dmState._undo = _dmState._undo || []; _dmState._undo.push(d.content);
+        _dmUndoApply(_dmState._redo.pop());
+    }
+    function _dmBindUndoKeys() {
+        if (window._dmUndoBound) return; window._dmUndoBound = true;
+        document.addEventListener('keydown', function (e) {
+            var dv = document.getElementById('docmap-view'); if (!dv || dv.classList.contains('hidden')) return;
+            if (!(e.ctrlKey || e.metaKey)) return;
+            var ae = document.activeElement;
+            if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;   // 편집 중엔 native undo
+            var z = (e.key === 'z' || e.key === 'Z'), y = (e.key === 'y' || e.key === 'Y');
+            if (z && !e.shiftKey) { e.preventDefault(); dmUndo(); }
+            else if (y || (z && e.shiftKey)) { e.preventDefault(); dmRedo(); }
+        });
     }
     // ── 표 인터랙티브(셀 편집 + 우클릭 행/열 추가·삭제) ──
     function dmAllRows(table) {
@@ -36832,6 +36956,7 @@ ${intrLog}
     // ── [r317] 위키링크 호버 팝업(문서 미리보기) ── 예시 HTML의 링크→팝업/드래그 리사이즈 이식
     function dmBindWlPreview(container) {
         if (!container) return;
+        if (container.closest && container.closest('#dm-wl-popup')) return;   // [r333 #2] 미리보기 안에서 또 미리보기 금지
         var links = container.querySelectorAll('a.wikilink[data-wl-type="doc"][data-wl-id]');
         Array.prototype.forEach.call(links, function (a) {
             if (a._dmWlBound) return; a._dmWlBound = true;
@@ -36860,7 +36985,7 @@ ${intrLog}
         pop._hideT = setTimeout(function () { if (!pop._hover && !pop._pinned) dmHideWlPopup(); }, 260);
     }
     function dmHideWlPopup() { var pop = document.getElementById('dm-wl-popup'); if (pop) pop.remove(); }
-    function dmShowWlPopup(id, anchor, hash) {
+    function dmShowWlPopup(id, anchor, hash, mention) {
         if (!id || !anchor) return;
         var d = _dmById(id);
         var pop = document.getElementById('dm-wl-popup');
@@ -36869,7 +36994,7 @@ ${intrLog}
         dmHideWlPopup();
         pop = document.createElement('div');
         pop.id = 'dm-wl-popup'; pop._docId = id;
-        pop.style.cssText = 'position:fixed;z-index:9000;width:380px;height:300px;min-width:240px;min-height:150px;max-width:680px;max-height:80vh;'
+        pop.style.cssText = 'position:fixed;z-index:9000;width:570px;height:340px;min-width:300px;min-height:150px;max-width:840px;max-height:80vh;'
             + 'background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.28);'
             + 'display:flex;flex-direction:column;overflow:hidden;resize:both;font-size:12.5px;';
         var title = d ? (d.title || '(제목 없음)') : '(없는 문서)';
@@ -36884,8 +37009,8 @@ ${intrLog}
         document.body.appendChild(pop);
         // 위치 — 앵커 근처(화면 밖 방지)
         var r = anchor.getBoundingClientRect();
-        var px = Math.max(8, Math.min(r.left, window.innerWidth - 400));
-        var py = r.bottom + 8; if (py + 300 > window.innerHeight) py = Math.max(8, r.top - 308);
+        var px = Math.max(8, Math.min(r.left, window.innerWidth - 590));
+        var py = r.bottom + 8; if (py + 340 > window.innerHeight) py = Math.max(8, r.top - 348);
         pop.style.left = px + 'px'; pop.style.top = py + 'px';
         pop.addEventListener('mouseenter', function () { pop._hover = true; clearTimeout(pop._hideT); });
         pop.addEventListener('mouseleave', function () { pop._hover = false; dmScheduleHideWlPopup(); });
@@ -36911,6 +37036,7 @@ ${intrLog}
             bd.innerHTML = rr || '<span style="color:var(--c-text3);">빈 문서</span>';
             try { dmBindWlPreview(bd); } catch (e) {}
             if (hash) setTimeout(function () { _dmScrollHl(bd, hash); }, 40);   // [r330 #1] 헤더로 스크롤+섹션 하이라이트
+            else if (mention) setTimeout(function () { _dmHlMention(bd, mention); }, 40);   // [r333 #1] 언급 위치 하이라이트
         }
         if (d && d._contentLoaded === false && typeof _fetchDocContent === 'function') {
             _fetchDocContent(id).then(function (c) { d.content = c || ''; d._contentLoaded = true; if (document.getElementById('dm-wl-popup') === pop) fill(d); });
@@ -36926,6 +37052,16 @@ ${intrLog}
         var lv = parseInt(el.tagName[1], 10); var sec = [el];
         for (var n = el.nextElementSibling; n; n = n.nextElementSibling) { if (/^H[1-6]$/.test(n.tagName) && parseInt(n.tagName[1], 10) <= lv) break; sec.push(n); }
         sec.forEach(function (x) { var p = x.style.backgroundColor; x.style.transition = 'background-color .5s'; x.style.backgroundColor = 'rgba(217,162,74,.26)'; x.style.borderRadius = '5px'; setTimeout(function () { x.style.backgroundColor = p || ''; }, 2600); });
+    }
+    // [r333 #1] 미리보기 안에서 특정 doc:id 가 언급된 부분을 찾아 스크롤+하이라이트
+    function _dmHlMention(container, docId) {
+        if (!container || !docId) return; var needle = String(docId).toLowerCase();
+        var els = container.querySelectorAll('a,td,th,li,p,h1,h2,h3,h4,h5,h6'); var target = null;
+        for (var i = 0; i < els.length; i++) { if ((els[i].textContent || '').toLowerCase().indexOf(needle) >= 0) { target = els[i]; break; } }
+        if (!target) return;
+        try { target.scrollIntoView({ block: 'center' }); } catch (e) {}
+        var p = target.style.backgroundColor; target.style.transition = 'background-color .4s'; target.style.backgroundColor = 'rgba(217,162,74,.32)'; target.style.borderRadius = '4px';
+        setTimeout(function () { target.style.backgroundColor = p || ''; }, 2600);
     }
     async function dmNewDoc(stepNo) {
         stepNo = parseInt(stepNo, 10) || 0;
