@@ -5811,20 +5811,23 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
                 <div id="dm-doc" style="flex:1;min-width:0;display:flex;flex-direction:column;"></div>
             </div>
             <!-- 연결 보기 탭: SVG 그래프 -->
-            <div id="dm-graph" style="flex:1;display:none;position:relative;min-height:0;overflow:hidden;background:var(--c-paper);">
-                <div id="dm-graph-toolbar" style="position:absolute;top:10px;left:12px;z-index:5;display:flex;gap:6px;align-items:center;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:5px 8px;font-size:11.5px;box-shadow:0 2px 8px rgba(0,0,0,.12);">
-                    <span style="color:var(--c-text3);">노드 <b id="dm-g-nodes">0</b> · 연결 <b id="dm-g-links">0</b></span>
-                    <span style="width:1px;height:14px;background:var(--c-border);"></span>
-                    <button class="aihub-gpu-btn" style="font-size:11px;padding:3px 8px;" onclick="dmGraphRelayout()" title="레이아웃 다시 계산">🔄 재배치</button>
-                    <button class="aihub-gpu-btn" style="font-size:11px;padding:3px 8px;" onclick="dmGraphFit()" title="화면에 맞춤">⊡ 맞춤</button>
-                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--c-text2);"><input type="checkbox" id="dm-g-labels" checked onchange="dmGraphRender()"> 라벨</label>
+            <div id="dm-graph" style="flex:1;display:none;min-height:0;overflow:hidden;background:var(--c-paper);">
+                <div id="dm-graph-main" style="flex:1;position:relative;min-width:0;overflow:hidden;">
+                    <div id="dm-graph-toolbar" style="position:absolute;top:10px;left:12px;z-index:5;display:flex;gap:6px;align-items:center;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:5px 8px;font-size:11.5px;box-shadow:0 2px 8px rgba(0,0,0,.12);">
+                        <span style="color:var(--c-text3);">노드 <b id="dm-g-nodes">0</b> · 연결 <b id="dm-g-links">0</b></span>
+                        <span style="width:1px;height:14px;background:var(--c-border);"></span>
+                        <button class="aihub-gpu-btn" style="font-size:11px;padding:3px 8px;" onclick="dmGraphRelayout()" title="레이아웃 다시 계산">🔄 재배치</button>
+                        <button class="aihub-gpu-btn" style="font-size:11px;padding:3px 8px;" onclick="dmGraphFit()" title="화면에 맞춤">⊡ 맞춤</button>
+                        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--c-text2);"><input type="checkbox" id="dm-g-labels" checked onchange="dmGraphRender()"> 라벨</label>
+                    </div>
+                    <svg id="dm-graph-svg" style="width:100%;height:100%;display:block;cursor:grab;"></svg>
+                    <div id="dm-graph-empty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;color:var(--c-text3);text-align:center;padding:40px;">
+                        <div style="font-size:40px;margin-bottom:10px;">🔗</div>
+                        <div style="font-size:14px;font-weight:700;color:var(--c-text2);">아직 문서 간 연결이 없습니다</div>
+                        <div style="font-size:12px;margin-top:6px;">문서 본문에 <code>[[다른 문서 제목]]</code> 또는 <code>[[doc:id]]</code> 위키링크를 넣으면<br>여기에 연결 그래프가 그려집니다.</div>
+                    </div>
                 </div>
-                <svg id="dm-graph-svg" style="width:100%;height:100%;display:block;cursor:grab;"></svg>
-                <div id="dm-graph-empty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;color:var(--c-text3);text-align:center;padding:40px;">
-                    <div style="font-size:40px;margin-bottom:10px;">🔗</div>
-                    <div style="font-size:14px;font-weight:700;color:var(--c-text2);">아직 문서 간 연결이 없습니다</div>
-                    <div style="font-size:12px;margin-top:6px;">문서 본문에 <code>[[다른 문서 제목]]</code> 또는 <code>[[doc:id]]</code> 위키링크를 넣으면<br>여기에 연결 그래프가 그려집니다.</div>
-                </div>
+                <div id="dm-graph-side" style="display:none;flex:none;width:44%;min-width:300px;max-width:72%;border-left:1px solid var(--c-border);background:var(--c-card);flex-direction:column;overflow:hidden;"></div>
             </div>
         </div>
 
@@ -13813,7 +13816,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r333';
+        var _AHUB_FRONT_REV = 'r334';
 
 
         var _ahubRevWarned = false;
@@ -25854,6 +25857,13 @@ addEventListener("resize",sendPos);
             var wl = (e.target && e.target.closest) ? e.target.closest('.wikilink') : null;
             if (!wl) return;
             if (typeof dmHideWlPopup === 'function') dmHideWlPopup();   // [r323] 위키링크 클릭(이동) 시 호버 미리보기 팝업 닫기
+            // [r334 #3] 연결 보기 분할 패널 안 위키링크 → 그 패널에서 문서 전환
+            if (e.target.closest && e.target.closest('#dm-graph-side')) {
+                var _gsType = wl.getAttribute('data-wl-type'), _gsId = wl.getAttribute('data-wl-id');
+                e.preventDefault(); e.stopPropagation();
+                if (_gsType === 'doc' && _gsId && typeof dmGraphOpenSide === 'function') dmGraphOpenSide(_gsId);
+                return;
+            }
             // [r329] 분할 패널 안 위키링크는 분할 패널만 전환(메인 문서는 그대로)
             if (e.target.closest && e.target.closest('#dm-split-pane')) {
                 var _spType = wl.getAttribute('data-wl-type'); var _spId = wl.getAttribute('data-wl-id');
@@ -35515,7 +35525,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r333';
+    var _RFS_FRONT_REV = 'r334';
 
 
     async function rfsHealthCheck() {
@@ -35754,8 +35764,8 @@ ${intrLog}
         var ex = document.getElementById('dm-explorer'), gr = document.getElementById('dm-graph');
         if (ex) ex.style.display = (tab === 'explorer') ? 'flex' : 'none';
         if (gr) gr.style.display = (tab === 'graph') ? 'flex' : 'none';
-        if (tab === 'graph') dmGraphBuildAndRender();
-        else dmRenderDoc();
+        if (tab === 'graph') { dmGraphBuildAndRender(); }
+        else { dmGraphCloseSide(); dmRenderDoc(); }   // [r334 #3] 탐색기로 돌아오면 그래프 분할 패널 정리(#dm-doc-body 중복 방지)
     }
 
     // ── 트리 (PHASE 대분류 → STEP 중분류 → 문서) ──
@@ -35877,6 +35887,7 @@ ${intrLog}
         var d = _dmById(id); if (!d) { showToast('문서를 찾을 수 없습니다', 'alert'); return; }
         var sameDoc = (_dmState.activeId === id);
         if (id === _dmState.splitId) _dmState.splitId = null;   // [r329] 분할 문서를 메인으로 열면 분할 닫기
+        _dmState._docHost = 'dm-doc';   // [r334 #3] 탐색기 본문에 연다
         _dmState.activeId = id;
         _dmState.mode = 'preview';
         if (_dmState.tab !== 'explorer') dmSetTab('explorer');
@@ -35909,8 +35920,10 @@ ${intrLog}
         var prev = el.style.backgroundColor; el.style.transition = 'background-color .4s'; el.style.backgroundColor = 'rgba(217,162,74,.26)';
         setTimeout(function () { el.style.backgroundColor = prev || ''; }, 1300);
     }
-    function dmRenderDoc(loading) {
-        var host = document.getElementById('dm-doc'); if (!host) return;
+    function dmRenderDoc(loading, hostId) {
+        hostId = hostId || _dmState._docHost || 'dm-doc';   // [r334 #3] 현재 렌더 대상(탐색기 #dm-doc / 그래프 #dm-graph-side)
+        var host = document.getElementById(hostId); if (!host) return;
+        var _isSide = (hostId !== 'dm-doc');
         var d = _dmById(_dmState.activeId);
         if (!d) {
             host.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);font-size:13px;">좌측에서 문서를 선택하세요.</div>';
@@ -35937,13 +35950,14 @@ ${intrLog}
             + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmMoveStep(\'' + d.id + '\')" title="단계(STEP) 이동">⇄ 단계</button>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmRenameDoc(\'' + d.id + '\')" title="제목 변경">✏️</button>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;color:#9a1c20;" onclick="dmDeleteDoc(\'' + d.id + '\')" title="삭제">🗑</button>'
+            + (_isSide ? '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmGraphCloseSide()" title="분할 패널 닫기">✕</button>' : '')
             + '</div>';
         var mainHtml;
         if (loading) mainHtml = bar + '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
         else if (mode === 'source' && !locked) mainHtml = bar + '<textarea id="dm-src" oncontextmenu="handleEditorContextMenu(event)" style="flex:1;width:100%;box-sizing:border-box;border:none;outline:none;resize:none;padding:16px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;background:var(--c-paper);color:var(--c-text);">' + _annEsc(d.content || '') + '</textarea>';
         else mainHtml = bar + '<div id="dm-doc-body" class="markdown-body dm-doc-style" oncontextmenu="dmBodyCtx(event)" style="flex:1;overflow-y:auto;padding:22px 30px;"></div>';
         // [r329] 분할보기 — 우측에 참조 문서 패널(읽기전용 미리보기)
-        var splitDoc = _dmState.splitId ? _dmById(_dmState.splitId) : null;
+        var splitDoc = (!_isSide && _dmState.splitId) ? _dmById(_dmState.splitId) : null;   // 그래프 패널은 중첩 분할 없음
         if (splitDoc && splitDoc.id !== d.id) {
             host.style.flexDirection = 'row';
             host.innerHTML = '<div id="dm-main-pane" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden;">' + mainHtml + '</div>'
@@ -36570,10 +36584,12 @@ ${intrLog}
     // [r333 #8] 본문 우클릭 컨텍스트 메뉴 — 표/이미지/파일/인용 삽입(소스보기와 동일 기능)
     function dmBodyCtx(e) {
         var t = e.target;
-        if (t.closest && (t.closest('table') || t.closest('a,button,input,textarea,.dm-meta-panel,.dm-lp-edit'))) return;  // 표/링크/메타/편집중은 통과
+        if (t.closest && (t.closest('table') || t.closest('a,button,input,textarea,.dm-meta-panel'))) return;  // 표/링크/메타는 통과
         var d = _dmById(_dmState.activeId); if (d && (d.isLocked || (d.meta && d.meta.vault))) return;
-        e.preventDefault(); e.stopPropagation();
-        var row = t.closest && t.closest('.dm-lp-row, .dm-lp-blank'); var idx = row ? parseInt(row.getAttribute('data-idx'), 10) : -1;
+        e.preventDefault(); e.stopPropagation();   // [r334 #1] 편집 중(contenteditable)에도 우리 메뉴 — native 크롬 메뉴 차단
+        var idx;
+        if (_dmLpEditingIdx != null) { idx = _dmLpEditingIdx; dmLpCommitEdit(); }   // 편집 중이면 커밋 후 그 위치 기준 삽입
+        else { var row = t.closest && t.closest('.dm-lp-row, .dm-lp-blank'); idx = row ? parseInt(row.getAttribute('data-idx'), 10) : -1; }
         _dmShowMenu(e, [
             { emoji: '▦', label: '표 삽입', fn: function () { dmInsertBlock(idx, '| 제목1 | 제목2 |\n|---|---|\n|   |   |'); } },
             { emoji: '🖼', label: '이미지 첨부', fn: function () { window._dmPendingInsertIdx = idx; if (typeof _pickAndInsertFile === 'function') _pickAndInsertFile(true); } },
@@ -36978,18 +36994,20 @@ ${intrLog}
         var row = tree.querySelector('.dm-tree-item[data-id="' + id + '"]');
         if (row) { row.classList.add('dm-wl-hl'); try { row.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
     }
+    var _dmWlHideT = null;
     function dmScheduleHideWlPopup() {
         var pop = document.getElementById('dm-wl-popup');
         if (!pop || pop._pinned) return;
-        clearTimeout(pop._hideT);
-        pop._hideT = setTimeout(function () { if (!pop._hover && !pop._pinned) dmHideWlPopup(); }, 260);
+        clearTimeout(_dmWlHideT);
+        _dmWlHideT = setTimeout(function () { var p = document.getElementById('dm-wl-popup'); if (p && !p._hover && !p._pinned) dmHideWlPopup(); }, 260);
     }
-    function dmHideWlPopup() { var pop = document.getElementById('dm-wl-popup'); if (pop) pop.remove(); }
+    function dmHideWlPopup() { clearTimeout(_dmWlHideT); var pop = document.getElementById('dm-wl-popup'); if (pop) pop.remove(); }
     function dmShowWlPopup(id, anchor, hash, mention) {
         if (!id || !anchor) return;
+        clearTimeout(_dmWlHideT);   // [r334 #2] 다른 항목으로 즉시 옮길 때 이전 hide 타이머가 새 팝업을 지우지 않게
         var d = _dmById(id);
         var pop = document.getElementById('dm-wl-popup');
-        if (pop && pop._docId === id) { clearTimeout(pop._hideT); if (hash) { var _b = pop.querySelector('#dm-wl-body'); if (_b) _dmScrollHl(_b, hash); } return; }
+        if (pop && pop._docId === id) { if (hash) { var _b = pop.querySelector('#dm-wl-body'); if (_b) _dmScrollHl(_b, hash); } return; }
         if (pop && pop._pinned) return;   // 고정된 팝업이 있으면 새로 안 띄움
         dmHideWlPopup();
         pop = document.createElement('div');
@@ -37012,7 +37030,7 @@ ${intrLog}
         var px = Math.max(8, Math.min(r.left, window.innerWidth - 590));
         var py = r.bottom + 8; if (py + 340 > window.innerHeight) py = Math.max(8, r.top - 348);
         pop.style.left = px + 'px'; pop.style.top = py + 'px';
-        pop.addEventListener('mouseenter', function () { pop._hover = true; clearTimeout(pop._hideT); });
+        pop.addEventListener('mouseenter', function () { pop._hover = true; clearTimeout(_dmWlHideT); });
         pop.addEventListener('mouseleave', function () { pop._hover = false; dmScheduleHideWlPopup(); });
         // 헤더 드래그(이동) — 잡으면 고정
         var hd = pop.querySelector('#dm-wl-head');
@@ -37318,7 +37336,7 @@ ${intrLog}
         var glinks = [].slice.call(svg.querySelectorAll('.dm-glink'));
         gnodes.forEach(function (g) {
             var id = g.getAttribute('data-id');
-            g.addEventListener('mouseenter', function () {
+            g.addEventListener('mouseenter', function () {   // [r334 #3] 연결 하이라이트만(미리보기 팝업 제거)
                 var nb = {}; nb[id] = 1;
                 glinks.forEach(function (l) {
                     var on = (l.dataset.s === id || l.dataset.d === id);
@@ -37326,14 +37344,12 @@ ${intrLog}
                     if (l.dataset.s === id) nb[l.dataset.d] = 1; if (l.dataset.d === id) nb[l.dataset.s] = 1;
                 });
                 gnodes.forEach(function (n) { n.style.opacity = nb[n.getAttribute('data-id')] ? '1' : '0.2'; });
-                dmShowGraphPreview(g, id);
             });
             g.addEventListener('mouseleave', function () {
                 glinks.forEach(function (l) { l.setAttribute('fill-opacity', '0.38'); });
                 gnodes.forEach(function (n) { n.style.opacity = '1'; });
-                dmHideGraphPreview();
             });
-            g.addEventListener('click', function (e) { e.stopPropagation(); dmHideGraphPreview(); dmOpenDoc(id); });
+            g.addEventListener('click', function (e) { e.stopPropagation(); dmGraphOpenSide(id); });   // [r334 #3] 우측 분할 패널로
         });
         // 팬/줌
         if (!svg._dmPanBound) {
@@ -37360,6 +37376,20 @@ ${intrLog}
             }, { passive: false });
         }
     }
+    // [r334 #3] 그래프 노드 클릭 → 우측 분할 패널에 편집 가능한 문서 표시
+    function dmGraphOpenSide(id) {
+        var d = _dmById(id); if (!d) return;
+        if (_dmLpEditingIdx != null) { try { dmLpCommitEdit(); } catch (e) {} }
+        _dmState.activeId = id; _dmState.mode = 'preview'; _dmState._docHost = 'dm-graph-side';
+        var side = document.getElementById('dm-graph-side'); if (!side) return;
+        side.style.display = 'flex';
+        var ex = document.getElementById('dm-doc'); if (ex) ex.innerHTML = '';   // #dm-doc-body 중복 방지(편집 인프라 단일 id)
+        if (d._contentLoaded === false && typeof _fetchDocContent === 'function') {
+            dmRenderDoc(true, 'dm-graph-side');
+            _fetchDocContent(id).then(function (c) { d.content = c || ''; d._contentLoaded = true; if (_dmState.activeId === id) dmRenderDoc(false, 'dm-graph-side'); });
+        } else dmRenderDoc(false, 'dm-graph-side');
+    }
+    function dmGraphCloseSide() { _dmState._docHost = 'dm-doc'; var side = document.getElementById('dm-graph-side'); if (side) { side.innerHTML = ''; side.style.display = 'none'; } }
     function dmShowGraphPreview(gEl, id) {
         var d = _dmById(id); if (!d) return;
         dmHideGraphPreview();
