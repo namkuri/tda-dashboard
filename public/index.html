@@ -10214,13 +10214,18 @@ gate: true
                 .replace(/\s+/g, ' ')
                 .trim();
         }
-        // [r324] 문서 본문 프론트매터의 doc: id 추출 — 파이프라인 키트 규약([[CPR-0001]]처럼 doc id로 참조)
+        // [r324/r325] 문서의 doc: id — 파이프라인 키트 규약([[CPR-0001]]처럼 doc id로 참조).
+        //   본문은 지연 로드라 비어있을 수 있으므로, meta.docId(즉시 로드되는 메타)에 캐시해 사용.
         function _wlDocFrontId(d) {
-            var c = d && d.content; if (!c || c.indexOf('---') < 0) return '';
+            if (!d) return '';
+            if (d.meta && d.meta.docId) return d.meta.docId;          // 캐시(본문 미로드여도 동작)
+            var c = d.content; if (!c || c.indexOf('---') < 0) return '';
             var m = c.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
             if (!m) return '';
             var dm = m[1].match(/^[ \t]*doc[ \t]*:[ \t]*(.+?)[ \t]*$/m);
-            return dm ? dm[1].trim().replace(/^["']|["']$/g, '') : '';
+            var id = dm ? dm[1].trim().replace(/^["']|["']$/g, '') : '';
+            if (id && d.meta) { try { d.meta.docId = id; } catch (e) {} }   // 파싱 결과 캐시
+            return id;
         }
         // [r235 #5] vault: 링크 대상(파일명/제목/ID)을 실제 문서로 해석 — 각주의 (vault:xxx) 링크용
         function _vaultResolve(target) {
@@ -12955,7 +12960,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r324';
+        var _AHUB_FRONT_REV = 'r325';
 
 
         var _ahubRevWarned = false;
@@ -34649,7 +34654,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r324';
+    var _RFS_FRONT_REV = 'r325';
 
 
     async function rfsHealthCheck() {
@@ -34818,6 +34823,27 @@ ${intrLog}
         }
         dmRenderTree();
         dmSetTab(_dmState.tab);
+        _dmBackfillDocIds();   // [r325] 위키링크 doc:id 해석을 위해 미로드 문서의 doc id 미리 채움
+    }
+    // [r325] 파이프라인 문서의 doc: id(meta.docId)를 모두 채운다 — 본문 지연로드라 위키링크 해석이
+    //   안 되던 문제 해결. 미로드 문서만 본문을 한 번 불러와 meta.docId 캐시 후(영속) 트리/본문 재렌더.
+    function _dmBackfillDocIds() {
+        var need = _dmDocs().filter(function (d) { return !(d.meta && d.meta.docId) && d._contentLoaded === false; });
+        // 이미 로드된 문서는 즉시 캐시
+        _dmDocs().forEach(function (d) { if (!(d.meta && d.meta.docId) && d.content) _wlDocFrontId(d); });
+        if (!need.length || typeof _fetchDocContent !== 'function') return;
+        var done = 0, changed = false;
+        need.forEach(function (d) {
+            _fetchDocContent(d.id).then(function (c) {
+                d.content = c || ''; d._contentLoaded = true;
+                if (!d.meta) d.meta = {};
+                var id = _wlDocFrontId(d);   // 파싱+meta.docId 캐시
+                if (id) { changed = true; if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} } }
+            }).catch(function () {}).then(function () {
+                done++;
+                if (done === need.length && changed) { dmRenderTree(); if (_dmState.activeId) dmRenderDoc(); }
+            });
+        });
     }
     function dmSetTab(tab) {
         _dmState.tab = tab;
@@ -35464,6 +35490,8 @@ ${intrLog}
     }
     function dmSaveDoc(id) {
         var d = _dmById(id); if (!d) return;
+        // [r325] 본문의 doc: id를 meta.docId로 동기화(위키링크 해석용 — 지연로드 무관)
+        if (d.content) { if (!d.meta) d.meta = {}; var _fid = ''; var _m = d.content.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/); if (_m) { var _dm = _m[1].match(/^[ \t]*doc[ \t]*:[ \t]*(.+?)[ \t]*$/m); if (_dm) _fid = _dm[1].trim().replace(/^["']|["']$/g, ''); } d.meta.docId = _fid || undefined; }
         if (typeof autoRegisterWikiLinks === 'function') { try { autoRegisterWikiLinks('doc', id, d.content || ''); } catch (e) {} }
         // 저장 — dbUpsertDoc 있으면 그걸로, 없으면 supabase 직접
         if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(d); } catch (e) {} }
