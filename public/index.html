@@ -12938,7 +12938,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r320';
+        var _AHUB_FRONT_REV = 'r321';
 
 
         var _ahubRevWarned = false;
@@ -34629,7 +34629,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r320';
+    var _RFS_FRONT_REV = 'r321';
 
 
     async function rfsHealthCheck() {
@@ -34731,7 +34731,11 @@ ${intrLog}
         var label = kind === 'phase' ? ('PHASE ' + no + ' 설명') : ('STEP ' + (no < 10 ? '0' + no : no) + ' 작성 가이드');
         _dmShowMenu(e, [{ emoji: '❔', label: label + ' 보기', fn: function () { dmShowHelp(kind, no); } }]);
     }
-    function dmHideHelp() { var p = document.getElementById('dm-help-popup'); if (p) p.remove(); }
+    var _dmHelpOutside = null;
+    function dmHideHelp() {
+        var p = document.getElementById('dm-help-popup'); if (p) p.remove();
+        if (_dmHelpOutside) { document.removeEventListener('mousedown', _dmHelpOutside, true); _dmHelpOutside = null; }
+    }
     function dmShowHelp(kind, no) {
         dmHideHelp();
         var md = kind === 'phase' ? _dmHelpPhase(no) : _dmHelpStep(no);
@@ -34756,6 +34760,15 @@ ${intrLog}
         document.body.appendChild(pop);
         pop.style.left = Math.max(8, (window.innerWidth - 780) / 2) + 'px';
         pop.style.top = Math.max(8, window.innerHeight * 0.16) + 'px';
+        // [r321] 팝업 바깥(또는 다른 ?/도움말 메뉴 외)을 누르면 닫기
+        setTimeout(function () {
+            _dmHelpOutside = function (e) {
+                var t = e.target;
+                if (t && t.closest && (t.closest('#dm-help-popup') || t.closest('.dm-help-btn') || t.closest('#dm-ctx-menu'))) return;
+                dmHideHelp();
+            };
+            document.addEventListener('mousedown', _dmHelpOutside, true);
+        }, 0);
         var hd = pop.querySelector('#dm-help-head');
         if (hd) hd.addEventListener('mousedown', function (e) {
             if (e.target.tagName === 'BUTTON') return;
@@ -34822,10 +34835,10 @@ ${intrLog}
                 var items = byStep[s.no] || [];
                 var col = p.color;
                 // 중분류 헤더 (STEP)
-                html += '<div class="dm-step-hd" oncontextmenu="dmHelpCtx(event,\'step\',' + s.no + ')" onclick="dmToggleStep(' + s.no + ')" style="display:flex;align-items:center;gap:6px;margin:6px 4px 1px;cursor:pointer;user-select:none;">'
+                html += '<div class="dm-step-hd" oncontextmenu="dmHelpCtx(event,\'step\',' + s.no + ')" onclick="dmToggleStep(' + s.no + ')" style="display:flex;align-items:center;gap:5px;margin:6px 4px 1px;cursor:pointer;user-select:none;">'
+                    + '<span style="flex:none;font-size:9px;color:var(--c-text3);width:10px;text-align:center;line-height:1;">' + (_dmState._collapsed[s.no] ? '▶' : '▼') + '</span>'
                     + '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;background:' + col + '22;color:' + col + ';border-radius:4px;padding:1px 5px;flex:none;">S' + (s.no < 10 ? '0' + s.no : s.no) + '</span>'
                     + '<span style="font-size:11.5px;font-weight:700;color:var(--c-text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(s.title) + '</span>'
-                    + (items.length ? '<span style="font-size:10px;color:var(--c-text3);">' + items.length + '</span>' : '')
                     + '<button class="dm-help-btn" onclick="event.stopPropagation();dmShowHelp(\'step\',' + s.no + ',this)" title="이 STEP 작성 가이드" style="border:none;background:none;cursor:help;color:var(--c-text3);font-size:9px;font-weight:700;line-height:1;width:11px;height:11px;border-radius:50%;padding:0;flex:none;">?</button>'
                     + '<button class="dm-step-add" onclick="event.stopPropagation();dmNewDoc(' + s.no + ')" title="이 단계에 새 문서" style="border:none;background:none;cursor:pointer;color:var(--c-accent);font-size:13px;line-height:1;padding:0 2px;flex:none;">＋</button>'
                     + '</div>';
