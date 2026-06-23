@@ -13800,7 +13800,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r330';
+        var _AHUB_FRONT_REV = 'r331';
 
 
         var _ahubRevWarned = false;
@@ -35502,7 +35502,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r330';
+    var _RFS_FRONT_REV = 'r331';
 
 
     async function rfsHealthCheck() {
@@ -35707,6 +35707,7 @@ ${intrLog}
         }
         dmRenderTree();
         dmSetTab(_dmState.tab);
+        _dmBindTips();         // [r331 #2] 커스텀 툴팁 1회 바인딩
         _dmBackfillDocIds();   // [r325] 위키링크 doc:id 해석을 위해 미로드 문서의 doc id 미리 채움
     }
     // [r325] 파이프라인 문서의 doc: id(meta.docId)를 모두 채운다 — 본문 지연로드라 위키링크 해석이
@@ -35747,6 +35748,17 @@ ${intrLog}
     function dmRenderTree() {
         var host = document.getElementById('dm-tree'); if (!host) return;
         var docs = _dmDocs();
+        // [r331 #1] 같은 doc:id(버전 family)는 트리에 하나만 — 최신 버전을 대표로
+        var famMap = {}, deduped = [];
+        docs.forEach(function (d) {
+            var did = (_wlDocFrontId(d) || '').toLowerCase();
+            if (!did) { deduped.push(d); return; }
+            if (!famMap[did]) { famMap[did] = d; deduped.push(d); }
+            else if ((_dmDocVer(d) || 1) > (_dmDocVer(famMap[did]) || 1)) { var i = deduped.indexOf(famMap[did]); if (i >= 0) deduped[i] = d; famMap[did] = d; }
+        });
+        docs = deduped;
+        var _activeDoc = _dmById(_dmState.activeId); var _activeDid = _activeDoc ? (_wlDocFrontId(_activeDoc) || '').toLowerCase() : '';
+        _dmState._activeDid = _activeDid;   // family 활성 표시용
         // step별 문서 모으기
         var byStep = {};
         docs.forEach(function (d) { var sn = _dmDocStep(d); (byStep[sn] = byStep[sn] || []).push(d); });
@@ -35776,7 +35788,7 @@ ${intrLog}
                     + '</div>';
                 if (_dmState._collapsed[s.no]) return;
                 items.forEach(function (d) {
-                    var active = (d.id === _dmState.activeId);
+                    var active = (d.id === _dmState.activeId) || (_dmState._activeDid && (_wlDocFrontId(d) || '').toLowerCase() === _dmState._activeDid);
                     var ft = _dmFrontTitle(d);   // [r317] 프론트매터 title
                     var ftLoading = _dmState.backfilling && d._contentLoaded === false && !(d.meta && typeof d.meta.docTitle === 'string');  // [r326]
                     html += '<div class="dm-tree-item" data-id="' + d.id + '" onclick="dmOpenDoc(\'' + d.id + '\')" oncontextmenu="dmTreeCtx(event,\'' + d.id + '\')" '
@@ -35896,10 +35908,13 @@ ${intrLog}
         var stepChip = si
             ? '<span title="' + _annEsc(si.owner) + '" style="font-family:ui-monospace,monospace;font-size:10.5px;font-weight:700;background:' + si.color + '22;color:' + si.color + ';border-radius:5px;padding:2px 8px;flex:none;">S' + (sn < 10 ? '0' + sn : sn) + ' · ' + _annEsc(si.title) + '</span>'
             : '<span style="font-size:10.5px;color:var(--c-text3);">미분류</span>';
+        // [r331 #4] 구버전 링크 경고 칩(타이틀 옆)
+        var _odRefs = _dmScanRefs(d.content || '');
+        var odChip = _odRefs.length ? '<span data-dm-tip="구버전 링크 ' + _odRefs.length + '개 — 최신이 아닌 버전을 가리킵니다: ' + _annEsc(_odRefs.map(function (o) { return o.ref + '→v' + o.latest; }).join(', ')) + '" style="flex:none;font-size:10.5px;font-weight:700;color:#9a6a1a;background:rgba(212,154,28,.16);border:1px solid rgba(212,154,28,.5);border-radius:5px;padding:2px 8px;cursor:help;">⚠ 구버전 링크 ' + _odRefs.length + '</span>' : '';
         var bar = '<div style="flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--c-border);background:var(--c-card);">'
             + '<span style="font-size:15px;">' + (d.emoji || '📄') + '</span>'
             + '<span style="font-weight:800;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38%;">' + _annEsc(d.title || '(제목 없음)') + '</span>'
-            + stepChip
+            + stepChip + odChip
             + '<span style="flex:1;"></span>'
             + '<span style="display:inline-flex;border:1px solid var(--c-border);border-radius:6px;overflow:hidden;">'
             + '<button class="aihub-gpu-btn" style="font-size:11px;border:none;border-radius:0;' + (mode === 'preview' ? 'background:var(--c-accent);color:#fff;' : '') + '" onclick="dmSetMode(\'preview\')">📖 본문</button>'
@@ -36022,7 +36037,14 @@ ${intrLog}
                 frag += '<div class="dm-lp-row dm-lp-fm" data-idx="' + idx + '"><div class="dm-lp-content">' + dmRenderMetaPanel(b.text, idx, stepNo, locked) + '</div></div>';
                 return;
             }
-            frag += '<div class="dm-lp-row" data-idx="' + idx + '"><div class="dm-lp-content"' + (locked ? '' : ' onclick="dmLpRowClick(event,' + idx + ')"') + ' style="border-radius:6px;' + (locked ? '' : 'cursor:text;') + '">' + _lpRenderBlockHtml(b.text) + '</div></div>';
+            if (/^<!--dmedit:/.test((b.text || '').trim())) {   // [r331 #6] 헤더 수정 이력 주석 → 부드러운 표시
+                var _em = (b.text || '').trim().match(/^<!--dmedit:(.+?)\|([\s\S]*?)-->$/);
+                frag += '<div class="dm-lp-row dm-lp-edstamp" data-idx="' + idx + '"><div class="dm-lp-content" style="font-size:10px;color:var(--c-text3);opacity:.7;padding:0 0 2px 2px;">✎ ' + (_em ? _annEsc(_em[1] + ' · ' + _em[2] + ' 수정') : '수정 이력') + '</div></div>';
+                return;
+            }
+            var _outd = _dmScanRefs(b.text);   // [r331 #4] 구버전 링크 포함 줄 경고
+            var warnIco = _outd.length ? '<span data-dm-tip="구버전 링크: ' + _annEsc(_outd.map(function (o) { return o.ref + ' → 최신 v' + o.latest; }).join(', ')) + '" style="flex:none;color:#d49a1c;font-size:13px;line-height:1.75;cursor:help;">⚠</span>' : '';
+            frag += '<div class="dm-lp-row" data-idx="' + idx + '" style="display:flex;align-items:flex-start;gap:5px;">' + warnIco + '<div class="dm-lp-content"' + (locked ? '' : ' onclick="dmLpRowClick(event,' + idx + ')"') + ' style="flex:1;min-width:0;border-radius:6px;' + (locked ? '' : 'cursor:text;') + '">' + _lpRenderBlockHtml(b.text) + '</div></div>';
         });
         body.innerHTML = frag;
         try { if (typeof _buildHtmlEmbeds === 'function') _buildHtmlEmbeds(body, (d.meta && d.meta.htmlEmbeds) || {}); } catch (e) {}
@@ -36030,6 +36052,40 @@ ${intrLog}
         try { if (typeof enhanceMediaLinks === 'function') enhanceMediaLinks(body); } catch (e) {}
         try { dmBindWlPreview(body); } catch (e) {}   // [r317] 위키링크 호버 팝업
         if (!locked) { try { dmBindTables(body); } catch (e) {} }
+        try { dmRenderBacklinks(body, d); } catch (e) {}   // [r331 #7] 본문 하단 '링크된 언급'
+    }
+    // [r331 #7] 링크된 언급 — 이 문서(doc:id)를 본문/프론트매터에서 참조하는 문서들
+    function dmRenderBacklinks(body, d) {
+        if (!body || !d) return;
+        var did = (_wlDocFrontId(d) || '').toLowerCase(); if (!did) return;
+        var refs = [];
+        _dmDocs().forEach(function (x) {
+            if (x.id === d.id) return;
+            var xdid = (_wlDocFrontId(x) || '').toLowerCase(); if (xdid === did) return;   // 같은 family(다른 버전) 제외
+            var c = x.content || ''; if (!c) return;
+            // [[..did..]] 위키링크 또는 did@n / did 참조
+            var re = new RegExp('(\\[\\[[^\\]]*' + did.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '[^\\]]*\\]\\])|(\\b' + did.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '(?:@\\d+)?\\b)', 'i');
+            if (re.test(c.toLowerCase())) refs.push(x);
+        });
+        if (!refs.length) return;
+        var sec = document.createElement('div');
+        sec.style.cssText = 'margin-top:30px;padding-top:14px;border-top:2px solid var(--c-border);';
+        var html = '<div style="font-size:13px;font-weight:800;color:var(--c-text2);margin-bottom:10px;">🔗 링크된 언급 <span style="font-weight:600;color:var(--c-text3);font-size:11px;">(' + refs.length + ')</span></div>';
+        refs.sort(function (a, b2) { return (_dmDocStep(a) || 99) - (_dmDocStep(b2) || 99); });
+        refs.forEach(function (x) {
+            var sn = _dmDocStep(x); var si = sn ? _dmStepInfo(sn) : null; var ph = si ? ('PHASE ' + si.phaseNo) : '';
+            var ver = _dmDocVer(x); var col = si ? si.color : 'var(--c-text3)';
+            html += '<div onclick="dmOpenDoc(\'' + x.id + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--c-border);border-radius:8px;margin-bottom:5px;cursor:pointer;background:var(--c-paper);">'
+                + '<span style="flex:none;">' + (x.emoji || '📄') + '</span>'
+                + '<span style="font-size:12.5px;font-weight:700;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40%;">' + _annEsc(x.title || '(제목 없음)') + '</span>'
+                + (_dmFrontTitle(x) ? '<span style="font-size:11px;color:var(--c-text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(_dmFrontTitle(x)) + '</span>' : '')
+                + '<span style="flex:1;"></span>'
+                + (si ? '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;background:' + col + '22;color:' + col + ';border-radius:4px;padding:1px 6px;">' + (ph ? ph + ' · ' : '') + 'S' + (sn < 10 ? '0' + sn : sn) + '</span>' : '<span style="font-size:10px;color:var(--c-text3);">미분류</span>')
+                + (ver ? '<span style="font-size:10px;font-weight:700;color:var(--c-text3);">v' + ver + '</span>' : '')
+                + '</div>';
+        });
+        sec.innerHTML = html;
+        body.appendChild(sec);
     }
     // ── [r319] 메타데이터(프론트매터) 패널 — 예쁜 표시 + 미작성/누락 감지 + 편집 ──
     function _dmParseFront(text) {
@@ -36070,9 +36126,17 @@ ${intrLog}
     function _dmResolveDocRef(ref) {
         var p = _dmParseDocRef(ref); if (!p) return { ok: false };
         var fam = _dmDocsByDocId(p.docId); if (!fam.length) return { ok: false, p: p };
-        if (p.ver == null) return { ok: true, doc: fam[fam.length - 1], p: p };
+        var latest = fam[fam.length - 1]; var latestVer = _dmDocVer(latest) || 1;
+        if (p.ver == null) return { ok: true, doc: latest, p: p, latestVer: latestVer, outdated: false };
         var hit = null; fam.forEach(function (d) { if ((_dmDocVer(d) || 1) === p.ver) hit = d; });
-        return hit ? { ok: true, doc: hit, p: p } : { ok: false, p: p };
+        if (!hit) return { ok: false, p: p, latestVer: latestVer };
+        return { ok: true, doc: hit, p: p, latestVer: latestVer, outdated: p.ver < latestVer, latestDoc: latest };
+    }
+    // [r331 #4] 콘텐츠에서 구버전 참조(XXX-NNNN@V, V<최신) 스캔
+    function _dmScanRefs(content) {
+        var out = []; var re = /([A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9]+)*-\d+)@(\d+)/g; var m;
+        while ((m = re.exec(String(content || '')))) { var docId = m[1], ver = parseInt(m[2], 10); var fam = _dmDocsByDocId(docId); if (!fam.length) continue; var latest = _dmDocVer(fam[fam.length - 1]) || 1; if (ver < latest) out.push({ ref: m[0], docId: docId, ver: ver, latest: latest }); }
+        return out;
     }
     // owner 사용자 매칭/pill(#7)
     function _dmFindUser(token) {
@@ -36080,20 +36144,43 @@ ${intrLog}
         return (currentData.users || []).find(function (u) { var nm = (u.nickname || u.displayName || '').toLowerCase(); var em = (u.email || '').toLowerCase(); return nm === token || em === token || (em && em.split('@')[0] === token); }) || null;
     }
     function _dmOwnerPill(value) {
-        var u = _dmFindUser(value);
-        if (u) {
+        var toks = String(value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        if (!toks.length) return '<span style="color:var(--c-text3);">—</span>';
+        return '<span style="display:inline-flex;flex-wrap:wrap;gap:5px;align-items:center;">' + toks.map(_dmOwnerTokenPill).join('') + '</span>';
+    }
+    function _dmOwnerTokenPill(t) {
+        var u = _dmFindUser(t);
+        if (u) {   // 유효 프로필 — 아바타 + 닉네임 pill(실선)
             var nm = u.nickname || u.displayName || u.email || '사용자';
+            var prov = u.provider === 'github' ? '⚫' : (u.provider === 'google' ? '🔵' : '');
             var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;flex:none;">'
                 : '<span style="width:18px;height:18px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
-            return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--c-card);border:1px solid var(--c-border);border-radius:13px;padding:2px 9px 2px 3px;">' + av + '<span style="font-size:12px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span></span>';
+            return '<span data-dm-tip="등록 사용자' + (prov ? ' (' + (u.provider) + ')' : '') + (u.email ? ' · ' + _annEsc(u.email) : '') + '" style="display:inline-flex;align-items:center;gap:5px;background:var(--c-card);border:1px solid var(--c-border);border-radius:13px;padding:2px 9px 2px 3px;">' + av + '<span style="font-size:12px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span>' + (prov ? '<span style="font-size:9px;opacity:.6;">' + prov + '</span>' : '') + '</span>';
         }
-        return '<span style="font-size:12.5px;color:var(--c-text);">' + (value ? _annEsc(value) : '<span style="color:var(--c-text3);">—</span>') + '</span>';
+        // 일반 텍스트 — 점선 pill(프로필 미연결 표시)
+        return '<span data-dm-tip="등록 사용자가 아닌 텍스트 (@로 사용자를 연결할 수 있어요)" style="display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px dashed var(--c-border);border-radius:13px;padding:2px 10px;font-size:12px;color:var(--c-text2);">' + _annEsc(t) + '</span>';
     }
     function _dmMetaKeyHtml(key) {
         return '<span style="flex:0 0 116px;display:flex;align-items:center;gap:4px;padding-top:1px;">'
             + '<span style="font-size:11.5px;font-weight:700;color:var(--c-text3);font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;">' + _annEsc(key) + '</span>'
-            + '<span class="dm-meta-q" title="' + _annEsc(_dmMetaDesc(key)) + '" style="font-size:8.5px;color:var(--c-text3);border:1px solid var(--c-border);border-radius:50%;width:12px;height:12px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex:none;">?</span>'
+            + '<span class="dm-meta-q" data-dm-tip="' + _annEsc(_dmMetaDesc(key)) + '" style="font-size:9px;color:var(--c-text3);border:1px solid var(--c-border);border-radius:50%;min-width:13px;height:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex:none;">?</span>'
             + '</span>';
+    }
+    // [r331 #2] 커스텀 툴팁(네이티브 title 미표시 대응) — data-dm-tip 호버 시 표시
+    var _dmTipEl = null;
+    function _dmTipShow(el) {
+        var txt = el.getAttribute('data-dm-tip'); if (!txt) return;
+        if (!_dmTipEl) { _dmTipEl = document.createElement('div'); _dmTipEl.id = 'dm-tip'; _dmTipEl.style.cssText = 'position:fixed;z-index:9999;max-width:280px;background:var(--c-text);color:var(--c-card);font-size:11.5px;font-weight:500;line-height:1.5;padding:6px 10px;border-radius:7px;box-shadow:0 6px 20px rgba(0,0,0,.32);pointer-events:none;'; document.body.appendChild(_dmTipEl); }
+        _dmTipEl.textContent = txt; _dmTipEl.style.display = 'block';
+        var r = el.getBoundingClientRect(); var tw = _dmTipEl.offsetWidth, th = _dmTipEl.offsetHeight;
+        var x = Math.min(r.left, window.innerWidth - tw - 8); var y = r.bottom + 6; if (y + th > window.innerHeight) y = r.top - th - 6;
+        _dmTipEl.style.left = Math.max(6, x) + 'px'; _dmTipEl.style.top = Math.max(6, y) + 'px';
+    }
+    function _dmTipHide() { if (_dmTipEl) _dmTipEl.style.display = 'none'; }
+    function _dmBindTips() {
+        if (window._dmTipsBound) return; window._dmTipsBound = true;
+        document.addEventListener('mouseover', function (e) { var q = e.target.closest && e.target.closest('[data-dm-tip]'); if (q) _dmTipShow(q); });
+        document.addEventListener('mouseout', function (e) { var q = e.target.closest && e.target.closest('[data-dm-tip]'); if (q) _dmTipHide(); });
     }
     // 키별 값 렌더(#3 status pill / #4 doc참조 색 / #6 version 화살표 / #7 owner pill)
     function _dmMetaValueHtml(key, value, idx, locked) {
@@ -36107,7 +36194,14 @@ ${intrLog}
             var inner = raw.replace(/[\[\]]/g, ''); var parts = inner.split(/[,\s]+/).filter(Boolean); var ph = '';
             parts.forEach(function (pp) {
                 var r = _dmResolveDocRef(pp);
-                if (r.p) { var c = r.ok ? '#3a6ea5' : '#c0504d'; var tip = r.ok ? ('유효: ' + ((r.doc && r.doc.title) || '')) : '대상 문서/버전 없음'; ph += '<span style="color:' + c + ';font-weight:600;border-bottom:1px ' + (r.ok ? 'solid' : 'dashed') + ' ' + c + ';margin-right:9px;cursor:' + (r.ok ? 'pointer' : 'help') + ';" title="' + _annEsc(tip) + '"' + (r.ok && r.doc ? ' onclick="event.stopPropagation();dmOpenDoc(\'' + r.doc.id + '\')"' : '') + '>' + _annEsc(pp) + '</span>'; }
+                if (r.p) {
+                    var c, tip, dash, mark = '';
+                    if (!r.ok) { c = '#c0504d'; tip = '대상 문서/버전 없음'; dash = 'dashed'; }
+                    else if (r.outdated) { c = '#b5732a'; tip = '⚠ 최신 버전이 아닙니다 — 최신: v' + r.latestVer + ' (현재 참조 v' + r.p.ver + ')'; dash = 'dashed'; mark = '⚠ '; }
+                    else { c = '#3a6ea5'; tip = '유효: ' + ((r.doc && r.doc.title) || ''); dash = 'solid'; }
+                    var go = (r.ok && r.doc) ? r.doc.id : ((r.outdated && r.latestDoc) ? r.latestDoc.id : '');
+                    ph += '<span data-dm-tip="' + _annEsc(tip) + '" style="color:' + c + ';font-weight:600;border-bottom:1px ' + dash + ' ' + c + ';margin-right:9px;cursor:' + (go ? 'pointer' : 'help') + ';"' + (go ? ' onclick="event.stopPropagation();dmOpenDoc(\'' + go + '\')"' : '') + '>' + mark + _annEsc(pp) + '</span>';
+                }
                 else ph += '<span style="margin-right:9px;">' + _annEsc(pp) + '</span>';
             });
             return '<span data-meta-key="' + _annEsc(key) + '"' + clickEdit + ' style="flex:1;' + (locked ? '' : 'cursor:text;') + '" title="' + (locked ? '' : '클릭해 편집') + '">' + (ph || '<span style="color:var(--c-text3);">—</span>') + '</span>';
@@ -36158,8 +36252,19 @@ ${intrLog}
                 + (locked ? '' : '<button onclick="dmMetaFillMissing(' + idx + ',\'' + _annEsc(t.key) + '\')" title="이 필드 추가" style="border:1px solid var(--c-accent);background:var(--c-accent);color:#fff;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;padding:1px 9px;flex:none;">＋ 추가</button>')
                 + '</div>';
         });
+        // [r331 #5] 작성/수정 시점(자동) — 읽기전용
+        var _d = _dmById(_dmState.activeId);
+        if (_d) {
+            function tsRow(label, ts, tip) { return '<div class="dm-meta-row" style="display:flex;align-items:center;gap:10px;padding:4px 0;border-top:1px solid var(--c-border);">' + '<span style="flex:0 0 116px;display:flex;align-items:center;gap:4px;"><span style="font-size:11px;font-weight:600;color:var(--c-text3);font-family:ui-monospace,monospace;">' + label + '</span><span class="dm-meta-q" data-dm-tip="' + tip + '" style="font-size:9px;color:var(--c-text3);border:1px solid var(--c-border);border-radius:50%;min-width:13px;height:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help;">?</span></span>' + '<span style="flex:1;font-size:11.5px;color:var(--c-text2);">' + (ts ? _dmFmtTime(ts) : '—') + '</span></div>'; }
+            html += tsRow('작성', _d.createdAt, '문서가 처음 만들어진 시점(자동)');
+            html += tsRow('수정', _d.updatedAt, '마지막으로 저장된 시점(자동)');
+        }
         html += '</div></div>';
         return html;
+    }
+    function _dmFmtTime(ts) {
+        var n = parseInt(ts, 10); if (!n) return '—';
+        try { var dt = new Date(n); var p = function (x) { return (x < 10 ? '0' : '') + x; }; return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate()) + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes()); } catch (e) { return '—'; }
     }
     function _dmMetaBlock(idx) { var body = document.getElementById('dm-doc-body'); return (body && body._dmBlocks && body._dmBlocks[idx]) || null; }
     function _dmMetaSetKey(idx, key, value) {
@@ -36381,9 +36486,25 @@ ${intrLog}
         var idx = _dmLpEditingIdx; _dmLpEditingIdx = null;
         var ed = body.querySelector('.dm-lp-edit[data-idx="' + idx + '"]'); if (!ed) return;
         var blocks = body._dmBlocks || [];
-        if (blocks[idx]) { blocks[idx].text = _lpExtractText(ed); blocks[idx].blank = (blocks[idx].text.trim() === ''); }
+        if (blocks[idx]) { blocks[idx].text = _lpExtractText(ed); blocks[idx].blank = (blocks[idx].text.trim() === ''); try { _dmStampHeaderEdit(blocks, idx); } catch (e) {} }
         dmLpCommitBlocks();
         dmRenderLiveBody(body, _dmById(_dmState.activeId), false);
+    }
+    // [r331 #6] 편집된 블록이 속한 헤더에 수정 시각·수정자 주석(<!--dmedit:...-->)을 갱신
+    function _dmStampHeaderEdit(blocks, idx) {
+        var eb = blocks[idx]; if (!eb) return;
+        var et = (eb.text || '').trim();
+        if (/^<!--dmedit:/.test(et) || /^﻿?\s*---/.test(et)) return;   // 주석/프론트매터 편집은 제외
+        var hi = -1;
+        for (var i = idx; i >= 0; i--) { var b = blocks[i]; if (b && !b.blank && /^#{1,6}\s/.test(b.text || '')) { hi = i; break; } }
+        if (hi < 0) return;
+        var nm = '';
+        try { nm = (typeof myNickname !== 'undefined' && myNickname) || (currentUser && (currentUser.name || currentUser.displayName || currentUser.email)) || ''; } catch (e) {}
+        nm = String(nm || '사용자').replace(/[|<>]/g, '').slice(0, 40);
+        var stamp = '<!--dmedit:' + _dmFmtTime(Date.now()) + '|' + nm + '-->';
+        var nx = blocks[hi + 1];
+        if (nx && !nx.blank && /^<!--dmedit:/.test((nx.text || '').trim())) { nx.text = stamp; }
+        else { blocks.splice(hi + 1, 0, { text: stamp, blank: false }); if (blocks[hi + 2] && !blocks[hi + 2].blank) blocks.splice(hi + 2, 0, { text: '', blank: true }); }
     }
     function dmLpCommitBlocks() {
         var body = document.getElementById('dm-doc-body'); if (!body || !body._dmBlocks) return;
