@@ -12963,7 +12963,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r327';
+        var _AHUB_FRONT_REV = 'r328';
 
 
         var _ahubRevWarned = false;
@@ -34657,7 +34657,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r327';
+    var _RFS_FRONT_REV = 'r328';
 
 
     async function rfsHealthCheck() {
@@ -35671,7 +35671,7 @@ ${intrLog}
         return Object.keys(out);
     }
     // ── Alluvial(Sankey) — 12 STEP 을 좌→우 열로, 위키링크가 띠(리본) ──
-    var _DM_COLW = 14, _DM_PITCH = 150, _DM_LEFT = 90, _DM_TOP = 84, _DM_T = 10, _DM_NODEGAP = 16, _DM_COLH = 560;
+    var _DM_COLW = 14, _DM_PITCH = 150, _DM_LEFT = 90, _DM_TOP = 84, _DM_T = 10, _DM_NODEGAP = 16, _DM_COLH = 560, _DM_ZIG = 130;
     async function dmGraphBuildAndRender() {
         var allPipe = _dmDocs();
         var docs = allPipe.filter(function (d) { return _dmDocStep(d) > 0; });
@@ -35725,9 +35725,10 @@ ${intrLog}
             arr.sort(function (a, b) { return b.deg - a.deg; });
             var heights = arr.map(function (n) { return Math.max(20, Math.min(220, n.deg * _DM_T + 6)); });
             var total = heights.reduce(function (a, b) { return a + b; }, 0) + Math.max(0, arr.length - 1) * _DM_NODEGAP;
-            // 상단 정렬(라벨 바로 아래) — 단, 전체 열들의 중앙선 기준으로 살짝 내려 균형.
-            var startY = _DM_TOP + 8;
-            var x = _DM_LEFT + (parseInt(sn, 10) - 1) * _DM_PITCH;
+            // [r328] 짝수/홀수 STEP을 위아래로 엇갈리게(지그재그) 배치 — 일직선 리본 겹침 완화
+            var stepNo = parseInt(sn, 10);
+            var startY = _DM_TOP + 8 + ((stepNo % 2 === 0) ? _DM_ZIG : 0);
+            var x = _DM_LEFT + (stepNo - 1) * _DM_PITCH;
             var cy = startY;
             arr.forEach(function (n, i) { n.x = x; n.h = heights[i]; n.y = cy; n._out = 0; n._in = 0; cy += heights[i] + _DM_NODEGAP; });
         });
