@@ -10861,8 +10861,16 @@ gate: true
                 if (titlePart) {
                     var _visDocs = (currentData.docs || []).filter(_wlVisible);
                     // [r324] doc: 프론트매터 id 우선 매칭([[CPR-0001]] 등). 같은 id면 파이프라인 문서 우선.
-                    var _byId = _visDocs.filter(function (d) { return _wlDocFrontId(d).toLowerCase() === lower; });
-                    if (_byId.length) docHit = _byId.find(function (d) { return (d.kind || '') === 'pipeline'; }) || _byId[0];
+                    // [r332 #5] doc:id (+@버전) — 버전 미지정이면 최신, @N 지정이면 그 버전
+                    var _vm = lower.match(/^(.+?)@(\d+)$/); var _idPart = _vm ? _vm[1] : lower; var _wantVer = _vm ? parseInt(_vm[2], 10) : null;
+                    var _byId = _visDocs.filter(function (d) { return _wlDocFrontId(d).toLowerCase() === _idPart; });
+                    if (_byId.length) {
+                        var _pipe = _byId.filter(function (d) { return (d.kind || '') === 'pipeline'; }); if (_pipe.length) _byId = _pipe;
+                        var _vof = function (d) { return (typeof _dmDocVer === 'function' ? _dmDocVer(d) : null) || 1; };
+                        _byId.sort(function (a, b) { return _vof(a) - _vof(b); });
+                        if (_wantVer != null) docHit = _byId.filter(function (d) { return _vof(d) === _wantVer; })[0] || null;
+                        else docHit = _byId[_byId.length - 1];   // 최신 버전
+                    }
                     if (!docHit) docHit = _visDocs.find(function (d) { return (d.title || '').toLowerCase() === lower; });
                     if (!docHit) { var _nrm = _wlNorm(titlePart); if (_nrm) docHit = _visDocs.find(function (d) { return _wlNorm(d.title) === _nrm; }); }  // [r233 #5] 정규화 매칭
                 }
@@ -13800,7 +13808,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r331';
+        var _AHUB_FRONT_REV = 'r332';
 
 
         var _ahubRevWarned = false;
@@ -35502,7 +35510,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r331';
+    var _RFS_FRONT_REV = 'r332';
 
 
     async function rfsHealthCheck() {
@@ -36075,7 +36083,7 @@ ${intrLog}
         refs.forEach(function (x) {
             var sn = _dmDocStep(x); var si = sn ? _dmStepInfo(sn) : null; var ph = si ? ('PHASE ' + si.phaseNo) : '';
             var ver = _dmDocVer(x); var col = si ? si.color : 'var(--c-text3)';
-            html += '<div onclick="dmOpenDoc(\'' + x.id + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--c-border);border-radius:8px;margin-bottom:5px;cursor:pointer;background:var(--c-paper);">'
+            html += '<div class="dm-backlink" data-id="' + x.id + '" onclick="dmOpenDoc(\'' + x.id + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--c-border);border-radius:8px;margin-bottom:5px;cursor:pointer;background:var(--c-paper);">'
                 + '<span style="flex:none;">' + (x.emoji || '📄') + '</span>'
                 + '<span style="font-size:12.5px;font-weight:700;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40%;">' + _annEsc(x.title || '(제목 없음)') + '</span>'
                 + (_dmFrontTitle(x) ? '<span style="font-size:11px;color:var(--c-text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(_dmFrontTitle(x)) + '</span>' : '')
@@ -36086,6 +36094,12 @@ ${intrLog}
         });
         sec.innerHTML = html;
         body.appendChild(sec);
+        // [r332 #7] 링크된 언급 호버 → 미리보기 팝업 + 트리 하이라이트
+        Array.prototype.forEach.call(sec.querySelectorAll('.dm-backlink'), function (row) {
+            var rid = row.getAttribute('data-id'); var ht = null;
+            row.addEventListener('mouseenter', function () { clearTimeout(ht); dmHighlightTreeDoc(rid); ht = setTimeout(function () { dmShowWlPopup(rid, row); }, 240); });
+            row.addEventListener('mouseleave', function () { clearTimeout(ht); dmHighlightTreeDoc(null); dmScheduleHideWlPopup(); });
+        });
     }
     // ── [r319] 메타데이터(프론트매터) 패널 — 예쁜 표시 + 미작성/누락 감지 + 편집 ──
     function _dmParseFront(text) {
@@ -36114,6 +36128,15 @@ ${intrLog}
     // 상태 pill 색(#3)
     var _DM_STATUS_COLORS = { draft: '#8a8378', proposed: '#6e59c9', active: '#3c8a5a', accepted: '#3a6ea5', approved: '#3a6ea5', locked: '#9a5b2a', deprecated: '#9a1c20', rejected: '#9a1c20', done: '#3c8a5a', review: '#d49a1c' };
     function _dmStatusColor(v) { return _DM_STATUS_COLORS[String(v || '').trim().toLowerCase()] || '#6f6b5d'; }
+    // [r332 #8] 키별 추천 옵션(입력 포커스 시 드롭다운). pillars 는 기존 문서 값에서 수집.
+    var _DM_FIELD_OPTIONS = { status: ['draft', 'proposed', 'active', 'accepted', 'approved', 'locked', 'deprecated', 'review'] };
+    function _dmFieldOptions(kl) {
+        if (kl === 'pillar' || kl === 'pillars') {
+            var set = {}; _dmDocs().forEach(function (d) { var v = _dmFrontField(d, 'pillars') || _dmFrontField(d, 'pillar'); v.replace(/[\[\]]/g, '').split(/[,\s]+/).forEach(function (t) { t = t.trim(); if (t && !/^<.*>$/.test(t)) set[t] = 1; }); });
+            return Object.keys(set);
+        }
+        return _DM_FIELD_OPTIONS[kl] || null;
+    }
     // 버전 모델(#6) — 같은 doc: id 문서들이 version 별로 존재
     function _dmFrontField(d, key) {
         var c = (d && d.content) || ''; var m = c.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/); if (!m) return '';
@@ -36121,6 +36144,15 @@ ${intrLog}
     }
     function _dmDocVer(d) { var n = parseInt(_dmFrontField(d, 'version'), 10); return (n >= 1) ? n : null; }
     function _dmDocsByDocId(docId) { docId = String(docId || '').toLowerCase(); if (!docId) return []; return _dmDocs().filter(function (d) { return (_wlDocFrontId(d) || '').toLowerCase() === docId; }).sort(function (a, b) { return (_dmDocVer(a) || 1) - (_dmDocVer(b) || 1); }); }
+    // [r332 #9] 기존 doc:id 와 안 겹치는 새 id (XXX-0001 → XXX-0002, 0패딩 폭 유지)
+    function _dmUniqueDocId(baseId) {
+        baseId = String(baseId || '').trim(); if (!baseId) return baseId;
+        var m = baseId.match(/^(.*?)(\d+)$/);
+        if (!m) { if (!_dmDocsByDocId(baseId).length) return baseId; var k = 2; while (_dmDocsByDocId(baseId + '-' + k).length) k++; return baseId + '-' + k; }
+        var prefix = m[1], width = m[2].length, n = parseInt(m[2], 10), id = baseId;
+        while (_dmDocsByDocId(id).length) { n++; var ns = String(n); while (ns.length < width) ns = '0' + ns; id = prefix + ns; }
+        return id;
+    }
     // doc 참조(CPR-0001@2) 해석(#4) → {ok, doc, p}
     function _dmParseDocRef(s) { var m = String(s || '').match(/([A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9]+)*-\d+)(?:@(\d+))?/); if (!m) return null; return { docId: m[1], ver: m[2] ? parseInt(m[2], 10) : null }; }
     function _dmResolveDocRef(ref) {
@@ -36150,15 +36182,15 @@ ${intrLog}
     }
     function _dmOwnerTokenPill(t) {
         var u = _dmFindUser(t);
-        if (u) {   // 유효 프로필 — 아바타 + 닉네임 pill(실선)
+        if (u) {   // 유효 프로필 — 아바타 + 닉네임 pill(실선, 행 높이 핏하게)
             var nm = u.nickname || u.displayName || u.email || '사용자';
             var prov = u.provider === 'github' ? '⚫' : (u.provider === 'google' ? '🔵' : '');
-            var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;flex:none;">'
-                : '<span style="width:18px;height:18px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
-            return '<span data-dm-tip="등록 사용자' + (prov ? ' (' + (u.provider) + ')' : '') + (u.email ? ' · ' + _annEsc(u.email) : '') + '" style="display:inline-flex;align-items:center;gap:5px;background:var(--c-card);border:1px solid var(--c-border);border-radius:13px;padding:2px 9px 2px 3px;">' + av + '<span style="font-size:12px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span>' + (prov ? '<span style="font-size:9px;opacity:.6;">' + prov + '</span>' : '') + '</span>';
+            var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:15px;height:15px;border-radius:50%;object-fit:cover;flex:none;display:block;">'
+                : '<span style="width:15px;height:15px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
+            return '<span data-dm-tip="등록 사용자' + (prov ? ' (' + (u.provider) + ')' : '') + (u.email ? ' · ' + _annEsc(u.email) : '') + '" style="display:inline-flex;align-items:center;gap:4px;background:var(--c-card);border:1px solid var(--c-border);border-radius:11px;padding:0 7px 0 2px;line-height:17px;vertical-align:middle;">' + av + '<span style="font-size:11.5px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span>' + (prov ? '<span style="font-size:8px;opacity:.6;">' + prov + '</span>' : '') + '</span>';
         }
         // 일반 텍스트 — 점선 pill(프로필 미연결 표시)
-        return '<span data-dm-tip="등록 사용자가 아닌 텍스트 (@로 사용자를 연결할 수 있어요)" style="display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px dashed var(--c-border);border-radius:13px;padding:2px 10px;font-size:12px;color:var(--c-text2);">' + _annEsc(t) + '</span>';
+        return '<span data-dm-tip="등록 사용자가 아닌 텍스트 (@로 사용자를 연결할 수 있어요)" style="display:inline-flex;align-items:center;background:transparent;border:1px dashed var(--c-border);border-radius:11px;padding:0 9px;font-size:11.5px;line-height:17px;color:var(--c-text2);vertical-align:middle;">' + _annEsc(t) + '</span>';
     }
     function _dmMetaKeyHtml(key) {
         return '<span style="flex:0 0 116px;display:flex;align-items:center;gap:4px;padding-top:1px;">'
@@ -36187,8 +36219,9 @@ ${intrLog}
         var kl = String(key).toLowerCase(); var raw = _dmMetaStripComment(value);
         var clickEdit = locked ? '' : ' onclick="dmMetaEditInline(' + idx + ',\'' + _annEsc(key) + '\',this)"';
         if (kl === 'status') {
-            var col = _dmStatusColor(raw);
-            return '<span data-meta-key="' + _annEsc(key) + '"' + clickEdit + ' style="flex:1;' + (locked ? '' : 'cursor:pointer;') + '" title="' + (locked ? '' : '클릭해 수정') + '"><span style="display:inline-block;font-size:11px;font-weight:800;color:#fff;background:' + col + ';border-radius:11px;padding:2px 11px;letter-spacing:.02em;">' + _annEsc(raw || '—') + '</span></span>';
+            var stoks = raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);   // [r332 #1] 쉼표 분리 pill
+            var spills = stoks.length ? stoks.map(function (t) { var c = _dmStatusColor(t); return '<span style="display:inline-block;font-size:11px;font-weight:800;color:#fff;background:' + c + ';border-radius:11px;padding:2px 11px;margin-right:5px;letter-spacing:.02em;">' + _annEsc(t) + '</span>'; }).join('') : '<span style="color:var(--c-text3);">—</span>';
+            return '<span data-meta-key="' + _annEsc(key) + '"' + clickEdit + ' style="flex:1;' + (locked ? '' : 'cursor:pointer;') + '" title="' + (locked ? '' : '클릭해 수정') + '">' + spills + '</span>';
         }
         if (kl === 'source' || kl === 'inherits' || kl === 'inputs' || kl === 'pillars' || kl === 'pillar') {
             var inner = raw.replace(/[\[\]]/g, ''); var parts = inner.split(/[,\s]+/).filter(Boolean); var ph = '';
@@ -36296,8 +36329,10 @@ ${intrLog}
         var holder = spanEl.parentNode; spanEl.replaceWith(inp); inp.focus(); try { inp.select(); } catch (e) {}
         var done = false;
         function finish(val) { if (done) return; done = true; _dmMetaAcOff(); _dmMetaSetKey(idx, key, val); }
+        var _opts = _dmFieldOptions(kl); var _multiOpt = (kl === 'status' || kl === 'pillar' || kl === 'pillars');
         function commit() {
             if (done) return; var v = inp.value.trim();
+            if (_opts) v = v.replace(/,\s*$/, '').trim();   // [r332 #8] 후행 쉼표 정리
             if (kl === 'version') {
                 if (v !== '' && !/^\d+$/.test(v)) { showToast('버전은 양의 정수만 가능합니다(음수·소수 불가).', 'alert'); inp.focus(); return; }
                 if (v === '0') { showToast('버전은 1부터 시작합니다.', 'alert'); inp.focus(); return; }
@@ -36311,6 +36346,7 @@ ${intrLog}
             else if (e.key === 'Escape') { e.preventDefault(); done = true; _dmMetaAcOff(); dmRenderLiveBody(document.getElementById('dm-doc-body'), _dmById(_dmState.activeId), false); }
         });
         if (kl === 'owner') { inp.addEventListener('input', function () { _dmOwnerAc(inp, function (sel) { inp.value = sel; finish(sel); }); }); _dmOwnerAc(inp, function (sel) { inp.value = sel; finish(sel); }); }
+        else if (_opts && _opts.length) { inp.addEventListener('input', function () { _dmOptionAc(inp, _opts, _multiOpt); }); _dmOptionAc(inp, _opts, _multiOpt); }
     }
     // [r330 #7] owner 사용자 자동완성 드롭다운
     var _dmMetaAcEl = null, _dmMetaAcHover = false, _dmMetaAcItems = [], _dmMetaAcSel = -1, _dmMetaAcPick = null;
@@ -36331,9 +36367,32 @@ ${intrLog}
         var r = inp.getBoundingClientRect(); _dmMetaAcEl.style.left = r.left + 'px'; _dmMetaAcEl.style.top = (r.bottom + 3) + 'px'; _dmMetaAcEl.style.minWidth = Math.max(200, r.width) + 'px';
         _dmMetaAcRender();
     }
+    // [r332 #8] 미리 정의된 옵션(status/pillars) 자동완성 — 마지막 쉼표 뒤 토큰 기준
+    function _dmOptionAc(inp, options, multi, onChange) {
+        var val = inp.value; var ci = multi ? val.lastIndexOf(',') : -1; var q = val.slice(ci + 1).trim().toLowerCase();
+        var opts = options.filter(function (o) { return o.toLowerCase().indexOf(q) >= 0; });
+        if (!opts.length) { _dmMetaAcOff(); return; }
+        _dmMetaAcItems = opts.map(function (o) { return { _opt: o }; }); _dmMetaAcSel = 0;
+        _dmMetaAcPick = function (it) { var before = ci >= 0 ? (val.slice(0, ci + 1).replace(/\s*$/, '') + ' ') : ''; inp.value = before + it._opt + (multi ? ', ' : ''); inp.focus(); if (multi) { setTimeout(function () { _dmOptionAc(inp, options, multi, onChange); }, 0); } else { _dmMetaAcOff(); } if (onChange) onChange(inp.value); };
+        if (!_dmMetaAcEl) {
+            _dmMetaAcEl = document.createElement('div'); _dmMetaAcEl.id = 'dm-meta-ac';
+            _dmMetaAcEl.style.cssText = 'position:fixed;z-index:9600;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:4px;min-width:170px;max-height:240px;overflow-y:auto;';
+            _dmMetaAcEl.addEventListener('mouseenter', function () { _dmMetaAcHover = true; }); _dmMetaAcEl.addEventListener('mouseleave', function () { _dmMetaAcHover = false; });
+            document.body.appendChild(_dmMetaAcEl);
+        }
+        var r = inp.getBoundingClientRect(); _dmMetaAcEl.style.left = r.left + 'px'; _dmMetaAcEl.style.top = (r.bottom + 3) + 'px'; _dmMetaAcEl.style.minWidth = Math.max(170, r.width) + 'px';
+        _dmMetaAcRender();
+    }
     function _dmMetaAcRender() {
         if (!_dmMetaAcEl) return; _dmMetaAcEl.innerHTML = '';
         _dmMetaAcItems.forEach(function (u, i) {
+            if (u._opt != null) {   // 옵션 항목(status 색칩 / pillars)
+                var oc = _dmStatusColor(u._opt);
+                var orow = document.createElement('div'); orow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;cursor:pointer;' + (i === _dmMetaAcSel ? 'background:var(--c-paper);' : '');
+                orow.innerHTML = '<span style="width:10px;height:10px;border-radius:3px;background:' + oc + ';flex:none;"></span><span style="flex:1;font-size:12.5px;font-weight:600;color:var(--c-text);">' + _annEsc(u._opt) + '</span>';
+                orow.addEventListener('mousedown', function (e) { e.preventDefault(); if (_dmMetaAcPick) _dmMetaAcPick(u); });
+                _dmMetaAcEl.appendChild(orow); return;
+            }
             var nm = u.nickname || u.displayName || u.email || '사용자';
             var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex:none;">' : '<span style="width:22px;height:22px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
             var prov = u.provider === 'github' ? '⚫' : (u.provider === 'google' ? '🔵' : '');
@@ -36586,8 +36645,19 @@ ${intrLog}
         var cell = target.closest('td,th'); if (!cell) return;
         dmMakeCellEditable(cell);
     }
+    // [r332 #6] 표 셀의 원본 마크다운(예: [[CPR-0001]])을 읽어 편집 시 보존
+    function _dmCellRawMd(cell) {
+        var ctx = _dmTableBlock(cell); if (!ctx) return null;
+        if (/<table[\s>]/i.test(ctx.b.text)) return null;
+        var md = _dmMdTable(ctx.b); var pos = _dmCellPos(cell); if (!md || !pos || pos.domRow < 0 || pos.col < 0) return null;
+        var li = _dmMdLineForRow(md.start, pos.domRow); if (li < md.start || li > md.end) return null;
+        var cells = _dmMdCells(md.lines[li]); if (pos.col >= cells.length) return null;
+        return cells[pos.col].trim();
+    }
     function dmMakeCellEditable(cell) {
         if (!cell || cell.dataset.dmEditing === '1') return;
+        // [r332 #6] 편집 중에는 렌더된 링크 대신 원본 마크다운을 보여 위키링크가 텍스트로 깨지지 않게
+        var _raw = _dmCellRawMd(cell); if (_raw != null) cell.textContent = _raw;
         cell.dataset.dmEditing = '1';
         cell.contentEditable = 'true';
         cell.style.outline = '2px solid var(--c-accent)';
@@ -36597,6 +36667,8 @@ ${intrLog}
             cell.contentEditable = 'false'; cell.style.outline = ''; cell.dataset.dmEditing = '';
             cell.removeEventListener('blur', commit); cell.removeEventListener('keydown', onkey);
             dmTableCellCommit(cell);   // [r323] 마크다운 소스의 해당 셀만 갱신(다른 셀/placeholder 보존)
+            var bd = document.getElementById('dm-doc-body'); var d = _dmById(_dmState.activeId);
+            if (bd && d) dmRenderLiveBody(bd, d, !!bd._dmLocked);   // [r332 #6] 재렌더로 위키링크 다시 표시
         }
         function onkey(e) {
             if (e.key === 'Escape') { e.preventDefault(); cell.blur(); }
@@ -36866,13 +36938,21 @@ ${intrLog}
         var body = tpl
             ? tpl
             : '여기에 내용을 작성하세요...\n\n다른 단계 문서를 참조하려면 [[문서 제목]] 처럼 입력하면 연결 보기(Alluvial)에 띠로 나타납니다.';
+        // [r332 #9] 템플릿 doc:id 가 기존 문서와 겹치면 자동 증가(MDA-0001 → MDA-0002) — 새 문서가 가려지지 않게
+        var _newDocId = '';
+        var _fm2 = body.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
+        if (_fm2) { var _dd2 = _fm2[1].match(/^[ \t]*doc[ \t]*:[ \t]*(.+?)[ \t]*$/m); if (_dd2) _newDocId = _dd2[1].trim().replace(/^["']|["']$/g, ''); }
+        if (_newDocId && !/^<.*>$/.test(_newDocId)) {
+            var _uniq = _dmUniqueDocId(_newDocId);
+            if (_uniq !== _newDocId) { body = body.replace(/^([ \t]*doc[ \t]*:[ \t]*).+$/m, '$1' + _uniq); _newDocId = _uniq; }
+        }
         // 전용 컬렉션(kind 'pipeline') + meta.stepNo. '문서' 탭과 분리.
         var nd = {
             id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: null,
             title: title, emoji: '📄', isCollapsed: false,
             content: body,
             _contentLoaded: true, createdAt: Date.now(), updatedAt: Date.now(), kind: 'pipeline',
-            meta: { stepNo: stepNo || 0 },
+            meta: { stepNo: stepNo || 0, docId: _newDocId || undefined },
             sortOrder: Date.now(), linkedDocIds: [], linkedTaskIds: [],
             createdBy: (currentUser && currentUser.id) || null, updatedBy: (currentUser && currentUser.id) || null
         };
@@ -36891,14 +36971,50 @@ ${intrLog}
         d.title = nt; d.updatedAt = Date.now();
         dmSaveDoc(id); dmRenderTree(); dmRenderDoc();
     }
+    function _dmDeleteOne(d) {
+        var i = currentData.docs.indexOf(d); if (i >= 0) currentData.docs.splice(i, 1);
+        if (typeof dbDeleteDoc === 'function') { try { dbDeleteDoc(d.id); } catch (e) {} }
+        else if (typeof supabaseClient !== 'undefined' && supabaseClient) { try { supabaseClient.from('wiki_docs').delete().eq('id', d.id); } catch (e) {} }
+    }
+    function _dmDeleteVersionPrompt(d, fam, curVer) {
+        return new Promise(function (resolve) {
+            var html = '<div style="font-size:13px;color:var(--c-text2);margin-bottom:12px;line-height:1.6;"><b style="color:var(--c-text);">' + _annEsc(d.title || '') + '</b> 은 버전이 ' + fam.length + '개 있습니다 (현재 보는 중: v' + curVer + ').<br>무엇을 삭제할까요?</div>'
+                + '<div style="display:flex;flex-direction:column;gap:8px;">'
+                + '<button onclick="window._dmDelChoice(\'this\')" style="text-align:left;padding:10px 12px;border:1px solid var(--c-border);border-radius:8px;background:var(--c-card);cursor:pointer;width:100%;"><b style="font-size:13px;color:var(--c-text);">이 버전(v' + curVer + ')만 삭제</b><br><span style="font-size:11px;color:var(--c-text3);">다른 버전은 유지되고, 다른 버전 문서가 표시됩니다</span></button>'
+                + '<button onclick="window._dmDelChoice(\'all\')" style="text-align:left;padding:10px 12px;border:1px solid rgba(154,28,32,.4);border-radius:8px;background:rgba(154,28,32,.06);cursor:pointer;width:100%;"><b style="font-size:13px;color:#c0504d;">문서 전체 삭제 (모든 버전 ' + fam.length + '개)</b><br><span style="font-size:11px;color:var(--c-text3);">이 문서의 모든 버전을 영구 삭제</span></button>'
+                + '<button onclick="window._dmDelChoice(\'\')" style="padding:7px;border:none;background:none;cursor:pointer;color:var(--c-text3);font-size:12px;">취소</button>'
+                + '</div>';
+            window._dmDelChoice = function (c) { _closeSimpleModal(); window._dmDelChoice = null; resolve(c); };
+            _openSimpleModal('문서/버전 삭제', html);
+        });
+    }
     async function dmDeleteDoc(id) {
         var d = _dmById(id); if (!d) return;
+        var docId = _wlDocFrontId(d); var fam = docId ? _dmDocsByDocId(docId) : [d];
+        if (fam.length > 1) {   // [r332 #2] 버전이 여러 개 — 이 버전만 / 전체 선택
+            var curVer = _dmDocVer(d) || 1;
+            var choice = await _dmDeleteVersionPrompt(d, fam, curVer);
+            if (!choice) return;
+            if (choice === 'this') {
+                _dmDeleteOne(d);
+                var rest = (docId ? _dmDocsByDocId(docId) : []).filter(function (x) { return x.id !== d.id; });
+                var nxt = rest.length ? rest[rest.length - 1] : (_dmDocs()[0] || null);
+                if (_dmState.activeId === id) _dmState.activeId = nxt ? nxt.id : null;
+                showToast('🗑 v' + curVer + ' 버전 삭제됨' + (nxt ? ' — v' + (_dmDocVer(nxt) || 1) + ' 표시' : ''), 'success');
+            } else {
+                var hadActive = fam.some(function (x) { return x.id === _dmState.activeId; });
+                fam.forEach(_dmDeleteOne);
+                if (hadActive) { var f0 = _dmDocs()[0]; _dmState.activeId = f0 ? f0.id : null; }
+                showToast('🗑 "' + (d.title || '') + '" 전체 ' + fam.length + '개 버전 삭제됨', 'success');
+            }
+            if (typeof saveData === 'function') saveData();
+            dmRenderTree(); dmRenderDoc();
+            return;
+        }
         var ok = await uiConfirm({ title: '문서 삭제', message: '"' + (d.title || '') + '" 문서를 삭제할까요?', confirmText: '삭제', danger: true });
         if (!ok) return;
-        var i = currentData.docs.indexOf(d); if (i >= 0) currentData.docs.splice(i, 1);
+        _dmDeleteOne(d);
         if (typeof saveData === 'function') saveData();
-        if (typeof dbDeleteDoc === 'function') { try { dbDeleteDoc(id); } catch (e) {} }
-        else if (typeof supabaseClient !== 'undefined' && supabaseClient) { try { supabaseClient.from('wiki_docs').delete().eq('id', id); } catch (e) {} }
         if (_dmState.activeId === id) { var f = _dmDocs()[0]; _dmState.activeId = f ? f.id : null; }
         dmRenderTree(); dmRenderDoc();
         showToast('🗑 삭제됨', 'success');
