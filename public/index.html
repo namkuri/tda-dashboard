@@ -12963,7 +12963,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r326';
+        var _AHUB_FRONT_REV = 'r327';
 
 
         var _ahubRevWarned = false;
@@ -34657,7 +34657,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r326';
+    var _RFS_FRONT_REV = 'r327';
 
 
     async function rfsHealthCheck() {
@@ -35656,8 +35656,8 @@ ${intrLog}
     }
 
     // ── 위키링크 연결 그래프 ──
-    function _dmParseLinks(content, titleMap) {
-        // [[doc:id]] 직접 + [[제목]]/[[제목#h]]/[[제목|alias]] 제목 해석 → 대상 doc id 집합
+    function _dmParseLinks(content, titleMap, docIdMap) {
+        // [[doc:id]] 직접 + [[CPR-0001]](프론트매터 doc:id) + [[제목]]/[[제목#h]]/[[제목|alias]] → 대상 doc id 집합
         var out = {}; if (!content) return [];
         var re1 = /\[\[doc:([A-Za-z0-9_-]+)\]\]/g, m;
         while ((m = re1.exec(content))) out[m[1]] = 1;
@@ -35665,7 +35665,7 @@ ${intrLog}
         while ((m = re2.exec(content))) {
             var t = (m[1] || '').trim().toLowerCase();
             if (/^(doc|task|code|user|project|sprint|review|event|asset|issue):/.test(t)) continue;
-            var tid = titleMap[t];
+            var tid = (docIdMap && docIdMap[t]) || titleMap[t];   // [r327] doc:id(예: CPR-0001) 우선, 없으면 제목
             if (tid) out[tid] = 1;
         }
         return Object.keys(out);
@@ -35684,8 +35684,12 @@ ${intrLog}
                 }));
             } catch (e) {}
         }
-        var titleMap = {};
-        allPipe.forEach(function (d) { var t = (d.title || '').trim().toLowerCase(); if (t) titleMap[t] = d.id; });
+        var titleMap = {}, docIdMap = {};
+        allPipe.forEach(function (d) {
+            var t = (d.title || '').trim().toLowerCase(); if (t) titleMap[t] = d.id;
+            var fid = (typeof _wlDocFrontId === 'function') ? _wlDocFrontId(d) : ((d.meta && d.meta.docId) || '');   // [r327] 프론트매터 doc:id
+            if (fid) docIdMap[fid.toLowerCase()] = d.id;
+        });
         var nodeById = {};
         var nodes = docs.map(function (d) {
             var sn = _dmDocStep(d);
@@ -35694,7 +35698,7 @@ ${intrLog}
         });
         var links = [], seen = {};
         docs.forEach(function (d) {
-            var targets = _dmParseLinks(d.content || '', titleMap);
+            var targets = _dmParseLinks(d.content || '', titleMap, docIdMap);
             targets.forEach(function (tid) {
                 if (tid === d.id || !nodeById[tid]) return;   // 대상이 step 없는 문서면 제외
                 var key = d.id + '>' + tid; if (seen[key]) return; seen[key] = 1;
