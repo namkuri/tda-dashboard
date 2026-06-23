@@ -12963,7 +12963,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r328';
+        var _AHUB_FRONT_REV = 'r329';
 
 
         var _ahubRevWarned = false;
@@ -25004,6 +25004,14 @@ addEventListener("resize",sendPos);
             var wl = (e.target && e.target.closest) ? e.target.closest('.wikilink') : null;
             if (!wl) return;
             if (typeof dmHideWlPopup === 'function') dmHideWlPopup();   // [r323] 위키링크 클릭(이동) 시 호버 미리보기 팝업 닫기
+            // [r329] 분할 패널 안 위키링크는 분할 패널만 전환(메인 문서는 그대로)
+            if (e.target.closest && e.target.closest('#dm-split-pane')) {
+                var _spType = wl.getAttribute('data-wl-type'); var _spId = wl.getAttribute('data-wl-id');
+                e.preventDefault(); e.stopPropagation();
+                if (_spType === 'doc' && _spId && typeof dmSplitOpen === 'function') dmSplitOpen(_spId);
+                else if (_spType === 'hash') { var _b = document.getElementById('dm-split-body'); if (_b) { var _s = wl.getAttribute('data-wl-hash'); var _h = _b.querySelectorAll('h1,h2,h3,h4,h5,h6'); for (var _i = 0; _i < _h.length; _i++) { var _sl = (typeof _wlSlug === 'function') ? _wlSlug(_h[_i].textContent || '') : ''; if (_sl === _s || _sl.indexOf(_s) === 0) { _h[_i].scrollIntoView({ behavior: 'smooth', block: 'start' }); break; } } } }
+                return;
+            }
             // [r315] 문서 맵 안에서 클릭한 위키링크는 페이지를 벗어나지 않고 그 안에서 문서 전환.
             if (e.target.closest && e.target.closest('#dm-doc')) {
                 var _dmType = wl.getAttribute('data-wl-type');
@@ -34657,7 +34665,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r328';
+    var _RFS_FRONT_REV = 'r329';
 
 
     async function rfsHealthCheck() {
@@ -34970,6 +34978,7 @@ ${intrLog}
     function dmOpenDoc(id, hash) {
         var d = _dmById(id); if (!d) { showToast('문서를 찾을 수 없습니다', 'alert'); return; }
         var sameDoc = (_dmState.activeId === id);
+        if (id === _dmState.splitId) _dmState.splitId = null;   // [r329] 분할 문서를 메인으로 열면 분할 닫기
         _dmState.activeId = id;
         _dmState.mode = 'preview';
         if (_dmState.tab !== 'explorer') dmSetTab('explorer');
@@ -35028,24 +35037,86 @@ ${intrLog}
             + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmRenameDoc(\'' + d.id + '\')" title="제목 변경">✏️</button>'
             + '<button class="aihub-gpu-btn" style="font-size:11px;color:#9a1c20;" onclick="dmDeleteDoc(\'' + d.id + '\')" title="삭제">🗑</button>'
             + '</div>';
-        if (loading) {
-            host.innerHTML = bar + '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
-            return;
+        var mainHtml;
+        if (loading) mainHtml = bar + '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--c-text3);"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
+        else if (mode === 'source' && !locked) mainHtml = bar + '<textarea id="dm-src" oncontextmenu="handleEditorContextMenu(event)" style="flex:1;width:100%;box-sizing:border-box;border:none;outline:none;resize:none;padding:16px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;background:var(--c-paper);color:var(--c-text);">' + _annEsc(d.content || '') + '</textarea>';
+        else mainHtml = bar + '<div id="dm-doc-body" class="markdown-body dm-doc-style" style="flex:1;overflow-y:auto;padding:22px 30px;"></div>';
+        // [r329] 분할보기 — 우측에 참조 문서 패널(읽기전용 미리보기)
+        var splitDoc = _dmState.splitId ? _dmById(_dmState.splitId) : null;
+        if (splitDoc && splitDoc.id !== d.id) {
+            host.style.flexDirection = 'row';
+            host.innerHTML = '<div id="dm-main-pane" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden;">' + mainHtml + '</div>'
+                + '<div id="dm-split-divider" title="드래그하여 분할 너비 조절" style="flex:none;width:6px;cursor:col-resize;background:var(--c-border);"></div>'
+                + '<div id="dm-split-pane" style="flex:none;width:' + (_dmState.splitW || 42) + '%;min-width:240px;max-width:72%;display:flex;flex-direction:column;overflow:hidden;background:var(--c-card);">' + dmSplitPaneHtml(splitDoc) + '</div>';
+        } else {
+            host.style.flexDirection = 'column';
+            host.innerHTML = mainHtml;
         }
+        if (loading) return;
         if (mode === 'source' && !locked) {
-            var ta = '<textarea id="dm-src" oncontextmenu="handleEditorContextMenu(event)" style="flex:1;width:100%;box-sizing:border-box;border:none;outline:none;resize:none;padding:16px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;background:var(--c-paper);color:var(--c-text);">' + _annEsc(d.content || '') + '</textarea>';
-            host.innerHTML = bar + ta;
             var taEl = document.getElementById('dm-src');
-            if (taEl) {
-                taEl.addEventListener('input', function () { dmOnEdit(d.id, taEl.value); });
-                setTimeout(function () { taEl.focus(); }, 20);
-            }
-            return;
+            if (taEl) { taEl.addEventListener('input', function () { dmOnEdit(d.id, taEl.value); }); setTimeout(function () { taEl.focus(); }, 20); }
+        } else {
+            var body = document.getElementById('dm-doc-body'); if (body) dmRenderLiveBody(body, d, locked);
         }
-        // preview — [r318] 라이브 인라인 편집(블록 클릭→편집, 표 인터랙티브). 잠금 문서는 읽기전용.
-        host.innerHTML = bar + '<div id="dm-doc-body" class="markdown-body dm-doc-style" style="flex:1;overflow-y:auto;padding:22px 30px;"></div>';
-        var body = document.getElementById('dm-doc-body');
-        if (body) dmRenderLiveBody(body, d, locked);
+        if (splitDoc && splitDoc.id !== d.id) { dmSplitPaneWire(splitDoc); _dmBindSplitDivider(); }
+    }
+    // ── [r329] 분할보기(우측 패널) — 호버 팝업의 '분할' 버튼으로 도킹 ──
+    function dmSplitPaneHtml(sd) {
+        var sn = _dmDocStep(sd); var si = sn ? _dmStepInfo(sn) : null;
+        var chip = si ? '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;background:' + si.color + '22;color:' + si.color + ';border-radius:4px;padding:1px 6px;flex:none;">S' + (sn < 10 ? '0' + sn : sn) + '</span>' : '';
+        return '<div style="flex:none;display:flex;align-items:center;gap:7px;padding:9px 12px;border-bottom:1px solid var(--c-border);background:var(--c-paper);">'
+            + '<span style="font-size:12px;flex:none;">🔭</span>'
+            + '<span style="font-weight:800;font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _annEsc(sd.title || '') + '">' + _annEsc(sd.title || '(제목 없음)') + '</span>'
+            + chip
+            + '<button class="aihub-gpu-btn" style="font-size:11px;" onclick="dmOpenDoc(\'' + sd.id + '\')" title="이 문서를 메인으로 열기">↦ 열기</button>'
+            + '<button class="aihub-gpu-btn" style="font-size:11px;color:#9a1c20;" onclick="dmSplitClose()" title="분할 닫기">✕</button>'
+            + '</div>'
+            + '<div id="dm-split-body" class="markdown-body dm-doc-style" style="flex:1;overflow-y:auto;padding:18px 22px;"></div>';
+    }
+    function dmSplitPaneWire(sd) {
+        var body = document.getElementById('dm-split-body'); if (!body) return;
+        if (sd._contentLoaded === false && typeof _fetchDocContent === 'function') {
+            body.innerHTML = '<div style="color:var(--c-text3);font-size:13px;"><span class="rfs-dc-spinner"></span> 불러오는 중…</div>';
+            _fetchDocContent(sd.id).then(function (c) { sd.content = c || ''; sd._contentLoaded = true; if (_dmState.splitId === sd.id) dmSplitRenderBody(sd, document.getElementById('dm-split-body')); });
+        } else dmSplitRenderBody(sd, body);
+    }
+    function dmSplitRenderBody(sd, body) {
+        if (!body) return;
+        var rr;
+        try {
+            var raw = (sd.content || '').replace(/<!--TDAHTML:([A-Za-z0-9_]+)-->/g, function (m, hid) { return '\n\n<div class="tda-html-mount" data-tdahtml="' + hid + '"></div>\n\n'; });
+            var cfg = (typeof domPurifyConfig !== 'undefined') ? Object.assign({}, domPurifyConfig) : undefined;
+            if (cfg) cfg.ADD_ATTR = (cfg.ADD_ATTR || []).concat(['data-tdahtml', 'data-wl-type', 'data-wl-id', 'data-wl-title', 'data-wl-hash']);
+            rr = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(raw), cfg) : parseMarkdownWithTables(raw);
+        } catch (e) { rr = _annEsc(sd.content || ''); }
+        body.innerHTML = rr || '<div style="color:var(--c-text3);">빈 문서</div>';
+        try { if (typeof _buildHtmlEmbeds === 'function') _buildHtmlEmbeds(body, (sd.meta && sd.meta.htmlEmbeds) || {}); } catch (e) {}
+        try { if (typeof renderMermaidIn === 'function') renderMermaidIn(body); } catch (e) {}
+        try { if (typeof enhanceMediaLinks === 'function') enhanceMediaLinks(body); } catch (e) {}
+        try { dmBindWlPreview(body); } catch (e) {}
+    }
+    function dmSplitOpen(id) {
+        if (!id) return;
+        if (id === _dmState.activeId) { showToast('이미 메인에 열린 문서입니다', 'info'); return; }
+        _dmState.splitId = id;
+        if (typeof dmHideWlPopup === 'function') dmHideWlPopup();
+        dmRenderDoc();
+    }
+    function dmSplitClose() { _dmState.splitId = null; dmRenderDoc(); }
+    function _dmBindSplitDivider() {
+        var dv = document.getElementById('dm-split-divider'); var host = document.getElementById('dm-doc'); if (!dv || !host) return;
+        dv.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            function mv(ev) {
+                var r = host.getBoundingClientRect(); if (!r.width) return;
+                var w = Math.max(20, Math.min(72, (r.right - ev.clientX) / r.width * 100));
+                _dmState.splitW = w; var sp = document.getElementById('dm-split-pane'); if (sp) sp.style.width = w + '%';
+            }
+            function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); document.body.style.cursor = ''; }
+            document.body.style.cursor = 'col-resize';
+            document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+        });
     }
     // ── [r318] 파이프라인 본문 라이브 에디터 — 블록 클릭→인라인 편집 + 인터랙티브 표 ──
     var _dmLpEditingIdx = null;
@@ -35557,6 +35628,7 @@ ${intrLog}
         pop.innerHTML = '<div id="dm-wl-head" style="flex:none;display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--c-border);background:var(--c-paper);cursor:move;user-select:none;">'
             + '<span style="flex:none;">' + emoji + '</span>'
             + '<span style="font-weight:800;font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(title) + '</span>'
+            + (d ? '<button onclick="dmSplitOpen(\'' + id + '\')" title="우측에 분할보기로 열기" style="border:1px solid var(--c-border);background:var(--c-card);border-radius:5px;cursor:pointer;font-size:11px;padding:2px 7px;">⊟ 분할</button>' : '')
             + (d ? '<button onclick="dmHideWlPopup();dmOpenDoc(\'' + id + '\')" title="문서 열기" style="border:1px solid var(--c-border);background:var(--c-card);border-radius:5px;cursor:pointer;font-size:11px;padding:2px 7px;">↦ 열기</button>' : '')
             + '<button onclick="dmHideWlPopup()" title="닫기" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;color:var(--c-text3);">✕</button></div>'
             + '<div id="dm-wl-body" class="markdown-body" style="flex:1;overflow-y:auto;padding:12px 16px;line-height:1.7;"><span style="color:var(--c-text3);">불러오는 중…</span></div>';
