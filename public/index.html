@@ -4826,7 +4826,12 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         #dm-doc-body pre, .dm-doc-style pre { background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 9px; padding: 12px 14px; overflow-x: auto; margin: 10px 0; }
         #dm-doc-body pre code, .dm-doc-style pre code { background: none; border: none; padding: 0; color: var(--c-text); }
         #dm-doc-body table, .dm-doc-style table { border-collapse: collapse; width: 100%; margin: 11px 0; font-size: 12.5px; }
-        #dm-doc-body th, #dm-doc-body td, .dm-doc-style th, .dm-doc-style td { border: 1px solid var(--c-border); padding: 6px 9px; text-align: center; color: var(--c-text2); }
+        #dm-doc-body th, #dm-doc-body td, .dm-doc-style th, .dm-doc-style td { border: 1px solid var(--c-border); padding: 6px 9px; text-align: center; color: var(--c-text2); min-width: 64px; height: 30px; vertical-align: middle; position: relative; }
+        /* [r323] 빈 셀도 최소 폭·높이를 갖도록 */
+        #dm-doc-body td:empty::after, #dm-doc-body th:empty::after, .dm-doc-style td:empty::after, .dm-doc-style th:empty::after { content: '\00a0'; color: transparent; }
+        /* [r323] 컬럼 리사이즈 핸들(헤더 우측 경계 드래그) */
+        .dm-col-resize { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 3; user-select: none; }
+        .dm-col-resize:hover { background: var(--c-accent); opacity: .35; }
         #dm-doc-body thead th, .dm-doc-style thead th { background: var(--c-paper); font-weight: 700; color: var(--c-text); }
         #dm-doc-body tbody td:first-child, .dm-doc-style tbody td:first-child { text-align: left; font-family: ui-monospace, monospace; font-weight: 600; background: var(--c-paper); color: var(--c-text); }
         .dm-help-btn:hover { background: var(--c-accent) !important; color: #fff !important; }
@@ -12938,7 +12943,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r322';
+        var _AHUB_FRONT_REV = 'r323';
 
 
         var _ahubRevWarned = false;
@@ -24978,6 +24983,7 @@ addEventListener("resize",sendPos);
         document.addEventListener('click', function(e) {
             var wl = (e.target && e.target.closest) ? e.target.closest('.wikilink') : null;
             if (!wl) return;
+            if (typeof dmHideWlPopup === 'function') dmHideWlPopup();   // [r323] 위키링크 클릭(이동) 시 호버 미리보기 팝업 닫기
             // [r315] 문서 맵 안에서 클릭한 위키링크는 페이지를 벗어나지 않고 그 안에서 문서 전환.
             if (e.target.closest && e.target.closest('#dm-doc')) {
                 var _dmType = wl.getAttribute('data-wl-type');
@@ -34629,7 +34635,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r322';
+    var _RFS_FRONT_REV = 'r323';
 
 
     async function rfsHealthCheck() {
@@ -35211,13 +35217,63 @@ ${intrLog}
         Array.prototype.forEach.call(table.tBodies, function (tb) { Array.prototype.forEach.call(tb.rows, function (r) { rows.push(r); }); });
         return rows;
     }
+    // [r323] 표 블록의 저장된 컬럼 폭(<!--dmcolw:w1,w2-->)
+    function _dmTableWidths(blockText) {
+        var m = String(blockText || '').match(/<!--dmcolw:([\d,\s]+)-->/);
+        if (!m) return null;
+        var ws = m[1].split(',').map(function (s) { return parseInt(s.trim(), 10); });
+        return ws.every(function (n) { return !isNaN(n) && n > 0; }) ? ws : null;
+    }
+    function _dmSetTableWidths(idx, widths) {
+        var body = document.getElementById('dm-doc-body'); var b = body && body._dmBlocks && body._dmBlocks[idx]; if (!b) return;
+        var comment = '<!--dmcolw:' + widths.map(function (w) { return Math.round(w); }).join(',') + '-->';
+        if (/<!--dmcolw:[\d,\s]*-->/.test(b.text)) b.text = b.text.replace(/<!--dmcolw:[\d,\s]*-->/, comment);
+        else b.text = b.text.replace(/\s*$/, '') + '\n' + comment;
+        dmLpCommitBlocks();
+    }
     function dmBindTables(body) {
         Array.prototype.forEach.call(body.querySelectorAll('table'), function (tbl) {
-            if (tbl._dmBound) return; tbl._dmBound = true;
-            Array.prototype.forEach.call(tbl.querySelectorAll('td,th'), function (cell) {
-                cell.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); dmTableMenu(e, cell); });
+            var rowEl = tbl.closest('.dm-lp-row'); var idx = rowEl ? parseInt(rowEl.getAttribute('data-idx'), 10) : -1;
+            var b = (idx >= 0 && body._dmBlocks) ? body._dmBlocks[idx] : null;
+            var headRow = tbl.tHead ? tbl.tHead.rows[0] : tbl.rows[0];
+            var headCells = headRow ? Array.prototype.slice.call(headRow.cells) : [];
+            // 저장된 컬럼 폭 적용(고정 레이아웃)
+            if (b) {
+                var ws = _dmTableWidths(b.text);
+                if (ws && ws.length === headCells.length) {
+                    tbl.style.tableLayout = 'fixed'; tbl.style.width = 'auto';
+                    headCells.forEach(function (c, i) { c.style.width = ws[i] + 'px'; });
+                }
+            }
+            if (!tbl._dmBound) {
+                tbl._dmBound = true;
+                Array.prototype.forEach.call(tbl.querySelectorAll('td,th'), function (cell) {
+                    cell.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); dmTableMenu(e, cell); });
+                });
+            }
+            // 컬럼 리사이즈 핸들(헤더 셀 우측 경계) — 잠금 아닐 때
+            if (!body._dmLocked) headCells.forEach(function (c, i) {
+                if (c.querySelector('.dm-col-resize')) return;
+                var h = document.createElement('span'); h.className = 'dm-col-resize'; h.title = '드래그하여 열 너비 조절';
+                h.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); _dmStartColResize(tbl, idx, headCells, i, e.clientX); });
+                h.addEventListener('click', function (e) { e.stopPropagation(); });
+                c.appendChild(h);
             });
         });
+    }
+    function _dmStartColResize(tbl, idx, headCells, colI, startX) {
+        var startW = headCells[colI].getBoundingClientRect().width;
+        tbl.style.tableLayout = 'fixed'; tbl.style.width = 'auto';
+        var widths = headCells.map(function (c) { return c.getBoundingClientRect().width; });
+        headCells.forEach(function (c, i) { c.style.width = widths[i] + 'px'; });
+        document.body.style.cursor = 'col-resize';
+        function mv(ev) { var w = Math.max(40, startW + (ev.clientX - startX)); widths[colI] = w; headCells[colI].style.width = w + 'px'; }
+        function up() {
+            document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+            document.body.style.cursor = '';
+            if (idx >= 0) _dmSetTableWidths(idx, widths);
+        }
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
     }
     function dmTableCellClick(e, target) {
         var cell = target.closest('td,th'); if (!cell) return;
@@ -35233,7 +35289,7 @@ ${intrLog}
         function commit() {
             cell.contentEditable = 'false'; cell.style.outline = ''; cell.dataset.dmEditing = '';
             cell.removeEventListener('blur', commit); cell.removeEventListener('keydown', onkey);
-            dmLpSyncTableFromDOM(cell);
+            dmTableCellCommit(cell);   // [r323] 마크다운 소스의 해당 셀만 갱신(다른 셀/placeholder 보존)
         }
         function onkey(e) {
             if (e.key === 'Escape') { e.preventDefault(); cell.blur(); }
@@ -35261,7 +35317,69 @@ ${intrLog}
         b.text = newText; dmLpCommitBlocks();
         return true;
     }
+    // ── [r323] 마크다운 표를 소스에서 직접 조작 — 렌더 DOM 재직렬화의 내용 손실(<placeholder> 등) 방지 ──
+    function _dmMdTable(b) {
+        var lines = b.text.split('\n'); var start = -1, end = -1;
+        for (var i = 0; i < lines.length; i++) { if (/^\s*\|.*\|\s*$/.test(lines[i])) { if (start < 0) start = i; end = i; } else if (start >= 0) break; }
+        if (start < 0 || end - start < 1) return null;
+        return { lines: lines, start: start, end: end };  // [start]=헤더,[start+1]=구분선,[start+2..]=데이터
+    }
+    function _dmMdCells(line) {
+        var p = line.split('|');
+        if (p.length && p[0].trim() === '') p = p.slice(1);
+        if (p.length && p[p.length - 1].trim() === '') p = p.slice(0, -1);
+        return p;
+    }
+    function _dmJoinMdCells(cells) { return '|' + cells.join('|') + '|'; }
+    function _dmFillArr(n, v) { var a = []; for (var i = 0; i < n; i++) a.push(v); return a; }
+    function _dmCellPos(cell) {
+        var table = cell.closest('table'); if (!table) return null;
+        var tr = cell.closest('tr');
+        return { domRow: dmAllRows(table).indexOf(tr), col: Array.prototype.indexOf.call(tr.children, cell) };
+    }
+    function _dmMdLineForRow(start, domRow) { return domRow === 0 ? start : (start + 1 + domRow); }
+    function _dmTableBlock(cell) {
+        var body = document.getElementById('dm-doc-body'); if (!body || !body._dmBlocks) return null;
+        var rowEl = cell.closest('.dm-lp-row'); if (!rowEl) return null;
+        var idx = parseInt(rowEl.getAttribute('data-idx'), 10); var b = body._dmBlocks[idx];
+        return b ? { body: body, idx: idx, b: b } : null;
+    }
+    // 셀 1칸만 마크다운 소스에서 갱신(다른 셀·placeholder 보존)
+    function dmTableCellCommit(cell) {
+        var ctx = _dmTableBlock(cell); if (!ctx) return;
+        if (/<table[\s>]/i.test(ctx.b.text)) { dmLpSyncTableFromDOM(cell); return; }
+        var md = _dmMdTable(ctx.b); var pos = _dmCellPos(cell); if (!md || !pos || pos.domRow < 0 || pos.col < 0) return;
+        var li = _dmMdLineForRow(md.start, pos.domRow); if (li < md.start || li > md.end) return;
+        var cells = _dmMdCells(md.lines[li]); if (pos.col >= cells.length) return;
+        cells[pos.col] = ' ' + (cell.textContent || '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim() + ' ';
+        md.lines[li] = _dmJoinMdCells(cells);
+        ctx.b.text = md.lines.join('\n'); dmLpCommitBlocks();
+    }
     function dmTableOp(cell, op) {
+        var ctx = _dmTableBlock(cell); if (!ctx) return;
+        if (/<table[\s>]/i.test(ctx.b.text)) { return _dmHtmlTableOp(cell, op); }   // 리사이즈로 변환된 HTML 표
+        var md = _dmMdTable(ctx.b); var pos = _dmCellPos(cell); if (!md || !pos) return;
+        var lines = md.lines, start = md.start, end = md.end, colCount = _dmMdCells(lines[start]).length;
+        if (op === 'row-below' || op === 'row-above') {
+            var at = (pos.domRow === 0) ? (start + 2) : (_dmMdLineForRow(start, pos.domRow) + (op === 'row-below' ? 1 : 0));
+            lines.splice(at, 0, _dmJoinMdCells(_dmFillArr(colCount, '   ')));
+        } else if (op === 'col-left' || op === 'col-right') {
+            var insAt = pos.col + (op === 'col-right' ? 1 : 0);
+            for (var li = start; li <= end; li++) { var cs = _dmMdCells(lines[li]); cs.splice(Math.min(insAt, cs.length), 0, (li === start + 1) ? '---' : '   '); lines[li] = _dmJoinMdCells(cs); }
+        } else if (op === 'row-del') {
+            if (pos.domRow === 0) { showToast('헤더 행은 삭제할 수 없습니다', 'alert'); return; }
+            lines.splice(_dmMdLineForRow(start, pos.domRow), 1);
+        } else if (op === 'col-del') {
+            if (colCount <= 1) { showToast('마지막 열은 삭제할 수 없습니다', 'alert'); return; }
+            for (var lj = start; lj <= end; lj++) { var c2 = _dmMdCells(lines[lj]); if (pos.col < c2.length) c2.splice(pos.col, 1); lines[lj] = _dmJoinMdCells(c2); }
+        }
+        ctx.b.text = lines.join('\n');
+        if (op.indexOf('col') === 0) ctx.b.text = ctx.b.text.replace(/\n?[ \t]*<!--dmcolw:[\d,\s]*-->/, '');  // 열 수 변경 → 저장 폭 무효화
+        dmLpCommitBlocks();
+        dmRenderLiveBody(ctx.body, _dmById(_dmState.activeId), false);
+    }
+    // HTML 표(컬럼 리사이즈로 변환된)용 — DOM 직접 조작 후 outerHTML 동기화
+    function _dmHtmlTableOp(cell, op) {
         var table = cell.closest('table'); if (!table) return;
         if (op === 'row-above' || op === 'row-below') {
             var tr = cell.closest('tr'); var section = tr.parentNode;
@@ -35270,17 +35388,13 @@ ${intrLog}
         } else if (op === 'col-left' || op === 'col-right') {
             var cellIdx = Array.prototype.indexOf.call(cell.parentNode.children, cell);
             var insertIdx = cellIdx + (op === 'col-right' ? 1 : 0);
-            dmAllRows(table).forEach(function (r, ri) {
-                var nc = document.createElement(ri === 0 ? 'th' : 'td'); nc.innerHTML = '&nbsp;';
-                if (r.children[insertIdx]) r.insertBefore(nc, r.children[insertIdx]); else r.appendChild(nc);
-            });
+            dmAllRows(table).forEach(function (r, ri) { var nc = document.createElement(ri === 0 ? 'th' : 'td'); nc.innerHTML = '&nbsp;'; if (r.children[insertIdx]) r.insertBefore(nc, r.children[insertIdx]); else r.appendChild(nc); });
         } else if (op === 'row-del') {
             var tr2 = cell.closest('tr');
             if (tr2.parentNode && tr2.parentNode.tagName === 'THEAD') { showToast('헤더 행은 삭제할 수 없습니다', 'alert'); return; }
             tr2.remove();
         } else if (op === 'col-del') {
-            var ci = Array.prototype.indexOf.call(cell.parentNode.children, cell);
-            var rows2 = dmAllRows(table);
+            var ci = Array.prototype.indexOf.call(cell.parentNode.children, cell); var rows2 = dmAllRows(table);
             if (rows2[0] && rows2[0].children.length <= 1) { showToast('마지막 열은 삭제할 수 없습니다', 'alert'); return; }
             rows2.forEach(function (r) { if (r.children[ci]) r.removeChild(r.children[ci]); });
         }
