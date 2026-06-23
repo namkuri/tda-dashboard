@@ -4835,6 +4835,8 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         /* [r326] 트리 프론트매터 title 로딩 shimmer */
         .dm-ft-shimmer { background: linear-gradient(90deg, var(--c-border) 25%, var(--c-paper) 50%, var(--c-border) 75%); background-size: 200% 100%; animation: dmShimmer 1.1s linear infinite; opacity: .7; }
         @keyframes dmShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        /* [r330 #9] 위키링크 호버 시 좌측 트리 문서 하이라이트 */
+        .dm-tree-item.dm-wl-hl { background: var(--c-accent-soft, #efe7dd) !important; box-shadow: inset 0 0 0 2px var(--c-accent); color: var(--c-text) !important; transition: background .15s; }
         #dm-doc-body table, .dm-doc-style table { cursor: default; }
         #dm-doc-body thead th, .dm-doc-style thead th { background: var(--c-paper); font-weight: 700; color: var(--c-text); }
         #dm-doc-body tbody td:first-child, .dm-doc-style tbody td:first-child { text-align: left; background: var(--c-paper); color: var(--c-text); }
@@ -5795,7 +5797,7 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
             <div style="padding:12px 20px;border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:12px;background:var(--c-card);flex:none;">
                 <div style="font-size:19px;">🧭</div>
                 <div style="flex:1;min-width:0;">
-                    <div style="font-size:15px;font-weight:800;color:var(--c-text);">프로젝트 파이프라인</div>
+                    <div style="font-size:15px;font-weight:800;color:var(--c-text);display:flex;align-items:center;gap:7px;">프로젝트 파이프라인<button onclick="dmShowKitBrowser()" title="키트 문서(README·규약·용어집·역할·예시) 열어보기" style="border:1px solid var(--c-border);background:var(--c-paper);border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;color:var(--c-text3);cursor:help;line-height:1;padding:0;flex:none;">?</button></div>
                     <div style="font-size:11px;color:var(--c-text3);margin-top:1px;">PHASE 1~5 · STEP 1~12 — 단방향 12단계 파이프라인. 연결 보기는 문서 안 <code style="font-size:10.5px;">[[제목]]</code>/<code style="font-size:10.5px;">[[doc:id]]</code> 참조를 Alluvial 로 시각화</div>
                 </div>
                 <div id="dm-tabs" style="display:inline-flex;gap:0;border:1px solid var(--c-border);border-radius:8px;overflow:hidden;flex:none;">
@@ -7220,6 +7222,841 @@ gate: true
 ## 8. 연결
 - 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
 - 다음 단계 : **— (마지막 단계)**
+        </script>
+
+        <!-- [r330] 키트 문서(README/규약/용어집/역할/예시) — 도움말 브라우저용 -->
+        <script type="text/template" class="dm-kit" data-kit="0" data-kit-label="README — 키트 개요">
+# game-production-pipeline · 문서 체계 키트
+
+3인 인디팀(멀티플레이 생존 제작, Unity 6.3)을 위한 **게임 제작 파이프라인 문서 템플릿 키트**입니다.
+아이디어가 떠도는 채로 끝나지 않고 오염되지 않은 수직 단면(MVP)까지 가도록, **PHASE 1~5 · 12단계**로
+무엇을 어떤 순서로 쓰는지와 각 문서의 작성 규칙·가이드라인·템플릿을 담았습니다.
+
+## 위계 (하위는 상위를 위반하지 못한다)
+```
+CPR(헌법) → 상황 MDA → 루프 MDA → Pillar Guide → Feature Matrix → GDR
+        → SCOPE → MVP → ADR → ARCH-CHECK → PRIO → GATE
+```
+
+## 단 하나의 규약
+- 모든 문서는 **위(먼저 생긴 문서)를 가리킨다.** 부모는 자식을 나열하지 않는다.
+- 상위가 새 버전이 되면 핀이 어긋난 하위가 **쿼리(pull)** 로 "재검증 필요"에 잡힌다.
+- 자세한 규칙은 [CONVENTIONS.md](CONVENTIONS.md), 역할은 [ROLES.md](ROLES.md).
+- **용어/개념이 낯설면 → [GLOSSARY.md](GLOSSARY.md)** (12요소를 약어·이론·비유·예시까지 상세히).
+
+## 폴더 구조
+```
+game-production-pipeline/
+├─ README.md            ← 지금 이 문서
+├─ CONVENTIONS.md       ← 공통 규약 (참조 방향·버전 핀·네이밍·status·도구)
+├─ GLOSSARY.md          ← 12요소 상세 용어 설명 (CPR…GATE, 약어·이론·비유·예시)
+├─ ROLES.md             ← 4가지 역할 + 12단계 RACI
+├─ phases/              ← PHASE 1~5 개요
+├─ steps/              ← STEP 01~12 : 작성 규칙 + 가이드 + 템플릿 + 체크리스트
+├─ templates/          ← 복사해서 채우는 빈 .md 스켈레톤 (문서 유형별)
+└─ examples/           ← 실제로 채워진 한 벌의 예시 (CPR-0001 … GATE-0001)
+```
+
+## 쓰는 법 (한 사이클)
+1. `steps/STEP-0N-*.md` 를 읽고 **작성 규칙**과 **가이드라인**을 확인한다.
+2. `templates/<유형>.template.md` 를 복사해 `<유형>-NNNN.md` 로 이름 짓는다.
+3. frontmatter에서 **위(상위)를 가리키는** `inherits`/`source`/`pillars`를 채운다 — 자식은 적지 않는다.
+4. 필수 섹션을 채우고 `steps`의 **완료 체크리스트**를 통과시킨다.
+5. 커밋. 상위 문서를 고쳤다면 버전을 올리고, 하위는 pull 쿼리로 재검증한다.
+
+## 도구
+- VS Code **Foam** 또는 **Obsidian** 으로 이 폴더를 열면 `[[ID]]` 위키링크가 백링크·그래프로 이어진다.
+- `pillars:`/`source:`/`inherits:` 는 **Dataview** 쿼리로 역참조를 자동 수집할 수 있다 (CONVENTIONS 참고).
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="1" data-kit-label="CONVENTIONS — 공통 규약">
+# CONVENTIONS · 공통 작성 규약
+
+이 키트의 모든 문서가 공유하는 규칙입니다. 단계별 세부 규칙은 `steps/`를 보세요.
+
+## 1. 위계
+```
+CPR → MDA → LOOP-MDA → PG → FM → GDR → SCOPE / MVP → ADR → ARCH-CHECK → PRIO → GATE
+```
+하위는 상위를 **위반하지 못한다.** 충돌하면 하위를 고친다 (헌법 우선).
+
+## 2. 참조 방향 — 단 하나의 규칙
+- **모든 참조는 위를 가리킨다.** 늦게 생긴 문서가 먼저 생긴 문서를 `inherits`/`source`/`pillars`로 가리킨다.
+- **부모는 자식을 나열하지 않는다.** CPR은 자신을 상속한 MDA들을 적지 않는다 — 자식이 늘어도 부모는 안 바뀐다.
+- 자식 목록이 필요하면 **나열하지 말고 쿼리로 수집**한다 (Dataview/grep/CI).
+
+## 3. 버전 핀과 pull 전파
+- 상위를 참조할 땐 버전을 고정한다 : `inherits: CPR-0001@2`, `source: MDA-0001@2`.
+- `@N` 은 **그 문서의 버전**이지 별도 문서가 아니다.
+- 상위가 `@2 → @3` 으로 오르면 **push 하지 않는다.** 핀이 `@2`로 남은 하위가 아래 쿼리에 잡혀 "재검증 필요"가 된다.
+```dataview
+LIST FROM ""
+WHERE contains(string(inherits), "CPR-0001@2")
+```
+(또는 `grep -rl "CPR-0001@2"` / CI 스텝)
+
+## 4. 네이밍
+- 문서 ID : `TYPE-NNNN` — `CPR-0001`, `MDA-0001`, `LOOP-MDA-0001`, `PG-0001`, `FM-0001`,
+  `GDR-0012`, `SCOPE-0001`, `MVP-0001`, `ADR-0042`, `ARCH-CHECK-0001`, `PRIO-0001`, `GATE-0001`.
+- 파일명 = `ID.md`. 별칭이 필요하면 frontmatter `aliases: [MDA-NIGHT]`.
+- 피처는 `F-NN`, 불변식은 `INV-N`, 비전은 `VIS-N`.
+
+## 5. frontmatter 표준
+| 필드 | 의미 | 누가 쓰나 |
+|---|---|---|
+| `title` | 사람이 읽는 제목 | 전부 |
+| `doc` | 문서 ID | 전부 |
+| `owner` | 주관 역할 | 전부 |
+| `status` | 상태(아래) | 전부 |
+| `version` | 자기 버전 | CPR 등 상위 |
+| `inherits` | 상속하는 상위@버전 | MDA·LOOP·PG |
+| `source` | 출처 상위@버전 | FM·GDR·ADR·ARCH |
+| `pillars` | 적용 기둥 슬러그 | GDR |
+
+## 6. status 어휘
+`draft`(작성중) · `active`(사용중) · `approved`(승인) · `locked`(동결) · `cut`(잘림) · `pending`(대기).
+
+## 7. 헤딩 앵커 (불변식 링크)
+불변식·비전은 헤더로 만든다 → `### INV-1`. 그래야 `[[CPR-0001#INV-1]]` 로 정확히 가리킬 수 있다.
+
+## 8. 표기 약속
+- 커버리지 셀 : `●●` 강함 · `●` 있음 · `△` 약함 · `–` 없음 · `✗` 위반.
+- `✗` 는 곧 **cut 후보** 신호다 (SCOPE에서 처리).
+
+## 9. 도구
+- **Foam(VS Code)** / **Obsidian** : `[[ID]]` 백링크·그래프.
+- **Dataview** : `source`/`pillars`/`inherits` 로 역참조·커버리지 자동 수집.
+- **CI** : 단방향 의존(상위→하위) 위반 시 빌드 실패 (ARCH-CHECK 참고).
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="2" data-kit-label="GLOSSARY — 용어집">
+# GLOSSARY · 파이프라인 12요소 상세 용어 설명
+
+이 문서는 아래 체인의 **각 구성요소가 정확히 무엇이고, 왜 그 자리에 있는지**를 디테일하게 설명합니다.
+처음 보는 사람이 약어와 개념에서 막히지 않도록, 풀네임·이론적 출처·비유·우리 프로젝트 예시·흔한 오해·앞뒤 관계를 함께 적었습니다.
+
+```
+CPR(헌법) → 상황 MDA → 루프 MDA → Pillar Guide → Feature Matrix → GDR
+        → SCOPE → MVP → ADR → ARCH-CHECK → PRIO → GATE
+```
+
+## 먼저 — 이 체인을 읽는 법
+
+- **방향**: 왼쪽이 더 추상적(왜·무엇), 오른쪽이 더 구체적(어떻게·언제). 왼쪽이 **먼저 생기고**, 오른쪽이 그것을 **위로(왼쪽으로) 가리킨다.**
+- **위계 비유(법체계)**: `CPR=헌법` → `상황 MDA=법률` → `GDR=시행령(수치)` → `ADR=집행(기술)`. 하위는 상위를 **위반하지 못한다.**
+- **단 하나의 규칙**: 모든 문서는 위(먼저 생긴 문서)를 가리킨다. **부모는 자식을 나열하지 않는다.** 자식 목록이 필요하면 쿼리로 수집한다.
+- **추상→구체 4층**: ①경험을 정한다(CPR·MDA·Loop) → ②설계로 번역한다(PG·FM·GDR) → ③범위를 긋는다(SCOPE·MVP) → ④구조를 세우고 승인한다(ADR·ARCH·PRIO·GATE).
+
+---
+
+## 1. CPR — Core Principle Record (대원칙 · 헌법)
+
+**한 줄** · 게임이 절대 어기지 않을 비전과 불변식을 박제한 **최상위 문서**. 모든 하위 문서의 기준점.
+
+**무엇인가** · CPR은 두 부분으로 나뉜다. **Vision(비전)** 은 "이 게임이 주려는 단 하나의 경험"을 긍정형 한 문장으로 적은 것이고, **Invariant(불변식)** 은 "어떤 일정 압력에도 어기지 않는 절대 규칙"이다. '대원칙을 기록한다'는 뜻에서 Core Principle Record다. 게임 디자인에서 흔히 말하는 **design pillars(디자인 기둥)** 와 invariant 개념을 한 문서로 못 박은 것으로, 이 게임을 '이 게임답게' 만드는 헌법 역할을 한다.
+
+**왜 필요한가** · 프로젝트가 길어지면 "이 기능 넣을까?" 하는 순간마다 판단 기준이 흔들린다(드리프트). 매번 회의로 정하면 느리고, 사람마다 다르게 기억한다. CPR은 그 **잣대를 글로 고정**해, 새 기능이 정체성에 맞는지 한 곳에서 판정하게 한다.
+
+**무엇을 담는가**
+- `### VIS-1` 비전 한 문장 (헤더로 만들어 링크 가능하게)
+- `### INV-1`, `### INV-2` … 불변식. **각 불변식은 적용 도메인을 한정**한다.
+- 변경 이력(`@1`, `@2` …) — 원칙이 바뀔 때만 버전을 올린다.
+
+**핵심: 도메인 한정** · 불변식은 반드시 "어디에만 적용되는지"를 못 박아야 한다. 예) `cv-invariant`(위협 단서는 항상 불확실)를 **'위협 정보만'** 으로 한정하지 않고 전역으로 적으면, 건설·제작의 정밀 배치까지 모호해져 무관한 시스템에 족쇄가 된다.
+
+**비유** · 국가의 헌법. 모든 법률·시행령이 헌법을 위반할 수 없듯, MDA·GDR·ADR이 CPR을 위반할 수 없다.
+
+**우리 프로젝트 예시** · VIS-1 "생존은 결코 확신할 수 없다." / INV-1 cv-invariant(위협 정보만) / INV-2 죽음의 무게(회수 가능한 손실만).
+
+**흔한 오해** · "불변식은 많을수록 좋다" → 아니다. 2~3개를 넘어가면 헌법이 아니라 기획서가 된다. / "CPR이 자식(MDA)을 나열해야 한다" → 아니다. 부모는 자식을 나열하지 않는다.
+
+**연결** · 위: 없음(최상위). 아래: 모든 문서가 `inherits: CPR-0001@N` 또는 `[[CPR-0001#INV-N]]` 로 이 문서를 가리킨다.
+
+---
+
+## 2. 상황 MDA — situational MDA (법률)
+
+**한 줄** · 특정 **상황**(야간/건설/탐험…)의 목표 경험을 **A/D/M** 세 층으로 설계한 문서. 헌법을 구체 경험으로 내린 첫 단계.
+
+**무엇인가** · MDA는 **Mechanics(규칙) · Dynamics(행동) · Aesthetics(감정)** 의 약자로, Hunicke·LeBlanc·Zubek(2004)의 게임 분석 프레임워크다. 런타임에서는 M이 D를 만들고 D가 A로 귀결되지만, **설계는 반드시 역방향(A→D→M)** 으로 한다 — 먼저 어떤 재미(A)를 줄지 정하고, 그 재미를 만들 행동(D), 그 행동을 강제할 규칙(M) 순으로 내려온다. '상황 MDA'는 게임 전체가 아니라 **한 상황** 단위로 이 분석을 적용한 것이다.
+
+**왜 필요한가** · 헌법(CPR)은 추상적이다. "공포를 준다"는 비전을 실제 시스템으로 옮기려면 "야간이라는 상황에서 어떤 경험을, 어떤 행동으로, 어떤 레버로 만들지"를 상황별로 쪼개야 한다. 이 분할이 없으면 곧장 수치(GDR)로 건너뛰어 '왜 이렇게 만드는지'가 사라진다.
+
+**무엇을 담는가**
+- **A** : 이 상황이 주려는 감정/경험 (불변식과 연결)
+- **D** : 그 경험을 만들 플레이어 행동
+- **M** : 행동을 강제할 **레버 카테고리만** (구체 수치는 GDR로)
+- **불변식 적합성** : `[[CPR-0001#INV-N]]` 을 어떻게 지키는지
+
+**핵심: M에 수치를 넣지 않는다** · M은 "적 출현 강화 / 시야 제한" 같은 **레버의 종류**까지만 적는다. "발소리 ±15°" 같은 숫자는 GDR의 몫이다. 그래야 진실 소스가 둘로 갈라지지 않는다.
+
+**비유** · 헌법(CPR) 아래의 개별 **법률**. 각 법률은 특정 영역(야간·건설)을 다루되 헌법을 위반할 수 없다.
+
+**우리 프로젝트 예시** · MDA-0001 야간생존(A: 공포·생존 긴장 / D: 단서를 추정하며 은신↔위험 저울질 / M: 출현·시야·정보 모호화).
+
+**흔한 오해** · "MDA는 게임 전체에 하나" → 아니다, 상황마다 하나씩. / "M에 수치를 적어야 구체적" → 아니다, 수치는 GDR.
+
+**연결** · 위: `inherits: CPR-0001@N`. 아래: 루프 MDA·PG·FM·GDR이 이 문서를 가리킨다.
+
+---
+
+## 3. 루프 MDA — Loop MDA (정합)
+
+**한 줄** · 여러 상황 MDA를 **하나의 닫힌 루프**로 엮어, 상황 간 전이·이월·병목을 설계한 문서.
+
+**무엇인가** · 개별 상황(채집·건설·야간·탐험)이 따로 놀면 게임이 아니라 미니게임 모음이 된다. 루프 MDA는 이들을 **코어 루프**로 잇는다. 이론적으로는 Daniel Cook의 **loops and arcs(루프와 아크)**, 시스템 공학의 **DSM(Design Structure Matrix, 설계 구조 매트릭스)** 개념을 빌린다. 루프 자체에도 A/D/M이 있다(A: 성장 나선·긴장↔안도 리듬).
+
+**왜 필요한가** · 상황 사이의 **경계**에서 경험이 끊기는 일이 가장 흔하다. "밤을 넘긴 뒤 무엇을 가지고 탐험으로 가는가"를 정하지 않으면 흐름이 뚝 끊긴다. 또 어떤 상황이 **중심 병목**인지(예: 건설)를 모르면 개발 우선순위를 잘못 잡는다.
+
+**무엇을 담는가**
+- **루프 맵** : 단계 → 산출 → 다음 (닫힌 사이클)
+- **DSM(의존성 매트릭스)** : 어느 상황이 무엇을 주고받는지 → **중심 병목**이 드러난다
+- **전이 계약** : 상황 X→Y의 트리거·이월 데이터
+
+**비유** · 톱니바퀴들이 맞물려 도는 그림. 어느 톱니(상황)가 가장 많은 톱니를 돌리는지(병목)가 DSM에 보인다.
+
+**우리 프로젝트 예시** · 채집→건설→야간→탐험→채집의 닫힌 루프. DSM에서 **건설 = 중심 병목**으로 드러남.
+
+**흔한 오해** · "루프 MDA가 상황 MDA를 만들어낸다" → 아니다, 상황 MDA가 먼저 있고 루프가 그것들을 위로 가리키며 엮는다.
+
+**연결** · 위: `inherits: CPR@N`, 엮는 `[[MDA-NNNN]]`. 아래: ADR이 전이/시간 의존을 구현할 때 이 문서를 참조.
+
+---
+
+## 4. Pillar Guide — 기둥 지침서 (번역)
+
+**한 줄** · 불변식·경험을 **실제 설계 지침**으로 번역한 문서. 추상(불변식)과 구체(수치)를 잇는 **사다리**.
+
+**무엇인가** · 디자인 기둥(pillar)은 보통 한 단어("긴장")로 끝나 모호하다. Pillar Guide는 그 기둥을 **DO/DON'T·리트머스·North Star** 까지 풀어, 누구나 같은 기준으로 cut/keep을 판단하게 만든다. CPR의 불변식이 '무엇을 어기면 안 되는가'라면, Pillar Guide는 '그래서 어떻게 만들어야 하는가'다.
+
+**왜 필요한가** · 불변식만으로는 "이 기능이 위반인가?"를 사람마다 다르게 답한다. **리트머스**(예/아니오 한 문장)가 그 판정을 객관화한다. 또 '느낌'(체감)은 검증하기 어려운데, **North Star**(한 장면의 글)가 데모 MVP가 재현할 구체 목표를 준다.
+
+**무엇을 담는가**
+- **유래** : 어느 불변식/MDA에서 비롯됐는지
+- **추상→구체 사다리** : 불변식 → A → D → PG원칙 → GDR수치 (5칸)
+- **DO / DON'T** : 실제 메카닉 예
+- **리트머스** : "이 기능을 켜면 ___ 하게 되는가?" → Yes면 위반
+- **North Star** : 기둥이 가장 강하게 체감되는 한 장면
+- **검증 훅** : GDR이 `pillars:` 로 역참조
+
+**비유** · 헌법 조문을 현장 공무원이 쓸 수 있게 풀어쓴 **업무 지침서**.
+
+**우리 프로젝트 예시** · PG-0001 cv-invariant. 리트머스 "켜면 단서를 100% 신뢰하게 되는가?". North Star "멀리서 둔탁한 소리 — 좀비인지 바람인지 확신이 없다…".
+
+**흔한 오해** · "Pillar Guide에 수치를 적는다" → 아니다(GDR). / "적용 GDR을 손으로 나열" → 아니다, 쿼리로 수집.
+
+**연결** · 위: `source: CPR@N`/`[[MDA-NNNN]]`. 아래: GDR이 `pillars: [...]` 로 가리킨다.
+
+---
+
+## 5. Feature Matrix — 피처 분할 + 커버리지 (FM)
+
+**한 줄** · 방대한 기획을 **피처 한 줄씩**으로 쪼개고, **Pillar × Feature 커버리지**로 빈/위반(✗)을 드러내는 표.
+
+**무엇인가** · 분할 정복(Divide & Conquer)의 도구다. 모든 시스템을 `[피처 → 상황 → A → M → pillars]` 가로 한 줄로 분절하면, 아무리 방대해도 **Engineer가 구현할 Mechanics 목록이 한눈에** 잡힌다. 여기에 더해 **커버리지 매트릭스**(행=피처, 열=기둥)를 같은 문서 안에 둬서, 어떤 기둥이 비거나 위반(✗)되는지를 시각적으로 적출한다.
+
+**왜 필요한가** · 피처 목록만으로는 "정체성을 제대로 떠받치는가"를 알 수 없다. 커버리지가 그 결함을 드러낸다 — 예: 미니맵이 cv-invariant `✗` 면, 그 한 칸이 곧 **cut 후보** 신호가 된다.
+
+**무엇을 담는가**
+- MDA Feature Matrix : `피처|상황|A|M|pillars`
+- Pillar × Feature 커버리지 : 셀 표기 `●●/●/△/–/✗`
+
+**비유** · 스프레드시트 대시보드. 빨간 칸(✗)이 곧 할 일(cut)이다.
+
+**우리 프로젝트 예시** · F-31 미니맵이 cv-invariant `✗` → SCOPE에서 cut.
+
+**흔한 오해** · "커버리지를 별도 문서로" → 아니다, FM 안에 같이 둔다(파편화 방지).
+
+**연결** · 위: `source: MDA@N`, `[[PG-NNNN]]`. 아래: GDR·SCOPE·MVP가 참조.
+
+---
+
+## 6. GDR — Game Design Record / Requirement (시행령 · 수치)
+
+**한 줄** · 피처를 **Engineer가 그대로 구현할 수치**로 확정한 시행령. 모호함이 없어야 한다.
+
+**무엇인가** · GDR은 ADR(아키텍처 결정 기록)의 **기획 버전**이다. "주야간이 몇 분", "발소리 오차 몇 도"처럼 코드에 바로 넣을 수 있는 값으로 박제한다. 상위(MDA·PG)가 '왜·무엇'이라면 GDR은 '정확히 얼마'다.
+
+**왜 필요한가** · MDA의 레버("시야 제한")만으로는 구현이 멈춘다. **숫자가 없으면 코드를 못 짠다.** GDR이 그 숫자와 **검증 기준**을 제공해 기획↔구현의 단절을 없앤다.
+
+**무엇을 담는가**
+- 맥락 / 결정
+- **📊 데이터·튜닝 표(의무)** : 키·값·근거(플레이테스트)
+- **✅ 검증(의무)** : 리트머스(PG) · KPI 지표 · 수용기준
+- `source: MDA@N` · `pillars: [...]`
+
+**핵심: 네트워크 권위는 여기서 정하지 않는다** · "무엇을 서버가 정하고 무엇을 동기화할지"는 STEP 09 ADR에서 Tech Lead가 판단한다. GDR은 디자인 수치까지만.
+
+**비유** · 법률(MDA)을 실무에 적용하는 **시행령**. 구체 수치와 기준이 여기 있다.
+
+**우리 프로젝트 예시** · GDR-0012 단서(발소리 8분할 ±15°, 거리 ±20% 노이즈, KPI 오인율 25~35%).
+
+**흔한 오해** · "수치 없는 GDR도 가능" → 아니다(그럼 MDA와 같다). / "GDR이 ADR을 가리킨다" → 아니다, ADR이 GDR을 역참조.
+
+**연결** · 위: `source: MDA@N`, `pillars`. 아래: SCOPE·MVP·ADR·PRIO가 참조.
+
+---
+
+## 7. SCOPE — 범위 결정 / Cut List (범위)
+
+**한 줄** · 자원·일정으로 **IN/OUT을 결정**하고, 빼는 것을 명시적 cut list로 박제한 문서.
+
+**무엇인가** · 범위 폭증(scope creep)을 **결정으로** 막는다. MoSCoW(Must/Should/Could/Won't, DSDM 기법)로 등급을 매기되, cv-invariant 직결 피처는 항상 Must. 커버리지에서 `✗` 받은 피처는 cut 후보다.
+
+**왜 필요한가** · "나중에 빼지 뭐"는 다음 회의에서 슬그머니 되살아난다. cut은 **[항목·이유·재검토]** 세 칸을 다 채워야 '결정'이며, 안 적으면 '보류'다. 이 명시성이 재발을 막는다.
+
+**무엇을 담는가** · 범위 규칙 / MoSCoW 표 / Cut List(이유·재검토) / out-of-scope.
+
+**판정 도구: cost-of-exclusion** · borderline 항목은 "없이 출시하면 무슨 일?"로 가른다 — 사과할 일(Should)/핫픽스(Must)/아무 일 없음(cut).
+
+**비유** · 예산 회의의 **확정 명세서**. 무엇을 사고 무엇을 포기하는지 사인까지.
+
+**우리 프로젝트 예시** · 미니맵 cut(cv-invariant 위반) · 하우징 Should(데모엔 최소만).
+
+**흔한 오해** · "cut = 영구 삭제" → 아니다, 재검토 시점을 적는다. / "SCOPE에서 MVP까지 정의" → 아니다(STEP 08).
+
+**연결** · 위: `[[GDR-NNNN]]`, `[[FM-0001]]`, `[[CPR-0001#INV-N]]`. 아래: MVP·PRIO가 참조.
+
+---
+
+## 8. MVP — Minimum Viable Product (수직 단면)
+
+**한 줄** · 검증 가능한 **수직 단면**. 콘텐츠를 가로로 넓히지 않고, 핵심 기능을 세로로 끝까지 관통시킨 최소 제품.
+
+**무엇인가** · 이 프로젝트는 MVP를 둘로 나눈다 — **시스템 MVP(G-system 게이트: 의존 그래프가 닫히는가=작동)** 와 **데모 MVP(G-demo 게이트: 정체성이 체감되는가)**. 데모 ⊂ 시스템. **수직 단면(vertical slice)** 은 Cerny Method에서 온 개념으로, 맵·아이템을 가로로 잔뜩 만드는 대신 핵심 기능 하나를 엔진 최하단(MW)부터 최상단(GS)까지 깨끗이 관통시키는 것이다. "Cut scope, not quality."
+
+**왜 필요한가** · 작동하지 않는 건 **polish(다듬기)** 할 수 없다. 그래서 데모 항목은 먼저 G-system(작동)을 통과해야 한다. 또 가로로 넓힌 미완성 콘텐츠는 무엇이 재밌는지 검증해주지 못한다.
+
+**무엇을 담는가** · 한 줄 정의 / 시스템 MVP·데모 MVP 구분 / **수용 테스트**(시나리오·통과 조건, 마지막 행은 불변식 위반 0건).
+
+**비유** · 케이크 한 조각을 **맨 위 장식부터 맨 아래 빵까지** 통째로 잘라 맛보는 것(층 전부 포함). 케이크 전체를 굽는 게 아니다.
+
+**우리 프로젝트 예시** · "한 밤을 불확실한 단서만으로 버틴다." 시스템 MVP=루프 1회전 작동, 데모 MVP=North Star 장면 재현.
+
+**흔한 오해** · "MVP=기능 적은 버전" → 아니다, **세로로 완결된** 단면. / "프로토타입과 같다" → 아니다(프로토타입은 폐기용, MVP는 제품 근간).
+
+**연결** · 위: `[[GDR-NNNN]]`, `[[SCOPE-0001]]`, `[[PG-NNNN]]`. 아래: ADR·PRIO·GATE가 참조.
+
+---
+
+## 9. ADR — Architecture Decision Record (집행 · 기술)
+
+**한 줄** · "어떤 구조·패턴으로 구현하고, 무엇을 서버가 정할지"를 기록한 **기술 의사결정 문서**.
+
+**무엇인가** · Michael Nygard(2011)가 정립한 형식으로, **맥락 → 검토한 옵션 → 결정 → 결과**를 남겨 "왜 이렇게 짰지"가 사라지지 않게 한다. GDR이 '무엇'(디자인 수치)이라면 ADR은 '어떻게'(기술). 멀티플레이의 **네트워크·권위·동기화** 판단도 여기서 한다.
+
+**왜 필요한가** · 코드만 남으면 6개월 뒤 아무도 이유를 모른다. 또 멀티플레이에서 불변식(cv-invariant)이 **네트워크 레벨에서** 깨질 수 있다(정확 좌표를 전송하면 wallhack). ADR이 "서버가 모호화한 단서만 전송"처럼 불변식을 기술로 보존한다.
+
+**무엇을 담는가** · 맥락 / 결정 동인 / 검토한 옵션(표) / 결정 / 네트워크·권위 / 결과·존속성(그레고리 G/L-system) / `source: [GDR@N]`.
+
+**비유** · 법률·시행령을 현장에서 **집행**하는 방식의 기록. 누가(서버) 무엇을 정하는지까지.
+
+**우리 프로젝트 예시** · ADR-0042 GameTime(서버 권위 단일 시계) · ADR-0043 위협 정보 동기화(서버 모호화 후 전송).
+
+**흔한 오해** · "ADR이 GDR을 다시 쓴다" → 아니다(ADR='어떻게'). / "네트워크 권위는 GDR에" → 아니다, ADR에서.
+
+**연결** · 위: `source: [GDR@N]`, `[[LOOP-MDA-0001]]`, `[[CPR-0001#INV-N]]`. 아래: ARCH-CHECK·GATE·PRIO가 참조.
+
+---
+
+## 10. ARCH-CHECK — 의존성·존속성 점검
+
+**한 줄** · 아키텍처가 **오염되지 않았는지**(의존 단방향)와 **콘텐츠가 붙어도 버티는지**(존속성)를 점검하는 게이트 문서.
+
+**무엇인가** · Jason Gregory의 **엔진 레이어 모델**(MW·CORE·RES·…·GF·GS)을 기준으로, 시스템이 어느 레이어에 속하는지 분류하고 의존이 **위→아래로만** 흐르는지 검사한다. 하위가 상위를 역참조하면 아키텍처 크랙 → 반려. **존속성(durability)** 은 "지금 구조가 나중에 콘텐츠를 붙일 때도 버티는가"다.
+
+**왜 필요한가** · 단방향이 깨지면 콘텐츠 확장 때 엔진을 다시 짜야 한다. 또 **G-system(런타임 내내 사는 시스템)** 병목(예: GameTime)을 미리 식별해야 변경 영향을 통제한다. 가능하면 **CI 아키텍처 테스트**로 위반을 자동 검출한다.
+
+**무엇을 담는가** · 단방향 규칙 / 그레고리 분류표 / 병목·순환 점검 / 액션 아이템.
+
+**핵심: 데이터 사이클 ≠ 코드 사이클** · 루프(채집→건설→…)는 **데이터 흐름**이지 컴파일 의존 순환이 아니다. 둘을 구분해야 한다.
+
+**비유** · 건물 **구조 안전 검사**. 하중이 위에서 아래로만 가는지, 증축해도 버티는지 본다.
+
+**우리 프로젝트 예시** · GameTime이 최대 의존 노드 → 인터페이스 동결 우선. 순환 의존 없음.
+
+**흔한 오해** · "존속성은 나중에" → 아니다(나중엔 재작성 비용). / "루프가 있으니 순환 의존" → 아니다(데이터 흐름).
+
+**연결** · 위: `source: [ADR@N]`, `[[GDR-NNNN]]`. 아래: GATE가 참조.
+
+---
+
+## 11. PRIO — 개발 우선순위
+
+**한 줄** · **무엇을 먼저 만들지**를 가치·의존·일정으로 정한 순서 문서.
+
+**무엇인가** · 두 축을 합친다 — **가중 스코어링**(pillar 직결 × MVP 포함 × 의존 병목)으로 가치를, **의존성 위상정렬**로 제약(무엇이 무엇에 선행)을 반영한다. 많이 의존받는 토대(GameTime 등)가 먼저다. 일정은 **DSDM 자원 게이트**(Must ≤ 가용 50%, buffer 20%)로 보호한다.
+
+**왜 필요한가** · 가치순으로만 정렬하면 선행 부품이 없어 막힌다(블로킹). 의존을 무시한 백로그는 현실에서 깨진다. 또 버퍼 0%로 채우면 누군가 아프거나 버그가 터질 때 일정 전체가 무너진다.
+
+**무엇을 담는가** · 스코어링 기준(가중) / 순서(스코어·위상정렬) / 자원 게이트(DSDM) / 제외·보류.
+
+**비유** · 공사 **공정표**. 기초→골조→마감 순서를 어기면 무너진다.
+
+**우리 프로젝트 예시** · 1) GameTime(의존 병목 선행) → 2) 단서 → 3) 야간습격.
+
+**흔한 오해** · "가치 높은 것부터" → 아니다, 의존 선행이 우선. / "버퍼는 낭비" → 아니다, 충격 흡수.
+
+**연결** · 위: `[[GDR-NNNN]]`, `[[ADR-NNNN]]`, `[[FM-0001]]`, `[[SCOPE-0001]]`, `[[MVP-0001]]`. 아래: GATE가 후속으로 참조.
+
+---
+
+## 12. GATE — 기술 구조 승인 (게이트)
+
+**한 줄** · 구현 착수 **직전의 최종 검문소**. 체크리스트를 통과한 설계만 승인하고, 승인된 단면을 빌드한다.
+
+**무엇인가** · 거버넌스 루프의 마지막 단계. **체크리스트**(순환 의존 없음 · G-system 병목 동결 · 불변식 네트워크 보존 · 데모 리스크 식별)를 ✓/△/✗ 로 판정하고, 통과 시 ADR을 `accepted`로 승인한다. 통과 못 하면 앞 단계로 되돌려 고친다.
+
+**왜 필요한가** · 오염된 구조로 구현을 시작하면 되돌리는 비용이 폭발한다. 게이트는 그 **마지막 차단막**이자, 역할별 **사인오프**로 책임을 분명히 하는 장치다.
+
+**무엇을 담는가** · 승인 대상(ARCH-CHECK·ADR) / 체크리스트 / 미결·조건부 / 사인오프 / 판정(통과 시 PRIO 순서로 착수).
+
+**비유** · 비행 전 **최종 점검 체크리스트**. 한 항목이라도 ✗면 이륙하지 않는다.
+
+**우리 프로젝트 예시** · 순환 의존 없음 ✓ · GameTime 동결 ✓ · 불변식 네트워크 보존 ✓ · 데모 리스크 △(진행중) → 조건부.
+
+**흔한 오해** · "게이트는 형식적 도장" → 아니다, 못 지나면 되돌아간다. / "GATE가 PRIO를 만든다" → 아니다, GATE가 PRIO를 후속으로 가리킨다.
+
+**연결** · 위: `[[ARCH-CHECK-0001]]`, `[[ADR-NNNN]]`, `[[CPR-0001#INV-N]]`, `[[MVP-0001]]`, `[[PRIO-0001]]`. 아래: 없음(마지막). 통과 후 **구현 착수**.
+
+---
+
+## 한눈에 — 4층 요약
+
+| 층 | 단계 | 답하는 질문 | 산출 형태 |
+|---|---|---|---|
+| ① 경험 정립 | CPR · MDA · Loop | 왜·무엇을 느끼게? | 비전·불변식·A/D/M·루프 |
+| ② 기획 번역 | PG · FM · GDR | 어떻게 설계·수치로? | 지침·커버리지·수치표 |
+| ③ 범위 결정 | SCOPE · MVP | 이번엔 무엇까지? | MoSCoW·수직 단면 |
+| ④ 구조·승인 | ADR · ARCH · PRIO · GATE | 어떤 구조로·어떤 순서로·승인? | 결정·점검·순서·게이트 |
+
+> 한 문장으로: **CPR로 헌법을 세우고 → 상황·루프 MDA로 경험을 짜고 → Pillar Guide로 번역하고 → GDR로 수치까지 박제하고 → SCOPE·MVP로 범위를 긋고 → ADR·점검으로 구조를 세워 → 게이트 승인으로 깨끗한 수직 단면을 뽑는다.** 그리고 모든 문서는 늘 **위를 가리킨다.**
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="3" data-kit-label="ROLES — 역할">
+# ROLES · 4가지 역할 + 12단계 RACI
+
+한 단계는 **한 명이 주관**하되, 인접 역할이 참여·검토로 붙어 단절을 막는다.
+두 PD의 구분 — **Producer형** = 자원·범위·일정을 굴린다 / **Director형** = 비전·경험·정체성을 정한다.
+
+## 역할
+### Producer형 PD  (자원·범위·일정)  — violet
+일정·예산·범위·리스크의 소유자. 프로젝트를 굴러가게 한다.
+주관 : 범위·cut(SCOPE) · MVP 정의 · 개발 우선순위(PRIO).
+
+### Director형 PD  (비전·경험·정체성)  — amber
+비전과 최종 의사결정권. 게임의 정체성을 **CPR(헌법)** 의 Vision·Invariant로 못 박고,
+**Pillar Guide** 로 drift를 막는다.
+주관 : CPR · 상황 MDA · 루프 MDA · Pillar Guide.
+
+### Designer  (컨텐츠 기획)  — green
+상위 경험을 토대로 피처를 기획하고, 수치·규칙을 코드화 가능한 스펙으로 확정한다.
+주관 : Feature Matrix · GDR.
+
+### Engineer / Tech Lead  (아키텍처·구현)  — blue
+기획을 엔진 레이어로 매핑·설계·승인·구현한다. 네트워크·권위 판단, 아키텍처 오염 차단.
+주관 : ADR · 의존성·존속성 점검 · 기술 구조 승인(GATE).
+
+## 12단계 RACI
+표기 : ● 주관(Owner) · ◐ 참여(Contributor) · ○ 검토(Review) · · 비관여
+
+| STEP | 산출물 | Producer | Director | Designer | Engineer |
+|---|---|:--:|:--:|:--:|:--:|
+| 01 | CPR (대원칙) | · | ● | ○ | · |
+| 02 | 상황 MDA | · | ● | ◐ | · |
+| 03 | 루프 MDA | · | ● | ◐ | ○ |
+| 04 | Pillar Guide | · | ● | ◐ | · |
+| 05 | Feature Matrix | ○ | ◐ | ● | ○ |
+| 06 | GDR | ○ | ◐ | ● | ◐ |
+| 07 | 범위·cut (SCOPE) | ● | ◐ | ◐ | ○ |
+| 08 | MVP 정의 | ● | ○ | ◐ | ◐ |
+| 09 | ADR | ○ | · | ○ | ● |
+| 10 | 의존성·존속성 | ○ | · | · | ● |
+| 11 | 개발 우선순위 (PRIO) | ● | ○ | ○ | ● |
+| 12 | 기술 구조 승인 (GATE) | ◐ | ○ | ○ | ● |
+
+## 협업 원칙
+- **정체성 보호** : 어떤 cut 압력에도 Director형 PD가 불변식(cv-invariant)이 잘리지 않게 막는다.
+- **번역 책임** : Designer는 '왜 이렇게 만드는지'(상위 의도)를 GDR 수치까지 안 뭉개지게 옮긴다.
+- **구조 책임** : Engineer는 모호한 한 줄이 아니라 숫자가 적힌 GDR을 받아 ADR로 구현하고, 의존 단방향을 지킨다.
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="4" data-kit-label="예시 · CPR-0001">
+---
+title: 대원칙 (Core Principle Record)
+doc: CPR-0001
+owner: Director
+status: locked
+version: 2
+---
+
+# CPR-0001 · 대원칙 — 게임의 헌법
+
+## Vision · VIS-1
+> 생존은 결코 확신할 수 없다 — 늘 불완전한 정보로 생사를 건 선택을 한다.
+
+## Invariants (위반 금지)
+### INV-1 · cv invariant
+- 위협 단서는 항상 불확실하다 (확실성 cv < 1.0)
+- **적용 도메인 : 위협 정보만**. 건설·제작 정밀도엔 적용하지 않는다.
+
+### INV-2 · 죽음의 무게
+- 사망은 회수 가능한 손실만 남긴다 (영구 박탈 금지)
+
+## 이 문서를 가리키는 것들
+- 여기 나열하지 않는다 — **부모는 자식을 나열하지 않는다.**
+- 하위 문서가 inherits: CPR-0001@2 로 **위를 향해** 참조한다.
+
+## 변경 이력
+- @2 : INV-1 도메인을 위협 정보로 한정 → 하위 재검증 트리거
+- @1 : 최초 확정
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="5" data-kit-label="예시 · MDA-0001">
+---
+title: 상황 MDA · 야간생존
+doc: MDA-0001
+inherits: CPR-0001@2
+owner: Director
+status: active
+---
+
+# MDA-0001 · 야간생존 (상황 MDA)
+
+## A · Aesthetics (목표 경험)
+- 공포·생존 긴장 — ① 위협 불확실성([[CPR-0001#INV-1]]) ② 손실 위험 ③ 밤의 압박
+
+## D · Dynamics (유도 행동)
+- 단서를 확인이 아니라 추정하며 은신 ↔ 위험 감수를 저울질
+
+## M · Mechanics (레버 — 수치는 GDR)
+- 적 출현 강화 / 감각·시야 제한 / 위협 정보 모호화
+
+## 불변식 적합성
+- [[CPR-0001#INV-1]] : 적 위치 확정표시 안 함, 소리로만 암시 ✓
+- [[CPR-0001#INV-2]] : 사망 시 소울 일부만 손실 ✓
+
+## 연결
+- 상속 [[CPR-0001#INV-1]] · 피처는 GDR이 source: MDA-0001 로 역참조
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="6" data-kit-label="예시 · LOOP-MDA-0001">
+---
+title: 루프 MDA
+doc: LOOP-MDA-0001
+inherits: CPR-0001@2
+owner: Director
+status: active
+---
+
+# LOOP-MDA-0001 · 루프 MDA (상황 엮기)
+
+## 루프 그 자체의 A/D/M
+- A : 성장 나선 + 긴장↔안도 리듬
+- D : 상황 배치·우선순위 저울질
+- M : 전이 트리거 / 결과 이월 / 티어 게이팅
+
+## 루프 맵
+| 단계 | 산출 | 다음 |
+|---|---|---|
+| 채집 | 자원 | 건설 |
+| 건설 | 방어도 | 야간 |
+| 야간 | 생존상태 | 탐험 |
+| 탐험 | 자원·정보 | 채집 |
+
+## 의존성 매트릭스 (DSM)
+| 준다 ＼ 받는다 | 채집 | 건설 | 야간 | 탐험 |
+|---|---|---|---|---|
+| 채집 | – | 자원 | · | · |
+| 건설 | · | – | 방어도 | · |
+| 야간 | · | · | – | 생존상태 |
+| 탐험 | 자원·정보 | · | · | – |
+
+> 읽기 : 닫힌 사이클 · **건설 = 중심 병목**
+
+## 전이 계약 (예)
+- 야간 → 탐험 : 트리거 새벽 / 이월 HP·자원·미확인 위협정보([[CPR-0001#INV-1]])
+
+## 연결
+- 엮는 상황 [[MDA-0001]] (외 건설·탐험 상황 MDA)
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="7" data-kit-label="예시 · PG-0001">
+---
+title: Pillar Guide · cv-invariant
+doc: PG-0001
+pillar: cv-invariant
+owner: Director
+source: CPR-0001@2
+status: locked
+---
+
+# PG-0001 · cv invariant — Pillar Guide (설계 지침)
+
+## 유래 (비롯됨)
+- [[CPR-0001#INV-1]] 불변식을 **설계 지침으로 번역**한 문서
+- 적용 상황 : [[MDA-0001]] 야간 (위협 정보가 등장하는 곳)
+
+## 추상 → 구체 사다리
+1. [[CPR-0001#INV-1]] (추상) : 위협 단서는 항상 불확실
+2. MDA·A : 공포·생존 긴장
+3. MDA·D : 단서를 확인이 아니라 추정
+4. PG 원칙 : 모든 위협 단서에 한 단계 모호성을 남긴다
+5. GDR 수치 (가장 구체) : 발소리 8분할 ±15°
+
+## DO / DON'T
+- DO : 소리는 방향만, 거리는 ±오차로 흐린다
+- DON'T : 적 위치를 좌표·아이콘으로 확정 노출
+
+## 리트머스
+- "이 기능을 켜면 단서를 100% 신뢰하게 되는가?" → Yes면 위반
+
+## North Star
+> 해가 기운다. 멀리서 둔탁한 소리 — 좀비인지 바람인지 확신이 없다. 살아남은 안도와, 진짜였는지 모르는 찜찜함이 함께 남는다.
+
+## 검증 훅
+- GDR이 pillars: [cv-invariant] 로 역참조 → 적용 피처 자동 수집
+- 적용 범위 : 위협 감지·표시, 미니맵·HUD, 사운드 단서
+
+## 연결
+- 유래 [[CPR-0001#INV-1]] · 적용 상황 [[MDA-0001]]
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="8" data-kit-label="예시 · FM-0001">
+---
+title: Feature Matrix
+doc: FM-0001
+owner: Designer
+source: MDA-0001@2
+status: active
+---
+
+# FM-0001 · Feature Matrix + 커버리지
+
+## MDA Feature Matrix
+| 피처 | 상황 | A | M(레버) | pillars |
+|---|---|---|---|---|
+| F-01 야간습격 | [[MDA-0001]] | 공포 | 출현·시야 | cv-invariant, 밤긴장 |
+| F-05 단서 | [[MDA-0001]] | 긴장 | 소리 단서 | cv-invariant |
+| F-12 하우징 | 건설 | 통제 | 그리드 | 자립감 |
+| F-31 미니맵 | 탐험 | 편의 | 위치표시 | (없음) |
+
+## Pillar × Feature 커버리지
+| feature ＼ pillar | cv-invariant | 자립감 | 밤긴장 |
+|---|---|---|---|
+| F-01 야간습격 | ● | △ | ●● |
+| F-05 단서 | ●● | – | ● |
+| F-12 하우징 | – | ●● | ● |
+| F-31 미니맵 | ✗ | △ | – |
+
+> 읽기 : **F-31 미니맵 cv-invariant ✗ → cut 후보**
+
+## 연결
+- 출처 [[MDA-0001]] · pillar [[PG-0001]] (GDR이 source/pillars로 역참조)
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="9" data-kit-label="예시 · GDR-0012">
+---
+title: 단서(발소리) 시스템
+doc: GDR-0012
+source: MDA-0001@2
+pillars: [cv-invariant]
+owner: Designer
+status: approved
+---
+
+# GDR-0012 · 단서(발소리) 시스템
+
+## 맥락
+[[MDA-0001]]의 A(공포·긴장)를 떠받치고 [[PG-0001]] cv-invariant를 시행. 위협을 추정하게 만든다.
+
+## 결정
+- 발소리 : 방향 8분할(45°) + ±15° 무작위 지터
+- 거리 : 볼륨 역비례지만 ±20% 노이즈
+
+## 데이터·튜닝 [의무]
+| 파라미터 | 값 | 근거 |
+|---|---|---|
+| 방향 분할 | 8 | 16=과정확, 4=답답 |
+| 지터 각 | ±15° | 10=과신, 20=좌절 |
+| 거리 노이즈 | ±20% | 체감 균형 |
+
+## 검증 [의무]
+- 리트머스 [[PG-0001]] "100% 신뢰?" → No ✓
+- KPI : 위협 방향 오인율 25~35%
+- 커버리지 [[FM-0001]] : cv-invariant ●●
+
+## 연결
+- 상위 [[MDA-0001]] · pillar [[PG-0001]] · 불변식 [[CPR-0001#INV-1]] · 매트릭스 [[FM-0001]]
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="10" data-kit-label="예시 · SCOPE-0001">
+---
+title: 범위 결정 (MoSCoW + cut)
+doc: SCOPE-0001
+owner: Producer
+status: active
+---
+
+# SCOPE-0001 · 범위 결정
+
+## 범위 규칙
+- cv-invariant([[CPR-0001#INV-1]]) 직결 피처는 항상 Must
+- 커버리지([[FM-0001]])에서 ✗ → cut 후보
+
+## MoSCoW
+| 등급 | 피처 | 근거 |
+|---|---|---|
+| Must | [[GDR-0012]] 단서 | cv-invariant 핵심 |
+| Must | 야간습격 | 밤긴장 + cv-invariant |
+| Should | 하우징 | 자립감, 최소만 |
+| Won't | 동적 날씨 풀버전 | 차기 |
+
+## Cut
+- 미니맵 — [[CPR-0001#INV-1]] 위반 (커버리지 ✗ 적출)
+
+## 연결
+- 피처 출처 [[GDR-0012]] · 매트릭스 [[FM-0001]] · 불변식 [[CPR-0001#INV-1]]
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="11" data-kit-label="예시 · MVP-0001">
+---
+title: MVP 정의 (시스템 / 데모)
+doc: MVP-0001
+type: system-mvp
+owner: Producer
+status: active
+---
+
+# MVP-0001 · MVP 정의 (수직 단면)
+
+## 한 줄 정의
+> "한 밤을, 불확실한 단서만으로 버틴다" — 핵심 루프 1회전이 끝까지 작동하는가.
+
+## 시스템 MVP (G-system : 작동하는가)
+- [[GDR-0012]] 단서 · 야간습격 · 최소 건설
+- 의존 그래프가 닫히는가
+
+## 데모 MVP (G-demo : 체감되는가) ⊂ 시스템 MVP
+- [[PG-0001]] North Star 장면을 실제로 재현 (체감 확실성 차단)
+
+## 수용 테스트
+| # | 시나리오 | 통과 조건 |
+|---|---|---|
+| A1 | 단서 추정 | 방향을 ±오차로만 인지 |
+| A2 | 농성 | 벽으로 1밤 생존 |
+| A4 | 불변식 | 적 확정좌표 노출 0건 ([[CPR-0001#INV-1]]) |
+
+## 연결
+- 피처 [[GDR-0012]] · 범위 [[SCOPE-0001]] · pillar [[PG-0001]] · 불변식 [[CPR-0001#INV-1]]
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="12" data-kit-label="예시 · ADR-0042">
+---
+title: GameTime Manager
+doc: ADR-0042
+owner: Engineer
+status: accepted
+source: [GDR-0012@1]
+---
+
+# ADR-0042 · GameTime Manager (단일 권위 시계)
+
+## 맥락
+야간 압박·단서 감쇠·전이([[LOOP-MDA-0001]])가 모두 "지금 밤 몇 %"에 의존. 흩어지면 멀티 불일치.
+
+## 검토한 옵션
+| 옵션 | 장점 | 단점 |
+|---|---|---|
+| 클라 로컬 | 단순 | 불일치·치팅 |
+| 서버 권위 단일 | 일관·반치팅 | 지연 보정 |
+
+## 결정
+- **서버 권위 단일 GameTime** · 틱 20Hz · 클라 보간 + 동기화
+- 시간 의존 시스템은 이 서비스를 구독
+
+## 네트워크·권위 (Tech Lead)
+- 밤 페이즈·스폰 위치 = 서버 결정. 클라엔 모호화된 단서만 ([[CPR-0001#INV-1]])
+
+## 존속성 (그레고리)
+- G-system (런타임 내내) · 다수 의존 → 중심 병목
+
+## 연결
+- 상위 의도 [[GDR-0012]] · 루프 [[LOOP-MDA-0001]] · 불변식 [[CPR-0001#INV-1]] · MVP [[MVP-0001]]
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="13" data-kit-label="예시 · ARCH-CHECK-0001">
+---
+title: 의존성·존속성 점검
+doc: ARCH-CHECK-0001
+owner: Engineer
+status: active
+source: [ADR-0042@1]
+---
+
+# ARCH-CHECK-0001 · 의존성·존속성 점검
+
+## 단방향 규칙
+- 허용 : 상위 → 하위 (GS → GF → CORE)
+- 금지 : 하위 → 상위 → 빌드 실패
+
+## 그레고리 분류
+| 시스템 | 분류 | 존속 |
+|---|---|---|
+| GameTime([[ADR-0042]]) | G-system | 런타임 내내 |
+| 단서([[GDR-0012]]) | L-system | 야간 활성 |
+
+## 병목 / 순환
+- GameTime = 최대 의존 노드 → 인터페이스 동결 우선
+- 코드 순환 : 없음 (루프는 데이터 흐름)
+
+## 연결
+- 점검 대상 [[ADR-0042]] · 의존 피처 [[GDR-0012]]
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="14" data-kit-label="예시 · PRIO-0001">
+---
+title: 개발 우선순위
+doc: PRIO-0001
+owner: Producer
+status: active
+---
+
+# PRIO-0001 · 개발 우선순위
+
+## 스코어링 (가중)
+| 기준 | 가중 |
+|---|---|
+| pillar 직결([[FM-0001]]) | x3 |
+| MVP 포함([[MVP-0001]]) | x2 |
+| 의존 병목 | x2 |
+
+## 순서 (스코어 · 위상정렬)
+1. [[GDR-0012]] 단서 (cv-invariant ●● + MVP)
+2. [[ADR-0042]] GameTime (다수 의존 병목 선행)
+3. 야간습격 (밤긴장 ●● + MVP)
+
+## 자원 게이트 (DSDM)
+- Must ≤ 가용 50% · buffer 20%
+
+## 연결
+- 항목 [[GDR-0012]] [[ADR-0042]] · 매트릭스 [[FM-0001]] · 범위 [[SCOPE-0001]] · MVP [[MVP-0001]]
+        </script>
+        <script type="text/template" class="dm-kit" data-kit="15" data-kit-label="예시 · GATE-0001">
+---
+title: 기술 구조 승인 (게이트)
+doc: GATE-0001
+owner: Tech Lead
+status: pending
+gate: true
+---
+
+# GATE-0001 · 기술 구조 승인 → MVP 빌드
+
+## 승인 대상
+- [[ARCH-CHECK-0001]] 의존성 점검 통과
+- [[ADR-0042]] 확정
+
+## 체크리스트
+| 항목 | 상태 |
+|---|---|
+| 순환 의존 없음 | ✓ |
+| G-system 병목 동결 | ✓ |
+| 불변식([[CPR-0001#INV-1]]) 네트워크 보존 | ✓ |
+| 데모 슬라이스([[MVP-0001]]) 리스크 식별 | △ |
+
+## 판정
+- 통과 → [[PRIO-0001]] 순서로 구현 착수
+- 위반 발견 → 반려·재설계
+
+## 연결
+- 점검 [[ARCH-CHECK-0001]] · 결정 [[ADR-0042]] · 불변식 [[CPR-0001#INV-1]] · 후속 [[PRIO-0001]]
         </script>
 
         <div id="aihub-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:auto;padding:18px 22px;background:var(--c-paper);">
@@ -12963,7 +13800,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r329';
+        var _AHUB_FRONT_REV = 'r330';
 
 
         var _ahubRevWarned = false;
@@ -34665,7 +35502,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r329';
+    var _RFS_FRONT_REV = 'r330';
 
 
     async function rfsHealthCheck() {
@@ -34817,6 +35654,41 @@ ${intrLog}
         });
         var hb = pop.querySelector('.dm-doc-style');
         if (hb) { try { if (typeof renderMermaidIn === 'function') renderMermaidIn(hb); } catch (e) {} try { if (typeof enhanceMediaLinks === 'function') enhanceMediaLinks(hb); } catch (e) {} try { dmBindWlPreview(hb); } catch (e) {} }
+    }
+    // ── [r330 #8] 키트 문서 브라우저 — README/규약/용어집/역할/예시 md 를 좌측 목록 + 우측 본문으로 ──
+    function _dmKitDoc(i) { var el = document.querySelector('.dm-kit[data-kit="' + i + '"]'); return el ? (el.textContent || '').replace(/^\n+/, '').replace(/\s+$/, '') : ''; }
+    function dmHideKit() { var p = document.getElementById('dm-kit-popup'); if (p) p.remove(); }
+    function dmShowKitBrowser(sel) {
+        var els = document.querySelectorAll('.dm-kit'); if (!els.length) { showToast('키트 문서가 없습니다', 'info'); return; }
+        var pop = document.getElementById('dm-kit-popup');
+        sel = (sel == null) ? (pop ? (pop._sel || 0) : 0) : sel;
+        if (!pop) {
+            pop = document.createElement('div'); pop.id = 'dm-kit-popup';
+            pop.style.cssText = 'position:fixed;z-index:9250;width:880px;height:72vh;min-width:420px;min-height:260px;max-width:96vw;max-height:90vh;background:var(--c-card);border:1px solid var(--c-border);border-top:4px solid var(--c-accent);border-radius:12px;box-shadow:0 18px 56px rgba(0,0,0,.36);display:flex;flex-direction:column;overflow:hidden;resize:both;';
+            pop.innerHTML = '<div id="dm-kit-head" style="flex:none;display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--c-border);background:var(--c-paper);cursor:move;user-select:none;">'
+                + '<span style="font-size:14px;">📦</span><span style="font-weight:800;font-size:13px;flex:1;">파이프라인 키트 문서</span>'
+                + '<button onclick="dmHideKit()" title="닫기" style="border:none;background:none;cursor:pointer;font-size:15px;color:var(--c-text3);">✕</button></div>'
+                + '<div style="flex:1;display:flex;min-height:0;">'
+                + '<div id="dm-kit-list" style="flex:none;width:212px;overflow-y:auto;border-right:1px solid var(--c-border);padding:6px;background:var(--c-paper);"></div>'
+                + '<div id="dm-kit-body" class="dm-doc-style" style="flex:1;overflow-y:auto;padding:18px 24px;"></div></div>';
+            document.body.appendChild(pop);
+            pop.style.left = Math.max(8, (window.innerWidth - 880) / 2) + 'px'; pop.style.top = Math.max(8, window.innerHeight * 0.12) + 'px';
+            var hd = pop.querySelector('#dm-kit-head');
+            hd.addEventListener('mousedown', function (e) { if (e.target.tagName === 'BUTTON') return; e.preventDefault(); var sx = e.clientX, sy = e.clientY, bx = pop.offsetLeft, by = pop.offsetTop; function mv(ev) { pop.style.left = (bx + ev.clientX - sx) + 'px'; pop.style.top = (by + ev.clientY - sy) + 'px'; } function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); } document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); });
+        }
+        pop._sel = sel;
+        var listEl = pop.querySelector('#dm-kit-list'); listEl.innerHTML = '';
+        Array.prototype.forEach.call(els, function (el, i) {
+            var label = el.getAttribute('data-kit-label') || ('문서 ' + i);
+            var row = document.createElement('div');
+            row.style.cssText = 'padding:6px 9px;border-radius:6px;cursor:pointer;font-size:12px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:' + (i === sel ? '800' : '500') + ';color:' + (i === sel ? 'var(--c-accent)' : 'var(--c-text2)') + ';background:' + (i === sel ? 'var(--c-card)' : 'transparent') + ';';
+            row.textContent = label; row.title = label; row.onclick = function () { dmShowKitBrowser(i); };
+            listEl.appendChild(row);
+        });
+        var bodyEl = pop.querySelector('#dm-kit-body'); var md = _dmKitDoc(sel); var rr;
+        try { var cfg = (typeof domPurifyConfig !== 'undefined') ? Object.assign({}, domPurifyConfig) : undefined; rr = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(md), cfg) : parseMarkdownWithTables(md); } catch (e) { rr = _annEsc(md); }
+        bodyEl.innerHTML = rr; bodyEl.scrollTop = 0;
+        try { if (typeof renderMermaidIn === 'function') renderMermaidIn(bodyEl); } catch (e) {}
     }
 
     function _dmDocs() {
@@ -35008,7 +35880,7 @@ ${intrLog}
         }
         el = el || pref; if (!el) return;
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        var prev = el.style.backgroundColor; el.style.transition = 'background-color .4s'; el.style.backgroundColor = 'var(--c-accent-soft)';
+        var prev = el.style.backgroundColor; el.style.transition = 'background-color .4s'; el.style.backgroundColor = 'rgba(217,162,74,.26)';
         setTimeout(function () { el.style.backgroundColor = prev || ''; }, 1300);
     }
     function dmRenderDoc(loading) {
@@ -35174,10 +36046,91 @@ ${intrLog}
     function _dmTemplateFrontKeys(stepNo) { var tpl = stepNo ? _dmTemplate(stepNo) : ''; return tpl ? _dmParseFront(tpl) : []; }
     function _dmMetaUnfilled(v) { v = (v == null ? '' : String(v)).trim(); return v === '' || /<[^>]*>/.test(v); }
     function _dmMetaStripComment(v) { return String(v == null ? '' : v).replace(/\s{2,}#.*$/, '').trim(); }
+    // [r330] 메타 키 설명(#2)
+    var _DM_META_DESC = {
+        title: '문서의 한 줄 제목(사람이 읽는 이름)', doc: '문서 고유 ID — 위키링크 [[이 ID]]로 참조됩니다 (예: CPR-0001)',
+        owner: '이 문서의 주관자. @를 입력하면 등록된 사용자를 고를 수 있어요', status: '문서 상태 — draft(초안)/active(활성)/approved(승인)/locked(잠금)',
+        version: '문서 버전(정수, 1부터). 원칙·결정이 바뀔 때만 +1로 올립니다', source: '이 문서가 근거로 삼은 상위 문서 (doc id@버전)',
+        inherits: '상속하는 상위 문서 (doc id@버전)', inputs: '입력으로 삼은 상위 문서·자료', pillar: '관련 기둥(Pillar) 슬러그', pillars: '관련 기둥(Pillar)들',
+        decided: '결정 일자/요약', deciders: '결정에 참여한 사람들', date: '작성/결정 일자', scope: '범위', tier: '티어/등급'
+    };
+    function _dmMetaDesc(key) { return _DM_META_DESC[key] || _DM_META_DESC[String(key).toLowerCase()] || (key + ' 속성'); }
+    // 상태 pill 색(#3)
+    var _DM_STATUS_COLORS = { draft: '#8a8378', proposed: '#6e59c9', active: '#3c8a5a', accepted: '#3a6ea5', approved: '#3a6ea5', locked: '#9a5b2a', deprecated: '#9a1c20', rejected: '#9a1c20', done: '#3c8a5a', review: '#d49a1c' };
+    function _dmStatusColor(v) { return _DM_STATUS_COLORS[String(v || '').trim().toLowerCase()] || '#6f6b5d'; }
+    // 버전 모델(#6) — 같은 doc: id 문서들이 version 별로 존재
+    function _dmFrontField(d, key) {
+        var c = (d && d.content) || ''; var m = c.match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/); if (!m) return '';
+        var fm = m[1].match(new RegExp('^[ \\t]*' + key + '[ \\t]*:[ \\t]*(.+?)[ \\t]*$', 'm')); return fm ? fm[1].trim().replace(/^["']|["']$/g, '') : '';
+    }
+    function _dmDocVer(d) { var n = parseInt(_dmFrontField(d, 'version'), 10); return (n >= 1) ? n : null; }
+    function _dmDocsByDocId(docId) { docId = String(docId || '').toLowerCase(); if (!docId) return []; return _dmDocs().filter(function (d) { return (_wlDocFrontId(d) || '').toLowerCase() === docId; }).sort(function (a, b) { return (_dmDocVer(a) || 1) - (_dmDocVer(b) || 1); }); }
+    // doc 참조(CPR-0001@2) 해석(#4) → {ok, doc, p}
+    function _dmParseDocRef(s) { var m = String(s || '').match(/([A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9]+)*-\d+)(?:@(\d+))?/); if (!m) return null; return { docId: m[1], ver: m[2] ? parseInt(m[2], 10) : null }; }
+    function _dmResolveDocRef(ref) {
+        var p = _dmParseDocRef(ref); if (!p) return { ok: false };
+        var fam = _dmDocsByDocId(p.docId); if (!fam.length) return { ok: false, p: p };
+        if (p.ver == null) return { ok: true, doc: fam[fam.length - 1], p: p };
+        var hit = null; fam.forEach(function (d) { if ((_dmDocVer(d) || 1) === p.ver) hit = d; });
+        return hit ? { ok: true, doc: hit, p: p } : { ok: false, p: p };
+    }
+    // owner 사용자 매칭/pill(#7)
+    function _dmFindUser(token) {
+        token = String(token || '').replace(/^@/, '').trim().toLowerCase(); if (!token) return null;
+        return (currentData.users || []).find(function (u) { var nm = (u.nickname || u.displayName || '').toLowerCase(); var em = (u.email || '').toLowerCase(); return nm === token || em === token || (em && em.split('@')[0] === token); }) || null;
+    }
+    function _dmOwnerPill(value) {
+        var u = _dmFindUser(value);
+        if (u) {
+            var nm = u.nickname || u.displayName || u.email || '사용자';
+            var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;flex:none;">'
+                : '<span style="width:18px;height:18px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
+            return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--c-card);border:1px solid var(--c-border);border-radius:13px;padding:2px 9px 2px 3px;">' + av + '<span style="font-size:12px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span></span>';
+        }
+        return '<span style="font-size:12.5px;color:var(--c-text);">' + (value ? _annEsc(value) : '<span style="color:var(--c-text3);">—</span>') + '</span>';
+    }
+    function _dmMetaKeyHtml(key) {
+        return '<span style="flex:0 0 116px;display:flex;align-items:center;gap:4px;padding-top:1px;">'
+            + '<span style="font-size:11.5px;font-weight:700;color:var(--c-text3);font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;">' + _annEsc(key) + '</span>'
+            + '<span class="dm-meta-q" title="' + _annEsc(_dmMetaDesc(key)) + '" style="font-size:8.5px;color:var(--c-text3);border:1px solid var(--c-border);border-radius:50%;width:12px;height:12px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex:none;">?</span>'
+            + '</span>';
+    }
+    // 키별 값 렌더(#3 status pill / #4 doc참조 색 / #6 version 화살표 / #7 owner pill)
+    function _dmMetaValueHtml(key, value, idx, locked) {
+        var kl = String(key).toLowerCase(); var raw = _dmMetaStripComment(value);
+        var clickEdit = locked ? '' : ' onclick="dmMetaEditInline(' + idx + ',\'' + _annEsc(key) + '\',this)"';
+        if (kl === 'status') {
+            var col = _dmStatusColor(raw);
+            return '<span data-meta-key="' + _annEsc(key) + '"' + clickEdit + ' style="flex:1;' + (locked ? '' : 'cursor:pointer;') + '" title="' + (locked ? '' : '클릭해 수정') + '"><span style="display:inline-block;font-size:11px;font-weight:800;color:#fff;background:' + col + ';border-radius:11px;padding:2px 11px;letter-spacing:.02em;">' + _annEsc(raw || '—') + '</span></span>';
+        }
+        if (kl === 'source' || kl === 'inherits' || kl === 'inputs' || kl === 'pillars' || kl === 'pillar') {
+            var inner = raw.replace(/[\[\]]/g, ''); var parts = inner.split(/[,\s]+/).filter(Boolean); var ph = '';
+            parts.forEach(function (pp) {
+                var r = _dmResolveDocRef(pp);
+                if (r.p) { var c = r.ok ? '#3a6ea5' : '#c0504d'; var tip = r.ok ? ('유효: ' + ((r.doc && r.doc.title) || '')) : '대상 문서/버전 없음'; ph += '<span style="color:' + c + ';font-weight:600;border-bottom:1px ' + (r.ok ? 'solid' : 'dashed') + ' ' + c + ';margin-right:9px;cursor:' + (r.ok ? 'pointer' : 'help') + ';" title="' + _annEsc(tip) + '"' + (r.ok && r.doc ? ' onclick="event.stopPropagation();dmOpenDoc(\'' + r.doc.id + '\')"' : '') + '>' + _annEsc(pp) + '</span>'; }
+                else ph += '<span style="margin-right:9px;">' + _annEsc(pp) + '</span>';
+            });
+            return '<span data-meta-key="' + _annEsc(key) + '"' + clickEdit + ' style="flex:1;' + (locked ? '' : 'cursor:text;') + '" title="' + (locked ? '' : '클릭해 편집') + '">' + (ph || '<span style="color:var(--c-text3);">—</span>') + '</span>';
+        }
+        if (kl === 'version') {
+            return '<span data-meta-key="' + _annEsc(key) + '" style="flex:1;display:flex;align-items:center;gap:8px;">'
+                + (locked ? '' : '<button onclick="event.stopPropagation();dmVersionNav(-1)" title="이전 버전" style="border:1px solid var(--c-border);background:var(--c-card);border-radius:5px;cursor:pointer;width:21px;height:20px;line-height:1;color:var(--c-text2);font-size:10px;">◀</button>')
+                + '<span' + clickEdit + ' style="font-weight:700;font-size:12.5px;' + (locked ? '' : 'cursor:pointer;') + '" title="' + (locked ? '' : '클릭해 직접 수정(정수, +1 권장)') + '">v' + _annEsc(raw || '1') + '</span>'
+                + (locked ? '' : '<button onclick="event.stopPropagation();dmVersionNav(1)" title="다음 버전(없으면 새로 만들기)" style="border:1px solid var(--c-border);background:var(--c-card);border-radius:5px;cursor:pointer;width:21px;height:20px;line-height:1;color:var(--c-text2);font-size:10px;">▶</button>')
+                + '</span>';
+        }
+        if (kl === 'owner') {
+            return '<span data-meta-key="' + _annEsc(key) + '"' + clickEdit + ' style="flex:1;' + (locked ? '' : 'cursor:pointer;') + '" title="' + (locked ? '' : '클릭해 수정 (@로 사용자 검색)') + '">' + _dmOwnerPill(raw) + '</span>';
+        }
+        return '<span data-meta-key="' + _annEsc(key) + '"' + clickEdit + ' style="flex:1;font-size:12.5px;color:var(--c-text);' + (locked ? '' : 'cursor:text;') + 'word-break:break-word;" title="' + (locked ? '' : '클릭해 편집') + '">' + _annEsc(raw) + '</span>';
+    }
     function dmRenderMetaPanel(blockText, idx, stepNo, locked) {
         var rows = _dmParseFront(blockText);
         var have = {}; rows.forEach(function (r) { have[r.key] = true; });
-        var missing = _dmTemplateFrontKeys(stepNo).filter(function (t) { return !have[t.key]; });
+        // [r330 #5] version 은 모든 문서에 권장 — 템플릿에 없어도 추가
+        var recKeys = _dmTemplateFrontKeys(stepNo).slice();
+        if (!recKeys.some(function (t) { return t.key === 'version'; })) recKeys.push({ key: 'version', value: '1' });
+        var missing = recKeys.filter(function (t) { return !have[t.key]; });
         var nWarn = rows.filter(function (r) { return _dmMetaUnfilled(r.value); }).length + missing.length;
         var html = '<div class="dm-meta-panel" data-idx="' + idx + '" style="background:var(--c-paper);border:1px solid var(--c-border);border-radius:10px;overflow:hidden;margin:2px 0 12px;">';
         html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--c-border);background:var(--c-card);">'
@@ -35189,11 +36142,12 @@ ${intrLog}
         rows.forEach(function (r) {
             var unfilled = _dmMetaUnfilled(r.value);
             var clickAttr = locked ? '' : ' onclick="dmMetaEditInline(' + idx + ',\'' + _annEsc(r.key) + '\',this)"';
+            var valHtml = unfilled
+                ? '<span data-meta-key="' + _annEsc(r.key) + '"' + clickAttr + ' style="flex:1;font-size:12px;color:#b5732a;' + (locked ? '' : 'cursor:text;') + 'background:rgba(217,162,74,.10);border:1px dashed rgba(217,162,74,.5);border-radius:5px;padding:1px 7px;" title="' + (locked ? '' : '클릭해 입력') + '">⚠ ' + (r.value.trim() ? ('미작성: ' + _annEsc(r.value)) : '미작성') + (locked ? '' : ' — 클릭') + '</span>'
+                : _dmMetaValueHtml(r.key, r.value, idx, locked);   // [r330] 키별 특수 렌더(status/owner/source/version…)
             html += '<div class="dm-meta-row" style="display:flex;align-items:flex-start;gap:10px;padding:4px 0;border-bottom:1px dashed var(--c-border);">'
-                + '<span style="flex:0 0 116px;font-size:11.5px;font-weight:700;color:var(--c-text3);font-family:ui-monospace,monospace;padding-top:1px;">' + _annEsc(r.key) + '</span>'
-                + (unfilled
-                    ? '<span data-meta-key="' + _annEsc(r.key) + '"' + clickAttr + ' style="flex:1;font-size:12px;color:#b5732a;' + (locked ? '' : 'cursor:text;') + 'background:rgba(217,162,74,.10);border:1px dashed rgba(217,162,74,.5);border-radius:5px;padding:1px 7px;" title="' + (locked ? '' : '클릭해 입력') + '">⚠ ' + (r.value.trim() ? ('미작성: ' + _annEsc(r.value)) : '미작성') + (locked ? '' : ' — 클릭') + '</span>'
-                    : '<span data-meta-key="' + _annEsc(r.key) + '"' + clickAttr + ' style="flex:1;font-size:12.5px;color:var(--c-text);' + (locked ? '' : 'cursor:text;') + 'word-break:break-word;" title="' + (locked ? '' : '클릭해 편집') + '">' + _annEsc(_dmMetaStripComment(r.value)) + '</span>')
+                + _dmMetaKeyHtml(r.key)   // [r330 #2] 키 + ? 툴팁
+                + valHtml
                 + (locked ? '' : '<button onclick="dmMetaRemoveField(' + idx + ',\'' + _annEsc(r.key) + '\')" title="필드 삭제" style="border:none;background:none;cursor:pointer;color:var(--c-text3);font-size:11px;flex:none;opacity:.45;">✕</button>')
                 + '</div>';
         });
@@ -35225,20 +36179,72 @@ ${intrLog}
     function dmMetaEditInline(idx, key, spanEl) {
         var d = _dmById(_dmState.activeId); if (d && (d.isLocked || (d.meta && d.meta.vault))) return;
         if (!spanEl || spanEl.tagName === 'INPUT') return;
+        var kl = String(key).toLowerCase();
         var rows = _dmParseFront((_dmMetaBlock(idx) || {}).text || ''); var cur = '';
         rows.forEach(function (r) { if (r.key === key) cur = _dmMetaStripComment(r.value); });
-        if (/<[^>]*>/.test(cur)) cur = '';   // 플레이스홀더는 비우고 시작
+        if (/<[^>]*>/.test(cur)) cur = '';
         var inp = document.createElement('input');
         inp.type = 'text'; inp.value = cur;
         inp.style.cssText = 'flex:1;font:inherit;font-size:12.5px;padding:1px 6px;border:1px solid var(--c-accent);border-radius:5px;background:var(--c-paper);color:var(--c-text);outline:none;';
-        spanEl.replaceWith(inp); inp.focus(); try { inp.select(); } catch (e) {}
+        if (kl === 'version') inp.placeholder = '정수만 — 다음 버전은 +1';
+        if (kl === 'owner') inp.placeholder = '@ 입력 시 사용자 검색';
+        var holder = spanEl.parentNode; spanEl.replaceWith(inp); inp.focus(); try { inp.select(); } catch (e) {}
         var done = false;
-        function commit() { if (done) return; done = true; _dmMetaSetKey(idx, key, inp.value.trim()); }
-        inp.addEventListener('blur', commit);
+        function finish(val) { if (done) return; done = true; _dmMetaAcOff(); _dmMetaSetKey(idx, key, val); }
+        function commit() {
+            if (done) return; var v = inp.value.trim();
+            if (kl === 'version') {
+                if (v !== '' && !/^\d+$/.test(v)) { showToast('버전은 양의 정수만 가능합니다(음수·소수 불가).', 'alert'); inp.focus(); return; }
+                if (v === '0') { showToast('버전은 1부터 시작합니다.', 'alert'); inp.focus(); return; }
+            }
+            finish(v);
+        }
+        inp.addEventListener('blur', function () { setTimeout(function () { if (!done && !_dmMetaAcHover) commit(); }, 150); });
         inp.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-            else if (e.key === 'Escape') { e.preventDefault(); done = true; dmRenderLiveBody(document.getElementById('dm-doc-body'), _dmById(_dmState.activeId), false); }
+            if (_dmMetaAcKey(e)) return;
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            else if (e.key === 'Escape') { e.preventDefault(); done = true; _dmMetaAcOff(); dmRenderLiveBody(document.getElementById('dm-doc-body'), _dmById(_dmState.activeId), false); }
         });
+        if (kl === 'owner') { inp.addEventListener('input', function () { _dmOwnerAc(inp, function (sel) { inp.value = sel; finish(sel); }); }); _dmOwnerAc(inp, function (sel) { inp.value = sel; finish(sel); }); }
+    }
+    // [r330 #7] owner 사용자 자동완성 드롭다운
+    var _dmMetaAcEl = null, _dmMetaAcHover = false, _dmMetaAcItems = [], _dmMetaAcSel = -1, _dmMetaAcPick = null;
+    function _dmMetaAcOff() { if (_dmMetaAcEl) { _dmMetaAcEl.remove(); _dmMetaAcEl = null; } _dmMetaAcItems = []; _dmMetaAcSel = -1; _dmMetaAcPick = null; _dmMetaAcHover = false; }
+    function _dmOwnerAc(inp, onPick) {
+        var val = inp.value; var at = val.lastIndexOf('@');
+        if (at < 0) { _dmMetaAcOff(); return; }
+        var q = val.slice(at + 1).trim().toLowerCase();
+        var users = (currentData.users || []).filter(function (u) { var nm = (u.nickname || u.displayName || '').toLowerCase(); var em = (u.email || '').toLowerCase(); return !q || nm.indexOf(q) >= 0 || em.indexOf(q) >= 0; }).slice(0, 8);
+        if (!users.length) { _dmMetaAcOff(); return; }
+        _dmMetaAcItems = users; _dmMetaAcSel = 0; _dmMetaAcPick = function (u) { onPick(val.slice(0, at) + (u.nickname || u.displayName || u.email)); };
+        if (!_dmMetaAcEl) {
+            _dmMetaAcEl = document.createElement('div'); _dmMetaAcEl.id = 'dm-meta-ac';
+            _dmMetaAcEl.style.cssText = 'position:fixed;z-index:9600;background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:4px;min-width:200px;max-height:240px;overflow-y:auto;';
+            _dmMetaAcEl.addEventListener('mouseenter', function () { _dmMetaAcHover = true; }); _dmMetaAcEl.addEventListener('mouseleave', function () { _dmMetaAcHover = false; });
+            document.body.appendChild(_dmMetaAcEl);
+        }
+        var r = inp.getBoundingClientRect(); _dmMetaAcEl.style.left = r.left + 'px'; _dmMetaAcEl.style.top = (r.bottom + 3) + 'px'; _dmMetaAcEl.style.minWidth = Math.max(200, r.width) + 'px';
+        _dmMetaAcRender();
+    }
+    function _dmMetaAcRender() {
+        if (!_dmMetaAcEl) return; _dmMetaAcEl.innerHTML = '';
+        _dmMetaAcItems.forEach(function (u, i) {
+            var nm = u.nickname || u.displayName || u.email || '사용자';
+            var av = u.avatarUrl ? '<img src="' + _annEsc(u.avatarUrl) + '" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex:none;">' : '<span style="width:22px;height:22px;border-radius:50%;background:var(--c-accent-soft,#efe7dd);color:var(--c-accent);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none;">' + _annEsc((nm[0] || '?').toUpperCase()) + '</span>';
+            var prov = u.provider === 'github' ? '⚫' : (u.provider === 'google' ? '🔵' : '');
+            var row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;cursor:pointer;' + (i === _dmMetaAcSel ? 'background:var(--c-paper);' : '');
+            row.innerHTML = av + '<span style="flex:1;font-size:12.5px;font-weight:600;color:var(--c-text);">' + _annEsc(nm) + '</span>' + (prov ? '<span style="font-size:10px;opacity:.65;">' + prov + '</span>' : '') + (u.email ? '<span style="font-size:10px;color:var(--c-text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;">' + _annEsc(u.email) + '</span>' : '');
+            row.addEventListener('mousedown', function (e) { e.preventDefault(); if (_dmMetaAcPick) _dmMetaAcPick(u); });
+            _dmMetaAcEl.appendChild(row);
+        });
+    }
+    function _dmMetaAcKey(e) {
+        if (!_dmMetaAcEl || !_dmMetaAcItems.length) return false;
+        if (e.key === 'ArrowDown') { e.preventDefault(); _dmMetaAcSel = (_dmMetaAcSel + 1) % _dmMetaAcItems.length; _dmMetaAcRender(); return true; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); _dmMetaAcSel = (_dmMetaAcSel - 1 + _dmMetaAcItems.length) % _dmMetaAcItems.length; _dmMetaAcRender(); return true; }
+        if ((e.key === 'Enter' || e.key === 'Tab') && _dmMetaAcSel >= 0) { e.preventDefault(); if (_dmMetaAcPick) _dmMetaAcPick(_dmMetaAcItems[_dmMetaAcSel]); return true; }
+        if (e.key === 'Escape') { _dmMetaAcOff(); return true; }
+        return false;
     }
     // [r320] 필드 추가 — 패널 안에 key/value 인라인 입력 행 추가(팝업 없이)
     function dmMetaAddField(idx) {
@@ -35282,6 +36288,46 @@ ${intrLog}
         body._dmBlocks.unshift({ text: fm, blank: false }, { text: '', blank: true });
         dmLpCommitBlocks(); dmRenderLiveBody(body, d, false);
         showToast('📋 메타데이터를 추가했습니다 — 값을 채워주세요', 'success');
+    }
+    // [r330 #6] 버전 이동 — 같은 doc:id 의 version 별 문서들 사이 이동, 다음 버전 없으면 새로 만들기
+    async function dmVersionNav(dir) {
+        var d = _dmById(_dmState.activeId); if (!d) return;
+        var docId = _wlDocFrontId(d); if (!docId) { showToast('이 문서에 doc: id가 없어 버전 관리를 할 수 없습니다', 'alert'); return; }
+        var fam = _dmDocsByDocId(docId); var curVer = _dmDocVer(d) || 1;
+        if (dir < 0) {
+            var prev = null; fam.forEach(function (x) { var v = _dmDocVer(x) || 1; if (v < curVer && (!prev || v > (_dmDocVer(prev) || 1))) prev = x; });
+            if (prev) dmOpenDoc(prev.id); else showToast('이전 버전이 없습니다 (현재 v' + curVer + ')', 'info');
+            return;
+        }
+        var next = null; fam.forEach(function (x) { var v = _dmDocVer(x) || 1; if (v > curVer && (!next || v < (_dmDocVer(next) || 1))) next = x; });
+        if (next) { dmOpenDoc(next.id); return; }
+        var mk = (typeof uiConfirm === 'function') ? await uiConfirm({ title: '다음 버전 만들기', message: 'v' + (curVer + 1) + ' 버전이 없습니다.\n현재 v' + curVer + ' 내용을 그대로 복사해 새 버전을 만들까요?', confirmText: '새 버전 만들기', cancelText: '취소' }) : true;
+        if (!mk) return;
+        dmCreateVersion(d, curVer + 1);
+    }
+    function dmCreateVersion(srcDoc, newVer) {
+        if (!currentUser) { showToast('로그인이 필요합니다', 'alert'); return; }
+        var content = srcDoc.content || '';
+        var m = content.match(/^(﻿?\s*---[ \t]*\r?\n)([\s\S]*?)(\r?\n---)/);
+        if (m) {
+            var fm = m[2];
+            if (/^[ \t]*version[ \t]*:/m.test(fm)) fm = fm.replace(/^([ \t]*version[ \t]*:[ \t]*).+$/m, '$1' + newVer);
+            else fm = fm + '\nversion: ' + newVer;
+            content = m[1] + fm + m[3] + content.slice(m[0].length);
+        } else { content = '---\nversion: ' + newVer + '\n---\n\n' + content; }
+        var nd = {
+            id: 'doc_' + Date.now(), projectId: activeProjectId, parentId: srcDoc.parentId || null,
+            title: srcDoc.title, emoji: srcDoc.emoji || '📄', content: content, _contentLoaded: true,
+            createdAt: Date.now(), updatedAt: Date.now(), kind: 'pipeline',
+            meta: Object.assign({}, srcDoc.meta || {}, { version: newVer, docTitle: (srcDoc.meta && srcDoc.meta.docTitle) || undefined }),
+            sortOrder: Date.now(), linkedDocIds: [], linkedTaskIds: [],
+            createdBy: currentUser.id, updatedBy: currentUser.id
+        };
+        currentData.docs.push(nd);
+        if (typeof saveData === 'function') saveData();
+        if (typeof dbUpsertDoc === 'function') { try { dbUpsertDoc(nd); } catch (e) {} }
+        showToast('🆕 v' + newVer + ' 새 버전 생성 (이전 내용 복사)', 'success');
+        dmRenderTree(); dmOpenDoc(nd.id);
     }
     function dmLpRowClick(e, idx) {
         var t = e.target;
@@ -35599,10 +36645,20 @@ ${intrLog}
             var hoverT = null;
             a.addEventListener('mouseenter', function () {
                 clearTimeout(hoverT);
-                hoverT = setTimeout(function () { dmShowWlPopup(a.getAttribute('data-wl-id'), a); }, 240);
+                var _id = a.getAttribute('data-wl-id'), _h = a.getAttribute('data-wl-hash') || '';
+                dmHighlightTreeDoc(_id);   // [r330 #9] 호버 시 좌측 트리에서 해당 문서 하이라이트
+                hoverT = setTimeout(function () { dmShowWlPopup(_id, a, _h); }, 240);
             });
-            a.addEventListener('mouseleave', function () { clearTimeout(hoverT); dmScheduleHideWlPopup(); });
+            a.addEventListener('mouseleave', function () { clearTimeout(hoverT); dmHighlightTreeDoc(null); dmScheduleHideWlPopup(); });
         });
+    }
+    // [r330 #9] 좌측 하이어라키에서 해당 문서 행 하이라이트
+    function dmHighlightTreeDoc(id) {
+        var tree = document.getElementById('dm-tree'); if (!tree) return;
+        Array.prototype.forEach.call(tree.querySelectorAll('.dm-tree-item.dm-wl-hl'), function (el) { el.classList.remove('dm-wl-hl'); });
+        if (!id) return;
+        var row = tree.querySelector('.dm-tree-item[data-id="' + id + '"]');
+        if (row) { row.classList.add('dm-wl-hl'); try { row.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
     }
     function dmScheduleHideWlPopup() {
         var pop = document.getElementById('dm-wl-popup');
@@ -35611,11 +36667,11 @@ ${intrLog}
         pop._hideT = setTimeout(function () { if (!pop._hover && !pop._pinned) dmHideWlPopup(); }, 260);
     }
     function dmHideWlPopup() { var pop = document.getElementById('dm-wl-popup'); if (pop) pop.remove(); }
-    function dmShowWlPopup(id, anchor) {
+    function dmShowWlPopup(id, anchor, hash) {
         if (!id || !anchor) return;
         var d = _dmById(id);
         var pop = document.getElementById('dm-wl-popup');
-        if (pop && pop._docId === id) { clearTimeout(pop._hideT); return; }
+        if (pop && pop._docId === id) { clearTimeout(pop._hideT); if (hash) { var _b = pop.querySelector('#dm-wl-body'); if (_b) _dmScrollHl(_b, hash); } return; }
         if (pop && pop._pinned) return;   // 고정된 팝업이 있으면 새로 안 띄움
         dmHideWlPopup();
         pop = document.createElement('div');
@@ -35661,10 +36717,22 @@ ${intrLog}
             } catch (e) { rr = _annEsc(doc.content || ''); }
             bd.innerHTML = rr || '<span style="color:var(--c-text3);">빈 문서</span>';
             try { dmBindWlPreview(bd); } catch (e) {}
+            if (hash) setTimeout(function () { _dmScrollHl(bd, hash); }, 40);   // [r330 #1] 헤더로 스크롤+섹션 하이라이트
         }
         if (d && d._contentLoaded === false && typeof _fetchDocContent === 'function') {
             _fetchDocContent(id).then(function (c) { d.content = c || ''; d._contentLoaded = true; if (document.getElementById('dm-wl-popup') === pop) fill(d); });
         } else { fill(d); }
+    }
+    // [r330 #1] 컨테이너 안에서 헤더(slug)로 스크롤 + 그 섹션 내용 하이라이트
+    function _dmScrollHl(container, slug) {
+        if (!container || !slug) return; slug = String(slug).toLowerCase();
+        var hs = container.querySelectorAll('h1,h2,h3,h4,h5,h6'); var el = null, pref = null;
+        for (var i = 0; i < hs.length; i++) { var s = (typeof _wlSlug === 'function') ? _wlSlug(hs[i].textContent || '') : (hs[i].textContent || '').toLowerCase(); if (s === slug) { el = hs[i]; break; } if (!pref && (s.indexOf(slug) === 0 || s.indexOf(slug + '-') === 0)) pref = hs[i]; }
+        el = el || pref; if (!el) return;
+        try { el.scrollIntoView({ block: 'start' }); } catch (e) {}
+        var lv = parseInt(el.tagName[1], 10); var sec = [el];
+        for (var n = el.nextElementSibling; n; n = n.nextElementSibling) { if (/^H[1-6]$/.test(n.tagName) && parseInt(n.tagName[1], 10) <= lv) break; sec.push(n); }
+        sec.forEach(function (x) { var p = x.style.backgroundColor; x.style.transition = 'background-color .5s'; x.style.backgroundColor = 'rgba(217,162,74,.26)'; x.style.borderRadius = '5px'; setTimeout(function () { x.style.backgroundColor = p || ''; }, 2600); });
     }
     async function dmNewDoc(stepNo) {
         stepNo = parseInt(stepNo, 10) || 0;
