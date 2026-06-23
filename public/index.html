@@ -4808,6 +4808,28 @@ html.is-desktop #docs-view.flex-show { display: flex !important; }
         .md-fm-row { display: flex; gap: 10px; align-items: baseline; }
         .md-fm-key { flex: 0 0 130px; color: var(--c-text3); font-weight: 600; font-size: 11.5px; }
         .md-fm-val { flex: 1; color: var(--c-text2); font-weight: 400; word-break: break-word; white-space: pre-wrap; }
+        /* [r319] 프로젝트 파이프라인 본문/도움말 — 예시 HTML(.docwrap) 스타일을 시스템 테마 색으로 */
+        #dm-doc-body, .dm-doc-style { font-size: 13.5px; line-height: 1.72; color: var(--c-text); }
+        #dm-doc-body h1, .dm-doc-style h1 { font-size: 22px; font-weight: 800; margin: 4px 0 14px; padding-bottom: 9px; border-bottom: 3px solid var(--c-accent); color: var(--c-text); }
+        #dm-doc-body h2, .dm-doc-style h2 { font-size: 18px; font-weight: 700; margin: 22px 0 11px; padding-bottom: 7px; border-bottom: 2px solid var(--c-accent); color: var(--c-text); }
+        #dm-doc-body h3, .dm-doc-style h3 { font-size: 14.5px; font-weight: 700; margin: 18px 0 6px; color: var(--c-text); }
+        #dm-doc-body h4, .dm-doc-style h4 { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; font-weight: 700; margin: 13px 0 4px; color: var(--c-accent); letter-spacing: .01em; }
+        #dm-doc-body p, .dm-doc-style p { margin: 7px 0; color: var(--c-text2); }
+        #dm-doc-body ul, #dm-doc-body ol, .dm-doc-style ul, .dm-doc-style ol { margin: 7px 0; padding-left: 20px; }
+        #dm-doc-body li, .dm-doc-style li { margin: 4px 0; color: var(--c-text2); }
+        #dm-doc-body ul li::marker, .dm-doc-style ul li::marker { color: var(--c-accent); }
+        #dm-doc-body a, .dm-doc-style a { color: var(--c-accent); text-decoration: none; }
+        #dm-doc-body a:hover, .dm-doc-style a:hover { text-decoration: underline; }
+        #dm-doc-body strong, #dm-doc-body b, .dm-doc-style strong, .dm-doc-style b { color: var(--c-text); font-weight: 700; }
+        #dm-doc-body blockquote, .dm-doc-style blockquote { margin: 10px 0; padding: 6px 14px; border-left: 3px solid var(--c-accent); background: var(--c-paper); color: var(--c-text2); border-radius: 0 7px 7px 0; }
+        #dm-doc-body code, .dm-doc-style code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 4px; padding: 1px 5px; color: var(--c-accent); }
+        #dm-doc-body pre, .dm-doc-style pre { background: var(--c-paper); border: 1px solid var(--c-border); border-radius: 9px; padding: 12px 14px; overflow-x: auto; margin: 10px 0; }
+        #dm-doc-body pre code, .dm-doc-style pre code { background: none; border: none; padding: 0; color: var(--c-text); }
+        #dm-doc-body table, .dm-doc-style table { border-collapse: collapse; width: 100%; margin: 11px 0; font-size: 12.5px; }
+        #dm-doc-body th, #dm-doc-body td, .dm-doc-style th, .dm-doc-style td { border: 1px solid var(--c-border); padding: 6px 9px; text-align: center; color: var(--c-text2); }
+        #dm-doc-body thead th, .dm-doc-style thead th { background: var(--c-paper); font-weight: 700; color: var(--c-text); }
+        #dm-doc-body tbody td:first-child, .dm-doc-style tbody td:first-child { text-align: left; font-family: ui-monospace, monospace; font-weight: 600; background: var(--c-paper); color: var(--c-text); }
+        .dm-help-btn:hover { background: var(--c-accent) !important; color: #fff !important; }
         /* [r233 #12] --- 구분선 살짝만 더 밝게(은은하게) */
         #doc-preview-container hr, .markdown-body hr, .rfs-md-rendered hr { border: none; border-top: 1px solid var(--c-border); opacity: .6; margin: 18px 0; background: none; }
         /* [r233 #10] 각주 — 의미있는 번호 각주 + 되돌아가기 */
@@ -6161,6 +6183,1034 @@ gate: true
 
 ## 연결
 - 점검 [[ARCH-CHECK-0001]] · 결정 [[ADR-0042]] · 불변식 [[CPR-0001#INV-1]] · 후속 [[PRIO-0001]]
+        </script>
+
+        <!-- [r319] PHASE/STEP 도움말(설명 md, 미실행 스크립트로 보관) -->
+        <script type="text/template" class="dm-help" data-dm-phase="1">
+# PHASE 1 · 경험 정립
+
+> 무엇을·왜 — 헌법과 경험을 세운다
+
+## 이 페이즈가 하는 일
+게임의 비전과 불변식(CPR)을 못 박고, 상황별 경험(MDA)과 그 엮임(루프)을 설계한다. 모든 하위 문서가 이 층을 위로 가리킨다.
+
+## 포함 단계
+- STEP 01 CPR (대원칙)
+- STEP 02 상황 MDA
+- STEP 03 루프 MDA
+
+## 산출물은 어디로 가리키나
+- 이 페이즈의 모든 문서는 **위(이전 단계/페이즈)** 를 `inherits`/`source`/`pillars`로 가리킨다.
+- 부모는 자식을 나열하지 않는다 — 자식은 쿼리로 수집한다.
+        </script>
+        <script type="text/template" class="dm-help" data-dm-phase="2">
+# PHASE 2 · 기획 번역
+
+> 어떻게 — 경험을 설계·수치로 옮긴다
+
+## 이 페이즈가 하는 일
+불변식·경험을 설계 지침(Pillar Guide)으로 번역하고, 피처로 분할(Feature Matrix)한 뒤, Engineer가 구현할 수치 시행령(GDR)으로 확정한다.
+
+## 포함 단계
+- STEP 04 Pillar Guide
+- STEP 05 Feature Matrix
+- STEP 06 GDR
+
+## 산출물은 어디로 가리키나
+- 이 페이즈의 모든 문서는 **위(이전 단계/페이즈)** 를 `inherits`/`source`/`pillars`로 가리킨다.
+- 부모는 자식을 나열하지 않는다 — 자식은 쿼리로 수집한다.
+        </script>
+        <script type="text/template" class="dm-help" data-dm-phase="3">
+# PHASE 3 · 범위 결정
+
+> 무엇을 이번에 — 범위를 긋는다
+
+## 이 페이즈가 하는 일
+자원·일정으로 IN/OUT을 결정하고(SCOPE), 검증 가능한 수직 단면(MVP)을 정의한다. 정체성 직결 피처는 항상 Must.
+
+## 포함 단계
+- STEP 07 범위·cut (SCOPE)
+- STEP 08 MVP 정의
+
+## 산출물은 어디로 가리키나
+- 이 페이즈의 모든 문서는 **위(이전 단계/페이즈)** 를 `inherits`/`source`/`pillars`로 가리킨다.
+- 부모는 자식을 나열하지 않는다 — 자식은 쿼리로 수집한다.
+        </script>
+        <script type="text/template" class="dm-help" data-dm-phase="4">
+# PHASE 4 · 아키텍처
+
+> 어떤 구조로 — 기술을 세운다
+
+## 이 페이즈가 하는 일
+구현 방식·네트워크 권위를 ADR로 기록하고, 그레고리 레이어로 의존 단방향·존속성을 점검한다.
+
+## 포함 단계
+- STEP 09 ADR
+- STEP 10 의존성·존속성 점검
+
+## 산출물은 어디로 가리키나
+- 이 페이즈의 모든 문서는 **위(이전 단계/페이즈)** 를 `inherits`/`source`/`pillars`로 가리킨다.
+- 부모는 자식을 나열하지 않는다 — 자식은 쿼리로 수집한다.
+        </script>
+        <script type="text/template" class="dm-help" data-dm-phase="5">
+# PHASE 5 · 실행 정렬 & 승인
+
+> 순서와 승인 — 착수한다
+
+## 이 페이즈가 하는 일
+의존·가치로 구현 순서를 정하고(PRIO), 최종 게이트(GATE)를 통과한 설계만 승인해 수직 단면을 빌드한다.
+
+## 포함 단계
+- STEP 11 개발 우선순위 (PRIO)
+- STEP 12 기술 구조 승인 (GATE)
+
+## 산출물은 어디로 가리키나
+- 이 페이즈의 모든 문서는 **위(이전 단계/페이즈)** 를 `inherits`/`source`/`pillars`로 가리킨다.
+- 부모는 자식을 나열하지 않는다 — 자식은 쿼리로 수집한다.
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="1">
+# STEP 01 · 대원칙 (CPR) — 작성 규칙 & 가이드
+
+> PHASE 1 · 경험 정립 | 산출물: **CPR-0001** | 주관: **Director형 PD**
+
+## 1. 이 단계는 무엇인가
+게임의 비전과 절대 불변식을 못 박는 최상위 헌법. 이후 모든 문서가 위반할 수 없는 기준점.
+
+## 2. 입력 → 출력
+- **입력** : 팀의 합의된 정체성(머릿속/회의)
+- **출력** : CPR-0001 — Vision(VIS) + Invariants(INV)
+
+## 3. 작성 규칙 (필수)
+- 문서당 1개의 CPR만 둔다 (게임 = 헌법 하나).
+- Vision은 **긍정형 한 문장**, Invariant는 **위반 금지 규칙**으로 분리한다.
+- 각 불변식은 `### INV-N` **헤더로** 만든다 → `[[CPR-0001#INV-N]]` 링크 가능.
+- 각 불변식에 **적용 도메인을 한정**한다 (예: cv-invariant = '위협 정보만').
+- `version:` 을 둔다. 원칙이 바뀔 때만 올린다 (MDA가 늘었다고 올리지 않는다).
+- 이 문서를 가리키는 하위를 **나열하지 않는다.**
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 불변식은 '무엇을 하지 않는다'로 적어 검증 가능하게.
+- 도메인 한정으로 무관한 시스템(건설 정밀도)에 족쇄가 되지 않게.
+- 비전은 마케팅 카피가 아니라 '이 게임이 주는 단 하나의 경험'.
+
+**DON'T**
+- 불변식을 전역으로 적어 모든 시스템을 묶기 (→ 건설까지 모호해짐).
+- 비전에 기능 목록 넣기 (비전은 경험이지 기능이 아니다).
+- 여기에 MDA·GDR을 나열하기.
+
+**흔한 함정**
+- 도메인 미한정 → 하위에서 '이거 INV 대상인가?' 분쟁.
+- 불변식이 5개 넘어가면 헌법이 아니라 기획서가 된다 (2~3개 권장).
+
+## 5. 템플릿 (복사해서 채우기 · `templates/CPR.template.md`)
+````markdown
+---
+title: <대원칙 한 줄 요약>
+doc: CPR-0001
+owner: Director
+status: locked      # draft | active | locked
+version: 1
+---
+
+# CPR-0001 · 대원칙 — 게임의 헌법
+
+## Vision · VIS-1
+> <게임이 주려는 단 하나의 경험을 긍정형 한 문장으로>
+
+## Invariants (위반 금지)
+### INV-1 · <불변식 이름>
+- <절대 규칙 한 줄>
+- 적용 도메인 : <어디에만 적용되는지 — 반드시 한정한다 (예: "위협 정보만")>
+
+### INV-2 · <불변식 이름>
+- <절대 규칙 한 줄>
+
+## 이 문서를 가리키는 것들
+- 여기 나열하지 않는다 — 부모는 자식을 나열하지 않는다.
+- 하위가 `inherits: CPR-0001@1` 로 위를 향해 참조한다.
+
+## 변경 이력
+- @1 : 최초 확정
+````
+
+## 6. 완료 체크리스트
+- [ ] Vision(VIS-1)이 긍정형 한 문장인가
+- [ ] 각 Invariant가 `### INV-N` 헤더이고 도메인이 한정됐는가
+- [ ] 자식 문서를 나열하지 않았는가
+- [ ] version 필드가 있는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/CPR-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 02 · 상황 MDA**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="2">
+# STEP 02 · 상황 MDA — 작성 규칙 & 가이드
+
+> PHASE 1 · 경험 정립 | 산출물: **MDA-NNNN** | 주관: **Director형 PD**
+
+## 1. 이 단계는 무엇인가
+상황별 목표 경험을 A/D/M으로 설계한다. 헌법을 구체 경험으로 내린 첫 단계.
+
+## 2. 입력 → 출력
+- **입력** : CPR (불변식·비전)
+- **출력** : MDA-NNNN — 상황별 A/D/M + 불변식 적합성
+
+## 3. 작성 규칙 (필수)
+- `inherits: CPR-0001@N` 으로 헌법 버전을 핀한다.
+- 설계는 **A→D→M 역방향**으로 한다 (경험 먼저, 규칙 나중).
+- **M에는 레버 카테고리만** 적는다 — 구체 수치(분/%/거리)는 GDR로 넘긴다.
+- 각 MDA에 **불변식 적합성** 섹션을 둬서 `[[CPR-0001#INV-N]]` 을 어떻게 지키는지 적는다.
+- 상황은 여러 개(야간/건설/탐험…). 각각 별도 MDA 파일.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- A는 '느끼게 할 감정', D는 '그래서 하는 행동', M은 '그 행동을 강제할 레버'.
+- 상황 간 연결(IN/OUT)은 한 줄로 표기하되 상세 엮임은 루프 MDA로.
+- 불변식과 무관한 상황(건설)이면 'INV-1 해당 없음'을 명시.
+
+**DON'T**
+- M에 '발소리 ±15°' 같은 수치 박기 (그건 GDR).
+- 한 MDA에 여러 상황 섞기.
+- A 없이 M부터 적기 (재미가 사라진다).
+
+**흔한 함정**
+- 수치를 M에 적으면 GDR과 충돌·중복으로 진실 소스가 둘이 된다.
+- 불변식 적합성 누락 → 나중에 위반 피처가 슬쩍 들어온다.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/MDA.template.md`)
+````markdown
+---
+title: 상황 MDA · <상황명>
+doc: MDA-0001
+inherits: CPR-0001@1
+owner: Director
+status: draft
+---
+
+# MDA-0001 · <상황명> (상황 MDA)
+
+## A · Aesthetics (목표 경험)
+- <이 상황이 주려는 감정/경험 — 무엇을 느끼게 할 것인가>
+
+## D · Dynamics (유도 행동)
+- <그 경험을 만들 플레이어 행동>
+
+## M · Mechanics (레버 — 수치는 GDR로)
+- <행동을 강제할 레버 '카테고리'만. 구체 수치(분/%/거리)는 적지 않는다>
+
+## 불변식 적합성
+- [[CPR-0001#INV-1]] : <이 상황이 INV-1을 어떻게 지키는가> ✓
+
+## 연결
+- 상속 [[CPR-0001#INV-1]]
+- 피처는 GDR이 `source: MDA-0001` 로 역참조 (여기서 GDR을 나열하지 않는다)
+````
+
+## 6. 완료 체크리스트
+- [ ] `inherits: CPR-0001@N` 핀이 있는가
+- [ ] A/D/M이 모두 채워졌고 M은 레버 카테고리뿐인가
+- [ ] 불변식 적합성에 `[[CPR-0001#INV-N]]` 링크가 있는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/MDA-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 03 · 루프 MDA**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="3">
+# STEP 03 · 루프 MDA — 작성 규칙 & 가이드
+
+> PHASE 1 · 경험 정립 | 산출물: **LOOP-MDA-NNNN** | 주관: **Director형 PD**
+
+## 1. 이 단계는 무엇인가
+여러 상황 MDA를 하나의 닫힌 루프로 엮는다. 상황 간 전이·이월·병목을 설계.
+
+## 2. 입력 → 출력
+- **입력** : 상황 MDA들
+- **출력** : LOOP-MDA-NNNN — 루프 맵 + DSM + 전이 계약
+
+## 3. 작성 규칙 (필수)
+- `inherits: CPR-0001@N` 핀.
+- **루프 맵**(단계→산출→다음)과 **DSM(의존성 매트릭스)** 를 둔다.
+- 상황 간 **전이 계약**(트리거·이월 데이터)을 적는다.
+- 엮는 상황 MDA를 `[[MDA-NNNN]]` 으로 위로 가리킨다 (루프가 MDA를 가리키지, MDA가 루프를 가리키지 않는다).
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- DSM으로 **중심 병목 상황**(예: 건설)을 드러내라 — 우선순위의 근거가 된다.
+- 전이 계약의 '이월 데이터'에 불변식 관련 정보(미확인 위협)를 명시.
+
+**DON'T**
+- MDA가 루프를 역참조하게 만들기 (방향 거꾸로).
+- 루프 맵을 산문으로만 적기 (표/매트릭스가 병목을 드러낸다).
+
+**흔한 함정**
+- 전이 계약이 없으면 상황 경계에서 경험이 끊긴다.
+- 병목 미식별 → 엉뚱한 순서로 개발.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/LOOP-MDA.template.md`)
+````markdown
+---
+title: 루프 MDA
+doc: LOOP-MDA-0001
+inherits: CPR-0001@1
+owner: Director
+status: draft
+---
+
+# LOOP-MDA-0001 · 루프 MDA (상황 엮기)
+
+## 루프 그 자체의 A/D/M
+- A : <루프가 주는 상위 리듬/성장감>
+- D : <상황 배치·우선순위 판단>
+- M : <전이 트리거 / 결과 이월 / 게이팅>
+
+## 루프 맵
+| 단계 | 산출 | 다음 |
+|---|---|---|
+| <상황> | <넘기는 것> | <다음 상황> |
+
+## 의존성 매트릭스 (DSM)
+| 준다 ＼ 받는다 | <A> | <B> | <C> |
+|---|---|---|---|
+| <A> | – | <자원> | · |
+
+## 전이 계약 (예)
+- <상황X> → <상황Y> : 트리거 <조건> / 이월 <데이터>([[CPR-0001#INV-1]])
+
+## 연결
+- 엮는 상황 [[MDA-0001]] (외 상황 MDA들)
+````
+
+## 6. 완료 체크리스트
+- [ ] 루프 맵·DSM·전이 계약이 모두 있는가
+- [ ] 중심 병목이 드러나는가
+- [ ] 참조가 MDA를 '위로' 가리키는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/LOOP-MDA-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 04 · Pillar Guide**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="4">
+# STEP 04 · Pillar Guide — 작성 규칙 & 가이드
+
+> PHASE 2 · 기획 번역 | 산출물: **PG-NNNN** | 주관: **Director형 PD**
+
+## 1. 이 단계는 무엇인가
+불변식·경험을 '설계 지침'으로 번역한다. 추상을 구체로 잇는 사다리.
+
+## 2. 입력 → 출력
+- **입력** : CPR 불변식 / 상황 MDA
+- **출력** : PG-NNNN — 사다리·DO/DON'T·리트머스·North Star·검증 훅
+
+## 3. 작성 규칙 (필수)
+- `source: CPR-0001@N` (또는 해당 MDA)로 유래를 핀한다.
+- **유래 → 추상→구체 사다리 → DO/DON'T → 리트머스 → North Star → 검증 훅** 순서.
+- **GDR을 나열하지 않는다** — GDR이 `pillars:`로 이 기둥을 역참조한다.
+- 리트머스는 **예/아니오로 답하는 한 문장 질문**.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 사다리는 5칸(불변식→A→D→PG원칙→GDR수치)으로 추상-구체를 연결.
+- North Star는 한 '장면'을 글로 박제 — 데모 MVP가 재현할 목표.
+- DO/DON'T는 실제 메카닉 예로.
+
+**DON'T**
+- 여기에 수치 박기 (그건 GDR).
+- 적용 GDR 목록을 손으로 나열하기 (쿼리로 수집).
+- 리트머스를 모호하게('좋은가?') 적기.
+
+**흔한 함정**
+- 리트머스가 모호하면 cut/keep 판정이 사람마다 달라진다.
+- North Star 없으면 '느낌'을 검증할 기준이 없다.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/PG.template.md`)
+````markdown
+---
+title: Pillar Guide · <기둥명>
+doc: PG-0001
+pillar: <기둥 슬러그>
+owner: Director
+source: CPR-0001@1
+status: draft
+---
+
+# PG-0001 · <기둥명> — Pillar Guide (설계 지침)
+
+## 유래 (비롯됨)
+- [[CPR-0001#INV-1]] 또는 [[MDA-0001]] — 어느 불변식/경험에서 왔는지
+- 적용 상황 : [[MDA-0001]]
+
+## 추상 → 구체 사다리
+1. [[CPR-0001#INV-1]] (추상) : <원칙>
+2. MDA·A : <경험>
+3. MDA·D : <행동>
+4. PG 원칙 : <설계 지침 한 줄>
+5. GDR 수치 (가장 구체) : <예시 수치>
+
+## DO / DON'T
+- DO : <지침을 살리는 구현>
+- DON'T : <지침을 깨는 구현>
+
+## 리트머스
+- "<이 기능을 켜면 ___ 하게 되는가?>" → Yes면 위반
+
+## North Star
+> <이 기둥이 가장 강하게 체감되는 한 장면을 글로 박제>
+
+## 검증 훅
+- GDR이 `pillars: [<슬러그>]` 로 역참조 → 적용 피처 자동 수집
+- 적용 범위 : <어떤 시스템/UI에 적용되는지>
+
+## 연결
+- 유래 [[CPR-0001#INV-1]] · 적용 상황 [[MDA-0001]]
+````
+
+## 6. 완료 체크리스트
+- [ ] 유래(`source`)와 사다리·리트머스·North Star가 다 있는가
+- [ ] GDR을 나열하지 않았는가
+- [ ] 리트머스가 예/아니오 질문인가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/PG-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 05 · Feature Matrix**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="5">
+# STEP 05 · Feature Matrix — 작성 규칙 & 가이드
+
+> PHASE 2 · 기획 번역 | 산출물: **FM-0001** | 주관: **Designer**
+
+## 1. 이 단계는 무엇인가
+기획을 피처 단위로 쪼개고, pillar 커버리지로 결함(빈/위반)을 드러낸다.
+
+## 2. 입력 → 출력
+- **입력** : 상황 MDA / Pillar Guide
+- **출력** : FM-0001 — 피처 분할표 + Pillar×Feature 커버리지
+
+## 3. 작성 규칙 (필수)
+- `source: MDA-0001@N` 핀.
+- **[피처→상황→A→M→pillars]** 한 줄 분할.
+- 같은 문서 안에 **Pillar × Feature 커버리지 매트릭스**를 둔다.
+- 셀 표기 `●● / ● / △ / – / ✗` 를 지킨다. `✗` 는 cut 후보 신호.
+- 피처는 `[[MDA-NNNN]]`·`[[PG-NNNN]]` 로 위를 가리킨다.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 커버리지로 **비는 기둥 / 위반(✗) 피처**를 한눈에 보이게.
+- 한 줄 = 기획적 유기체 하나. M 칸이 곧 Engineer 구현 목록.
+
+**DON'T**
+- 커버리지를 별도 문서로 분리하기 (같은 FM 안에 둔다).
+- ✗를 보고도 SCOPE로 안 넘기기.
+
+**흔한 함정**
+- 커버리지 누락 → 정체성 위반 피처(미니맵)가 살아남는다.
+- 표기 불일치 → 자동 적출 쿼리가 깨진다.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/FM.template.md`)
+````markdown
+---
+title: Feature Matrix
+doc: FM-0001
+owner: Designer
+source: MDA-0001@1
+status: active
+---
+
+# FM-0001 · Feature Matrix + 커버리지
+
+## MDA Feature Matrix
+| 피처 | 상황 | A | M(레버) | pillars |
+|---|---|---|---|---|
+| F-01 <피처> | [[MDA-0001]] | <경험> | <레버> | <슬러그들> |
+
+## Pillar × Feature 커버리지
+| feature ＼ pillar | <기둥1> | <기둥2> | <기둥3> |
+|---|---|---|---|
+| F-01 <피처> | ●● | △ | – |
+
+> 읽기 : <빈/위반(✗) 칸을 해석 — ✗는 cut 후보>
+> 표기 : ●●강함 · ●있음 · △약함 · –없음 · ✗위반
+
+## 연결
+- 출처 [[MDA-0001]] · pillar [[PG-0001]]
+````
+
+## 6. 완료 체크리스트
+- [ ] 피처 분할 + 커버리지 매트릭스가 한 문서에 있는가
+- [ ] 셀 표기가 규약(●●/●/△/–/✗)을 따르는가
+- [ ] ✗ 피처가 식별됐는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/FM-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 06 · GDR**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="6">
+# STEP 06 · GDR — 작성 규칙 & 가이드
+
+> PHASE 2 · 기획 번역 | 산출물: **GDR-NNNN** | 주관: **Designer**
+
+## 1. 이 단계는 무엇인가
+피처를 Engineer가 그대로 구현할 수치 시행령으로 확정한다.
+
+## 2. 입력 → 출력
+- **입력** : 상황 MDA / Pillar Guide / Feature Matrix
+- **출력** : GDR-NNNN — 결정 + 데이터·튜닝 표 + 검증
+
+## 3. 작성 규칙 (필수)
+- `source: MDA-0001@N` 과 `pillars: [...]` 로 위를 가리킨다.
+- **📊 데이터·튜닝 표**(수치)와 **✅ 검증**(리트머스·KPI·수용기준)은 **의무**.
+- 모호함 없이 수치로. 숫자가 없으면 구현이 멈춘다.
+- **네트워크·권위는 적지 않는다** — STEP 09 ADR에서 Tech Lead가 판단.
+- ADR을 가리키지 않는다 (ADR이 이 GDR을 역참조).
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 검증의 리트머스는 해당 `[[PG-NNNN]]` 의 질문을 그대로 적용.
+- 데이터 표의 각 값에 **플레이테스트 근거**를 한 줄.
+- 엣지 케이스·멀티플레이 고려를 짧게라도.
+
+**DON'T**
+- 수치 없는 GDR (그럼 MDA와 다를 게 없다).
+- GDR에서 ADR/SCOPE 같은 하위 가리키기.
+- 네트워크 권위를 여기서 결정하기.
+
+**흔한 함정**
+- 근거 없는 수치는 다음 튜닝 때 분쟁.
+- pillar 미연결 → 커버리지 자동 수집에서 누락.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/GDR.template.md`)
+````markdown
+---
+title: <피처명>
+doc: GDR-0012
+source: MDA-0001@1
+pillars: [<기둥 슬러그>]
+owner: Designer
+status: draft       # draft | approved | cut
+---
+
+# GDR-0012 · <피처명>
+
+## 맥락
+<어느 상황/기둥을 구현하는가. [[MDA-0001]] · [[PG-0001]]>
+
+## 결정
+- <메카닉을 모호함 없이>
+
+## 데이터·튜닝 [의무]
+| 파라미터 | 값 | 근거 |
+|---|---|---|
+| <키> | <값> | <플레이테스트 근거> |
+
+## 검증 [의무]
+- 리트머스 [[PG-0001]] "<질문>" → No ✓
+- KPI : <측정 지표·목표치>
+- 커버리지 [[FM-0001]] : <기둥> ●●
+
+## 연결
+- 상위 [[MDA-0001]] · pillar [[PG-0001]] · 불변식 [[CPR-0001#INV-1]] · 매트릭스 [[FM-0001]]
+````
+
+## 6. 완료 체크리스트
+- [ ] `source`·`pillars` 핀이 있는가
+- [ ] 📊 데이터 표와 ✅ 검증이 모두 있는가
+- [ ] 하위(ADR 등)를 가리키지 않았는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/GDR-0012.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 07 · 범위·cut (SCOPE)**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="7">
+# STEP 07 · 범위·cut (SCOPE) — 작성 규칙 & 가이드
+
+> PHASE 3 · 범위 결정 | 산출물: **SCOPE-0001** | 주관: **Producer형 PD**
+
+## 1. 이 단계는 무엇인가
+자원·일정 기준으로 IN/OUT을 결정하고 cut을 명시한다.
+
+## 2. 입력 → 출력
+- **입력** : GDR / Feature Matrix 커버리지
+- **출력** : SCOPE-0001 — MoSCoW + Cut List
+
+## 3. 작성 규칙 (필수)
+- **MoSCoW**(Must/Should/Could/Won't)로 등급. cv-invariant 직결은 항상 Must.
+- 커버리지 `✗` 피처는 cut 후보로 검토.
+- cut은 **[항목·이유·재검토]** 를 채워야 '결정'이다 (안 적으면 보류).
+- GDR을 `[[GDR-NNNN]]` 로 위로 가리킨다.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- borderline은 **cost-of-exclusion**(없이 출시하면?)로 가른다.
+- Director형 PD가 불변식 직결 피처의 cut을 막는다.
+
+**DON'T**
+- cut 사유 없이 그냥 빼기 (다음 회의에 슬그머니 복귀).
+- MVP를 여기서 정의하기 (그건 STEP 08).
+
+**흔한 함정**
+- 사유 미기재 cut → scope creep 재발.
+- 정체성 피처 cut → 게임이 흔들린다.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/SCOPE.template.md`)
+````markdown
+---
+title: 범위 결정 (MoSCoW + cut)
+doc: SCOPE-0001
+owner: Producer
+status: active
+---
+
+# SCOPE-0001 · 범위 결정
+
+## 범위 규칙
+- cv-invariant([[CPR-0001#INV-1]]) 직결 피처는 항상 Must
+- 커버리지([[FM-0001]])에서 ✗ → cut 후보
+
+## MoSCoW
+| 등급 | 피처 | 근거 |
+|---|---|---|
+| Must | [[GDR-0012]] | <근거> |
+| Should | <피처> | <근거> |
+| Won't | <피처> | <차기로> |
+
+## Cut
+- <피처> — <이유> (커버리지 ✗ / 비용 초과)
+
+## 연결
+- 피처 출처 [[GDR-0012]] · 매트릭스 [[FM-0001]] · 불변식 [[CPR-0001#INV-1]]
+````
+
+## 6. 완료 체크리스트
+- [ ] MoSCoW 등급이 매겨졌는가
+- [ ] cut에 [항목·이유·재검토]가 다 있는가
+- [ ] ✗ 피처가 처리됐는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/SCOPE-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 08 · MVP 정의**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="8">
+# STEP 08 · MVP 정의 — 작성 규칙 & 가이드
+
+> PHASE 3 · 범위 결정 | 산출물: **MVP-NNNN** | 주관: **Producer형 PD**
+
+## 1. 이 단계는 무엇인가
+검증 가능한 수직 단면을 확정한다. 가로(콘텐츠)가 아니라 세로(관통).
+
+## 2. 입력 → 출력
+- **입력** : SCOPE / GDR / Pillar Guide
+- **출력** : MVP-NNNN — 시스템 MVP / 데모 MVP + 수용 테스트
+
+## 3. 작성 규칙 (필수)
+- MVP를 **시스템 MVP(G-system: 작동)** 와 **데모 MVP(G-demo: 체감)** 로 나눈다. 데모 ⊂ 시스템.
+- **수용 테스트**(시나리오·통과 조건)를 둔다. 마지막 행은 불변식 위반 0건.
+- 포함/제외 피처를 `[[GDR-NNNN]]`·`[[SCOPE-0001]]` 로 가리킨다.
+- 작동 안 하는 건 polish 못 한다 — 데모 항목은 먼저 G-system 통과.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 데모 MVP는 [[PG-NNNN]] North Star 장면을 실제로 재현하는 것.
+- 수직 단면 = 핵심 기능 하나를 MW~GS까지 깨끗이 관통.
+
+**DON'T**
+- 콘텐츠를 가로로 늘리기 (맵·아이템 전부).
+- 측정 불가능한 성공 기준('재밌으면 됨').
+
+**흔한 함정**
+- 수용 테스트 없으면 '됐다'의 기준이 사람마다 다르다.
+- G-system 건너뛰고 polish → 모래 위 집.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/MVP.template.md`)
+````markdown
+---
+title: MVP 정의 (시스템 / 데모)
+doc: MVP-0001
+type: system-mvp     # system-mvp | demo-mvp
+owner: Producer
+status: active
+---
+
+# MVP-0001 · MVP 정의 (수직 단면)
+
+## 한 줄 정의
+> "<핵심 루프 1회전을 한 문장으로>" — 끝까지 작동하는가.
+
+## 시스템 MVP (G-system : 작동하는가)
+- 포함 : [[GDR-0012]] 외 — 의존 그래프가 닫히는 최소 셋
+
+## 데모 MVP (G-demo : 체감되는가) ⊂ 시스템 MVP
+- [[PG-0001]] North Star 장면을 실제로 재현
+
+## 수용 테스트
+| # | 시나리오 | 통과 조건 |
+|---|---|---|
+| A1 | <시나리오> | <통과 조건> |
+| A2 | 불변식 | <INV 위반 0건> ([[CPR-0001#INV-1]]) |
+
+## 연결
+- 피처 [[GDR-0012]] · 범위 [[SCOPE-0001]] · pillar [[PG-0001]] · 불변식 [[CPR-0001#INV-1]]
+````
+
+## 6. 완료 체크리스트
+- [ ] 시스템/데모 MVP가 구분됐는가
+- [ ] 수용 테스트에 불변식 위반 0건 행이 있는가
+- [ ] 포함/제외가 위 문서로 링크됐는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/MVP-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 09 · ADR**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="9">
+# STEP 09 · ADR — 작성 규칙 & 가이드
+
+> PHASE 4 · 아키텍처 | 산출물: **ADR-NNNN** | 주관: **Engineer**
+
+## 1. 이 단계는 무엇인가
+구현 방식·구조·네트워크 권위를 기록한다 (Nygard ADR).
+
+## 2. 입력 → 출력
+- **입력** : GDR / Loop MDA
+- **출력** : ADR-NNNN — 맥락·옵션·결정·결과 + 네트워크 권위
+
+## 3. 작성 규칙 (필수)
+- `source: [GDR-NNNN@N]` 으로 상위 의도를 핀한다.
+- **맥락 → 결정 동인 → 검토한 옵션(표) → 결정 → 결과/존속성** 구조.
+- **네트워크·권위·동기화**(무엇을 서버가 정하고 무엇을 동기화할지)를 여기서 판단·기록.
+- 불변식([[CPR-0001#INV-N]])이 **네트워크 레벨에서** 깨지지 않게 한다.
+- 존속성(그레고리 G/L-system)을 명시.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 옵션 표에 장단점을 같이 적어 '왜 이걸 골랐나'를 남긴다.
+- GDR↔ADR은 1:N. ADR 상단에 어느 GDR을 구현하는지 명시.
+
+**DON'T**
+- GDR을 다시 쓰기 (ADR은 '어떻게', GDR은 '무엇').
+- ARCH-CHECK/GATE 같은 하위 가리키기.
+
+**흔한 함정**
+- 네트워크 권위 누락 → 멀티에서 불변식이 깨진다.
+- 옵션·근거 없는 결정 → 나중에 '왜 이렇게 짰지'가 사라진다.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/ADR.template.md`)
+````markdown
+---
+title: <기술 결정명>
+doc: ADR-0042
+owner: Engineer
+status: proposed     # proposed | accepted | superseded
+source: [GDR-0012@1]
+date: <YYYY-MM-DD>
+deciders: [Tech Lead]
+---
+
+# ADR-0042 · <기술 결정명>
+
+## 맥락
+<무엇을 결정해야 하는가. 어떤 상위 의도([[GDR-0012]])를 구현하나>
+
+## 결정 동인
+- <일관성/치팅/성능 등>
+- [[CPR-0001#INV-1]] : <불변식이 기술에서 깨지지 않게>
+
+## 검토한 옵션
+| 옵션 | 장점 | 단점 |
+|---|---|---|
+| <A> | <장점> | <단점> |
+
+## 결정
+- <채택안과 핵심 파라미터>
+
+## 네트워크·권위 (Tech Lead)
+- <무엇을 서버가 정하고 무엇을 동기화하나>
+
+## 결과 / 존속성 (그레고리)
+- (+) <장점>  (−) <비용>
+- 분류 : <G-system / L-system> · 의존 <병목 여부>
+
+## 연결
+- 상위 의도 [[GDR-0012]] · 불변식 [[CPR-0001#INV-1]]
+````
+
+## 6. 완료 체크리스트
+- [ ] `source` 핀과 옵션·결정·결과가 있는가
+- [ ] 네트워크·권위가 기록됐는가
+- [ ] 불변식 보존이 검토됐는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/ADR-0042.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 10 · 의존성·존속성 점검**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="10">
+# STEP 10 · 의존성·존속성 점검 — 작성 규칙 & 가이드
+
+> PHASE 4 · 아키텍처 | 산출물: **ARCH-CHECK-0001** | 주관: **Tech Lead**
+
+## 1. 이 단계는 무엇인가
+아키텍처 오염을 차단하고 그레고리 레이어로 존속성을 검증한다.
+
+## 2. 입력 → 출력
+- **입력** : ADR들
+- **출력** : ARCH-CHECK-0001 — 단방향 규칙 + 그레고리 분류 + 병목/순환
+
+## 3. 작성 규칙 (필수)
+- **의존은 위→아래만**. 하위가 상위를 역참조하면 빌드 실패(반려).
+- 시스템을 **그레고리 레이어**로 분류해 G-system(런타임 존속) 병목을 식별.
+- **순환 의존**을 점검한다 (루프는 데이터 흐름이지 코드 순환이 아님).
+- 점검 대상 ADR을 `[[ADR-NNNN]]` 로 가리킨다.
+- 가능하면 CI 아키텍처 테스트로 자동 검출.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 최대 의존 노드(GameTime 등)는 인터페이스를 먼저 동결.
+- 데이터 흐름 사이클과 코드 의존 사이클을 구분.
+
+**DON'T**
+- 존속성을 '나중에' 미루기 (콘텐츠 붙일 때 엔진 재작성).
+- 게이트(GATE)를 역참조하기.
+
+**흔한 함정**
+- 병목 미식별 → 잘못된 개발 순서.
+- 단방향 미검사 → 확장 시 크랙.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/ARCH-CHECK.template.md`)
+````markdown
+---
+title: 의존성·존속성 점검
+doc: ARCH-CHECK-0001
+owner: Engineer
+status: active
+source: [ADR-0042@1]
+---
+
+# ARCH-CHECK-0001 · 의존성·존속성 점검
+
+## 단방향 규칙
+- 허용 : 상위 → 하위 (GS → GF → CORE)
+- 금지 : 하위 → 상위 → 빌드 실패
+
+## 그레고리 분류
+| 시스템 | 분류 | 존속 |
+|---|---|---|
+| <시스템>([[ADR-0042]]) | <G/L-system> | <존속 범위> |
+
+## 병목 / 순환
+- <최대 의존 노드 → 인터페이스 동결 우선>
+- 코드 순환 : <있음/없음>
+
+## 액션 아이템
+- <할 일>
+
+## 연결
+- 점검 대상 [[ADR-0042]] · 의존 피처 [[GDR-0012]]
+````
+
+## 6. 완료 체크리스트
+- [ ] 단방향 규칙·그레고리 분류·병목/순환이 다 있는가
+- [ ] 점검 대상 ADR이 링크됐는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/ARCH-CHECK-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 11 · 개발 우선순위 (PRIO)**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="11">
+# STEP 11 · 개발 우선순위 (PRIO) — 작성 규칙 & 가이드
+
+> PHASE 5 · 실행 정렬 & 승인 | 산출물: **PRIO-0001** | 주관: **Producer형 PD × Engineer**
+
+## 1. 이 단계는 무엇인가
+스코어링 + 위상정렬로 실제 구현 순서를 정한다.
+
+## 2. 입력 → 출력
+- **입력** : GDR / ADR / 커버리지 / SCOPE / MVP
+- **출력** : PRIO-0001 — 가중 스코어링 + 순서 + 자원 게이트
+
+## 3. 작성 규칙 (필수)
+- **가중 기준**(pillar 직결×3 · MVP 포함×2 · 의존 병목×2 등)으로 점수.
+- **의존성 위상정렬** — 많이 의존받는 토대(GameTime)를 먼저.
+- **DSDM 자원 게이트**(Must ≤ 50%, buffer 20%)를 적용.
+- 항목을 `[[GDR-NNNN]]`·`[[ADR-NNNN]]` 로 위로 가리킨다.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- '무엇을(범위)'은 Producer가, '무엇이 선행(제약)'은 Engineer가 — 둘이 함께.
+- cut/보류 항목도 명시해 슬그머니 복귀 방지.
+
+**DON'T**
+- 의존 무시하고 가치순으로만 정렬 (선행 부품이 없어 막힌다).
+- 버퍼 0% (사람은 아프고 버그는 터진다).
+
+**흔한 함정**
+- 위상정렬 무시 → 블로킹.
+- 버퍼 미확보 → 일정 붕괴.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/PRIO.template.md`)
+````markdown
+---
+title: 개발 우선순위
+doc: PRIO-0001
+owner: Producer
+status: active
+---
+
+# PRIO-0001 · 개발 우선순위
+
+## 스코어링 (가중)
+| 기준 | 가중 |
+|---|---|
+| pillar 직결([[FM-0001]]) | x3 |
+| MVP 포함([[MVP-0001]]) | x2 |
+| 의존 병목 | x2 |
+
+## 순서 (스코어 · 위상정렬)
+1. [[GDR-0012]] <사유>
+2. [[ADR-0042]] <의존 병목 선행>
+
+## 자원 게이트 (DSDM)
+- Must ≤ 가용 50% · buffer 20%
+
+## 연결
+- 항목 [[GDR-0012]] [[ADR-0042]] · 매트릭스 [[FM-0001]] · 범위 [[SCOPE-0001]] · MVP [[MVP-0001]]
+````
+
+## 6. 완료 체크리스트
+- [ ] 스코어링 기준·순서·DSDM 게이트가 있는가
+- [ ] 의존 병목이 선행에 반영됐는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/PRIO-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **STEP 12 · 기술 구조 승인 (GATE)**
+        </script>
+        <script type="text/template" class="dm-help" data-dm-help-step="12">
+# STEP 12 · 기술 구조 승인 (GATE) — 작성 규칙 & 가이드
+
+> PHASE 5 · 실행 정렬 & 승인 | 산출물: **GATE-0001** | 주관: **Tech Lead Gate**
+
+## 1. 이 단계는 무엇인가
+구현 착수 전 최종 게이트. 통과한 설계만 승인하고 단면을 빌드한다.
+
+## 2. 입력 → 출력
+- **입력** : ARCH-CHECK / ADR / MVP
+- **출력** : GATE-0001 — 승인 대상 + 체크리스트 + 판정
+
+## 3. 작성 규칙 (필수)
+- **체크리스트**(순환 의존 없음 · G-system 병목 동결 · 불변식 네트워크 보존 · 데모 리스크 식별)를 둔다.
+- 각 항목을 ✓/✗/△ 로 판정. 통과 시 `accepted`.
+- 승인 대상 ADR·ARCH-CHECK·MVP를 `[[...]]` 로 가리킨다.
+- 통과 → `[[PRIO-0001]]` 순서로 구현 착수. 위반 → 반려·재설계.
+
+## 4. 작성 가이드라인 (잘 쓰는 법)
+**DO**
+- 게이트는 검문소다 — 못 지나면 되돌아가 고친다.
+- 사인오프(역할별 승인)를 남겨 책임을 분명히.
+
+**DON'T**
+- 체크 없이 통과시키기 (게이트의 의미 상실).
+- 불변식 보존 항목 빼기.
+
+**흔한 함정**
+- 체크리스트 없는 승인 → 오염된 채 구현 착수.
+- 사인오프 부재 → 책임 불명.
+
+## 5. 템플릿 (복사해서 채우기 · `templates/GATE.template.md`)
+````markdown
+---
+title: 기술 구조 승인 (게이트)
+doc: GATE-0001
+owner: Tech Lead
+status: pending
+gate: true
+---
+
+# GATE-0001 · 기술 구조 승인 → MVP 빌드
+
+## 승인 대상
+- [[ARCH-CHECK-0001]] 통과 · [[ADR-0042]] 확정
+
+## 체크리스트
+| 항목 | 상태 |
+|---|---|
+| 순환 의존 없음 | ✓ / ✗ |
+| G-system 병목 동결 | ✓ / ✗ |
+| 불변식([[CPR-0001#INV-1]]) 네트워크 보존 | ✓ / ✗ |
+| 데모 슬라이스([[MVP-0001]]) 리스크 식별 | ✓ / △ |
+
+## 판정
+- 통과 → [[PRIO-0001]] 순서로 구현 착수
+- 위반 → 반려·재설계
+
+## 연결
+- 점검 [[ARCH-CHECK-0001]] · 결정 [[ADR-0042]] · 불변식 [[CPR-0001#INV-1]] · 후속 [[PRIO-0001]]
+````
+
+## 6. 완료 체크리스트
+- [ ] 체크리스트 4항목이 판정됐는가
+- [ ] 불변식 네트워크 보존이 포함됐는가
+- [ ] 통과 시 후속(PRIO) 연결이 있는가
+- [ ] 모든 참조가 **위(상위)** 를 가리키고, 자식을 나열하지 않았다
+- [ ] frontmatter `status` 가 적절하다
+
+## 7. 채워진 예시
+- `examples/GATE-0001.md` 참고 (이 키트에 동봉).
+
+## 8. 연결
+- 공통 규약 : [../CONVENTIONS.md](../CONVENTIONS.md) · 역할 : [../ROLES.md](../ROLES.md)
+- 다음 단계 : **— (마지막 단계)**
         </script>
 
         <div id="aihub-view" class="hidden" onclick="event.stopPropagation()" style="height:calc(100vh - 60px);overflow:auto;padding:18px 22px;background:var(--c-paper);">
@@ -11886,7 +12936,7 @@ gate: true
         // [r209] 프론트 리비전 — 백엔드 /health 응답 server_revision 과 비교해
         // "코드 변경 후 백엔드 미재시작" 자동 감지. 코드를 새 r번호로 바꿀 때 함께 갱신.
 
-        var _AHUB_FRONT_REV = 'r318';
+        var _AHUB_FRONT_REV = 'r319';
 
 
         var _ahubRevWarned = false;
@@ -33577,7 +34627,7 @@ ${intrLog}
 
     // [r224] 백엔드 정련소 모듈 준비 여부 진단 — Failed to fetch 원인 명확화
 
-    var _RFS_FRONT_REV = 'r318';
+    var _RFS_FRONT_REV = 'r319';
 
 
     async function rfsHealthCheck() {
@@ -33671,6 +34721,51 @@ ${intrLog}
         if (/^<.*>$/.test(t)) return '';   // 플레이스홀더(<...>)면 표시 안 함
         return t;
     }
+    // ── [r319] PHASE/STEP 도움말(설명 md) — 숨김 <script>에서 읽어 팝업 ──
+    function _dmHelpPhase(no) { var el = document.querySelector('.dm-help[data-dm-phase="' + no + '"]'); return el ? (el.textContent || '').replace(/^\n+/, '').replace(/\s+$/, '') : ''; }
+    function _dmHelpStep(no) { var el = document.querySelector('.dm-help[data-dm-help-step="' + no + '"]'); return el ? (el.textContent || '').replace(/^\n+/, '').replace(/\s+$/, '') : ''; }
+    function dmHelpCtx(e, kind, no) {
+        e.preventDefault(); e.stopPropagation();
+        var label = kind === 'phase' ? ('PHASE ' + no + ' 설명') : ('STEP ' + (no < 10 ? '0' + no : no) + ' 작성 가이드');
+        _dmShowMenu(e, [{ emoji: '❔', label: label + ' 보기', fn: function () { dmShowHelp(kind, no); } }]);
+    }
+    function dmHideHelp() { var p = document.getElementById('dm-help-popup'); if (p) p.remove(); }
+    function dmShowHelp(kind, no) {
+        dmHideHelp();
+        var md = kind === 'phase' ? _dmHelpPhase(no) : _dmHelpStep(no);
+        if (!md) { showToast('설명을 찾을 수 없습니다', 'info'); return; }
+        var titleTxt, color;
+        if (kind === 'phase') { var p = (_dmPhases || []).find(function (x) { return x.no === no; }); titleTxt = 'PHASE ' + no + (p ? ' · ' + p.name : ''); color = p ? p.color : 'var(--c-accent)'; }
+        else { var si = _dmStepInfo(no); titleTxt = 'S' + (no < 10 ? '0' + no : no) + (si ? ' · ' + si.title : ''); color = _dmStepColor(no); }
+        var pop = document.createElement('div');
+        pop.id = 'dm-help-popup';
+        pop.style.cssText = 'position:fixed;z-index:9200;width:520px;height:62vh;min-width:300px;min-height:200px;max-width:92vw;max-height:88vh;background:var(--c-card);border:1px solid var(--c-border);border-top:4px solid ' + color + ';border-radius:12px;box-shadow:0 18px 56px rgba(0,0,0,.34);display:flex;flex-direction:column;overflow:hidden;resize:both;';
+        var rr;
+        try {
+            var cfg = (typeof domPurifyConfig !== 'undefined') ? Object.assign({}, domPurifyConfig) : undefined;
+            if (cfg) cfg.ADD_ATTR = (cfg.ADD_ATTR || []).concat(['data-wl-type', 'data-wl-id', 'data-wl-title', 'data-wl-hash']);
+            rr = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(parseMarkdownWithTables(md), cfg) : parseMarkdownWithTables(md);
+        } catch (e) { rr = _annEsc(md); }
+        pop.innerHTML = '<div id="dm-help-head" style="flex:none;display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--c-border);background:var(--c-paper);cursor:move;user-select:none;">'
+            + '<span style="font-size:14px;flex:none;">📖</span>'
+            + '<span style="font-weight:800;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + color + ';">' + _annEsc(titleTxt) + '</span>'
+            + '<button onclick="dmHideHelp()" title="닫기" style="border:none;background:none;cursor:pointer;font-size:15px;line-height:1;color:var(--c-text3);">✕</button></div>'
+            + '<div class="dm-doc-style" style="flex:1;overflow-y:auto;padding:16px 22px;">' + rr + '</div>';
+        document.body.appendChild(pop);
+        pop.style.left = Math.max(8, (window.innerWidth - 520) / 2) + 'px';
+        pop.style.top = Math.max(8, window.innerHeight * 0.16) + 'px';
+        var hd = pop.querySelector('#dm-help-head');
+        if (hd) hd.addEventListener('mousedown', function (e) {
+            if (e.target.tagName === 'BUTTON') return;
+            e.preventDefault();
+            var sx = e.clientX, sy = e.clientY, bx = pop.offsetLeft, by = pop.offsetTop;
+            function mv(ev) { pop.style.left = (bx + ev.clientX - sx) + 'px'; pop.style.top = (by + ev.clientY - sy) + 'px'; }
+            function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+            document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+        });
+        var hb = pop.querySelector('.dm-doc-style');
+        if (hb) { try { if (typeof renderMermaidIn === 'function') renderMermaidIn(hb); } catch (e) {} try { if (typeof enhanceMediaLinks === 'function') enhanceMediaLinks(hb); } catch (e) {} try { dmBindWlPreview(hb); } catch (e) {} }
+    }
 
     function _dmDocs() {
         // 이 페이지 전용 컬렉션(kind 'pipeline'). '문서' 탭(kind 'wiki')과 분리.
@@ -33716,19 +34811,21 @@ ${intrLog}
             + '<span style="font-size:11px;font-weight:800;color:var(--c-text3);flex:1;">문서 ' + nDoc + ' · 12단계</span></div>';
         _dmState._collapsed = _dmState._collapsed || {};
         _dmPhases.forEach(function (p) {
-            // 대분류 헤더
-            html += '<div style="display:flex;align-items:center;gap:7px;margin:12px 4px 3px;padding-bottom:4px;border-bottom:2px solid ' + p.color + ';">'
+            // 대분류 헤더 (우클릭/? = PHASE 설명)
+            html += '<div oncontextmenu="dmHelpCtx(event,\'phase\',' + p.no + ')" style="display:flex;align-items:center;gap:7px;margin:12px 4px 3px;padding-bottom:4px;border-bottom:2px solid ' + p.color + ';">'
                 + '<span style="width:9px;height:9px;border-radius:3px;background:' + p.color + ';flex:none;"></span>'
-                + '<span style="font-weight:800;font-size:12px;color:var(--c-text);">PHASE ' + p.no + ' · ' + _annEsc(p.name) + '</span></div>';
+                + '<span style="font-weight:800;font-size:12px;color:var(--c-text);flex:1;">PHASE ' + p.no + ' · ' + _annEsc(p.name) + '</span>'
+                + '<button class="dm-help-btn" onclick="event.stopPropagation();dmShowHelp(\'phase\',' + p.no + ',this)" title="이 PHASE 설명 보기" style="border:1px solid ' + p.color + '55;background:none;cursor:help;color:' + p.color + ';font-size:11px;font-weight:800;line-height:1;width:16px;height:16px;border-radius:50%;padding:0;flex:none;">?</button></div>';
             p.steps.forEach(function (s) {
                 var items = byStep[s.no] || [];
                 var col = p.color;
                 // 중분류 헤더 (STEP)
-                html += '<div class="dm-step-hd" onclick="dmToggleStep(' + s.no + ')" style="display:flex;align-items:center;gap:6px;margin:6px 4px 1px;cursor:pointer;user-select:none;">'
+                html += '<div class="dm-step-hd" oncontextmenu="dmHelpCtx(event,\'step\',' + s.no + ')" onclick="dmToggleStep(' + s.no + ')" style="display:flex;align-items:center;gap:6px;margin:6px 4px 1px;cursor:pointer;user-select:none;">'
                     + '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;background:' + col + '22;color:' + col + ';border-radius:4px;padding:1px 5px;flex:none;">S' + (s.no < 10 ? '0' + s.no : s.no) + '</span>'
                     + '<span style="font-size:11.5px;font-weight:700;color:var(--c-text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _annEsc(s.title) + '</span>'
                     + (items.length ? '<span style="font-size:10px;color:var(--c-text3);">' + items.length + '</span>' : '')
-                    + '<button class="dm-step-add" onclick="event.stopPropagation();dmNewDoc(' + s.no + ')" title="이 단계에 새 문서" style="border:none;background:none;cursor:pointer;color:var(--c-accent);font-size:13px;line-height:1;padding:0 2px;">＋</button>'
+                    + '<button class="dm-help-btn" onclick="event.stopPropagation();dmShowHelp(\'step\',' + s.no + ',this)" title="이 STEP 작성 가이드" style="border:1px solid ' + col + '55;background:none;cursor:help;color:' + col + ';font-size:10px;font-weight:800;line-height:1;width:15px;height:15px;border-radius:50%;padding:0;flex:none;">?</button>'
+                    + '<button class="dm-step-add" onclick="event.stopPropagation();dmNewDoc(' + s.no + ')" title="이 단계에 새 문서" style="border:none;background:none;cursor:pointer;color:var(--c-accent);font-size:13px;line-height:1;padding:0 2px;flex:none;">＋</button>'
                     + '</div>';
                 if (_dmState._collapsed[s.no]) return;
                 items.forEach(function (d) {
@@ -33859,7 +34956,7 @@ ${intrLog}
             return;
         }
         // preview — [r318] 라이브 인라인 편집(블록 클릭→편집, 표 인터랙티브). 잠금 문서는 읽기전용.
-        host.innerHTML = bar + '<div id="dm-doc-body" class="markdown-body" style="flex:1;overflow-y:auto;padding:20px 26px;font-size:13.5px;line-height:1.75;"></div>';
+        host.innerHTML = bar + '<div id="dm-doc-body" class="markdown-body dm-doc-style" style="flex:1;overflow-y:auto;padding:22px 30px;"></div>';
         var body = document.getElementById('dm-doc-body');
         if (body) dmRenderLiveBody(body, d, locked);
     }
@@ -33878,14 +34975,24 @@ ${intrLog}
         }
         var blocks = _lpSplitBlocks(content);
         body._dmBlocks = blocks;
+        var stepNo = _dmDocStep(d);
+        var isFmText = function (t) { return /^﻿?\s*---[ \t]*\r?\n[\s\S]*?\r?\n---\s*$/.test(t); };
+        var hasFm = blocks.some(function (b) { return !b.blank && isFmText(b.text); });
         var frag = '';
+        // [r319] 메타데이터(프론트매터) 없음 + 템플릿 권장 → 추가 안내
+        if (!hasFm && stepNo && _dmTemplateFrontKeys(stepNo).length && !locked) {
+            frag += '<div style="display:flex;align-items:center;gap:10px;background:rgba(217,162,74,.12);border:1px dashed rgba(217,162,74,.5);border-radius:10px;padding:9px 13px;margin:2px 0 12px;">'
+                + '<span style="font-size:15px;">⚠</span>'
+                + '<span style="flex:1;font-size:12px;color:var(--c-text2);">이 문서에는 메타데이터(속성)가 없습니다. 템플릿이 권장하는 속성을 추가하세요.</span>'
+                + '<button onclick="dmMetaCreateFromTemplate()" style="border:none;background:var(--c-accent);color:#fff;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;padding:4px 12px;flex:none;">＋ 메타데이터 추가</button></div>';
+        }
         blocks.forEach(function (b, idx) {
             if (b.blank) { frag += '<div class="dm-lp-blank" data-idx="' + idx + '"' + (locked ? '' : ' onclick="dmLpEnterEdit(' + idx + ')"') + ' style="min-height:12px;cursor:text;"></div>'; return; }
-            var isFm = /^﻿?\s*---[ \t]*\r?\n[\s\S]*?\r?\n---\s*$/.test(b.text);
-            var inner = isFm
-                ? '<div class="dm-lp-meta" style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11.5px;color:var(--c-text2);background:var(--c-paper);border:1px solid var(--c-border);border-radius:8px;padding:10px 12px;">' + _annEsc(b.text) + '</div>'
-                : _lpRenderBlockHtml(b.text);
-            frag += '<div class="dm-lp-row" data-idx="' + idx + '"><div class="dm-lp-content"' + (locked ? '' : ' onclick="dmLpRowClick(event,' + idx + ')"') + ' style="border-radius:6px;' + (locked ? '' : 'cursor:text;') + '">' + inner + '</div></div>';
+            if (isFmText(b.text)) {   // [r319] 프론트매터 → 예쁜 메타데이터 패널(미작성/누락 표시 + 편집)
+                frag += '<div class="dm-lp-row dm-lp-fm" data-idx="' + idx + '"><div class="dm-lp-content">' + dmRenderMetaPanel(b.text, idx, stepNo, locked) + '</div></div>';
+                return;
+            }
+            frag += '<div class="dm-lp-row" data-idx="' + idx + '"><div class="dm-lp-content"' + (locked ? '' : ' onclick="dmLpRowClick(event,' + idx + ')"') + ' style="border-radius:6px;' + (locked ? '' : 'cursor:text;') + '">' + _lpRenderBlockHtml(b.text) + '</div></div>';
         });
         body.innerHTML = frag;
         try { if (typeof _buildHtmlEmbeds === 'function') _buildHtmlEmbeds(body, (d.meta && d.meta.htmlEmbeds) || {}); } catch (e) {}
@@ -33893,6 +35000,96 @@ ${intrLog}
         try { if (typeof enhanceMediaLinks === 'function') enhanceMediaLinks(body); } catch (e) {}
         try { dmBindWlPreview(body); } catch (e) {}   // [r317] 위키링크 호버 팝업
         if (!locked) { try { dmBindTables(body); } catch (e) {} }
+    }
+    // ── [r319] 메타데이터(프론트매터) 패널 — 예쁜 표시 + 미작성/누락 감지 + 편집 ──
+    function _dmParseFront(text) {
+        var m = String(text == null ? '' : text).match(/^﻿?\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
+        var inner = m ? m[1] : '';
+        var rows = [];
+        inner.split(/\r?\n/).forEach(function (ln) {
+            if (!ln.trim()) return;
+            var kv = ln.match(/^([A-Za-z0-9_\-]+)\s*:\s*([\s\S]*?)\s*$/);
+            if (kv) rows.push({ key: kv[1], value: kv[2] });
+        });
+        return rows;
+    }
+    function _dmTemplateFrontKeys(stepNo) { var tpl = stepNo ? _dmTemplate(stepNo) : ''; return tpl ? _dmParseFront(tpl) : []; }
+    function _dmMetaUnfilled(v) { v = (v == null ? '' : String(v)).trim(); return v === '' || /<[^>]*>/.test(v); }
+    function _dmMetaStripComment(v) { return String(v == null ? '' : v).replace(/\s{2,}#.*$/, '').trim(); }
+    function dmRenderMetaPanel(blockText, idx, stepNo, locked) {
+        var rows = _dmParseFront(blockText);
+        var have = {}; rows.forEach(function (r) { have[r.key] = true; });
+        var missing = _dmTemplateFrontKeys(stepNo).filter(function (t) { return !have[t.key]; });
+        var nWarn = rows.filter(function (r) { return _dmMetaUnfilled(r.value); }).length + missing.length;
+        var html = '<div class="dm-meta-panel" data-idx="' + idx + '" style="background:var(--c-paper);border:1px solid var(--c-border);border-radius:10px;overflow:hidden;margin:2px 0 12px;">';
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--c-border);background:var(--c-card);">'
+            + '<span style="font-size:11px;font-weight:800;color:var(--c-text2);letter-spacing:.02em;">📋 메타데이터</span>'
+            + (nWarn ? '<span style="font-size:10px;font-weight:700;color:#b5732a;background:rgba(217,162,74,.16);border-radius:10px;padding:1px 8px;">⚠ ' + nWarn + '개 미작성</span>' : '<span style="font-size:10px;font-weight:700;color:#3c8a5a;">✓ 작성 완료</span>')
+            + '<span style="flex:1;"></span>'
+            + (locked ? '' : '<button onclick="dmMetaAddField(' + idx + ')" title="필드 추가" style="border:1px solid var(--c-border);background:var(--c-card);border-radius:6px;cursor:pointer;font-size:11px;color:var(--c-accent);font-weight:700;padding:2px 9px;">＋ 필드</button>')
+            + '</div><div style="padding:5px 12px 7px;">';
+        rows.forEach(function (r) {
+            var unfilled = _dmMetaUnfilled(r.value);
+            var clickAttr = locked ? '' : ' onclick="dmMetaEditField(' + idx + ',\'' + _annEsc(r.key) + '\')"';
+            html += '<div class="dm-meta-row" style="display:flex;align-items:flex-start;gap:10px;padding:4px 0;border-bottom:1px dashed var(--c-border);">'
+                + '<span style="flex:0 0 116px;font-size:11.5px;font-weight:700;color:var(--c-text3);font-family:ui-monospace,monospace;padding-top:1px;">' + _annEsc(r.key) + '</span>'
+                + (unfilled
+                    ? '<span' + clickAttr + ' style="flex:1;font-size:12px;color:#b5732a;' + (locked ? '' : 'cursor:pointer;') + 'background:rgba(217,162,74,.10);border:1px dashed rgba(217,162,74,.5);border-radius:5px;padding:1px 7px;" title="' + (locked ? '' : '클릭해 입력') + '">⚠ ' + (r.value.trim() ? ('미작성: ' + _annEsc(r.value)) : '미작성') + (locked ? '' : ' — 클릭') + '</span>'
+                    : '<span' + clickAttr + ' style="flex:1;font-size:12.5px;color:var(--c-text);' + (locked ? '' : 'cursor:pointer;') + 'word-break:break-word;" title="' + (locked ? '' : '클릭해 편집') + '">' + _annEsc(_dmMetaStripComment(r.value)) + '</span>')
+                + (locked ? '' : '<button onclick="dmMetaRemoveField(' + idx + ',\'' + _annEsc(r.key) + '\')" title="필드 삭제" style="border:none;background:none;cursor:pointer;color:var(--c-text3);font-size:11px;flex:none;opacity:.45;">✕</button>')
+                + '</div>';
+        });
+        missing.forEach(function (t) {
+            html += '<div class="dm-meta-row" style="display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px dashed var(--c-border);">'
+                + '<span style="flex:0 0 116px;font-size:11.5px;font-weight:700;color:#a14a4a;font-family:ui-monospace,monospace;">' + _annEsc(t.key) + '</span>'
+                + '<span style="flex:1;font-size:11.5px;color:#a14a4a;">템플릿 권장 속성 — 누락</span>'
+                + (locked ? '' : '<button onclick="dmMetaFillMissing(' + idx + ',\'' + _annEsc(t.key) + '\')" title="이 필드 추가" style="border:1px solid var(--c-accent);background:var(--c-accent);color:#fff;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;padding:1px 9px;flex:none;">＋ 추가</button>')
+                + '</div>';
+        });
+        html += '</div></div>';
+        return html;
+    }
+    function _dmMetaBlock(idx) { var body = document.getElementById('dm-doc-body'); return (body && body._dmBlocks && body._dmBlocks[idx]) || null; }
+    function _dmMetaSetKey(idx, key, value) {
+        var body = document.getElementById('dm-doc-body'); var b = body && body._dmBlocks && body._dmBlocks[idx]; if (!b) return;
+        var lines = b.text.split('\n'); var done = false;
+        for (var i = 0; i < lines.length; i++) { var m = lines[i].match(/^([A-Za-z0-9_\-]+)\s*:/); if (m && m[1] === key) { lines[i] = key + ': ' + value; done = true; break; } }
+        if (!done) { var insAt = -1; for (var j = 1; j < lines.length; j++) { if (/^---\s*$/.test(lines[j])) { insAt = j; break; } } if (insAt < 0) insAt = lines.length; lines.splice(insAt, 0, key + ': ' + value); }
+        b.text = lines.join('\n'); dmLpCommitBlocks();
+        dmRenderLiveBody(body, _dmById(_dmState.activeId), false);
+    }
+    function _dmMetaRemoveKey(idx, key) {
+        var body = document.getElementById('dm-doc-body'); var b = body && body._dmBlocks && body._dmBlocks[idx]; if (!b) return;
+        b.text = b.text.split('\n').filter(function (ln) { var m = ln.match(/^([A-Za-z0-9_\-]+)\s*:/); return !(m && m[1] === key); }).join('\n');
+        dmLpCommitBlocks(); dmRenderLiveBody(body, _dmById(_dmState.activeId), false);
+    }
+    async function dmMetaEditField(idx, key) {
+        var rows = _dmParseFront((_dmMetaBlock(idx) || {}).text || ''); var cur = '';
+        rows.forEach(function (r) { if (r.key === key) cur = _dmMetaStripComment(r.value); });
+        var v = await uiPrompt({ title: '메타데이터 편집', label: key, value: /<[^>]*>/.test(cur) ? '' : cur, placeholder: '값 입력' });
+        if (v == null) return; _dmMetaSetKey(idx, key, String(v).trim());
+    }
+    async function dmMetaAddField(idx) {
+        var k = await uiPrompt({ title: '메타데이터 필드 추가', label: '필드 이름(key)', placeholder: '예: priority' });
+        if (k == null) return; k = String(k).trim().replace(/[^A-Za-z0-9_\-]/g, ''); if (!k) { showToast('영문/숫자/_/- 만 가능', 'alert'); return; }
+        var v = await uiPrompt({ title: '메타데이터 값', label: k, placeholder: '값 입력' });
+        if (v == null) v = ''; _dmMetaSetKey(idx, k, String(v).trim());
+    }
+    async function dmMetaFillMissing(idx, key) {
+        var stepNo = _dmDocStep(_dmById(_dmState.activeId)); var def = '';
+        _dmTemplateFrontKeys(stepNo).forEach(function (t) { if (t.key === key) def = _dmMetaStripComment(t.value); });
+        var v = await uiPrompt({ title: '필드 추가: ' + key, label: key, value: /<[^>]*>/.test(def) ? '' : def, placeholder: def || '값 입력' });
+        if (v == null) return; _dmMetaSetKey(idx, key, String(v).trim());
+    }
+    function dmMetaRemoveField(idx, key) { _dmMetaRemoveKey(idx, key); }
+    function dmMetaCreateFromTemplate() {
+        var d = _dmById(_dmState.activeId); if (!d) return;
+        var tplKeys = _dmTemplateFrontKeys(_dmDocStep(d));
+        var fm = tplKeys.length ? ('---\n' + tplKeys.map(function (t) { return t.key + ': ' + t.value; }).join('\n') + '\n---') : '---\ntitle: \nstatus: draft\n---';
+        var body = document.getElementById('dm-doc-body'); if (!body || !body._dmBlocks) return;
+        body._dmBlocks.unshift({ text: fm, blank: false }, { text: '', blank: true });
+        dmLpCommitBlocks(); dmRenderLiveBody(body, d, false);
+        showToast('📋 메타데이터를 추가했습니다 — 값을 채워주세요', 'success');
     }
     function dmLpRowClick(e, idx) {
         var t = e.target;
